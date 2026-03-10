@@ -4,6 +4,7 @@ import Image from 'next/image'
 import { useState } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import { Chrome } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,6 +14,7 @@ export default function LoginPage() {
   const router = useRouter()
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -49,6 +51,13 @@ export default function LoginPage() {
     router.push(redirectMap[role] ?? '/admin/dashboard')
   }
 
+  async function handleGoogleSignIn() {
+    setError('')
+    setGoogleLoading(true)
+    await signIn('google', { callbackUrl: '/' })
+    setGoogleLoading(false)
+  }
+
   return (
     <Card className="w-full max-w-md shadow-lg">
       <CardHeader className="space-y-1 text-center">
@@ -66,6 +75,17 @@ export default function LoginPage() {
         <CardDescription>Sign in to your account to continue</CardDescription>
       </CardHeader>
       <CardContent>
+        <Button type="button" variant="outline" className="w-full" onClick={handleGoogleSignIn} disabled={googleLoading}>
+          <Chrome className="w-4 h-4" />
+          {googleLoading ? 'Redirecting...' : 'Continue with Google'}
+        </Button>
+
+        <div className="my-4 flex items-center gap-3 text-xs uppercase tracking-wide text-muted-foreground">
+          <div className="h-px flex-1 bg-border" />
+          <span>or</span>
+          <div className="h-px flex-1 bg-border" />
+        </div>
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
@@ -99,7 +119,7 @@ export default function LoginPage() {
           </Button>
         </form>
         <p className="text-xs text-center text-muted-foreground mt-4">
-          Contact your administrator if you need access.
+          New Google users are created automatically as customer accounts on first sign-in.
         </p>
       </CardContent>
     </Card>
