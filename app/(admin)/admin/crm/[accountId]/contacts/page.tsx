@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { PhoneSmsButton } from '@/components/crm/PhoneSmsButton'
 import { addContact } from '@/actions/crm'
 import Link from 'next/link'
 import { ArrowLeft, User } from 'lucide-react'
@@ -46,7 +47,7 @@ export default async function ContactsPage({ params }: { params: { accountId: st
                   </div>
                   {c.title && <p className="text-xs text-muted-foreground">{c.title}</p>}
                   {c.email && <p className="text-xs text-muted-foreground">{c.email}</p>}
-                  {c.phone && <p className="text-xs text-muted-foreground">{c.phone}</p>}
+                  {c.phone ? <PhoneSmsButton phone={c.phone} recipientName={c.name} className="text-xs" /> : null}
                 </div>
               </div>
             ))}

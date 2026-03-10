@@ -1,17 +1,17 @@
 import { db } from '@/db'
-import { customerAccounts } from '@/db/schema'
+import { customerAccounts, orders, orderItems } from '@/db/schema'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { formatCurrency } from '@/lib/utils'
 import { getHubSpotCompanies } from '@/lib/hubspot/client'
 import { HubSpotCompaniesTab } from '@/components/crm/HubSpotCompaniesTab'
+import { LocalAccountsTable } from '@/components/crm/LocalAccountsTable'
 import { CRMTabs } from '@/components/crm/CRMTabs'
+import { sql, eq, and, inArray } from 'drizzle-orm'
 import Link from 'next/link'
-import { Plus, Building2 } from 'lucide-react'
+import { Plus } from 'lucide-react'
 
 export default async function CRMPage() {
-  const [accounts, hsCompanies] = await Promise.all([
+  const [accounts, hsResult] = await Promise.all([
     db.select({
       id: customerAccounts.id,
       companyName: customerAccounts.companyName,
@@ -24,64 +24,58 @@ export default async function CRMPage() {
       paymentTerms: customerAccounts.paymentTerms,
       hubspotContactId: customerAccounts.hubspotContactId,
       hubspotCompanyId: customerAccounts.hubspotCompanyId,
+      starred: customerAccounts.starred,
     }).from(customerAccounts).orderBy(customerAccounts.companyName),
     getHubSpotCompanies(),
   ])
 
-  // Set of HubSpot company IDs already imported into local accounts
-  const importedHsIds = new Set(
-    accounts.map(a => a.hubspotCompanyId).filter(Boolean) as string[]
-  )
+  // Aggregate order stats per customer
+  const accountIds = accounts.map(a => a.id)
+  const [pendingStats, totalStats] = await Promise.all([
+    // Cases in pending/confirmed orders (in the pipeline, not yet fulfilled)
+    accountIds.length === 0 ? [] : db
+      .select({
+        customerId: orders.customerId,
+        cases: sql<number>`coalesce(sum(${orderItems.quantity}::numeric), 0)`.as('cases'),
+      })
+      .from(orders)
+      .innerJoin(orderItems, eq(orderItems.orderId, orders.id))
+      .where(and(
+        inArray(orders.customerId, accountIds),
+        inArray(orders.status, ['pending', 'confirmed'])
+      ))
+      .groupBy(orders.customerId),
 
-  const localAccountsTable = (
-    <div className="overflow-x-auto">
-      <table className="w-full">
-        <thead className="border-b bg-slate-50">
-          <tr>
-            <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Company</th>
-            <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Location</th>
-            <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Contact</th>
-            <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Terms</th>
-            <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Balance</th>
-            <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">HubSpot</th>
-            <th className="px-6 py-3" />
-          </tr>
-        </thead>
-        <tbody className="divide-y">
-          {accounts.length === 0 ? (
-            <tr><td colSpan={7} className="px-6 py-12 text-center text-muted-foreground">No accounts yet. Import from HubSpot or add manually.</td></tr>
-          ) : accounts.map(account => (
-            <tr key={account.id} className="hover:bg-slate-50 transition-colors">
-              <td className="px-6 py-4">
-                <div className="flex items-center gap-2">
-                  <Building2 className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">{account.companyName}</span>
-                </div>
-              </td>
-              <td className="px-6 py-4 text-sm text-muted-foreground">
-                {[account.city, account.state].filter(Boolean).join(', ') || '—'}
-              </td>
-              <td className="px-6 py-4 text-sm">{account.email || account.phone || '—'}</td>
-              <td className="px-6 py-4"><Badge variant="secondary">{account.paymentTerms}</Badge></td>
-              <td className="px-6 py-4 text-sm font-medium">{formatCurrency(account.balance ?? '0')}</td>
-              <td className="px-6 py-4">
-                {account.hubspotCompanyId || account.hubspotContactId ? (
-                  <Badge variant="success">Synced</Badge>
-                ) : (
-                  <Badge variant="outline">Not synced</Badge>
-                )}
-              </td>
-              <td className="px-6 py-4">
-                <Link href={`/admin/crm/${account.id}`}>
-                  <Button variant="ghost" size="sm">View</Button>
-                </Link>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    // Total cases ever purchased (all non-cancelled orders)
+    accountIds.length === 0 ? [] : db
+      .select({
+        customerId: orders.customerId,
+        cases: sql<number>`coalesce(sum(${orderItems.quantity}::numeric), 0)`.as('cases'),
+      })
+      .from(orders)
+      .innerJoin(orderItems, eq(orderItems.orderId, orders.id))
+      .where(and(
+        inArray(orders.customerId, accountIds),
+        inArray(orders.status, ['confirmed', 'fulfilled'])
+      ))
+      .groupBy(orders.customerId),
+  ])
+
+  const pendingMap = new Map(pendingStats.map(r => [r.customerId, Number(r.cases)]))
+  const totalMap = new Map(totalStats.map(r => [r.customerId, Number(r.cases)]))
+
+  const accountRows = accounts.map(a => ({
+    ...a,
+    pendingCases: pendingMap.get(a.id) ?? 0,
+    totalCasesPurchased: totalMap.get(a.id) ?? 0,
+  }))
+
+  // Map hubspotCompanyId → local account id
+  const localAccountIds = new Map<string, string>(
+    accounts.filter(a => a.hubspotCompanyId).map(a => [a.hubspotCompanyId!, a.id])
   )
+  const importedHsIds = new Set(localAccountIds.keys())
+  const { companies: hsCompanies, error: hsError } = hsResult
 
   return (
     <div className="p-8 space-y-6">
@@ -105,8 +99,13 @@ export default async function CRMPage() {
               { id: 'hubspot', label: 'HubSpot Companies', count: hsCompanies.length },
             ]}
           >
-            {localAccountsTable}
-            <HubSpotCompaniesTab companies={hsCompanies} importedIds={importedHsIds} />
+            <LocalAccountsTable initialAccounts={accountRows} />
+            <HubSpotCompaniesTab
+              companies={hsCompanies}
+              importedIds={importedHsIds}
+              localAccountIds={localAccountIds}
+              error={hsError}
+            />
           </CRMTabs>
         </CardContent>
       </Card>

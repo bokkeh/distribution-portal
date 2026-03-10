@@ -15,9 +15,18 @@ export interface HubSpotCompany {
   website: string | null
 }
 
-export async function getHubSpotCompanies(): Promise<HubSpotCompany[]> {
+// Detect key format: legacy UUID keys use hapikey param; Private App tokens use Bearer
+function buildHubSpotHeaders(apiKey: string): { headers: Record<string, string>; keyParam?: string } {
+  const isLegacy = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(apiKey)
+  if (isLegacy) return { headers: { 'Content-Type': 'application/json' }, keyParam: apiKey }
+  return { headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` } }
+}
+
+export async function getHubSpotCompanies(): Promise<{ companies: HubSpotCompany[]; error?: string }> {
   const apiKey = process.env.HUBSPOT_API_KEY
-  if (!apiKey) return []
+  if (!apiKey) return { companies: [], error: 'HUBSPOT_API_KEY not set' }
+
+  const { headers, keyParam } = buildHubSpotHeaders(apiKey)
 
   const properties = [
     'name', 'domain', 'phone', 'address', 'city', 'state', 'zip',
@@ -32,13 +41,18 @@ export async function getHubSpotCompanies(): Promise<HubSpotCompany[]> {
     url.searchParams.set('limit', '100')
     url.searchParams.set('properties', properties)
     if (after) url.searchParams.set('after', after)
+    if (keyParam) url.searchParams.set('hapikey', keyParam)
 
     const res = await fetch(url.toString(), {
-      headers: { Authorization: `Bearer ${apiKey}` },
-      next: { revalidate: 300 }, // cache 5 min
+      headers,
+      next: { revalidate: 300 },
     })
 
-    if (!res.ok) break
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      console.error('HubSpot companies fetch failed:', res.status, err)
+      return { companies: [], error: `HubSpot API error ${res.status}: ${err.message ?? 'Unknown error'}` }
+    }
     const data = await res.json()
 
     all = all.concat(
@@ -61,7 +75,36 @@ export async function getHubSpotCompanies(): Promise<HubSpotCompany[]> {
     after = data.paging?.next?.after
   } while (after)
 
-  return all.sort((a, b) => a.name.localeCompare(b.name))
+  return { companies: all.sort((a, b) => a.name.localeCompare(b.name)) }
+}
+
+export async function updateHubSpotCompany(
+  id: string,
+  props: Partial<Pick<HubSpotCompany, 'name' | 'phone' | 'address' | 'city' | 'state' | 'zip' | 'website' | 'industry'>>
+): Promise<boolean> {
+  const apiKey = process.env.HUBSPOT_API_KEY
+  if (!apiKey) return false
+
+  const { headers, keyParam } = buildHubSpotHeaders(apiKey)
+  const kp = keyParam ? `?hapikey=${keyParam}` : ''
+
+  const properties: Record<string, string> = {}
+  if (props.name !== undefined) properties.name = props.name
+  if (props.phone !== undefined) properties.phone = props.phone ?? ''
+  if (props.address !== undefined) properties.address = props.address ?? ''
+  if (props.city !== undefined) properties.city = props.city ?? ''
+  if (props.state !== undefined) properties.state = props.state ?? ''
+  if (props.zip !== undefined) properties.zip = props.zip ?? ''
+  if (props.website !== undefined) properties.website = props.website ?? ''
+  if (props.industry !== undefined) properties.industry = props.industry ?? ''
+
+  const res = await fetch(`${HUBSPOT_API_URL}/crm/v3/objects/companies/${id}${kp}`, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify({ properties }),
+  })
+
+  return res.ok
 }
 
 interface HubSpotContactProps {
@@ -81,13 +124,11 @@ export async function upsertHubSpotContact(props: HubSpotContactProps): Promise<
   const apiKey = process.env.HUBSPOT_API_KEY
   if (!apiKey || !props.email) return null
 
-  const headers = {
-    'Content-Type': 'application/json',
-    Authorization: `Bearer ${apiKey}`,
-  }
+  const { headers, keyParam } = buildHubSpotHeaders(apiKey)
+  const kp = keyParam ? `?hapikey=${keyParam}` : ''
 
   // Search for existing contact by email
-  const searchRes = await fetch(`${HUBSPOT_API_URL}/crm/v3/objects/contacts/search`, {
+  const searchRes = await fetch(`${HUBSPOT_API_URL}/crm/v3/objects/contacts/search${kp}`, {
     method: 'POST',
     headers,
     body: JSON.stringify({
@@ -114,14 +155,14 @@ export async function upsertHubSpotContact(props: HubSpotContactProps): Promise<
 
   if (existing) {
     const id = existing.id
-    await fetch(`${HUBSPOT_API_URL}/crm/v3/objects/contacts/${id}`, {
+    await fetch(`${HUBSPOT_API_URL}/crm/v3/objects/contacts/${id}${kp}`, {
       method: 'PATCH',
       headers,
       body: JSON.stringify({ properties }),
     })
     return id
   } else {
-    const createRes = await fetch(`${HUBSPOT_API_URL}/crm/v3/objects/contacts`, {
+    const createRes = await fetch(`${HUBSPOT_API_URL}/crm/v3/objects/contacts${kp}`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ properties }),

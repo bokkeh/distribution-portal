@@ -1,10 +1,11 @@
 import { db } from '@/db'
-import { customerAccounts, contacts, orders, invoices } from '@/db/schema'
+import { customerAccounts, contacts, orders } from '@/db/schema'
 import { eq, desc } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { PhoneSmsButton } from '@/components/crm/PhoneSmsButton'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { syncToHubSpot } from '@/actions/crm'
 import Link from 'next/link'
@@ -14,10 +15,9 @@ export default async function AccountDetailPage({ params }: { params: { accountI
   const [account] = await db.select().from(customerAccounts).where(eq(customerAccounts.id, params.accountId))
   if (!account) notFound()
 
-  const [accountContacts, accountOrders, accountInvoices] = await Promise.all([
+  const [accountContacts, accountOrders] = await Promise.all([
     db.select().from(contacts).where(eq(contacts.customerId, params.accountId)),
     db.select().from(orders).where(eq(orders.customerId, params.accountId)).orderBy(desc(orders.createdAt)).limit(10),
-    db.select().from(invoices).where(eq(invoices.customerId, params.accountId)).orderBy(desc(invoices.createdAt)).limit(10),
   ])
 
   return (
@@ -47,7 +47,12 @@ export default async function AccountDetailPage({ params }: { params: { accountI
                 </div>
               </div>
             )}
-            {account.phone && <div className="flex gap-2"><Phone className="w-4 h-4 text-muted-foreground" /><span>{account.phone}</span></div>}
+            {account.phone && (
+              <div className="flex gap-2">
+                <Phone className="w-4 h-4 text-muted-foreground" />
+                <PhoneSmsButton phone={account.phone} recipientName={account.companyName} showIcon={false} className="text-sm" />
+              </div>
+            )}
             {account.email && <div className="flex gap-2"><Mail className="w-4 h-4 text-muted-foreground" /><span>{account.email}</span></div>}
             <div className="pt-3 border-t space-y-2">
               <div className="flex justify-between"><span className="text-muted-foreground">Payment Terms</span><Badge variant="secondary">{account.paymentTerms}</Badge></div>
@@ -75,6 +80,9 @@ export default async function AccountDetailPage({ params }: { params: { accountI
                 </div>
                 <p className="text-xs text-muted-foreground">{contact.title}</p>
                 <p className="text-xs text-muted-foreground">{contact.email}</p>
+                {contact.phone ? (
+                  <PhoneSmsButton phone={contact.phone} recipientName={contact.name} className="text-xs" />
+                ) : null}
               </div>
             ))}
           </CardContent>

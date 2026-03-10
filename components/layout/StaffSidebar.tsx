@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { LayoutDashboard, ShoppingCart, Building2, Package, LogOut, ChevronRight } from 'lucide-react'
@@ -20,9 +21,14 @@ export default function StaffSidebar() {
     <aside className="w-64 min-h-screen bg-slate-900 text-slate-100 flex flex-col">
       <div className="p-6 border-b border-slate-700">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-green-500 rounded-lg flex items-center justify-center">
-            <span className="text-white font-bold text-lg">A</span>
-          </div>
+          <Image
+            src="/brand/logo.svg"
+            alt="AHAWC logo"
+            width={40}
+            height={40}
+            className="h-10 w-10 rounded-lg bg-white p-1 object-contain"
+            priority
+          />
           <div>
             <p className="font-bold text-white">AHAWC</p>
             <p className="text-xs text-slate-400">Sales Portal</p>

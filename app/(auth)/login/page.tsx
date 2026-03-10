@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { useState } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
@@ -52,9 +53,14 @@ export default function LoginPage() {
     <Card className="w-full max-w-md shadow-lg">
       <CardHeader className="space-y-1 text-center">
         <div className="flex justify-center mb-4">
-          <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center">
-            <span className="text-white font-bold text-xl">A</span>
-          </div>
+          <Image
+            src="/brand/logo.svg"
+            alt="AHAWC logo"
+            width={64}
+            height={64}
+            className="h-16 w-16 rounded-2xl bg-white p-2 shadow-sm object-contain"
+            priority
+          />
         </div>
         <CardTitle className="text-2xl font-bold">AHAWC Portal</CardTitle>
         <CardDescription>Sign in to your account to continue</CardDescription>

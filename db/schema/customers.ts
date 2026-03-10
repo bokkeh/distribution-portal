@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, numeric, timestamp } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, numeric, timestamp, boolean } from 'drizzle-orm/pg-core'
 import { users } from './users'
 
 export const customerAccounts = pgTable('customer_accounts', {
@@ -13,6 +13,7 @@ export const customerAccounts = pgTable('customer_accounts', {
   email: text('email'),
   hubspotContactId: text('hubspot_contact_id'),
   hubspotCompanyId: text('hubspot_company_id'),
+  starred: boolean('starred').notNull().default(false),
   creditLimit: numeric('credit_limit', { precision: 12, scale: 2 }).notNull().default('0'),
   balance: numeric('balance', { precision: 12, scale: 2 }).notNull().default('0'),
   paymentTerms: text('payment_terms').default('NET30'),

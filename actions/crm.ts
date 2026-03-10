@@ -5,7 +5,13 @@ import { customerAccounts, contacts } from '@/db/schema'
 import { requireAdminOrStaff } from '@/lib/auth/session'
 import { eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
-import { upsertHubSpotContact, getHubSpotCompanies } from '@/lib/hubspot/client'
+import { upsertHubSpotContact, getHubSpotCompanies, updateHubSpotCompany } from '@/lib/hubspot/client'
+
+export async function toggleStarAccount(accountId: string, starred: boolean) {
+  await requireAdminOrStaff()
+  await db.update(customerAccounts).set({ starred }).where(eq(customerAccounts.id, accountId))
+  revalidatePath('/admin/crm')
+}
 
 export async function syncToHubSpot(accountId: string) {
   await requireAdminOrStaff()
@@ -68,7 +74,7 @@ export async function importHubSpotCompany(hubspotCompanyId: string) {
     .where(eq(customerAccounts.hubspotCompanyId, hubspotCompanyId))
   if (existing.length > 0) return { error: 'Already imported' }
 
-  const companies = await getHubSpotCompanies()
+  const { companies } = await getHubSpotCompanies()
   const company = companies.find(c => c.id === hubspotCompanyId)
   if (!company) return { error: 'Company not found' }
 
@@ -84,6 +90,41 @@ export async function importHubSpotCompany(hubspotCompanyId: string) {
     balance: '0',
     paymentTerms: 'NET30',
   })
+
+  revalidatePath('/admin/crm')
+  return { success: true }
+}
+
+export async function updateHubSpotCompanyAction(
+  hubspotId: string,
+  localAccountId: string | null,
+  data: {
+    name: string
+    phone: string
+    address: string
+    city: string
+    state: string
+    zip: string
+    website: string
+    industry: string
+  }
+) {
+  await requireAdminOrStaff()
+
+  // Sync to HubSpot
+  await updateHubSpotCompany(hubspotId, data)
+
+  // Also update local account if imported
+  if (localAccountId) {
+    await db.update(customerAccounts).set({
+      companyName: data.name,
+      phone: data.phone || null,
+      address: data.address || null,
+      city: data.city || null,
+      state: data.state || null,
+      zip: data.zip || null,
+    }).where(eq(customerAccounts.id, localAccountId))
+  }
 
   revalidatePath('/admin/crm')
   return { success: true }
