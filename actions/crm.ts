@@ -5,7 +5,7 @@ import { customerAccounts, contacts } from '@/db/schema'
 import { requireAdminOrStaff } from '@/lib/auth/session'
 import { eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
-import { upsertHubSpotContact } from '@/lib/hubspot/client'
+import { upsertHubSpotContact, getHubSpotCompanies } from '@/lib/hubspot/client'
 
 export async function syncToHubSpot(accountId: string) {
   await requireAdminOrStaff()
@@ -57,6 +57,36 @@ export async function addContact(formData: FormData) {
   })
 
   revalidatePath(`/admin/crm/${customerId}`)
+}
+
+export async function importHubSpotCompany(hubspotCompanyId: string) {
+  await requireAdminOrStaff()
+
+  // Don't import if already linked
+  const existing = await db.select({ id: customerAccounts.id })
+    .from(customerAccounts)
+    .where(eq(customerAccounts.hubspotCompanyId, hubspotCompanyId))
+  if (existing.length > 0) return { error: 'Already imported' }
+
+  const companies = await getHubSpotCompanies()
+  const company = companies.find(c => c.id === hubspotCompanyId)
+  if (!company) return { error: 'Company not found' }
+
+  await db.insert(customerAccounts).values({
+    companyName: company.name,
+    address: company.address,
+    city: company.city,
+    state: company.state,
+    zip: company.zip,
+    phone: company.phone,
+    hubspotCompanyId: company.id,
+    creditLimit: '0',
+    balance: '0',
+    paymentTerms: 'NET30',
+  })
+
+  revalidatePath('/admin/crm')
+  return { success: true }
 }
 
 export async function updateCustomerAccount(formData: FormData) {

@@ -6,7 +6,7 @@ import { requireAdmin, requireAdminOrStaff } from '@/lib/auth/session'
 import { eq, inArray } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { sendSms } from '@/lib/twilio/client'
+import { sendSms } from '@/lib/telnyx/client'
 import { postGoogleChat } from '@/lib/google-chat/webhook'
 import { geocodeAddress } from '@/lib/maps/geocode'
 
