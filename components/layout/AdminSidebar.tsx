@@ -30,7 +30,7 @@ export default function AdminSidebar() {
       <div className="p-6 border-b border-slate-700">
         <div className="flex items-center gap-3">
           <Image
-            src="/brand/logo.svg"
+            src="/brand/logo.png"
             alt="AHAWC logo"
             width={40}
             height={40}

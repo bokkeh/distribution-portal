@@ -7,6 +7,8 @@ import { db } from '@/db'
 import { customerAccounts, users } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 
+const SUPER_ADMIN_EMAIL = 'alex@ahawc.com'
+
 const providers: Provider[] = [
   Credentials({
     name: 'Credentials',
@@ -60,19 +62,29 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return true
       }
 
+      const normalizedEmail = user.email.toLowerCase()
+      const isSuperAdmin = normalizedEmail === SUPER_ADMIN_EMAIL
+
       const [existingUser] = await db
         .select()
         .from(users)
-        .where(eq(users.email, user.email))
+        .where(eq(users.email, normalizedEmail))
         .limit(1)
 
       if (existingUser) {
         if (!existingUser.active) return false
 
-        user.id = existingUser.id
-        ;(user as typeof user & { role: string }).role = existingUser.role
-        user.name = existingUser.name
-        user.image = existingUser.avatarUrl ?? user.image
+        const effectiveUser = isSuperAdmin && existingUser.role !== 'admin'
+          ? (await db.update(users)
+              .set({ role: 'admin', active: true })
+              .where(eq(users.id, existingUser.id))
+              .returning())[0]
+          : existingUser
+
+        user.id = effectiveUser.id
+        ;(user as typeof user & { role: string }).role = effectiveUser.role
+        user.name = effectiveUser.name
+        user.image = effectiveUser.avatarUrl ?? user.image
         return true
       }
 
@@ -81,26 +93,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const avatarUrl = user.image ?? (profile?.picture as string | undefined) ?? null
 
       const [createdUser] = await db.insert(users).values({
-        email: user.email,
+        email: normalizedEmail,
         name: displayName,
         passwordHash: placeholderPassword,
-        role: 'customer',
+        role: isSuperAdmin ? 'admin' : 'customer',
         avatarUrl,
         active: true,
       }).returning()
 
-      await db.insert(customerAccounts).values({
-        userId: createdUser.id,
-        companyName: displayName,
-        email: createdUser.email,
-        phone: null,
-        address: null,
-        city: null,
-        state: null,
-        zip: null,
-        creditLimit: '0',
-        paymentTerms: 'NET30',
-      })
+      if (!isSuperAdmin) {
+        await db.insert(customerAccounts).values({
+          userId: createdUser.id,
+          companyName: displayName,
+          email: createdUser.email,
+          phone: null,
+          address: null,
+          city: null,
+          state: null,
+          zip: null,
+          creditLimit: '0',
+          paymentTerms: 'NET30',
+        })
+      }
 
       user.id = createdUser.id
       ;(user as typeof user & { role: string }).role = createdUser.role

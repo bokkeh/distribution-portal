@@ -63,7 +63,7 @@ export default function LoginPage() {
       <CardHeader className="space-y-1 text-center">
         <div className="flex justify-center mb-4">
           <Image
-            src="/brand/logo.svg"
+            src="/brand/logo.png"
             alt="AHAWC logo"
             width={64}
             height={64}
