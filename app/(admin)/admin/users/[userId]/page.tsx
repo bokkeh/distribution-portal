@@ -4,10 +4,9 @@ import { eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { activateUser, deactivateUser } from '@/actions/users'
+import { activateUser, deactivateUser, updateUserRole } from '@/actions/users'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 
@@ -45,6 +44,24 @@ export default async function UserDetailPage({ params }: { params: { userId: str
         <Card>
           <CardHeader><CardTitle>Account Actions</CardTitle></CardHeader>
           <CardContent className="space-y-3">
+            <form action={updateUserRole} className="space-y-2">
+              <input type="hidden" name="userId" value={user.id} />
+              <Label htmlFor="role">Role</Label>
+              <div className="flex gap-2">
+                <select
+                  id="role"
+                  name="role"
+                  defaultValue={user.role}
+                  className="flex h-9 flex-1 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="admin">Admin</option>
+                  <option value="staff">Staff</option>
+                  <option value="driver">Driver</option>
+                  <option value="customer">Customer</option>
+                </select>
+                <Button type="submit" variant="outline">Save Role</Button>
+              </div>
+            </form>
             {user.active ? (
               <form action={deactivateUser.bind(null, user.id)}>
                 <Button variant="destructive" className="w-full" type="submit">Deactivate Account</Button>

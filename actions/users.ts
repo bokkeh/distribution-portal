@@ -65,3 +65,15 @@ export async function activateUser(userId: string) {
   await db.update(users).set({ active: true }).where(eq(users.id, userId))
   revalidatePath('/admin/users')
 }
+
+export async function updateUserRole(formData: FormData) {
+  await requireAdmin()
+
+  const userId = formData.get('userId') as string
+  const role = formData.get('role') as 'admin' | 'staff' | 'driver' | 'customer'
+
+  await db.update(users).set({ role }).where(eq(users.id, userId))
+
+  revalidatePath('/admin/users')
+  revalidatePath(`/admin/users/${userId}`)
+}
