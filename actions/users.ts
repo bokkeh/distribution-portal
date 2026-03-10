@@ -82,26 +82,31 @@ export async function activateUser(userId: string) {
   revalidatePath('/admin/users')
 }
 
-export async function updateUserRole(formData: FormData) {
-  await requireAdmin()
+export async function updateUserRole(
+  _prev: { error?: string } | null,
+  formData: FormData
+): Promise<{ error?: string }> {
+  try {
+    await requireAdmin()
 
-  const userId = formData.get('userId') as string
-  const role = formData.get('role') as UserRole
-  const roles = parseRoles(formData, role)
-  const phone = (formData.get('phone') as string | null) ?? ''
+    const userId = formData.get('userId') as string
+    const role = formData.get('role') as UserRole
+    const roles = parseRoles(formData, role)
+    const phone = (formData.get('phone') as string | null) ?? ''
 
-  await db.update(users).set({ role, roles }).where(eq(users.id, userId))
+    await db.update(users).set({ role, roles }).where(eq(users.id, userId))
 
-  if (roles.includes('driver')) {
-    const [driver] = await db.select().from(drivers).where(eq(drivers.userId, userId)).limit(1)
-    if (!driver) {
-      await db.insert(drivers).values({
-        userId,
-        phone,
-      })
+    if (roles.includes('driver')) {
+      const [driver] = await db.select().from(drivers).where(eq(drivers.userId, userId)).limit(1)
+      if (!driver) {
+        await db.insert(drivers).values({ userId, phone })
+      }
     }
+
+    revalidatePath('/admin/users')
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) }
   }
 
-  revalidatePath('/admin/users')
-  redirect(`/admin/users/${userId}`)
+  redirect(`/admin/users/${(formData.get('userId') as string)}`)
 }
