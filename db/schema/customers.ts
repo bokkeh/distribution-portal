@@ -17,6 +17,17 @@ export const customerAccounts = pgTable('customer_accounts', {
   hubspotCompanyId: text('hubspot_company_id'),
   dealStage: text('deal_stage').default('new_lead'),
   starred: boolean('starred').notNull().default(false),
+  // Extended profile fields (customer-editable)
+  businessEmail: text('business_email'),
+  businessPhone: text('business_phone'),
+  notificationPreference: text('notification_preference').default('email'),
+  pocName: text('poc_name'),
+  pocPhone: text('poc_phone'),
+  pocEmail: text('poc_email'),
+  hoursOfOperation: text('hours_of_operation'),
+  preferredDeliveryDays: text('preferred_delivery_days'),
+  preferredDeliveryTimes: text('preferred_delivery_times'),
+  additionalLocations: text('additional_locations'), // JSON: [{address,city,state,zip}]
   creditLimit: numeric('credit_limit', { precision: 12, scale: 2 }).notNull().default('0'),
   balance: numeric('balance', { precision: 12, scale: 2 }).notNull().default('0'),
   paymentTerms: text('payment_terms').default('NET30'),
