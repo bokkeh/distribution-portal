@@ -1,14 +1,16 @@
-import { db } from '@/db'
-import { users, customerAccounts, drivers } from '@/db/schema'
+import Link from 'next/link'
 import { eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
-import { activateUser, deactivateUser, updateUserRole } from '@/actions/users'
-import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
+import { activateUser, deactivateUser, updateUserRole } from '@/actions/users'
+import { db } from '@/db'
+import { customerAccounts, drivers, users } from '@/db/schema'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Label } from '@/components/ui/label'
+
+const allRoles = ['admin', 'staff', 'driver', 'customer'] as const
 
 export default async function UserDetailPage({ params }: { params: { userId: string } }) {
   const [user] = await db.select().from(users).where(eq(users.id, params.userId))
@@ -28,15 +30,21 @@ export default async function UserDetailPage({ params }: { params: { userId: str
         <Badge variant={user.active ? 'success' : 'secondary'}>{user.active ? 'Active' : 'Inactive'}</Badge>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader><CardTitle>User Information</CardTitle></CardHeader>
           <CardContent className="space-y-3 text-sm">
             <div className="grid grid-cols-2 gap-4">
               <div><p className="text-muted-foreground">Name</p><p className="font-medium">{user.name}</p></div>
-              <div><p className="text-muted-foreground">Role</p><Badge variant="outline" className="capitalize">{user.role}</Badge></div>
+              <div><p className="text-muted-foreground">Primary Role</p><Badge variant="outline" className="capitalize">{user.role}</Badge></div>
               <div><p className="text-muted-foreground">Email</p><p className="font-medium">{user.email}</p></div>
-              <div><p className="text-muted-foreground">Phone</p><p className="font-medium">{user.phone ?? '—'}</p></div>
+              <div><p className="text-muted-foreground">Phone</p><p className="font-medium">{user.phone ?? '-'}</p></div>
+            </div>
+            <div>
+              <p className="mb-2 text-muted-foreground">All Roles</p>
+              <div className="flex flex-wrap gap-2">
+                {user.roles.map(role => <Badge key={role} variant="secondary" className="capitalize">{role}</Badge>)}
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -46,7 +54,8 @@ export default async function UserDetailPage({ params }: { params: { userId: str
           <CardContent className="space-y-3">
             <form action={updateUserRole} className="space-y-2">
               <input type="hidden" name="userId" value={user.id} />
-              <Label htmlFor="role">Role</Label>
+              <input type="hidden" name="phone" value={user.phone ?? ''} />
+              <Label htmlFor="role">Primary Role</Label>
               <div className="flex gap-2">
                 <select
                   id="role"
@@ -54,14 +63,20 @@ export default async function UserDetailPage({ params }: { params: { userId: str
                   defaultValue={user.role}
                   className="flex h-9 flex-1 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 >
-                  <option value="admin">Admin</option>
-                  <option value="staff">Staff</option>
-                  <option value="driver">Driver</option>
-                  <option value="customer">Customer</option>
+                  {allRoles.map(role => <option key={role} value={role}>{role.charAt(0).toUpperCase() + role.slice(1)}</option>)}
                 </select>
-                <Button type="submit" variant="outline">Save Role</Button>
+                <Button type="submit" variant="outline">Save Roles</Button>
+              </div>
+              <div className="grid grid-cols-2 gap-3 rounded-md border border-input p-3 text-sm">
+                {allRoles.map(role => (
+                  <label key={role} className="flex items-center gap-2 capitalize">
+                    <input type="checkbox" name="roles" value={role} defaultChecked={user.roles.includes(role)} className="rounded" />
+                    {role}
+                  </label>
+                ))}
               </div>
             </form>
+
             {user.active ? (
               <form action={deactivateUser.bind(null, user.id)}>
                 <Button variant="destructive" className="w-full" type="submit">Deactivate Account</Button>
@@ -71,15 +86,16 @@ export default async function UserDetailPage({ params }: { params: { userId: str
                 <Button className="w-full" type="submit">Reactivate Account</Button>
               </form>
             )}
-            {account && (
+
+            {account ? (
               <Link href={`/admin/crm/${account.id}`}>
                 <Button variant="outline" className="w-full">View CRM Account</Button>
               </Link>
-            )}
+            ) : null}
           </CardContent>
         </Card>
 
-        {account && (
+        {account ? (
           <Card>
             <CardHeader><CardTitle>Customer Account</CardTitle></CardHeader>
             <CardContent className="space-y-2 text-sm">
@@ -91,21 +107,21 @@ export default async function UserDetailPage({ params }: { params: { userId: str
               </div>
             </CardContent>
           </Card>
-        )}
+        ) : null}
 
-        {driver && (
+        {driver ? (
           <Card>
             <CardHeader><CardTitle>Driver Profile</CardTitle></CardHeader>
             <CardContent className="space-y-2 text-sm">
               <div className="grid grid-cols-2 gap-3">
-                <div><p className="text-muted-foreground">Vehicle</p><p className="font-medium">{[driver.vehicleMake, driver.vehicleModel].filter(Boolean).join(' ') || '—'}</p></div>
-                <div><p className="text-muted-foreground">License Plate</p><p className="font-medium">{driver.licensePlate ?? '—'}</p></div>
+                <div><p className="text-muted-foreground">Vehicle</p><p className="font-medium">{[driver.vehicleMake, driver.vehicleModel].filter(Boolean).join(' ') || '-'}</p></div>
+                <div><p className="text-muted-foreground">License Plate</p><p className="font-medium">{driver.licensePlate ?? '-'}</p></div>
                 <div><p className="text-muted-foreground">Phone</p><p className="font-medium">{driver.phone}</p></div>
                 <div><p className="text-muted-foreground">Status</p><Badge variant={driver.active ? 'success' : 'secondary'}>{driver.active ? 'Active' : 'Inactive'}</Badge></div>
               </div>
             </CardContent>
           </Card>
-        )}
+        ) : null}
       </div>
     </div>
   )

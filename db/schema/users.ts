@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm'
 import { pgTable, uuid, text, boolean, timestamp } from 'drizzle-orm/pg-core'
 
 export const users = pgTable('users', {
@@ -5,6 +6,7 @@ export const users = pgTable('users', {
   email: text('email').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
   role: text('role', { enum: ['admin', 'staff', 'driver', 'customer'] }).notNull(),
+  roles: text('roles').array().notNull().default(sql`ARRAY['customer']::text[]`),
   name: text('name').notNull(),
   phone: text('phone'),
   avatarUrl: text('avatar_url'),

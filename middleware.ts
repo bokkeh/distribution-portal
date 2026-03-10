@@ -5,6 +5,7 @@ export default auth((req) => {
   const { pathname } = req.nextUrl
   const session = req.auth
   const role = session?.user?.role
+  const roles = session?.user?.roles ?? (role ? [role] : [])
 
   // Public routes
   if (pathname === '/login' || pathname === '/') {
@@ -19,27 +20,27 @@ export default auth((req) => {
     return NextResponse.redirect(new URL('/login', req.url))
   }
 
-  if (role === 'admin') {
+  if (roles.includes('admin')) {
     return NextResponse.next()
   }
 
   // Admin routes
-  if (pathname.startsWith('/admin') && role !== 'admin') {
+  if (pathname.startsWith('/admin') && !roles.includes('admin')) {
     return NextResponse.redirect(new URL('/unauthorized', req.url))
   }
 
   // Staff routes (admin also allowed)
-  if (pathname.startsWith('/staff') && !['admin', 'staff'].includes(role ?? '')) {
+  if (pathname.startsWith('/staff') && !roles.some(nextRole => ['admin', 'staff'].includes(nextRole))) {
     return NextResponse.redirect(new URL('/unauthorized', req.url))
   }
 
   // Driver routes
-  if (pathname.startsWith('/driver') && role !== 'driver') {
+  if (pathname.startsWith('/driver') && !roles.includes('driver')) {
     return NextResponse.redirect(new URL('/unauthorized', req.url))
   }
 
   // Customer routes
-  if (pathname.startsWith('/customer') && role !== 'customer') {
+  if (pathname.startsWith('/customer') && !roles.includes('customer')) {
     return NextResponse.redirect(new URL('/unauthorized', req.url))
   }
 

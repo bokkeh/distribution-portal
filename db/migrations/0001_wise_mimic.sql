@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "roles" text[] DEFAULT ARRAY['customer']::text[] NOT NULL;

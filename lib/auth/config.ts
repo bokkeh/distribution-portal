@@ -8,6 +8,13 @@ import { customerAccounts, users } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 
 const SUPER_ADMIN_EMAIL = 'alex@ahawc.com'
+const ADMIN_ROLE = 'admin'
+
+function normalizeRoles(primaryRole: string, roles?: string[] | null) {
+  const nextRoles = new Set((roles ?? []).filter(Boolean))
+  nextRoles.add(primaryRole)
+  return Array.from(nextRoles)
+}
 
 const providers: Provider[] = [
   Credentials({
@@ -39,6 +46,7 @@ const providers: Provider[] = [
         email: user.email,
         name: user.name,
         role: user.role,
+        roles: user.roles,
         image: user.avatarUrl,
       }
     },
@@ -74,15 +82,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (existingUser) {
         if (!existingUser.active) return false
 
-        const effectiveUser = isSuperAdmin && existingUser.role !== 'admin'
+        const effectiveUser = isSuperAdmin && !existingUser.roles.includes(ADMIN_ROLE)
           ? (await db.update(users)
-              .set({ role: 'admin', active: true })
+              .set({
+                role: ADMIN_ROLE,
+                roles: normalizeRoles(ADMIN_ROLE, existingUser.roles),
+                active: true,
+              })
               .where(eq(users.id, existingUser.id))
               .returning())[0]
           : existingUser
 
         user.id = effectiveUser.id
         ;(user as typeof user & { role: string }).role = effectiveUser.role
+        ;(user as typeof user & { roles: string[] }).roles = effectiveUser.roles
         user.name = effectiveUser.name
         user.image = effectiveUser.avatarUrl ?? user.image
         return true
@@ -96,7 +109,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: normalizedEmail,
         name: displayName,
         passwordHash: placeholderPassword,
-        role: isSuperAdmin ? 'admin' : 'customer',
+        role: isSuperAdmin ? ADMIN_ROLE : 'customer',
+        roles: isSuperAdmin ? [ADMIN_ROLE] : ['customer'],
         avatarUrl,
         active: true,
       }).returning()
@@ -118,6 +132,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       user.id = createdUser.id
       ;(user as typeof user & { role: string }).role = createdUser.role
+      ;(user as typeof user & { roles: string[] }).roles = createdUser.roles
       user.name = createdUser.name
       user.image = createdUser.avatarUrl
       return true
@@ -126,13 +141,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user) {
         token.id = user.id
         token.role = (user as { role?: string }).role
+        token.roles = (user as { roles?: string[] }).roles
       }
 
-      if (token.email && !token.role) {
+      if (token.email && (!token.role || !token.roles)) {
         const [dbUser] = await db.select().from(users).where(eq(users.email, token.email)).limit(1)
         if (dbUser) {
           token.id = dbUser.id
           token.role = dbUser.role
+          token.roles = dbUser.roles
           token.picture = dbUser.avatarUrl ?? token.picture
           token.name = dbUser.name
         }
@@ -143,6 +160,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (token) {
         session.user.id = token.id as string
         session.user.role = token.role as string
+        session.user.roles = (token.roles as string[] | undefined) ?? []
       }
       return session
     },

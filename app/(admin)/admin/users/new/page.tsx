@@ -1,10 +1,17 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { createUser } from '@/actions/users'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
+import { createUser } from '@/actions/users'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+
+const allRoles = [
+  { value: 'admin', label: 'Admin' },
+  { value: 'staff', label: 'Staff / Sales Rep' },
+  { value: 'driver', label: 'Driver' },
+  { value: 'customer', label: 'Customer' },
+]
 
 export default function NewUserPage() {
   return (
@@ -27,25 +34,36 @@ export default function NewUserPage() {
                 <Input name="name" id="name" required placeholder="John Smith" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="role">Role</Label>
-                <select name="role" id="role" required
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                <Label htmlFor="role">Primary Role</Label>
+                <select name="role" id="role" required className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
                   <option value="">Select role...</option>
-                  <option value="admin">Admin</option>
-                  <option value="staff">Staff / Sales Rep</option>
-                  <option value="driver">Driver</option>
-                  <option value="customer">Customer</option>
+                  {allRoles.map(role => <option key={role.value} value={role.value}>{role.label}</option>)}
                 </select>
               </div>
             </div>
+
+            <div className="space-y-2">
+              <Label>All Roles</Label>
+              <div className="grid grid-cols-2 gap-3 rounded-md border border-input p-3 text-sm">
+                {allRoles.map(role => (
+                  <label key={role.value} className="flex items-center gap-2">
+                    <input type="checkbox" name="roles" value={role.value} className="rounded" />
+                    {role.label}
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">The primary role will always be included automatically.</p>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input name="email" id="email" type="email" required placeholder="user@example.com" />
             </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
-                <Input name="password" id="password" type="password" required placeholder="••••••••" minLength={8} />
+                <Input name="password" id="password" type="password" required placeholder="........" minLength={8} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="phone">Phone</Label>
@@ -53,9 +71,8 @@ export default function NewUserPage() {
               </div>
             </div>
 
-            {/* Customer-specific fields */}
             <div className="border-t pt-4 space-y-4">
-              <p className="text-sm font-medium text-muted-foreground">Customer Account Fields (if role = Customer)</p>
+              <p className="text-sm font-medium text-muted-foreground">Customer Account Fields (used if customer role is selected)</p>
               <div className="space-y-2">
                 <Label htmlFor="companyName">Company Name</Label>
                 <Input name="companyName" id="companyName" placeholder="ABC Liquors LLC" />
@@ -95,8 +112,7 @@ export default function NewUserPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="paymentTerms">Payment Terms</Label>
-                  <select name="paymentTerms" id="paymentTerms"
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                  <select name="paymentTerms" id="paymentTerms" className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
                     <option value="NET30">NET30</option>
                     <option value="NET15">NET15</option>
                     <option value="COD">COD</option>

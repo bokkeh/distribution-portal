@@ -1,12 +1,11 @@
-import { db } from '@/db'
-import { users } from '@/db/schema'
-import { desc } from 'drizzle-orm'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { formatDate } from '@/lib/utils'
 import Link from 'next/link'
 import { Plus, User } from 'lucide-react'
+import { db } from '@/db'
+import { users } from '@/db/schema'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { formatDate } from '@/lib/utils'
 
 const roleColors: Record<string, 'default' | 'success' | 'warning' | 'destructive' | 'info'> = {
   admin: 'destructive',
@@ -17,7 +16,14 @@ const roleColors: Record<string, 'default' | 'success' | 'warning' | 'destructiv
 
 export default async function UsersPage() {
   const allUsers = await db.select({
-    id: users.id, name: users.name, email: users.email, role: users.role, phone: users.phone, active: users.active, createdAt: users.createdAt,
+    id: users.id,
+    name: users.name,
+    email: users.email,
+    role: users.role,
+    roles: users.roles,
+    phone: users.phone,
+    active: users.active,
+    createdAt: users.createdAt,
   }).from(users).orderBy(users.role, users.name)
 
   return (
@@ -38,7 +44,7 @@ export default async function UsersPage() {
             <thead className="border-b bg-slate-50">
               <tr>
                 <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">User</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Role</th>
+                <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Roles</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Phone</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Status</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Joined</th>
@@ -47,11 +53,11 @@ export default async function UsersPage() {
             </thead>
             <tbody className="divide-y">
               {allUsers.map(user => (
-                <tr key={user.id} className="hover:bg-slate-50 transition-colors">
+                <tr key={user.id} className="transition-colors hover:bg-slate-50">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center">
-                        <User className="w-4 h-4 text-slate-500" />
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200">
+                        <User className="h-4 w-4 text-slate-500" />
                       </div>
                       <div>
                         <p className="text-sm font-medium">{user.name}</p>
@@ -59,8 +65,12 @@ export default async function UsersPage() {
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4"><Badge variant={roleColors[user.role]}>{user.role}</Badge></td>
-                  <td className="px-6 py-4 text-sm">{user.phone || '—'}</td>
+                  <td className="px-6 py-4">
+                    <div className="flex flex-wrap gap-1">
+                      {user.roles.map(role => <Badge key={role} variant={roleColors[role]}>{role}</Badge>)}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-sm">{user.phone || '-'}</td>
                   <td className="px-6 py-4">
                     {user.active ? <Badge variant="success">Active</Badge> : <Badge variant="secondary">Inactive</Badge>}
                   </td>

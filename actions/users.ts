@@ -1,12 +1,22 @@
 'use server'
 
-import { db } from '@/db'
-import { users, customerAccounts, drivers } from '@/db/schema'
-import { requireAdmin } from '@/lib/auth/session'
-import { eq } from 'drizzle-orm'
 import bcrypt from 'bcryptjs'
+import { eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { db } from '@/db'
+import { customerAccounts, drivers, users } from '@/db/schema'
+import { requireAdmin } from '@/lib/auth/session'
+
+const ALL_ROLES = ['admin', 'staff', 'driver', 'customer'] as const
+type UserRole = typeof ALL_ROLES[number]
+
+function parseRoles(formData: FormData, primaryRole: UserRole) {
+  const selectedRoles = formData.getAll('roles').map(value => String(value)) as UserRole[]
+  const nextRoles = new Set<UserRole>(selectedRoles.filter(role => ALL_ROLES.includes(role)))
+  nextRoles.add(primaryRole)
+  return Array.from(nextRoles)
+}
 
 export async function createUser(formData: FormData) {
   await requireAdmin()
@@ -14,16 +24,22 @@ export async function createUser(formData: FormData) {
   const name = formData.get('name') as string
   const email = formData.get('email') as string
   const password = formData.get('password') as string
-  const role = formData.get('role') as 'admin' | 'staff' | 'driver' | 'customer'
+  const role = formData.get('role') as UserRole
+  const roles = parseRoles(formData, role)
   const phone = formData.get('phone') as string | null
 
   const passwordHash = await bcrypt.hash(password, 12)
 
   const [user] = await db.insert(users).values({
-    name, email, passwordHash, role, phone: phone || null,
+    name,
+    email,
+    passwordHash,
+    role,
+    roles,
+    phone: phone || null,
   }).returning()
 
-  if (role === 'customer') {
+  if (roles.includes('customer')) {
     const companyName = formData.get('companyName') as string
     if (companyName) {
       await db.insert(customerAccounts).values({
@@ -43,7 +59,7 @@ export async function createUser(formData: FormData) {
     }
   }
 
-  if (role === 'driver') {
+  if (roles.includes('driver')) {
     await db.insert(drivers).values({
       userId: user.id,
       phone: phone ?? '',
@@ -70,9 +86,21 @@ export async function updateUserRole(formData: FormData) {
   await requireAdmin()
 
   const userId = formData.get('userId') as string
-  const role = formData.get('role') as 'admin' | 'staff' | 'driver' | 'customer'
+  const role = formData.get('role') as UserRole
+  const roles = parseRoles(formData, role)
+  const phone = (formData.get('phone') as string | null) ?? ''
 
-  await db.update(users).set({ role }).where(eq(users.id, userId))
+  await db.update(users).set({ role, roles }).where(eq(users.id, userId))
+
+  if (roles.includes('driver')) {
+    const [driver] = await db.select().from(drivers).where(eq(drivers.userId, userId)).limit(1)
+    if (!driver) {
+      await db.insert(drivers).values({
+        userId,
+        phone,
+      })
+    }
+  }
 
   revalidatePath('/admin/users')
   redirect(`/admin/users/${userId}`)
