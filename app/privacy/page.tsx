@@ -149,7 +149,8 @@ export default function PrivacyPolicyPage() {
           </address>
         </Section>
 
-        <div className="border-t pt-6 text-sm text-muted-foreground">
+        <div className="border-t pt-6 flex gap-6 text-sm">
+          <Link href="/terms" className="text-blue-600 hover:underline">Terms &amp; Conditions</Link>
           <Link href="/login" className="text-blue-600 hover:underline">← Back to sign in</Link>
         </div>
       </div>
