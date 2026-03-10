@@ -15,7 +15,7 @@ const allRoles = [
 
 export default function NewUserPage() {
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 sm:p-8 space-y-6">
       <div className="flex items-center gap-4">
         <Link href="/admin/users"><Button variant="ghost" size="icon"><ArrowLeft className="w-4 h-4" /></Button></Link>
         <div>
@@ -28,7 +28,7 @@ export default function NewUserPage() {
         <CardHeader><CardTitle>User Details</CardTitle></CardHeader>
         <CardContent>
           <form action={createUser} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Full Name</Label>
                 <Input name="name" id="name" required placeholder="John Smith" />
@@ -60,7 +60,7 @@ export default function NewUserPage() {
               <Input name="email" id="email" type="email" required placeholder="user@example.com" />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
                 <Input name="password" id="password" type="password" required placeholder="........" minLength={8} />
@@ -81,7 +81,7 @@ export default function NewUserPage() {
                 <Label htmlFor="contactName">Person of Contact</Label>
                 <Input name="contactName" id="contactName" placeholder="Jane Smith" />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="address">Address</Label>
                   <Input name="address" id="address" placeholder="123 Main St" />
@@ -91,7 +91,7 @@ export default function NewUserPage() {
                   <Input name="city" id="city" placeholder="Houston" />
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="state">State</Label>
                   <Input name="state" id="state" placeholder="TX" maxLength={2} />
@@ -105,7 +105,7 @@ export default function NewUserPage() {
                   <Input name="dcAbraNumber" id="dcAbraNumber" placeholder="Required for DC stores" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="creditLimit">Credit Limit ($)</Label>
                   <Input name="creditLimit" id="creditLimit" type="number" step="0.01" min="0" placeholder="5000" />

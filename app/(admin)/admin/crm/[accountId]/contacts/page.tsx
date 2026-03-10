@@ -19,7 +19,7 @@ export default async function ContactsPage({ params }: { params: { accountId: st
   const accountContacts = await db.select().from(contacts).where(eq(contacts.customerId, params.accountId))
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 sm:p-8 space-y-6">
       <div className="flex items-center gap-4">
         <Link href={`/admin/crm/${params.accountId}`}><Button variant="ghost" size="icon"><ArrowLeft className="w-4 h-4" /></Button></Link>
         <div>

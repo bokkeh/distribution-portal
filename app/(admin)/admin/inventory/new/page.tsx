@@ -8,7 +8,7 @@ import { ArrowLeft } from 'lucide-react'
 
 export default function NewProductPage() {
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 sm:p-8 space-y-6">
       <div className="flex items-center gap-4">
         <Link href="/admin/inventory"><Button variant="ghost" size="icon"><ArrowLeft className="w-4 h-4" /></Button></Link>
         <div>
@@ -21,7 +21,7 @@ export default function NewProductPage() {
         <CardHeader><CardTitle>Product Details</CardTitle></CardHeader>
         <CardContent>
           <form action={createProduct} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="sku">SKU</Label>
                 <Input name="sku" id="sku" required placeholder="WHI-001" />
@@ -31,7 +31,7 @@ export default function NewProductPage() {
                 <Input name="name" id="name" required placeholder="Jack Daniel's Old No. 7" />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="brand">Brand</Label>
                 <Input name="brand" id="brand" placeholder="Jack Daniel's" />
@@ -45,7 +45,7 @@ export default function NewProductPage() {
               <Label htmlFor="description">Description</Label>
               <Input name="description" id="description" placeholder="Tennessee whiskey..." />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="price">Price per Case ($)</Label>
                 <Input type="number" name="price" id="price" step="0.01" min="0" required placeholder="120.00" />
@@ -55,7 +55,7 @@ export default function NewProductPage() {
                 <Input type="number" name="bottlePrice" id="bottlePrice" step="0.01" min="0" defaultValue="0" placeholder="10.00" />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="bottlesPerCase">Bottles per Case</Label>
                 <Input type="number" name="bottlesPerCase" id="bottlesPerCase" min="1" defaultValue="12" />
@@ -65,7 +65,7 @@ export default function NewProductPage() {
                 <Input type="number" name="samplePrice" id="samplePrice" step="0.01" min="0" defaultValue="0" placeholder="0.00" />
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="quantityPaid">Initial Paid Cases</Label>
                 <Input type="number" name="quantityPaid" id="quantityPaid" min="0" defaultValue="0" />

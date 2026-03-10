@@ -15,7 +15,7 @@ export default async function NewInvoicePage() {
     .from(orders).where(eq(orders.status, 'fulfilled'))
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 sm:p-8 space-y-6">
       <div className="flex items-center gap-4">
         <Link href="/admin/invoicing"><Button variant="ghost" size="icon"><ArrowLeft className="w-4 h-4" /></Button></Link>
         <div>
@@ -44,7 +44,7 @@ export default async function NewInvoicePage() {
                 {fulfilledOrders.map(o => <option key={o.id} value={o.id}>Order #{o.id.slice(-8).toUpperCase()} — ${o.total}</option>)}
               </select>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="amount">Amount ($)</Label>
                 <Input type="number" name="amount" id="amount" step="0.01" min="0" required placeholder="0.00" />

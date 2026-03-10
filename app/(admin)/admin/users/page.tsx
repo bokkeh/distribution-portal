@@ -27,8 +27,8 @@ export default async function UsersPage() {
   }).from(users).orderBy(users.role, users.name)
 
   return (
-    <div className="p-8 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-8 space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">User Management</h1>
           <p className="text-muted-foreground mt-1">{allUsers.length} total users</p>
@@ -40,6 +40,7 @@ export default async function UsersPage() {
 
       <Card>
         <CardContent className="p-0">
+          <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="border-b bg-slate-50">
               <tr>
@@ -84,6 +85,7 @@ export default async function UsersPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </CardContent>
       </Card>
     </div>

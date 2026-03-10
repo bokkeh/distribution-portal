@@ -22,7 +22,7 @@ export default async function JournalEntriesPage() {
     .orderBy(desc(journalEntries.createdAt))
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 sm:p-8 space-y-6">
       <div className="flex items-center gap-4">
         <Link href="/admin/accounts"><Button variant="ghost" size="icon"><ArrowLeft className="w-4 h-4" /></Button></Link>
         <div className="flex-1">

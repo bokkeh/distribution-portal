@@ -21,7 +21,7 @@ export default async function AccountDetailPage({ params }: { params: { accountI
   ])
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 sm:p-8 space-y-6">
       <div className="flex items-center gap-4">
         <Link href="/admin/crm"><Button variant="ghost" size="icon"><ArrowLeft className="w-4 h-4" /></Button></Link>
         <div className="flex-1">
@@ -78,7 +78,7 @@ export default async function AccountDetailPage({ params }: { params: { accountI
               <p className="text-sm text-muted-foreground">No contacts added.</p>
             ) : accountContacts.map(contact => (
               <div key={contact.id} className="py-2 border-b last:border-0">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="text-sm font-medium">{contact.name}</p>
                   {contact.isPrimary && <Badge variant="info" className="text-xs">Primary</Badge>}
                 </div>

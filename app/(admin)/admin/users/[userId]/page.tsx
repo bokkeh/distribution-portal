@@ -18,7 +18,7 @@ export default async function UserDetailPage({ params }: { params: Promise<{ use
   const [driver] = await db.select().from(drivers).where(eq(drivers.userId, user.id))
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 sm:p-8 space-y-6">
       <div className="flex items-center gap-4">
         <Link href="/admin/users"><Button variant="ghost" size="icon"><ArrowLeft className="w-4 h-4" /></Button></Link>
         <div className="flex-1">
