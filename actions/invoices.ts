@@ -115,6 +115,12 @@ export async function createPaymentIntent(invoiceId: string) {
     amount: Math.round(parseFloat(invoice.total) * 100),
     currency: 'usd',
     metadata: { invoiceId },
+    payment_method_types: ['card', 'us_bank_account'],
+    payment_method_options: {
+      us_bank_account: {
+        financial_connections: { permissions: ['payment_method'] },
+      },
+    },
   })
 
   await db.update(invoices).set({ stripePaymentIntentId: paymentIntent.id }).where(eq(invoices.id, invoiceId))
