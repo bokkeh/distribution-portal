@@ -66,13 +66,19 @@ export default function InvoicePaymentClient({ invoiceId, total }: { invoiceId: 
       <CardContent>
         {!clientSecret ? (
           <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">Pay securely with your credit or debit card via Stripe.</p>
+            <p className="text-sm text-muted-foreground">Pay securely by bank transfer (ACH) or credit/debit card via Stripe.</p>
             <Button className="w-full" onClick={initPayment} disabled={loading}>
               {loading ? 'Preparing...' : `Pay ${formatCurrency(total)} Now`}
             </Button>
           </div>
         ) : (
-          <Elements stripe={stripePromise} options={{ clientSecret }}>
+          <Elements
+            stripe={stripePromise}
+            options={{
+              clientSecret,
+              paymentMethodOrder: ['us_bank_account', 'card'],
+            }}
+          >
             <InvoicePaymentForm total={total} onSuccess={() => router.push('/customer/invoices')} />
           </Elements>
         )}
