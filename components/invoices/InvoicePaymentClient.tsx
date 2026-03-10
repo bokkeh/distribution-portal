@@ -39,7 +39,7 @@ function InvoicePaymentForm({ total, onSuccess }: { total: string; onSuccess: ()
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <PaymentElement />
+      <PaymentElement options={{ paymentMethodOrder: ['us_bank_account', 'card'] }} />
       {error && <p className="text-sm text-red-600">{error}</p>}
       <Button type="submit" disabled={!stripe || loading} className="w-full">
         {loading ? 'Processing...' : `Pay ${formatCurrency(total)}`}
@@ -72,13 +72,7 @@ export default function InvoicePaymentClient({ invoiceId, total }: { invoiceId: 
             </Button>
           </div>
         ) : (
-          <Elements
-            stripe={stripePromise}
-            options={{
-              clientSecret,
-              paymentMethodOrder: ['us_bank_account', 'card'],
-            }}
-          >
+          <Elements stripe={stripePromise} options={{ clientSecret }}>
             <InvoicePaymentForm total={total} onSuccess={() => router.push('/customer/invoices')} />
           </Elements>
         )}
