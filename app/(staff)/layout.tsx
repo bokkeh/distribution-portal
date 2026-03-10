@@ -9,7 +9,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
   return (
     <div className="flex min-h-screen bg-slate-50">
       <StaffSidebar showViewSwitcher={isSuperAdmin} />
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto pt-14 md:pt-0">
         <TestSmsBar />
         {children}
       </main>
