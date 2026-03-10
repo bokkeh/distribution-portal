@@ -75,5 +75,5 @@ export async function updateUserRole(formData: FormData) {
   await db.update(users).set({ role }).where(eq(users.id, userId))
 
   revalidatePath('/admin/users')
-  revalidatePath(`/admin/users/${userId}`)
+  redirect(`/admin/users/${userId}`)
 }
