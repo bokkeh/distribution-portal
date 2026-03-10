@@ -7,6 +7,15 @@ import { eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { upsertHubSpotContact, getHubSpotCompanies, updateHubSpotCompany } from '@/lib/hubspot/client'
 
+export async function updateDealStage(accountId: string, dealStage: string) {
+  await requireAdminOrStaff()
+  await db.update(customerAccounts).set({ dealStage }).where(eq(customerAccounts.id, accountId))
+  revalidatePath('/admin/crm')
+  revalidatePath('/staff/crm')
+  revalidatePath(`/admin/crm/${accountId}`)
+  revalidatePath(`/staff/crm/${accountId}`)
+}
+
 export async function toggleStarAccount(accountId: string, starred: boolean) {
   await requireAdminOrStaff()
   await db.update(customerAccounts).set({ starred }).where(eq(customerAccounts.id, accountId))

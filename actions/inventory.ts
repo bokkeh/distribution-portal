@@ -2,10 +2,12 @@
 
 import { db } from '@/db'
 import { products, inventory } from '@/db/schema'
-import { requireAdmin } from '@/lib/auth/session'
+import { requireAdmin, requireAdminOrStaff } from '@/lib/auth/session'
 import { eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { sendSampleCaseAlert } from '@/lib/resend/client'
+import { auth } from '@/lib/auth/config'
 
 export async function createProduct(formData: FormData) {
   await requireAdmin()
@@ -33,6 +35,43 @@ export async function createProduct(formData: FormData) {
 
   revalidatePath('/admin/inventory')
   redirect('/admin/inventory')
+}
+
+export async function adjustSampleCases(productId: string, delta: number): Promise<{ error?: string }> {
+  await requireAdminOrStaff()
+
+  const session = await auth()
+  const staffName = session?.user?.name ?? 'Staff'
+
+  const [row] = await db
+    .select({ quantitySample: inventory.quantitySample, name: products.name, sku: products.sku })
+    .from(inventory)
+    .innerJoin(products, eq(inventory.productId, products.id))
+    .where(eq(inventory.productId, productId))
+
+  if (!row) return { error: 'Product not found' }
+
+  const previousQty = row.quantitySample ?? 0
+  const newQty = Math.max(0, previousQty + delta)
+
+  await db.update(inventory)
+    .set({ quantitySample: newQty, updatedAt: new Date() })
+    .where(eq(inventory.productId, productId))
+
+  revalidatePath('/staff/inventory')
+  revalidatePath('/admin/inventory')
+
+  // Fire-and-forget email — don't block UI
+  sendSampleCaseAlert({
+    staffName,
+    productName: row.name,
+    sku: row.sku,
+    previousQty,
+    newQty,
+    delta: newQty - previousQty,
+  })
+
+  return {}
 }
 
 export async function adjustStock(formData: FormData) {

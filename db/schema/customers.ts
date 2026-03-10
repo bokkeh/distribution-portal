@@ -15,6 +15,7 @@ export const customerAccounts = pgTable('customer_accounts', {
   dcAbraNumber: text('dc_abra_number'),
   hubspotContactId: text('hubspot_contact_id'),
   hubspotCompanyId: text('hubspot_company_id'),
+  dealStage: text('deal_stage').default('new_lead'),
   starred: boolean('starred').notNull().default(false),
   creditLimit: numeric('credit_limit', { precision: 12, scale: 2 }).notNull().default('0'),
   balance: numeric('balance', { precision: 12, scale: 2 }).notNull().default('0'),

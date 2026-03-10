@@ -49,6 +49,66 @@ export async function sendInvoiceEmailNotification({
   }
 }
 
+export async function sendSampleCaseAlert({
+  staffName,
+  productName,
+  sku,
+  previousQty,
+  newQty,
+  delta,
+}: {
+  staffName: string
+  productName: string
+  sku: string
+  previousQty: number
+  newQty: number
+  delta: number
+}): Promise<void> {
+  const direction = delta > 0 ? `+${delta}` : String(delta)
+  const action = delta > 0 ? 'added' : 'removed'
+
+  try {
+    await resend.emails.send({
+      from: process.env.RESEND_FROM_EMAIL ?? 'noreply@ahawc.com',
+      to: 'kris@ahawc.com',
+      subject: `Sample Case Adjustment — ${productName}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="background: #0f172a; padding: 20px 24px; border-radius: 8px 8px 0 0;">
+            <h1 style="color: white; margin: 0; font-size: 20px;">AHAWC · Sample Case Alert</h1>
+          </div>
+          <div style="background: #f8fafc; padding: 28px 24px; border-radius: 0 0 8px 8px; border: 1px solid #e2e8f0; border-top: none;">
+            <p style="color: #475569; margin: 0 0 16px;">
+              <strong>${staffName}</strong> ${action} <strong>${Math.abs(delta)}</strong> sample case(s) for:
+            </p>
+            <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 20px; margin-bottom: 20px;">
+              <p style="margin: 0 0 4px; font-size: 16px; font-weight: 600; color: #1e293b;">${productName}</p>
+              <p style="margin: 0; font-size: 13px; color: #64748b; font-family: monospace;">SKU: ${sku}</p>
+            </div>
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+              <tr>
+                <td style="padding: 6px 0; color: #64748b;">Previous quantity</td>
+                <td style="padding: 6px 0; text-align: right; font-weight: 600; color: #1e293b;">${previousQty} cases</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; color: #64748b;">Adjustment</td>
+                <td style="padding: 6px 0; text-align: right; font-weight: 600; color: ${delta > 0 ? '#16a34a' : '#dc2626'};">${direction} cases</td>
+              </tr>
+              <tr style="border-top: 1px solid #e2e8f0;">
+                <td style="padding: 10px 0 6px; color: #64748b; font-weight: 600;">New quantity</td>
+                <td style="padding: 10px 0 6px; text-align: right; font-weight: 700; font-size: 16px; color: #1e293b;">${newQty} cases</td>
+              </tr>
+            </table>
+            <p style="color: #94a3b8; font-size: 12px; margin: 20px 0 0;">AHAWC Distribution Portal · Sent automatically on sample case adjustment</p>
+          </div>
+        </div>
+      `,
+    })
+  } catch (error) {
+    console.error('Sample case alert email failed:', error)
+  }
+}
+
 export async function sendWelcomeEmail({
   to,
   name,
