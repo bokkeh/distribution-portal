@@ -1,0 +1,79 @@
+'use server'
+
+import { db } from '@/db'
+import { customerAccounts, contacts } from '@/db/schema'
+import { requireAdminOrStaff } from '@/lib/auth/session'
+import { eq } from 'drizzle-orm'
+import { revalidatePath } from 'next/cache'
+import { upsertHubSpotContact } from '@/lib/hubspot/client'
+
+export async function syncToHubSpot(accountId: string) {
+  await requireAdminOrStaff()
+
+  const [account] = await db.select().from(customerAccounts).where(eq(customerAccounts.id, accountId))
+  if (!account) return
+
+  const accountContacts = await db.select().from(contacts).where(eq(contacts.customerId, accountId))
+  const primaryContact = accountContacts.find(c => c.isPrimary) ?? accountContacts[0]
+
+  const hubspotId = await upsertHubSpotContact({
+    email: account.email ?? primaryContact?.email ?? '',
+    firstname: primaryContact?.name?.split(' ')[0] ?? account.companyName,
+    lastname: primaryContact?.name?.split(' ').slice(1).join(' ') ?? '',
+    company: account.companyName,
+    phone: account.phone ?? primaryContact?.phone ?? '',
+    city: account.city ?? '',
+    state: account.state ?? '',
+    credit_limit: account.creditLimit ?? '0',
+    payment_terms: account.paymentTerms ?? 'NET30',
+    account_balance: account.balance ?? '0',
+  })
+
+  if (hubspotId) {
+    await db.update(customerAccounts)
+      .set({ hubspotContactId: hubspotId })
+      .where(eq(customerAccounts.id, accountId))
+  }
+
+  revalidatePath(`/admin/crm/${accountId}`)
+}
+
+export async function addContact(formData: FormData) {
+  await requireAdminOrStaff()
+
+  const customerId = formData.get('customerId') as string
+  const name = formData.get('name') as string
+  const email = formData.get('email') as string | null
+  const phone = formData.get('phone') as string | null
+  const title = formData.get('title') as string | null
+  const isPrimary = formData.get('isPrimary') === 'on'
+
+  await db.insert(contacts).values({
+    customerId, name,
+    email: email || null,
+    phone: phone || null,
+    title: title || null,
+    isPrimary,
+  })
+
+  revalidatePath(`/admin/crm/${customerId}`)
+}
+
+export async function updateCustomerAccount(formData: FormData) {
+  await requireAdminOrStaff()
+
+  const id = formData.get('id') as string
+  await db.update(customerAccounts).set({
+    companyName: formData.get('companyName') as string,
+    address: formData.get('address') as string || null,
+    city: formData.get('city') as string || null,
+    state: formData.get('state') as string || null,
+    zip: formData.get('zip') as string || null,
+    phone: formData.get('phone') as string || null,
+    creditLimit: formData.get('creditLimit') as string,
+    paymentTerms: formData.get('paymentTerms') as string,
+  }).where(eq(customerAccounts.id, id))
+
+  revalidatePath('/admin/crm')
+  revalidatePath(`/admin/crm/${id}`)
+}

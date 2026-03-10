@@ -1,0 +1,73 @@
+import { db } from '@/db'
+import { orders, customerAccounts, orderItems, products } from '@/db/schema'
+import { eq, desc } from 'drizzle-orm'
+import { requireRole } from '@/lib/auth/session'
+import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { formatCurrency, formatDate } from '@/lib/utils'
+import Link from 'next/link'
+import { ShoppingCart } from 'lucide-react'
+
+export default async function CustomerOrdersPage() {
+  const session = await requireRole('customer')
+
+  const [account] = await db.select({ id: customerAccounts.id }).from(customerAccounts).where(eq(customerAccounts.userId, session.user.id))
+
+  const myOrders = account ? await db
+    .select({
+      id: orders.id, total: orders.total, status: orders.status, orderType: orders.orderType,
+      notes: orders.notes, createdAt: orders.createdAt,
+    })
+    .from(orders)
+    .where(eq(orders.customerId, account.id))
+    .orderBy(desc(orders.createdAt)) : []
+
+  const statusColor: Record<string, 'default' | 'success' | 'warning' | 'destructive' | 'info'> = {
+    pending: 'warning', confirmed: 'info', fulfilled: 'success', cancelled: 'destructive',
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900">My Orders</h1>
+        <p className="text-muted-foreground mt-1">{myOrders.length} orders</p>
+      </div>
+
+      {myOrders.length === 0 ? (
+        <div className="text-center py-16">
+          <ShoppingCart className="w-16 h-16 mx-auto text-slate-300 mb-4" />
+          <h2 className="text-lg font-semibold">No orders yet</h2>
+          <p className="text-muted-foreground mt-1">Start by browsing our product catalog.</p>
+          <Link href="/customer/products"><Button className="mt-4">Order Products</Button></Link>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {myOrders.map(order => (
+            <Card key={order.id} className="hover:shadow-md transition-shadow">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-3">
+                      <p className="font-semibold">Order #{order.id.slice(-8).toUpperCase()}</p>
+                      <Badge variant="outline">{order.orderType}</Badge>
+                      <Badge variant={statusColor[order.status]}>{order.status}</Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground">{formatDate(order.createdAt)}</p>
+                    {order.notes && <p className="text-sm text-muted-foreground">{order.notes}</p>}
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xl font-bold">{formatCurrency(order.total)}</p>
+                    <Link href={`/customer/orders/${order.id}`}>
+                      <Button variant="ghost" size="sm" className="mt-1">View Details</Button>
+                    </Link>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}

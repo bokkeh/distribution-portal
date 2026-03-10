@@ -1,0 +1,121 @@
+import { db } from '@/db'
+import { orders, orderItems, products, customerAccounts } from '@/db/schema'
+import { eq } from 'drizzle-orm'
+import { notFound } from 'next/navigation'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { formatCurrency, formatDate } from '@/lib/utils'
+import { updateOrderStatus } from '@/actions/orders'
+import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
+
+export default async function OrderDetailPage({ params }: { params: { orderId: string } }) {
+  const [order] = await db
+    .select({
+      id: orders.id, total: orders.total, subtotal: orders.subtotal, tax: orders.tax,
+      status: orders.status, orderType: orders.orderType, notes: orders.notes, createdAt: orders.createdAt,
+      companyName: customerAccounts.companyName,
+    })
+    .from(orders)
+    .leftJoin(customerAccounts, eq(orders.customerId, customerAccounts.id))
+    .where(eq(orders.id, params.orderId))
+
+  if (!order) notFound()
+
+  const items = await db
+    .select({
+      id: orderItems.id, quantity: orderItems.quantity, unitPrice: orderItems.unitPrice, total: orderItems.total,
+      productName: products.name, productSku: products.sku,
+    })
+    .from(orderItems)
+    .leftJoin(products, eq(orderItems.productId, products.id))
+    .where(eq(orderItems.orderId, params.orderId))
+
+  const statusColor: Record<string, 'default' | 'success' | 'warning' | 'destructive' | 'info'> = {
+    pending: 'warning', confirmed: 'info', fulfilled: 'success', cancelled: 'destructive',
+  }
+
+  const nextStatus: Record<string, 'confirmed' | 'fulfilled' | 'cancelled'> = {
+    pending: 'confirmed', confirmed: 'fulfilled',
+  }
+
+  return (
+    <div className="p-8 space-y-6 max-w-3xl">
+      <div className="flex items-center gap-4">
+        <Link href="/staff/orders"><Button variant="ghost" size="icon"><ArrowLeft className="w-4 h-4" /></Button></Link>
+        <div className="flex-1">
+          <h1 className="text-2xl font-bold text-slate-900">Order #{order.id.slice(-8).toUpperCase()}</h1>
+          <p className="text-muted-foreground mt-1">{order.companyName} · {formatDate(order.createdAt)}</p>
+        </div>
+        <Badge variant={statusColor[order.status]} className="text-sm px-3 py-1">{order.status}</Badge>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="md:col-span-2">
+          <CardHeader><CardTitle>Order Items</CardTitle></CardHeader>
+          <CardContent className="p-0">
+            <table className="w-full">
+              <thead className="border-b bg-slate-50">
+                <tr>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">Product</th>
+                  <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground">Qty</th>
+                  <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground">Unit Price</th>
+                  <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground">Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {items.map(item => (
+                  <tr key={item.id}>
+                    <td className="px-4 py-3">
+                      <p className="text-sm font-medium">{item.productName}</p>
+                      <p className="text-xs text-muted-foreground">{item.productSku}</p>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-right">{item.quantity}</td>
+                    <td className="px-4 py-3 text-sm text-right">{formatCurrency(item.unitPrice)}</td>
+                    <td className="px-4 py-3 text-sm font-medium text-right">{formatCurrency(item.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t">
+                  <td colSpan={3} className="px-4 py-3 text-sm font-bold text-right">Total</td>
+                  <td className="px-4 py-3 text-sm font-bold text-right">{formatCurrency(order.total)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Actions</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div className="text-sm space-y-2">
+              <div className="flex justify-between"><span className="text-muted-foreground">Type</span><Badge variant="outline">{order.orderType}</Badge></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Status</span><Badge variant={statusColor[order.status]}>{order.status}</Badge></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Total</span><span className="font-bold">{formatCurrency(order.total)}</span></div>
+            </div>
+            {order.notes && (
+              <div className="p-3 bg-slate-50 rounded-lg">
+                <p className="text-xs text-muted-foreground mb-1">Notes</p>
+                <p className="text-sm">{order.notes}</p>
+              </div>
+            )}
+            {nextStatus[order.status] && (
+              <form action={updateOrderStatus.bind(null, order.id, nextStatus[order.status])}>
+                <Button className="w-full" type="submit">
+                  Mark as {nextStatus[order.status]}
+                </Button>
+              </form>
+            )}
+            {order.status === 'pending' && (
+              <form action={updateOrderStatus.bind(null, order.id, 'cancelled')}>
+                <Button variant="destructive" className="w-full" type="submit">Cancel Order</Button>
+              </form>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}
