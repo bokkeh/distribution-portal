@@ -19,6 +19,10 @@ export default auth((req) => {
     return NextResponse.redirect(new URL('/login', req.url))
   }
 
+  if (role === 'admin') {
+    return NextResponse.next()
+  }
+
   // Admin routes
   if (pathname.startsWith('/admin') && role !== 'admin') {
     return NextResponse.redirect(new URL('/unauthorized', req.url))

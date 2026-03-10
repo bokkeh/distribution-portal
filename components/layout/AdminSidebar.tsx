@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { signOut } from 'next-auth/react'
+import { SuperAdminViewSwitcher } from './SuperAdminViewSwitcher'
 
 const navItems = [
   { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -21,7 +22,7 @@ const navItems = [
   { href: '/admin/drivers', label: 'Drivers', icon: Map },
 ]
 
-export default function AdminSidebar() {
+export default function AdminSidebar({ showViewSwitcher = false }: { showViewSwitcher?: boolean }) {
   const pathname = usePathname()
 
   return (
@@ -69,6 +70,11 @@ export default function AdminSidebar() {
 
       {/* Bottom */}
       <div className="p-4 border-t border-slate-700">
+        {showViewSwitcher ? (
+          <div className="mb-4">
+            <SuperAdminViewSwitcher compact />
+          </div>
+        ) : null}
         <button
           onClick={() => signOut({ callbackUrl: '/login' })}
           className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"

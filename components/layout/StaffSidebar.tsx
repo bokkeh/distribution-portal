@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 import { LayoutDashboard, ShoppingCart, Building2, Package, LogOut, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { signOut } from 'next-auth/react'
+import { SuperAdminViewSwitcher } from './SuperAdminViewSwitcher'
 
 const navItems = [
   { href: '/staff/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -14,7 +15,7 @@ const navItems = [
   { href: '/staff/inventory', label: 'Inventory', icon: Package },
 ]
 
-export default function StaffSidebar() {
+export default function StaffSidebar({ showViewSwitcher = false }: { showViewSwitcher?: boolean }) {
   const pathname = usePathname()
 
   return (
@@ -51,6 +52,11 @@ export default function StaffSidebar() {
         })}
       </nav>
       <div className="p-4 border-t border-slate-700">
+        {showViewSwitcher ? (
+          <div className="mb-4">
+            <SuperAdminViewSwitcher compact />
+          </div>
+        ) : null}
         <button onClick={() => signOut({ callbackUrl: '/login' })}
           className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:bg-slate-800 hover:text-white transition-colors">
           <LogOut className="w-4 h-4" />Sign Out

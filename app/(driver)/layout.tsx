@@ -1,9 +1,11 @@
 import { requireRole } from '@/lib/auth/session'
 import Link from 'next/link'
 import { Truck, Map, LogOut } from 'lucide-react'
+import { SuperAdminViewSwitcher } from '@/components/layout/SuperAdminViewSwitcher'
 
 export default async function DriverLayout({ children }: { children: React.ReactNode }) {
-  await requireRole('driver', 'admin')
+  const session = await requireRole('driver', 'admin')
+  const isSuperAdmin = session.user.email?.toLowerCase() === 'alex@ahawc.com'
   return (
     <div className="min-h-screen bg-slate-50">
       <nav className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between">
@@ -28,6 +30,11 @@ export default async function DriverLayout({ children }: { children: React.React
         </div>
       </nav>
       <main className="max-w-2xl mx-auto py-8 px-4">{children}</main>
+      {isSuperAdmin ? (
+        <div className="fixed bottom-4 left-4 z-40">
+          <SuperAdminViewSwitcher />
+        </div>
+      ) : null}
     </div>
   )
 }

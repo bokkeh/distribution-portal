@@ -14,6 +14,7 @@ export async function requireAuth() {
 export async function requireRole(...roles: string[]) {
   const session = await auth()
   if (!session) redirect('/login')
+  if (session.user.role === 'admin') return session
   if (!roles.includes(session.user.role as string)) redirect('/unauthorized')
   return session
 }
