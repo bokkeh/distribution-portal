@@ -29,12 +29,14 @@ export async function createUser(formData: FormData) {
       await db.insert(customerAccounts).values({
         userId: user.id,
         companyName,
+        contactName: formData.get('contactName') as string || null,
         address: formData.get('address') as string || null,
         city: formData.get('city') as string || null,
         state: formData.get('state') as string || null,
         zip: formData.get('zip') as string || null,
         phone: phone || null,
         email,
+        dcAbraNumber: formData.get('dcAbraNumber') as string || null,
         creditLimit: formData.get('creditLimit') as string || '0',
         paymentTerms: formData.get('paymentTerms') as string || 'NET30',
       })

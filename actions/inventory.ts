@@ -18,6 +18,8 @@ export async function createProduct(formData: FormData) {
     brand: formData.get('brand') as string || null,
     price: formData.get('price') as string,
     samplePrice: formData.get('samplePrice') as string || '0',
+    bottlePrice: formData.get('bottlePrice') as string || '0',
+    bottlesPerCase: parseInt(formData.get('bottlesPerCase') as string) || 12,
     unit: 'case',
     active: true,
   }).returning()

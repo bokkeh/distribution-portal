@@ -80,11 +80,13 @@ export async function importHubSpotCompany(hubspotCompanyId: string) {
 
   await db.insert(customerAccounts).values({
     companyName: company.name,
+    contactName: null,
     address: company.address,
     city: company.city,
     state: company.state,
     zip: company.zip,
     phone: company.phone,
+    dcAbraNumber: null,
     hubspotCompanyId: company.id,
     creditLimit: '0',
     balance: '0',
@@ -136,11 +138,13 @@ export async function updateCustomerAccount(formData: FormData) {
   const id = formData.get('id') as string
   await db.update(customerAccounts).set({
     companyName: formData.get('companyName') as string,
+    contactName: formData.get('contactName') as string || null,
     address: formData.get('address') as string || null,
     city: formData.get('city') as string || null,
     state: formData.get('state') as string || null,
     zip: formData.get('zip') as string || null,
     phone: formData.get('phone') as string || null,
+    dcAbraNumber: formData.get('dcAbraNumber') as string || null,
     creditLimit: formData.get('creditLimit') as string,
     paymentTerms: formData.get('paymentTerms') as string,
   }).where(eq(customerAccounts.id, id))

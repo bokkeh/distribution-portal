@@ -25,7 +25,7 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
 
   const items = await db
     .select({
-      id: orderItems.id, quantity: orderItems.quantity, unitPrice: orderItems.unitPrice, total: orderItems.total,
+      id: orderItems.id, quantity: orderItems.quantity, unit: orderItems.unit, unitPrice: orderItems.unitPrice, total: orderItems.total,
       productName: products.name, productSku: products.sku,
     })
     .from(orderItems)
@@ -71,7 +71,7 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
                       <p className="text-sm font-medium">{item.productName}</p>
                       <p className="text-xs text-muted-foreground">{item.productSku}</p>
                     </td>
-                    <td className="px-4 py-3 text-sm text-right">{item.quantity}</td>
+                    <td className="px-4 py-3 text-sm text-right">{item.quantity} {item.unit}{item.quantity === '1' ? '' : 's'}</td>
                     <td className="px-4 py-3 text-sm text-right">{formatCurrency(item.unitPrice)}</td>
                     <td className="px-4 py-3 text-sm font-medium text-right">{formatCurrency(item.total)}</td>
                   </tr>

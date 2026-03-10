@@ -54,6 +54,10 @@ export default async function AccountDetailPage({ params }: { params: { accountI
               </div>
             )}
             {account.email && <div className="flex gap-2"><Mail className="w-4 h-4 text-muted-foreground" /><span>{account.email}</span></div>}
+            {account.contactName && <div className="flex justify-between"><span className="text-muted-foreground">Person of Contact</span><span>{account.contactName}</span></div>}
+            {account.state === 'DC' && account.dcAbraNumber && (
+              <div className="flex justify-between"><span className="text-muted-foreground">DC ABRA Number</span><span>{account.dcAbraNumber}</span></div>
+            )}
             <div className="pt-3 border-t space-y-2">
               <div className="flex justify-between"><span className="text-muted-foreground">Payment Terms</span><Badge variant="secondary">{account.paymentTerms}</Badge></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Credit Limit</span><span className="font-medium">{formatCurrency(account.creditLimit ?? '0')}</span></div>

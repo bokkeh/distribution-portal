@@ -6,6 +6,7 @@ export const inventory = pgTable('inventory', {
   productId: uuid('product_id').notNull().unique().references(() => products.id, { onDelete: 'cascade' }),
   quantityPaid: integer('quantity_paid').notNull().default(0),
   quantitySample: integer('quantity_sample').notNull().default(0),
+  looseBottlePaid: integer('loose_bottle_paid').notNull().default(0),
   reorderLevel: integer('reorder_level').notNull().default(10),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })

@@ -58,6 +58,18 @@ export default async function CustomerProfilePage() {
               <div><p className="text-muted-foreground">Company</p><p className="font-medium">{account.companyName}</p></div>
               <div><p className="text-muted-foreground">Payment Terms</p><Badge variant="secondary">{account.paymentTerms}</Badge></div>
             </div>
+            {account.contactName && (
+              <div>
+                <p className="text-muted-foreground">Person of Contact</p>
+                <p className="font-medium">{account.contactName}</p>
+              </div>
+            )}
+            {account.state === 'DC' && account.dcAbraNumber && (
+              <div>
+                <p className="text-muted-foreground">DC ABRA Number</p>
+                <p className="font-medium">{account.dcAbraNumber}</p>
+              </div>
+            )}
             {account.address && (
               <div>
                 <p className="text-muted-foreground">Address</p>

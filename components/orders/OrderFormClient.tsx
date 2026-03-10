@@ -1,31 +1,34 @@
 'use client'
 
 import { useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Minus, Plus, Trash2 } from 'lucide-react'
+import { createOrder } from '@/actions/orders'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import { formatCurrency } from '@/lib/utils'
-import { createOrder } from '@/actions/orders'
-import { Plus, Minus, Trash2 } from 'lucide-react'
 
 interface Product {
   id: string
   sku: string
   name: string
   price: string
-  samplePrice: string
+  bottlePrice: string
   brand: string | null
   category: string | null
+  bottlesPerCase: number
   quantityPaid: number | null
-  quantitySample: number | null
+  looseBottlePaid: number | null
 }
 
 interface Customer {
   id: string
   companyName: string
 }
+
+type PurchaseUnit = 'case' | 'bottle'
 
 interface LineItem {
   productId: string
@@ -34,68 +37,108 @@ interface LineItem {
   unitPrice: number
 }
 
+function getBottlePrice(product: Product) {
+  const explicitBottlePrice = parseFloat(product.bottlePrice || '0')
+  if (explicitBottlePrice > 0) return explicitBottlePrice
+  const bottlesPerCase = product.bottlesPerCase || 12
+  return parseFloat(product.price) / bottlesPerCase
+}
+
+function getBottleStock(product: Product) {
+  const bottlesPerCase = product.bottlesPerCase || 12
+  return (product.quantityPaid ?? 0) * bottlesPerCase - (product.looseBottlePaid ?? 0)
+}
+
 export default function OrderFormClient({ customers, products }: { customers: Customer[]; products: Product[] }) {
   const [customerId, setCustomerId] = useState('')
-  const [orderType, setOrderType] = useState<'paid' | 'sample'>('paid')
+  const [purchaseUnit, setPurchaseUnit] = useState<PurchaseUnit>('case')
   const [lineItems, setLineItems] = useState<LineItem[]>([])
   const [notes, setNotes] = useState('')
   const [search, setSearch] = useState('')
 
-  const filteredProducts = products.filter(p =>
-    p.name.toLowerCase().includes(search.toLowerCase()) ||
-    p.sku.toLowerCase().includes(search.toLowerCase()) ||
-    (p.brand ?? '').toLowerCase().includes(search.toLowerCase())
+  const filteredProducts = products.filter(product =>
+    product.name.toLowerCase().includes(search.toLowerCase()) ||
+    product.sku.toLowerCase().includes(search.toLowerCase()) ||
+    (product.brand ?? '').toLowerCase().includes(search.toLowerCase())
   )
 
   const addProduct = (product: Product) => {
-    const price = parseFloat(orderType === 'sample' ? product.samplePrice : product.price)
+    const price = purchaseUnit === 'bottle' ? getBottlePrice(product) : parseFloat(product.price)
     setLineItems(prev => {
-      const existing = prev.find(li => li.productId === product.id)
-      if (existing) return prev.map(li => li.productId === product.id ? { ...li, quantity: li.quantity + 1 } : li)
+      const existing = prev.find(item => item.productId === product.id)
+      if (existing) {
+        return prev.map(item => item.productId === product.id ? { ...item, quantity: item.quantity + 1 } : item)
+      }
       return [...prev, { productId: product.id, name: product.name, quantity: 1, unitPrice: price }]
     })
   }
 
-  const updateQuantity = (productId: string, qty: number) => {
-    if (qty <= 0) setLineItems(prev => prev.filter(li => li.productId !== productId))
-    else setLineItems(prev => prev.map(li => li.productId === productId ? { ...li, quantity: qty } : li))
+  const updateQuantity = (productId: string, quantity: number) => {
+    if (quantity <= 0) {
+      setLineItems(prev => prev.filter(item => item.productId !== productId))
+      return
+    }
+
+    setLineItems(prev => prev.map(item => item.productId === productId ? { ...item, quantity } : item))
   }
 
-  const total = lineItems.reduce((sum, li) => sum + li.unitPrice * li.quantity, 0)
+  const total = lineItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0)
+
+  function updatePurchaseUnit(nextUnit: PurchaseUnit) {
+    setPurchaseUnit(nextUnit)
+    setLineItems(prev => prev.map(item => {
+      const product = products.find(candidate => candidate.id === item.productId)
+      if (!product) return item
+
+      return {
+        ...item,
+        unitPrice: nextUnit === 'bottle' ? getBottlePrice(product) : parseFloat(product.price),
+      }
+    }))
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const formData = new FormData()
     formData.append('customerId', customerId)
-    formData.append('orderType', orderType)
+    formData.append('purchaseUnit', purchaseUnit)
     formData.append('notes', notes)
-    formData.append('items', JSON.stringify(lineItems.map(li => ({ productId: li.productId, quantity: li.quantity }))))
+    formData.append('items', JSON.stringify(lineItems.map(item => ({ productId: item.productId, quantity: item.quantity }))))
     await createOrder(formData)
   }
 
   return (
     <form onSubmit={handleSubmit}>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left: Settings */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-4">
           <Card>
             <CardHeader><CardTitle className="text-base">Order Settings</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label>Customer</Label>
-                <select value={customerId} onChange={e => setCustomerId(e.target.value)} required
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                <select
+                  value={customerId}
+                  onChange={e => setCustomerId(e.target.value)}
+                  required
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
                   <option value="">Select customer...</option>
-                  {customers.map(c => <option key={c.id} value={c.id}>{c.companyName}</option>)}
+                  {customers.map(customer => <option key={customer.id} value={customer.id}>{customer.companyName}</option>)}
                 </select>
               </div>
+
               <div className="space-y-2">
-                <Label>Order Type</Label>
+                <Label>Purchase Unit</Label>
                 <div className="flex gap-2">
-                  <Button type="button" size="sm" variant={orderType === 'paid' ? 'default' : 'outline'} onClick={() => setOrderType('paid')}>Paid Cases</Button>
-                  <Button type="button" size="sm" variant={orderType === 'sample' ? 'default' : 'outline'} onClick={() => setOrderType('sample')}>Sample Cases</Button>
+                  <Button type="button" size="sm" variant={purchaseUnit === 'case' ? 'default' : 'outline'} onClick={() => updatePurchaseUnit('case')}>
+                    Cases
+                  </Button>
+                  <Button type="button" size="sm" variant={purchaseUnit === 'bottle' ? 'default' : 'outline'} onClick={() => updatePurchaseUnit('bottle')}>
+                    Bottles
+                  </Button>
                 </div>
               </div>
+
               <div className="space-y-2">
                 <Label>Notes</Label>
                 <Input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Delivery instructions..." />
@@ -103,60 +146,78 @@ export default function OrderFormClient({ customers, products }: { customers: Cu
             </CardContent>
           </Card>
 
-          {/* Order Summary */}
           <Card>
             <CardHeader><CardTitle className="text-base">Order Summary</CardTitle></CardHeader>
             <CardContent className="space-y-2">
               {lineItems.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No items added</p>
-              ) : lineItems.map(li => (
-                <div key={li.productId} className="flex items-center gap-2">
+              ) : lineItems.map(item => (
+                <div key={item.productId} className="flex items-center gap-2">
                   <div className="flex-1">
-                    <p className="text-xs font-medium">{li.name}</p>
-                    <p className="text-xs text-muted-foreground">{formatCurrency(li.unitPrice)} × {li.quantity}</p>
+                    <p className="text-xs font-medium">{item.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatCurrency(item.unitPrice)} x {item.quantity} {purchaseUnit}{item.quantity === 1 ? '' : 's'}
+                    </p>
                   </div>
                   <div className="flex items-center gap-1">
-                    <button type="button" onClick={() => updateQuantity(li.productId, li.quantity - 1)} className="w-5 h-5 rounded border flex items-center justify-center hover:bg-slate-100"><Minus className="w-3 h-3" /></button>
-                    <span className="text-xs w-5 text-center">{li.quantity}</span>
-                    <button type="button" onClick={() => updateQuantity(li.productId, li.quantity + 1)} className="w-5 h-5 rounded border flex items-center justify-center hover:bg-slate-100"><Plus className="w-3 h-3" /></button>
-                    <button type="button" onClick={() => updateQuantity(li.productId, 0)} className="w-5 h-5 flex items-center justify-center hover:text-red-500"><Trash2 className="w-3 h-3" /></button>
+                    <button type="button" onClick={() => updateQuantity(item.productId, item.quantity - 1)} className="flex h-5 w-5 items-center justify-center rounded border hover:bg-slate-100">
+                      <Minus className="h-3 w-3" />
+                    </button>
+                    <span className="w-5 text-center text-xs">{item.quantity}</span>
+                    <button type="button" onClick={() => updateQuantity(item.productId, item.quantity + 1)} className="flex h-5 w-5 items-center justify-center rounded border hover:bg-slate-100">
+                      <Plus className="h-3 w-3" />
+                    </button>
+                    <button type="button" onClick={() => updateQuantity(item.productId, 0)} className="flex h-5 w-5 items-center justify-center hover:text-red-500">
+                      <Trash2 className="h-3 w-3" />
+                    </button>
                   </div>
                 </div>
               ))}
-              <div className="border-t pt-2 flex justify-between font-bold">
-                <span>Total</span><span>{formatCurrency(total)}</span>
+
+              <div className="flex justify-between border-t pt-2 font-bold">
+                <span>Total</span>
+                <span>{formatCurrency(total)}</span>
               </div>
-              <Button type="submit" className="w-full mt-2" disabled={lineItems.length === 0 || !customerId}>
+
+              <Button type="submit" className="mt-2 w-full" disabled={lineItems.length === 0 || !customerId}>
                 Place Order
               </Button>
             </CardContent>
           </Card>
         </div>
 
-        {/* Right: Product Catalog */}
-        <div className="lg:col-span-2 space-y-4">
+        <div className="space-y-4 lg:col-span-2">
           <Input placeholder="Search products..." value={search} onChange={e => setSearch(e.target.value)} />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {filteredProducts.map(product => {
-              const price = parseFloat(orderType === 'sample' ? product.samplePrice : product.price)
-              const stock = orderType === 'sample' ? product.quantitySample : product.quantityPaid
-              const inOrder = lineItems.find(li => li.productId === product.id)
+              const price = purchaseUnit === 'bottle' ? getBottlePrice(product) : parseFloat(product.price)
+              const stock = purchaseUnit === 'bottle' ? getBottleStock(product) : (product.quantityPaid ?? 0)
+              const inOrder = lineItems.find(item => item.productId === product.id)
+
               return (
-                <Card key={product.id} className="cursor-pointer hover:shadow-md transition-shadow"
-                  onClick={() => addProduct(product)}>
+                <Card
+                  key={product.id}
+                  className="cursor-pointer transition-shadow hover:shadow-md"
+                  onClick={() => addProduct(product)}
+                >
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <p className="font-medium text-sm">{product.name}</p>
-                        {product.brand && <p className="text-xs text-muted-foreground">{product.brand}</p>}
-                        <p className="text-xs text-muted-foreground mt-0.5">SKU: {product.sku}</p>
+                        <p className="text-sm font-medium">{product.name}</p>
+                        {product.brand ? <p className="text-xs text-muted-foreground">{product.brand}</p> : null}
+                        <p className="mt-0.5 text-xs text-muted-foreground">SKU: {product.sku}</p>
+                        {purchaseUnit === 'bottle' ? (
+                          <p className="mt-1 text-xs text-muted-foreground">{product.bottlesPerCase || 12} bottles per case</p>
+                        ) : null}
                       </div>
-                      {inOrder && <Badge variant="info">{inOrder.quantity}</Badge>}
+                      {inOrder ? <Badge variant="info">{inOrder.quantity}</Badge> : null}
                     </div>
-                    <div className="flex items-center justify-between mt-3">
-                      <span className="font-semibold text-sm">{formatCurrency(price)}</span>
+
+                    <div className="mt-3 flex items-center justify-between">
+                      <span className="text-sm font-semibold">{formatCurrency(price)} / {purchaseUnit}</span>
                       <span className={`text-xs ${(stock ?? 0) <= 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
-                        {stock ?? 0} in stock
+                        {stock ?? 0} {purchaseUnit}{stock === 1 ? '' : 's'} in stock
                       </span>
                     </div>
                   </CardContent>

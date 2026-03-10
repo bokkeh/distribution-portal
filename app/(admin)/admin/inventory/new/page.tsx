@@ -51,6 +51,16 @@ export default function NewProductPage() {
                 <Input type="number" name="price" id="price" step="0.01" min="0" required placeholder="120.00" />
               </div>
               <div className="space-y-2">
+                <Label htmlFor="bottlePrice">Price per Bottle ($)</Label>
+                <Input type="number" name="bottlePrice" id="bottlePrice" step="0.01" min="0" defaultValue="0" placeholder="10.00" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="bottlesPerCase">Bottles per Case</Label>
+                <Input type="number" name="bottlesPerCase" id="bottlesPerCase" min="1" defaultValue="12" />
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="samplePrice">Sample Price ($)</Label>
                 <Input type="number" name="samplePrice" id="samplePrice" step="0.01" min="0" defaultValue="0" placeholder="0.00" />
               </div>

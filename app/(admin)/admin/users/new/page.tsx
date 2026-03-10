@@ -60,6 +60,10 @@ export default function NewUserPage() {
                 <Label htmlFor="companyName">Company Name</Label>
                 <Input name="companyName" id="companyName" placeholder="ABC Liquors LLC" />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="contactName">Person of Contact</Label>
+                <Input name="contactName" id="contactName" placeholder="Jane Smith" />
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="address">Address</Label>
@@ -80,19 +84,25 @@ export default function NewUserPage() {
                   <Input name="zip" id="zip" placeholder="77001" />
                 </div>
                 <div className="space-y-2">
+                  <Label htmlFor="dcAbraNumber">DC ABRA Number</Label>
+                  <Input name="dcAbraNumber" id="dcAbraNumber" placeholder="Required for DC stores" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
                   <Label htmlFor="creditLimit">Credit Limit ($)</Label>
                   <Input name="creditLimit" id="creditLimit" type="number" step="0.01" min="0" placeholder="5000" />
                 </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="paymentTerms">Payment Terms</Label>
-                <select name="paymentTerms" id="paymentTerms"
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
-                  <option value="NET30">NET30</option>
-                  <option value="NET15">NET15</option>
-                  <option value="COD">COD</option>
-                  <option value="PREPAID">Prepaid</option>
-                </select>
+                <div className="space-y-2">
+                  <Label htmlFor="paymentTerms">Payment Terms</Label>
+                  <select name="paymentTerms" id="paymentTerms"
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                    <option value="NET30">NET30</option>
+                    <option value="NET15">NET15</option>
+                    <option value="COD">COD</option>
+                    <option value="PREPAID">Prepaid</option>
+                  </select>
+                </div>
               </div>
             </div>
 
