@@ -28,13 +28,7 @@ interface Product {
 export default function CustomerProductCatalog({ products, categories }: { products: Product[]; categories: string[] }) {
   const [search, setSearch] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
-  const [orderType, setOrderType] = useState<'paid' | 'sample'>('paid')
-  const { items, addItem, setOrderType: setCartType, itemCount } = useCart()
-
-  const handleOrderTypeChange = (type: 'paid' | 'sample') => {
-    setOrderType(type)
-    setCartType(type)
-  }
+  const { items, addItem, itemCount } = useCart()
 
   const filtered = products.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -47,15 +41,23 @@ export default function CustomerProductCatalog({ products, categories }: { produ
 
   return (
     <div className="space-y-4">
-      {/* Controls */}
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-        <div className="flex gap-2 flex-wrap">
-          <Button size="sm" variant={orderType === 'paid' ? 'default' : 'outline'} onClick={() => handleOrderTypeChange('paid')}>
-            Paid Cases
-          </Button>
-          <Button size="sm" variant={orderType === 'sample' ? 'default' : 'outline'} onClick={() => handleOrderTypeChange('sample')}>
-            Sample Cases
-          </Button>
+        <div className="flex gap-3">
+          <Input className="max-w-xs" placeholder="Search products..." value={search} onChange={e => setSearch(e.target.value)} />
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => setSelectedCategory('all')}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${selectedCategory === 'all' ? 'bg-slate-900 text-white' : 'bg-white border hover:bg-slate-50'}`}>
+              All
+            </button>
+            {categories.map(cat => (
+              <button key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${selectedCategory === cat ? 'bg-slate-900 text-white' : 'bg-white border hover:bg-slate-50'}`}>
+                {cat}
+              </button>
+            ))}
+          </div>
         </div>
         {itemCount() > 0 && (
           <Link href="/customer/cart">
@@ -70,29 +72,9 @@ export default function CustomerProductCatalog({ products, categories }: { produ
         )}
       </div>
 
-      <div className="flex gap-3">
-        <Input className="max-w-xs" placeholder="Search products..." value={search} onChange={e => setSearch(e.target.value)} />
-        <div className="flex gap-2 flex-wrap">
-          <button
-            onClick={() => setSelectedCategory('all')}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${selectedCategory === 'all' ? 'bg-slate-900 text-white' : 'bg-white border hover:bg-slate-50'}`}>
-            All
-          </button>
-          {categories.map(cat => (
-            <button key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${selectedCategory === cat ? 'bg-slate-900 text-white' : 'bg-white border hover:bg-slate-50'}`}>
-              {cat}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Product Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {filtered.map(product => {
-          const price = orderType === 'sample' ? product.samplePrice : product.price
-          const stock = orderType === 'sample' ? product.quantitySample : product.quantityPaid
+          const stock = product.quantityPaid
           const inCart = isInCart(product.id)
           const outOfStock = (stock ?? 0) <= 0
 
@@ -117,7 +99,7 @@ export default function CustomerProductCatalog({ products, categories }: { produ
                   {product.category && <Badge variant="secondary" className="text-xs mt-1">{product.category}</Badge>}
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-blue-600">{formatCurrency(price)}</span>
+                  <span className="font-bold text-blue-600">{formatCurrency(product.price)}</span>
                   <span className="text-xs text-muted-foreground">{stock ?? 0} avail.</span>
                 </div>
                 <Button
@@ -132,7 +114,7 @@ export default function CustomerProductCatalog({ products, categories }: { produ
                     price: product.price,
                     samplePrice: product.samplePrice,
                     imageUrl: product.imageUrl,
-                    orderType,
+                    orderType: 'paid',
                   })}
                 >
                   {inCart ? <><Check className="w-4 h-4 mr-1" />Added</> : <><Plus className="w-4 h-4 mr-1" />Add to Order</>}

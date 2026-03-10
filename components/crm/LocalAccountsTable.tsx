@@ -29,9 +29,11 @@ export interface AccountRow {
 function AccountTable({
   accounts,
   onStar,
+  basePath = '/admin/crm',
 }: {
   accounts: AccountRow[]
   onStar: (id: string, val: boolean) => void
+  basePath?: string
 }) {
   const [pending, setPending] = useState<string | null>(null)
   const [, startTransition] = useTransition()
@@ -118,7 +120,7 @@ function AccountTable({
               )}
             </td>
             <td className="px-4 py-3">
-              <Link href={`/admin/crm/${account.id}`}>
+              <Link href={`${basePath}/${account.id}`}>
                 <Button variant="ghost" size="sm">View</Button>
               </Link>
             </td>
@@ -129,7 +131,13 @@ function AccountTable({
   )
 }
 
-export function LocalAccountsTable({ initialAccounts }: { initialAccounts: AccountRow[] }) {
+export function LocalAccountsTable({
+  initialAccounts,
+  basePath = '/admin/crm',
+}: {
+  initialAccounts: AccountRow[]
+  basePath?: string
+}) {
   const [accounts, setAccounts] = useState<AccountRow[]>(initialAccounts)
 
   function handleStar(id: string, val: boolean) {
@@ -147,7 +155,7 @@ export function LocalAccountsTable({ initialAccounts }: { initialAccounts: Accou
             <Star className="h-3.5 w-3.5 fill-yellow-400 stroke-yellow-500" />
             Starred Accounts ({starred.length})
           </div>
-          <AccountTable accounts={starred} onStar={handleStar} />
+          <AccountTable accounts={starred} onStar={handleStar} basePath={basePath} />
         </div>
       ) : null}
 
@@ -156,7 +164,7 @@ export function LocalAccountsTable({ initialAccounts }: { initialAccounts: Accou
           No accounts yet. Import from HubSpot or add manually.
         </div>
       ) : rest.length > 0 ? (
-        <AccountTable accounts={rest} onStar={handleStar} />
+        <AccountTable accounts={rest} onStar={handleStar} basePath={basePath} />
       ) : null}
     </div>
   )

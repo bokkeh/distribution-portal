@@ -8,7 +8,7 @@ export default auth((req) => {
   const roles = session?.user?.roles ?? (role ? [role] : [])
 
   // Public routes
-  if (pathname === '/login' || pathname === '/') {
+  if (pathname === '/login' || pathname === '/' || pathname === '/privacy') {
     if (session) {
       return NextResponse.redirect(new URL(getDashboardForRole(role), req.url))
     }
