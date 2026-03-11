@@ -1,6 +1,6 @@
 import { requireRole } from '@/lib/auth/session'
 import Link from 'next/link'
-import { Truck, Map, LogOut } from 'lucide-react'
+import { Truck, Map, LogOut, UserCircle } from 'lucide-react'
 import { SuperAdminViewSwitcher } from '@/components/layout/SuperAdminViewSwitcher'
 
 export default async function DriverLayout({ children }: { children: React.ReactNode }) {
@@ -21,6 +21,9 @@ export default async function DriverLayout({ children }: { children: React.React
           </Link>
           <Link href="/driver/map" className="flex items-center gap-2 text-sm text-slate-300 hover:text-white">
             <Map className="w-4 h-4" />Map
+          </Link>
+          <Link href="/driver/profile" className="flex items-center gap-2 text-sm text-slate-300 hover:text-white">
+            <UserCircle className="w-4 h-4" />Profile
           </Link>
           <form action="/api/auth/signout" method="post">
             <button className="flex items-center gap-2 text-sm text-slate-400 hover:text-white">

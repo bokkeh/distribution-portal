@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, FileText, BookOpen, Users, Package,
-  Truck, Map, Building2, LogOut, ChevronRight, Menu, X,
+  Truck, Map, Building2, LogOut, ChevronRight, Menu, X, UserCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { signOut } from 'next-auth/react'
@@ -21,6 +21,7 @@ const navItems = [
   { href: '/admin/users',      label: 'User Management',   icon: Users },
   { href: '/admin/deliveries', label: 'Deliveries',        icon: Truck },
   { href: '/admin/drivers',    label: 'Drivers',           icon: Map },
+  { href: '/admin/profile',   label: 'My Profile',        icon: UserCircle },
 ]
 
 function NavLinks({ pathname, onNav }: { pathname: string; onNav?: () => void }) {

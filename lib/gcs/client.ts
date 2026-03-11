@@ -15,21 +15,23 @@ function getStorage() {
   return _storage
 }
 
-export async function generateSignedUploadUrl(filename: string, contentType: string, folder: string = 'uploads'): Promise<string> {
+export async function generateSignedUploadUrl(
+  filename: string,
+  contentType: string,
+  folder: string = 'uploads'
+): Promise<{ uploadUrl: string; publicUrl: string }> {
   const storage = getStorage()
   const bucket = storage.bucket(process.env.GCS_BUCKET_NAME ?? '')
-  const file = bucket.file(`${folder}/${filename}`)
+  const filePath = `${folder}/${filename}`
+  const file = bucket.file(filePath)
 
-  const [url] = await file.generateSignedPostPolicyV4({
+  const [uploadUrl] = await file.getSignedUrl({
+    action: 'write',
     expires: Date.now() + 15 * 60 * 1000, // 15 minutes
-    conditions: [
-      ['content-length-range', 0, 10 * 1024 * 1024], // 10MB max
-      ['eq', '$Content-Type', contentType],
-    ],
-    fields: { 'Content-Type': contentType },
+    contentType,
   })
 
-  return `https://storage.googleapis.com/${process.env.GCS_BUCKET_NAME}/${folder}/${filename}`
+  return { uploadUrl, publicUrl: getPublicUrl(filePath) }
 }
 
 export async function generateSignedReadUrl(filePath: string): Promise<string> {

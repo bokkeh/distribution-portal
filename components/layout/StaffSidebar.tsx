@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, ShoppingCart, Building2, Package,
-  LogOut, ChevronRight, Menu, X,
+  LogOut, ChevronRight, Menu, X, UserCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { signOut } from 'next-auth/react'
@@ -16,7 +16,8 @@ const navItems = [
   { href: '/staff/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/staff/orders',    label: 'Orders',    icon: ShoppingCart },
   { href: '/staff/crm',       label: 'Accounts',  icon: Building2 },
-  { href: '/staff/inventory', label: 'Inventory', icon: Package },
+  { href: '/staff/inventory', label: 'Inventory',  icon: Package },
+  { href: '/staff/profile',  label: 'My Profile', icon: UserCircle },
 ]
 
 function NavLinks({ pathname, onNav }: { pathname: string; onNav?: () => void }) {

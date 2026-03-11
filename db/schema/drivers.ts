@@ -6,7 +6,10 @@ export const drivers = pgTable('drivers', {
   userId: uuid('user_id').notNull().unique().references(() => users.id, { onDelete: 'cascade' }),
   vehicleMake: text('vehicle_make'),
   vehicleModel: text('vehicle_model'),
+  vehicleYear: text('vehicle_year'),
+  vin: text('vin'),
   licensePlate: text('license_plate'),
+  vehicleImageUrl: text('vehicle_image_url'),
   phone: text('phone').notNull(),
   active: boolean('active').notNull().default(true),
 })

@@ -1,10 +1,12 @@
 'use server'
 
 import { db } from '@/db'
-import { users, customerAccounts } from '@/db/schema'
+import { users, customerAccounts, drivers } from '@/db/schema'
 import { requireAuth } from '@/lib/auth/session'
 import { eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
+import { generateSignedUploadUrl } from '@/lib/gcs/client'
+import { v4 as uuidv4 } from 'uuid'
 
 export async function updateProfile(
   _prev: { error?: string } | null,
@@ -49,5 +51,76 @@ export async function updateProfile(
     return {}
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+export async function updateSimpleProfile(
+  _prev: { error?: string } | null,
+  formData: FormData
+): Promise<{ error?: string }> {
+  try {
+    const session = await requireAuth()
+    const userId = formData.get('userId') as string
+    if (session.user.id !== userId) throw new Error('Unauthorized')
+
+    await db.update(users).set({
+      name: formData.get('name') as string,
+      email: formData.get('email') as string,
+      phone: (formData.get('phone') as string) || null,
+    }).where(eq(users.id, userId))
+
+    revalidatePath('/admin/profile')
+    revalidatePath('/staff/profile')
+    return {}
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+export async function updateDriverProfile(
+  _prev: { error?: string } | null,
+  formData: FormData
+): Promise<{ error?: string }> {
+  try {
+    const session = await requireAuth()
+    const userId = formData.get('userId') as string
+    if (session.user.id !== userId) throw new Error('Unauthorized')
+
+    await db.update(users).set({
+      name: formData.get('name') as string,
+      email: formData.get('email') as string,
+      phone: (formData.get('phone') as string) || null,
+    }).where(eq(users.id, userId))
+
+    const driverId = formData.get('driverId') as string | null
+    if (driverId) {
+      await db.update(drivers).set({
+        vehicleMake: (formData.get('vehicleMake') as string) || null,
+        vehicleModel: (formData.get('vehicleModel') as string) || null,
+        vehicleYear: (formData.get('vehicleYear') as string) || null,
+        vin: (formData.get('vin') as string) || null,
+        licensePlate: (formData.get('licensePlate') as string) || null,
+        vehicleImageUrl: (formData.get('vehicleImageUrl') as string) || null,
+        phone: (formData.get('phone') as string) || '',
+      }).where(eq(drivers.id, driverId))
+    }
+
+    revalidatePath('/driver/profile')
+    return {}
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+export async function getVehiclePhotoUploadUrl(
+  contentType: string
+): Promise<{ uploadUrl: string; publicUrl: string; error?: string }> {
+  try {
+    await requireAuth()
+    const ext = contentType === 'image/png' ? 'png' : contentType === 'image/webp' ? 'webp' : 'jpg'
+    const filename = `vehicle-${uuidv4()}.${ext}`
+    return await generateSignedUploadUrl(filename, contentType, 'vehicles')
+  } catch (err) {
+    return { uploadUrl: '', publicUrl: '', error: err instanceof Error ? err.message : String(err) }
   }
 }
