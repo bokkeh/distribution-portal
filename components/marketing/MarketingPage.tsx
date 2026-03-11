@@ -277,7 +277,7 @@ export function MarketingPage() {
           </div>
         </div>
         <div className="flex justify-center">
-          <Image src="/brand/logo.png" alt="AHAWC" width={260} height={260} className="object-contain" />
+          <Image src="/brand/logo.png" alt="AHAWC" width={160} height={160} className="object-contain" />
         </div>
       </section>
 
