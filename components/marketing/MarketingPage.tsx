@@ -2,8 +2,9 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { ShoppingCart, Star, ChevronRight, Phone, Mail, MapPin } from 'lucide-react'
-import { useState } from 'react'
+import { ShoppingCart, Star, ChevronRight, Mail, MapPin, X } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { LoginForm } from '@/components/auth/LoginForm'
 
 const categories = [
   'Whiskey', 'Vodka', 'Gin', 'Cognac', 'Rum',
@@ -11,22 +12,67 @@ const categories = [
 ]
 
 const featuredProducts = [
-  { name: 'Wisher Vodka', category: 'Vodka', size: '750ml', description: 'Gluten-free, grain-free beet vodka. Distilled 9 times.' },
+  { name: 'Wisher Vodka',    category: 'Vodka',   size: '750ml', description: 'Gluten-free, grain-free beet vodka. Distilled 9 times.' },
   { name: 'Reserve Bourbon', category: 'Whiskey', size: '750ml', description: 'Small-batch Kentucky straight bourbon.' },
-  { name: 'London Dry Gin', category: 'Gin', size: '750ml', description: 'Classic botanical gin, perfect for cocktails.' },
-  { name: 'Dark Reserve Rum', category: 'Rum', size: '750ml', description: 'Aged Caribbean rum with rich caramel notes.' },
+  { name: 'London Dry Gin',  category: 'Gin',     size: '750ml', description: 'Classic botanical gin, perfect for cocktails.' },
+  { name: 'Dark Reserve Rum',category: 'Rum',     size: '750ml', description: 'Aged Caribbean rum with rich caramel notes.' },
 ]
+
+function LoginModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [open, onClose])
+
+  // Lock body scroll
+  useEffect(() => {
+    document.body.style.overflow = open ? 'hidden' : ''
+    return () => { document.body.style.overflow = '' }
+  }, [open])
+
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      {/* Panel */}
+      <div className="relative z-10 w-full max-w-sm bg-white rounded-2xl shadow-2xl p-6 animate-in fade-in zoom-in-95 duration-200">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+          aria-label="Close"
+        >
+          <X className="w-4 h-4" />
+        </button>
+        <LoginForm />
+      </div>
+    </div>
+  )
+}
 
 export function MarketingPage() {
   const [qty, setQty] = useState(1)
+  const [loginOpen, setLoginOpen] = useState(false)
+
+  function openLogin() { setLoginOpen(true) }
+  function closeLogin() { setLoginOpen(false) }
 
   return (
     <div className="min-h-screen bg-white font-sans">
+      <LoginModal open={loginOpen} onClose={closeLogin} />
 
       {/* ── Nav ─────────────────────────────────────────── */}
-      <header className="sticky top-0 z-50 bg-[#0f2d5a] shadow-lg">
+      <header className="sticky top-0 z-40 bg-[#0f2d5a] shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
-          <Link href="/" className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-3 shrink-0">
             <Image
               src="/brand/logo.png"
               alt="AHAWC"
@@ -38,7 +84,7 @@ export function MarketingPage() {
               <p className="font-bold text-white text-sm leading-none">AHAWC</p>
               <p className="text-[10px] text-blue-300 leading-none mt-0.5 uppercase tracking-wide">Distribution</p>
             </div>
-          </Link>
+          </div>
 
           <nav className="hidden md:flex items-center gap-6">
             {['Brands', 'Products', 'About Us', 'Contact'].map(item => (
@@ -49,14 +95,16 @@ export function MarketingPage() {
             ))}
           </nav>
 
-          <Link href="/login"
-            className="bg-white text-[#0f2d5a] text-sm font-semibold px-4 py-2 rounded-lg hover:bg-blue-50 transition-colors">
+          <button
+            onClick={openLogin}
+            className="bg-white text-[#0f2d5a] text-sm font-semibold px-4 py-2 rounded-lg hover:bg-blue-50 transition-colors"
+          >
             Sign In
-          </Link>
+          </button>
         </div>
       </header>
 
-      {/* ── Hero banner ─────────────────────────────────── */}
+      {/* ── Hero ────────────────────────────────────────── */}
       <section className="bg-gradient-to-r from-[#0f2d5a] to-[#1a4a8a] text-white py-10 px-4">
         <div className="max-w-7xl mx-auto">
           <p className="text-blue-300 text-xs uppercase tracking-widest font-semibold mb-1">Licensed Distributor · Washington DC Metro Area</p>
@@ -67,10 +115,14 @@ export function MarketingPage() {
             AHAWC connects licensed retailers with the finest spirits, wines, and specialty beverages. Wholesale pricing, reliable delivery, exceptional service.
           </p>
           <div className="mt-5 flex flex-wrap gap-3">
-            <Link href="/login" className="bg-amber-400 hover:bg-amber-300 text-slate-900 font-semibold px-5 py-2.5 rounded-lg text-sm transition-colors">
+            <button
+              onClick={openLogin}
+              className="bg-amber-400 hover:bg-amber-300 text-slate-900 font-semibold px-5 py-2.5 rounded-lg text-sm transition-colors"
+            >
               Sign In to Order
-            </Link>
-            <a href="#contact" className="border border-blue-400 text-blue-200 hover:text-white hover:border-white font-medium px-5 py-2.5 rounded-lg text-sm transition-colors">
+            </button>
+            <a href="#contact"
+              className="border border-blue-400 text-blue-200 hover:text-white hover:border-white font-medium px-5 py-2.5 rounded-lg text-sm transition-colors">
               Request an Account
             </a>
           </div>
@@ -81,9 +133,9 @@ export function MarketingPage() {
       <section id="products" className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
         {/* Breadcrumb */}
         <nav className="flex items-center gap-1.5 text-xs text-slate-500 mb-6">
-          <a href="#" className="hover:text-[#0f2d5a] text-[#0f2d5a] font-medium">Home</a>
+          <span className="text-[#0f2d5a] font-medium">Home</span>
           <ChevronRight className="w-3 h-3" />
-          <a href="#" className="hover:text-[#0f2d5a] text-[#0f2d5a] font-medium">Vodka</a>
+          <span className="text-[#0f2d5a] font-medium">Vodka</span>
           <ChevronRight className="w-3 h-3" />
           <span>Wisher Vodka</span>
         </nav>
@@ -92,22 +144,26 @@ export function MarketingPage() {
 
           {/* Product image */}
           <div className="lg:w-72 shrink-0">
-            <div className="border rounded-xl overflow-hidden bg-slate-50 flex items-center justify-center aspect-[3/4] p-6">
-              {/* Bottle placeholder — replace with actual product image */}
-              <div className="flex flex-col items-center gap-3 select-none">
-                <div className="w-20 h-48 rounded-full bg-gradient-to-b from-slate-200 via-slate-100 to-white border border-slate-300 flex items-center justify-center relative shadow-lg">
-                  <div className="w-12 h-28 rounded-full bg-gradient-to-b from-blue-700 to-blue-900 absolute top-8 flex items-center justify-center">
-                    <span className="text-white font-black text-xs text-center leading-tight px-1">WISHER</span>
-                  </div>
-                  <div className="w-8 h-4 bg-amber-400 rounded-sm absolute top-3" />
-                </div>
-                <span className="text-xs text-slate-400">Wisher Vodka 750ml</span>
-              </div>
+            <div className="border rounded-xl overflow-hidden bg-slate-50 flex items-center justify-center aspect-[3/4] p-4">
+              <Image
+                src="/products/wisher-vodka.png.jpg"
+                alt="Wisher Vodka 750ml"
+                width={280}
+                height={380}
+                className="object-contain h-full w-full"
+                priority
+              />
             </div>
-            {/* Thumbnail strip */}
+            {/* Thumbnail */}
             <div className="flex gap-2 mt-2">
-              <div className="w-14 h-16 border-2 border-[#0f2d5a] rounded-lg bg-slate-50 flex items-center justify-center cursor-pointer">
-                <div className="w-6 h-12 rounded-full bg-gradient-to-b from-blue-700 to-blue-900" />
+              <div className="w-14 h-16 border-2 border-[#0f2d5a] rounded-lg overflow-hidden bg-slate-50 cursor-pointer">
+                <Image
+                  src="/products/wisher-vodka.png.jpg"
+                  alt="Wisher Vodka thumbnail"
+                  width={56}
+                  height={64}
+                  className="object-contain w-full h-full p-1"
+                />
               </div>
             </div>
           </div>
@@ -122,8 +178,13 @@ export function MarketingPage() {
               <span className="text-xs text-slate-500 ml-1">4.0 · 12 reviews</span>
             </div>
 
-            <p className="text-3xl font-bold text-[#0f2d5a] mt-4">$44.99 <span className="text-sm font-normal text-slate-500">/ bottle</span></p>
-            <p className="text-xs text-slate-500 mt-0.5">Wholesale pricing available — <Link href="/login" className="text-[#0f2d5a] underline">sign in to see case pricing</Link></p>
+            <p className="text-3xl font-bold text-[#0f2d5a] mt-4">
+              $44.99 <span className="text-sm font-normal text-slate-500">/ bottle</span>
+            </p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Wholesale pricing available —{' '}
+              <button onClick={openLogin} className="text-[#0f2d5a] underline">sign in to see case pricing</button>
+            </p>
 
             <p className="text-slate-600 mt-4 leading-relaxed text-sm">
               Made from gluten and grain-free beets and distilled 9 times. Every batch is lab tested for quality assurance. Sip with confidence knowing that we use only vegan ingredients and processes. Proudly crafted in the USA by a pioneering women-owned brand.
@@ -137,11 +198,13 @@ export function MarketingPage() {
                 <button type="button" onClick={() => setQty(q => q + 1)}
                   className="px-3 py-2 text-slate-600 hover:bg-slate-100 font-bold transition-colors">+</button>
               </div>
-              <Link href="/login"
-                className="flex items-center gap-2 bg-[#0f2d5a] hover:bg-[#1a4a8a] text-white font-semibold px-6 py-2.5 rounded-lg text-sm transition-colors">
+              <button
+                onClick={openLogin}
+                className="flex items-center gap-2 bg-[#0f2d5a] hover:bg-[#1a4a8a] text-white font-semibold px-6 py-2.5 rounded-lg text-sm transition-colors"
+              >
                 <ShoppingCart className="w-4 h-4" />
                 Sign In to Order
-              </Link>
+              </button>
             </div>
 
             <div className="mt-5 flex flex-wrap gap-4 text-xs text-slate-500 border-t pt-4">
@@ -162,7 +225,7 @@ export function MarketingPage() {
                 ))}
               </div>
               <p className="text-sm text-slate-600 leading-relaxed mt-4">
-                Introducing Wisher Vodka, a super premium craft vodka with a unique twist. Made from gluten and grain-free beets and distilled 7–9 times for unparalleled purity. Every batch is lab tested for quality assurance. Sip with confidence knowing that Wisher uses only vegan ingredients and processes. Proudly crafted in the USA by a pioneering women-owned brand. Wisher Vodka has received accolades including being featured on the cover of The Wall Street Journal and in Forbes magazine. Raise a glass and cheers to a new level of premium vodka.
+                Introducing Wisher Vodka, a super premium craft vodka with a unique twist. Made from gluten and grain-free beets and distilled 7–9 times for unparalleled purity. Every batch is lab tested for quality assurance. Sip with confidence knowing that Wisher uses only vegan ingredients and processes. Proudly crafted in the USA by a pioneering women-owned brand. Wisher Vodka has received accolades including being featured on the cover of The Wall Street Journal and in Forbes magazine.
               </p>
             </div>
           </div>
@@ -176,10 +239,13 @@ export function MarketingPage() {
               <ul className="divide-y">
                 {categories.map(cat => (
                   <li key={cat}>
-                    <a href="#" className="flex items-center justify-between px-4 py-2.5 text-sm text-slate-700 hover:bg-blue-50 hover:text-[#0f2d5a] transition-colors group">
+                    <button
+                      onClick={openLogin}
+                      className="flex items-center justify-between w-full px-4 py-2.5 text-sm text-slate-700 hover:bg-blue-50 hover:text-[#0f2d5a] transition-colors group"
+                    >
                       {cat}
                       <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-[#0f2d5a]" />
-                    </a>
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -188,15 +254,18 @@ export function MarketingPage() {
             <div className="mt-4 border rounded-xl p-4 bg-amber-50 border-amber-200">
               <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide">Licensed Retailers</p>
               <p className="text-xs text-amber-700 mt-1 leading-relaxed">Sign in to access wholesale pricing and place orders.</p>
-              <Link href="/login" className="mt-3 block text-center bg-[#0f2d5a] text-white text-xs font-semibold px-3 py-2 rounded-lg hover:bg-[#1a4a8a] transition-colors">
+              <button
+                onClick={openLogin}
+                className="mt-3 w-full text-center bg-[#0f2d5a] text-white text-xs font-semibold px-3 py-2 rounded-lg hover:bg-[#1a4a8a] transition-colors"
+              >
                 Sign In
-              </Link>
+              </button>
             </div>
           </aside>
         </div>
       </section>
 
-      {/* ── Featured products grid ───────────────────────── */}
+      {/* ── Featured products ────────────────────────────── */}
       <section id="brands" className="bg-slate-50 py-12 px-4">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-end justify-between mb-6">
@@ -204,12 +273,12 @@ export function MarketingPage() {
               <p className="text-xs uppercase tracking-widest text-[#0f2d5a] font-semibold">Our Portfolio</p>
               <h2 className="text-2xl font-bold text-slate-900 mt-0.5">Featured Products</h2>
             </div>
-            <Link href="/login" className="text-sm text-[#0f2d5a] font-medium hover:underline hidden sm:block">
+            <button onClick={openLogin} className="text-sm text-[#0f2d5a] font-medium hover:underline hidden sm:block">
               View full catalog →
-            </Link>
+            </button>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {featuredProducts.map(p => (
               <div key={p.name} className="bg-white border rounded-xl overflow-hidden hover:shadow-md transition-shadow group">
                 <div className="aspect-square bg-gradient-to-b from-slate-100 to-slate-50 flex items-center justify-center p-6">
@@ -220,9 +289,12 @@ export function MarketingPage() {
                   <p className="font-semibold text-slate-900 text-sm mt-0.5">{p.name}</p>
                   <p className="text-xs text-slate-500 mt-1 line-clamp-2">{p.description}</p>
                   <p className="text-xs text-slate-400 mt-1">{p.size}</p>
-                  <Link href="/login" className="mt-3 block text-center border border-[#0f2d5a] text-[#0f2d5a] text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-[#0f2d5a] hover:text-white transition-colors">
+                  <button
+                    onClick={openLogin}
+                    className="mt-3 w-full text-center border border-[#0f2d5a] text-[#0f2d5a] text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-[#0f2d5a] hover:text-white transition-colors"
+                  >
                     Sign In to Order
-                  </Link>
+                  </button>
                 </div>
               </div>
             ))}
@@ -300,7 +372,7 @@ export function MarketingPage() {
           <div className="flex gap-4">
             <Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
             <Link href="/terms" className="hover:text-white transition-colors">Terms &amp; Conditions</Link>
-            <Link href="/login" className="hover:text-white transition-colors">Sign In</Link>
+            <button onClick={openLogin} className="hover:text-white transition-colors">Sign In</button>
           </div>
           <p>© {new Date().getFullYear()} AHAWC LLC. All rights reserved. Must be 21+ to purchase.</p>
         </div>
