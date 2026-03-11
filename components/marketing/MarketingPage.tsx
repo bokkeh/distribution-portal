@@ -145,23 +145,20 @@ export function MarketingPage() {
           {/* Product image */}
           <div className="lg:w-72 shrink-0">
             <div className="border rounded-xl overflow-hidden bg-slate-50 flex items-center justify-center aspect-[3/4] p-4">
-              <Image
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
                 src="/products/wisher-vodka.jpg"
                 alt="Wisher Vodka 750ml"
-                width={280}
-                height={380}
                 className="object-contain h-full w-full"
-                priority
               />
             </div>
             {/* Thumbnail */}
             <div className="flex gap-2 mt-2">
               <div className="w-14 h-16 border-2 border-[#0f2d5a] rounded-lg overflow-hidden bg-slate-50 cursor-pointer">
-                <Image
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
                   src="/products/wisher-vodka.jpg"
                   alt="Wisher Vodka thumbnail"
-                  width={56}
-                  height={64}
                   className="object-contain w-full h-full p-1"
                 />
               </div>
