@@ -11,12 +11,6 @@ const categories = [
   'Brandy', 'Tequila', 'Wine', 'Ready to Drink', 'Liqueur', 'Mixers',
 ]
 
-const featuredProducts = [
-  { name: 'Wisher Vodka',    category: 'Vodka',   size: '750ml', description: 'Gluten-free, grain-free beet vodka. Distilled 9 times.' },
-  { name: 'Reserve Bourbon', category: 'Whiskey', size: '750ml', description: 'Small-batch Kentucky straight bourbon.' },
-  { name: 'London Dry Gin',  category: 'Gin',     size: '750ml', description: 'Classic botanical gin, perfect for cocktails.' },
-  { name: 'Dark Reserve Rum',category: 'Rum',     size: '750ml', description: 'Aged Caribbean rum with rich caramel notes.' },
-]
 
 function LoginModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   // Close on Escape
@@ -259,43 +253,6 @@ export function MarketingPage() {
               </button>
             </div>
           </aside>
-        </div>
-      </section>
-
-      {/* ── Featured products ────────────────────────────── */}
-      <section id="brands" className="bg-slate-50 py-12 px-4">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-end justify-between mb-6">
-            <div>
-              <p className="text-xs uppercase tracking-widest text-[#0f2d5a] font-semibold">Our Portfolio</p>
-              <h2 className="text-2xl font-bold text-slate-900 mt-0.5">Featured Products</h2>
-            </div>
-            <button onClick={openLogin} className="text-sm text-[#0f2d5a] font-medium hover:underline hidden sm:block">
-              View full catalog →
-            </button>
-          </div>
-
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {featuredProducts.map(p => (
-              <div key={p.name} className="bg-white border rounded-xl overflow-hidden hover:shadow-md transition-shadow group">
-                <div className="aspect-square bg-gradient-to-b from-slate-100 to-slate-50 flex items-center justify-center p-6">
-                  <div className="w-10 h-28 rounded-full bg-gradient-to-b from-[#0f2d5a] to-[#1a4a8a] opacity-80 group-hover:opacity-100 transition-opacity" />
-                </div>
-                <div className="p-3 border-t">
-                  <p className="text-xs text-slate-400 uppercase tracking-wide">{p.category}</p>
-                  <p className="font-semibold text-slate-900 text-sm mt-0.5">{p.name}</p>
-                  <p className="text-xs text-slate-500 mt-1 line-clamp-2">{p.description}</p>
-                  <p className="text-xs text-slate-400 mt-1">{p.size}</p>
-                  <button
-                    onClick={openLogin}
-                    className="mt-3 w-full text-center border border-[#0f2d5a] text-[#0f2d5a] text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-[#0f2d5a] hover:text-white transition-colors"
-                  >
-                    Sign In to Order
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
       </section>
 
