@@ -4,7 +4,7 @@ import { useActionState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { submitWholesaleAccountRequest } from '@/actions/marketing'
-import { SMS_CONSENT_COPY } from '@/lib/telnyx/compliance'
+import { SMS_CONSENT_COPY } from '@/lib/telnyx/messages'
 
 const initialState = null
 
