@@ -14,6 +14,14 @@ const requestSchema = z.object({
   smsOptIn: z.boolean(),
   source: z.string().trim().default('marketing_contact_form'),
   submissionPage: z.string().trim().optional(),
+}).superRefine((data, ctx) => {
+  if (!data.smsOptIn) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['smsOptIn'],
+      message: 'SMS consent is required',
+    })
+  }
 })
 
 export async function submitWholesaleAccountRequest(
@@ -31,12 +39,13 @@ export async function submitWholesaleAccountRequest(
     })
 
     const requestHeaders = await headers()
-    const phoneNormalized = normalizePhone(parsed.phone)
+    const phone = parsed.phone
+    const phoneNormalized = normalizePhone(phone)
 
     await db.insert(wholesaleAccountRequests).values({
       businessName: parsed.businessName,
       businessEmail: parsed.businessEmail,
-      phone: parsed.phone,
+      phone,
       phoneNormalized,
       smsOptIn: parsed.smsOptIn,
       smsOptInAt: parsed.smsOptIn ? new Date() : null,
@@ -67,7 +76,7 @@ export async function submitWholesaleAccountRequest(
     void sendWholesaleRequestNotification({
       businessName: parsed.businessName,
       businessEmail: parsed.businessEmail,
-      phone: parsed.phone,
+      phone,
       phoneNormalized,
       smsOptIn: parsed.smsOptIn,
     })

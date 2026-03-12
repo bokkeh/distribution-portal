@@ -29,6 +29,13 @@
       "when": 1773319200000,
       "tag": "0003_silent_hall",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1773320400000,
+      "tag": "0004_plain_village",
+      "breakpoints": true
     }
   ]
 }

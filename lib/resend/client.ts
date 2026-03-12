@@ -151,8 +151,8 @@ export async function sendWholesaleRequestNotification({
 }: {
   businessName: string
   businessEmail: string
-  phone: string
-  phoneNormalized: string
+  phone: string | null
+  phoneNormalized: string | null
   smsOptIn: boolean
 }): Promise<void> {
   const to = process.env.WHOLESALE_REQUEST_NOTIFICATION_EMAIL ?? 'admin@ahawc.com'
@@ -172,8 +172,8 @@ export async function sendWholesaleRequestNotification({
             <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
               <tr><td style="padding: 6px 0; color: #64748b;">Business</td><td style="padding: 6px 0; font-weight: 600; color: #1e293b;">${businessName}</td></tr>
               <tr><td style="padding: 6px 0; color: #64748b;">Email</td><td style="padding: 6px 0; font-weight: 600; color: #1e293b;">${businessEmail}</td></tr>
-              <tr><td style="padding: 6px 0; color: #64748b;">Phone</td><td style="padding: 6px 0; font-weight: 600; color: #1e293b;">${phone}</td></tr>
-              <tr><td style="padding: 6px 0; color: #64748b;">Normalized</td><td style="padding: 6px 0; font-weight: 600; color: #1e293b;">${phoneNormalized}</td></tr>
+              <tr><td style="padding: 6px 0; color: #64748b;">Phone</td><td style="padding: 6px 0; font-weight: 600; color: #1e293b;">${phone ?? '-'}</td></tr>
+              <tr><td style="padding: 6px 0; color: #64748b;">Normalized</td><td style="padding: 6px 0; font-weight: 600; color: #1e293b;">${phoneNormalized ?? '-'}</td></tr>
               <tr><td style="padding: 6px 0; color: #64748b;">SMS opt-in</td><td style="padding: 6px 0; font-weight: 600; color: #1e293b;">${smsOptIn ? 'Yes' : 'No'}</td></tr>
             </table>
           </div>
