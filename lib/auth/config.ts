@@ -64,6 +64,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers,
+  trustHost: true,
   callbacks: {
     async signIn({ user, account, profile }) {
       if (account?.provider !== 'google' || !user.email) {
@@ -164,9 +165,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       return session
     },
+    async redirect({ url, baseUrl }) {
+      if (url.startsWith('/')) return `${baseUrl}${url}`
+
+      try {
+        const nextUrl = new URL(url)
+        if (nextUrl.origin === baseUrl) return url
+      } catch {}
+
+      return baseUrl
+    },
   },
   pages: {
     signIn: '/login',
+    error: '/login',
   },
   session: {
     strategy: 'jwt',

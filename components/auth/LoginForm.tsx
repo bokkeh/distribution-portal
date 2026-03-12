@@ -58,7 +58,7 @@ export function LoginForm({ onSuccess }: Props) {
   async function handleGoogle() {
     setError('')
     setGoogleLoading(true)
-    await signIn('google', { callbackUrl: '/' })
+    await signIn('google', { callbackUrl: `${window.location.origin}/` })
     setGoogleLoading(false)
   }
 
