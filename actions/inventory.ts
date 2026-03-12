@@ -80,10 +80,36 @@ export async function adjustStock(formData: FormData) {
   const productId = formData.get('productId') as string
   const quantityPaid = parseInt(formData.get('quantityPaid') as string)
   const quantitySample = parseInt(formData.get('quantitySample') as string)
+  const reorderLevel = parseInt(formData.get('reorderLevel') as string)
+  const looseBottlePaid = parseInt(formData.get('looseBottlePaid') as string)
+  const now = new Date()
 
-  await db.update(inventory)
-    .set({ quantityPaid, quantitySample, updatedAt: new Date() })
+  const [existingInventory] = await db
+    .select({ productId: inventory.productId })
+    .from(inventory)
     .where(eq(inventory.productId, productId))
+    .limit(1)
+
+  if (existingInventory) {
+    await db.update(inventory)
+      .set({
+        quantityPaid,
+        quantitySample,
+        reorderLevel: Number.isNaN(reorderLevel) ? undefined : reorderLevel,
+        looseBottlePaid: Number.isNaN(looseBottlePaid) ? undefined : looseBottlePaid,
+        updatedAt: now,
+      })
+      .where(eq(inventory.productId, productId))
+  } else {
+    await db.insert(inventory).values({
+      productId,
+      quantityPaid: Number.isNaN(quantityPaid) ? 0 : quantityPaid,
+      quantitySample: Number.isNaN(quantitySample) ? 0 : quantitySample,
+      reorderLevel: Number.isNaN(reorderLevel) ? 10 : reorderLevel,
+      looseBottlePaid: Number.isNaN(looseBottlePaid) ? 0 : looseBottlePaid,
+      updatedAt: now,
+    })
+  }
 
   revalidatePath('/admin/inventory')
 }

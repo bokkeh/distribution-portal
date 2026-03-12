@@ -1,6 +1,6 @@
 import { db } from '@/db'
 import { products, inventory } from '@/db/schema'
-import { eq } from 'drizzle-orm'
+import { eq, or } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -11,10 +11,20 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 
 export default async function EditProductPage({ params }: { params: { productId: string } }) {
-  const [product] = await db.select().from(products).where(eq(products.id, params.productId))
-  if (!product) notFound()
+  const [record] = await db
+    .select({
+      product: products,
+      inventory: inventory,
+    })
+    .from(products)
+    .leftJoin(inventory, eq(inventory.productId, products.id))
+    .where(or(eq(products.id, params.productId), eq(inventory.id, params.productId)))
+    .limit(1)
 
-  const [inv] = await db.select().from(inventory).where(eq(inventory.productId, params.productId))
+  if (!record?.product) notFound()
+
+  const product = record.product
+  const inv = record.inventory
 
   return (
     <div className="p-4 sm:p-8 space-y-6">
@@ -39,6 +49,16 @@ export default async function EditProductPage({ params }: { params: { productId:
               <div className="space-y-2">
                 <Label>Sample Cases</Label>
                 <Input type="number" name="quantitySample" min="0" defaultValue={inv?.quantitySample ?? 0} />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Loose Bottles</Label>
+                <Input type="number" name="looseBottlePaid" min="0" defaultValue={inv?.looseBottlePaid ?? 0} />
+              </div>
+              <div className="space-y-2">
+                <Label>Reorder Level</Label>
+                <Input type="number" name="reorderLevel" min="0" defaultValue={inv?.reorderLevel ?? 10} />
               </div>
             </div>
             <div className="flex gap-3">

@@ -1,6 +1,6 @@
 import { db } from '@/db'
 import { inventory, products } from '@/db/schema'
-import { eq, sql } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -11,7 +11,7 @@ import { Plus, AlertTriangle } from 'lucide-react'
 export default async function InventoryPage() {
   const items = await db
     .select({
-      id: inventory.id,
+      id: products.id,
       productId: inventory.productId,
       quantityPaid: inventory.quantityPaid,
       quantitySample: inventory.quantitySample,
@@ -24,8 +24,8 @@ export default async function InventoryPage() {
       samplePrice: products.samplePrice,
       active: products.active,
     })
-    .from(inventory)
-    .innerJoin(products, eq(inventory.productId, products.id))
+    .from(products)
+    .leftJoin(inventory, eq(inventory.productId, products.id))
     .orderBy(products.name)
 
   return (
@@ -33,7 +33,7 @@ export default async function InventoryPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Inventory</h1>
-          <p className="text-muted-foreground mt-1">{items.length} products tracked</p>
+          <p className="text-muted-foreground mt-1">{items.length} products available</p>
         </div>
         <Link href="/admin/inventory/new">
           <Button><Plus className="w-4 h-4 mr-2" />Add Product</Button>
@@ -83,7 +83,7 @@ export default async function InventoryPage() {
                         {item.active ? <Badge variant="success">Active</Badge> : <Badge variant="secondary">Inactive</Badge>}
                       </td>
                       <td className="px-6 py-4">
-                        <Link href={`/admin/inventory/${item.productId}`}>
+                        <Link href={`/admin/inventory/${item.productId ?? item.id}`}>
                           <Button variant="ghost" size="sm">Edit</Button>
                         </Link>
                       </td>
