@@ -66,8 +66,10 @@ export function WholesaleAccountRequestForm() {
       </label>
 
       <p className="text-xs leading-relaxed text-blue-200">
-        Message frequency varies. Message and data rates may apply. Reply STOP to opt out, HELP for help.
-        Consent is not a condition of purchase. See our{' '}
+        By providing your phone number, you agree to receive SMS wholesale account updates and onboarding
+        messages from AHAWC. Message frequency may vary. Standard Message and Data Rates may apply.
+        Reply STOP to opt out. Reply HELP for help. We will not share mobile information with third
+        parties for promotional or marketing purposes. See our{' '}
         <Link href="/privacy" className="font-medium text-white underline underline-offset-2">
           Privacy Policy
         </Link>{' '}
