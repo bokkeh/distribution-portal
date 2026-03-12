@@ -4,6 +4,7 @@ import { useActionState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { submitWholesaleAccountRequest } from '@/actions/marketing'
+import { SMS_CONSENT_COPY } from '@/lib/telnyx/compliance'
 
 const initialState = null
 
@@ -66,10 +67,7 @@ export function WholesaleAccountRequestForm() {
       </label>
 
       <p className="text-xs leading-relaxed text-blue-200">
-        By providing your phone number, you agree to receive SMS wholesale account updates and onboarding
-        messages from AHAWC. Message frequency may vary. Standard Message and Data Rates may apply.
-        Reply STOP to opt out. Reply HELP for help. We will not share mobile information with third
-        parties for promotional or marketing purposes. See our{' '}
+        {SMS_CONSENT_COPY} See our{' '}
         <Link href="/privacy" className="font-medium text-white underline underline-offset-2">
           Privacy Policy
         </Link>{' '}

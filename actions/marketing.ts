@@ -4,8 +4,8 @@ import { z } from 'zod'
 import { headers } from 'next/headers'
 import { db } from '@/db'
 import { wholesaleAccountRequests } from '@/db/schema'
-
-const SMS_CONSENT_COPY = 'I agree to receive SMS messages from AHAWC about my wholesale account request and account setup. Message frequency varies. Message and data rates may apply. Reply STOP to opt out, HELP for help. Consent is not a condition of purchase.'
+import { normalizePhone, setSmsSubscription, SMS_CONFIRMATION_MESSAGE, SMS_CONSENT_COPY } from '@/lib/telnyx/compliance'
+import { sendSms } from '@/lib/telnyx/client'
 
 const requestSchema = z.object({
   businessName: z.string().trim().min(2, 'Business name is required'),
@@ -15,15 +15,6 @@ const requestSchema = z.object({
   source: z.string().trim().default('marketing_contact_form'),
   submissionPage: z.string().trim().optional(),
 })
-
-function normalizePhone(input: string) {
-  const digits = input.replace(/[^\d+]/g, '')
-  if (/^\+1\d{10}$/.test(digits)) return digits
-  if (/^1\d{10}$/.test(digits)) return `+${digits}`
-  if (/^\d{10}$/.test(digits)) return `+1${digits}`
-  if (/^\+\d{11,15}$/.test(digits)) return digits
-  throw new Error('Enter a valid phone number')
-}
 
 export async function submitWholesaleAccountRequest(
   _prev: { error?: string; success?: boolean } | null,
@@ -55,6 +46,22 @@ export async function submitWholesaleAccountRequest(
       ipAddress: requestHeaders.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null,
       userAgent: requestHeaders.get('user-agent'),
     })
+
+    if (parsed.smsOptIn) {
+      await setSmsSubscription({
+        phoneNormalized,
+        status: 'subscribed',
+        source: 'marketing_contact_form',
+        consentLanguage: SMS_CONSENT_COPY,
+      })
+      void sendSms({
+        to: phoneNormalized,
+        body: SMS_CONFIRMATION_MESSAGE,
+        bypassOptOut: true,
+      }).catch(error => {
+        console.error('SMS confirmation failed:', error)
+      })
+    }
 
     const { sendWholesaleRequestNotification } = await import('@/lib/resend/client')
     void sendWholesaleRequestNotification({

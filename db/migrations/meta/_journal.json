@@ -22,6 +22,13 @@
       "when": 1773318000000,
       "tag": "0002_round_moon",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1773319200000,
+      "tag": "0003_silent_hall",
+      "breakpoints": true
     }
   ]
 }
