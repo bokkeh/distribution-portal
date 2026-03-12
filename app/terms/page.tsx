@@ -1,7 +1,7 @@
 import Link from 'next/link'
 
 export const metadata = {
-  title: 'Terms & Conditions — AHAWC Distribution Portal',
+  title: 'Terms & Conditions - AHAWC Distribution Portal',
   description: 'Terms and Conditions for the AHAWC Liquor Distribution Portal',
 }
 
@@ -9,34 +9,31 @@ export default function TermsPage() {
   return (
     <div className="min-h-screen bg-white">
       <div className="bg-slate-900 px-6 py-5">
-        <div className="max-w-3xl mx-auto flex items-center justify-between">
-          <span className="text-white font-bold text-lg tracking-tight">AHAWC</span>
-          <Link href="/login" className="text-slate-300 hover:text-white text-sm transition-colors">
-            Sign In →
+        <div className="mx-auto flex max-w-3xl items-center justify-between">
+          <span className="text-lg font-bold tracking-tight text-white">AHAWC</span>
+          <Link href="/login" className="text-sm text-slate-300 transition-colors hover:text-white">
+            Sign In -&gt;
           </Link>
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto px-6 py-12 space-y-8">
+      <div className="mx-auto max-w-3xl space-y-8 px-6 py-12">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Terms &amp; Conditions</h1>
-          <p className="text-muted-foreground mt-2 text-sm">
-            Effective date: March 9, 2026 &nbsp;·&nbsp; Last updated: March 9, 2026
+          <p className="mt-2 text-sm text-muted-foreground">
+            Effective date: March 9, 2026 &nbsp;|&nbsp; Last updated: March 12, 2026
           </p>
         </div>
 
-        <p className="text-slate-700 leading-relaxed">
-          These Terms and Conditions ("Terms") govern your access to and use of the AHAWC Distribution
-          Portal ("Portal") operated by AHAWC LLC ("AHAWC," "we," "us," or "our"). By accessing or
-          using the Portal, you agree to be bound by these Terms. If you do not agree, do not use
-          the Portal.
+        <p className="leading-relaxed text-slate-700">
+          These Terms and Conditions (&quot;Terms&quot;) govern your access to and use of the AHAWC
+          Distribution Portal (&quot;Portal&quot;) operated by AHAWC LLC (&quot;AHAWC,&quot;
+          &quot;we,&quot; &quot;us,&quot; or &quot;our&quot;). By accessing or using the Portal,
+          you agree to be bound by these Terms. If you do not agree, do not use the Portal.
         </p>
 
         <Section title="1. Eligibility">
-          <p>
-            The Portal is a private, invitation-only business-to-business platform. Access is
-            restricted to:
-          </p>
+          <p>The Portal is a private, invitation-only business-to-business platform. Access is restricted to:</p>
           <ul>
             <li>Licensed alcohol beverage retailers, restaurants, and hospitality businesses operating under a valid license issued by the applicable state or local alcohol beverage control authority.</li>
             <li>Authorized employees and agents of such businesses.</li>
@@ -53,44 +50,43 @@ export default function TermsPage() {
             Access credentials are issued by AHAWC. You are responsible for maintaining the
             confidentiality of your password and for all activity that occurs under your account.
             You agree to notify AHAWC immediately of any unauthorized use of your account at
-            admin@ahawc.com. AHAWC reserves the right to suspend or terminate accounts at any
-            time without notice.
+            admin@ahawc.com. AHAWC reserves the right to suspend or terminate accounts at any time
+            without notice.
           </p>
         </Section>
 
         <Section title="3. Orders &amp; Purchases">
           <ul>
-            <li>All orders placed through the Portal are subject to availability and AHAWC's acceptance.</li>
+            <li>All orders placed through the Portal are subject to availability and AHAWC&apos;s acceptance.</li>
             <li>Prices are subject to change without notice. The price displayed at the time of order confirmation is the price charged.</li>
             <li>Orders are fulfilled in accordance with applicable federal, state, and local alcohol beverage control laws and regulations.</li>
-            <li>AHAWC reserves the right to cancel or modify any order that would violate applicable law or AHAWC's distribution policies.</li>
+            <li>AHAWC reserves the right to cancel or modify any order that would violate applicable law or AHAWC&apos;s distribution policies.</li>
           </ul>
         </Section>
 
         <Section title="4. Payment Terms">
           <ul>
-            <li>Payment is due in accordance with the payment terms assigned to your account (e.g., NET30).</li>
-            <li>Online payments are processed securely through Stripe. By submitting payment you agree to Stripe's Terms of Service.</li>
-            <li>ACH/bank transfer payments may take 3–5 business days to settle. Orders are not fulfilled until payment clears unless otherwise agreed in writing.</li>
-            <li>Late payments may be subject to account suspension and finance charges at AHAWC's discretion.</li>
+            <li>Payment is due in accordance with the payment terms assigned to your account (for example, NET30).</li>
+            <li>Online payments are processed securely through Stripe. By submitting payment you agree to Stripe&apos;s Terms of Service.</li>
+            <li>ACH and bank transfer payments may take 3-5 business days to settle. Orders are not fulfilled until payment clears unless otherwise agreed in writing.</li>
+            <li>Late payments may be subject to account suspension and finance charges at AHAWC&apos;s discretion.</li>
           </ul>
         </Section>
 
         <Section title="5. SMS Communications">
           <p>
-            By providing a phone number and creating an account, you consent to receive transactional
-            SMS messages from AHAWC regarding your orders, invoices, deliveries, and account status.
-            Message and data rates may apply. Message frequency varies. Reply <strong>STOP</strong> to
-            opt out at any time. Reply <strong>HELP</strong> for assistance. Consent is not a condition
-            of purchase.
+            If you explicitly opt in, you consent to receive SMS messages from AHAWC regarding your
+            wholesale account request, orders, invoices, deliveries, and account status. Message and
+            data rates may apply. Message frequency varies. Reply <strong>STOP</strong> to opt out
+            at any time. Reply <strong>HELP</strong> for assistance. Consent is not a condition of
+            purchase.
           </p>
         </Section>
 
         <Section title="6. Alcohol Compliance">
           <p>
             All purchases made through the Portal are subject to the laws and regulations governing
-            the sale and distribution of alcohol beverages in the applicable jurisdiction. You agree
-            to:
+            the sale and distribution of alcohol beverages in the applicable jurisdiction. You agree to:
           </p>
           <ul>
             <li>Maintain a valid alcohol beverage license for the duration of your account.</li>
@@ -106,8 +102,8 @@ export default function TermsPage() {
         <Section title="7. Intellectual Property">
           <p>
             All content, trademarks, logos, and software comprising the Portal are the property of
-            AHAWC LLC or its licensors. You may not reproduce, distribute, or create derivative works
-            without prior written permission from AHAWC.
+            AHAWC LLC or its licensors. You may not reproduce, distribute, or create derivative
+            works without prior written permission from AHAWC.
           </p>
         </Section>
 
@@ -116,17 +112,17 @@ export default function TermsPage() {
             To the maximum extent permitted by applicable law, AHAWC shall not be liable for any
             indirect, incidental, special, consequential, or punitive damages arising from your use
             of the Portal, including but not limited to loss of profits, data, or business
-            opportunities. AHAWC's total liability to you for any claim arising from these Terms
-            shall not exceed the total amounts paid by you to AHAWC in the three (3) months
-            preceding the claim.
+            opportunities. AHAWC&apos;s total liability to you for any claim arising from these Terms
+            shall not exceed the total amounts paid by you to AHAWC in the three months preceding
+            the claim.
           </p>
         </Section>
 
         <Section title="9. Disclaimer of Warranties">
           <p>
-            The Portal is provided "as is" and "as available" without warranties of any kind, express
-            or implied. AHAWC does not warrant that the Portal will be uninterrupted, error-free, or
-            free of harmful components.
+            The Portal is provided &quot;as is&quot; and &quot;as available&quot; without warranties
+            of any kind, express or implied. AHAWC does not warrant that the Portal will be
+            uninterrupted, error-free, or free of harmful components.
           </p>
         </Section>
 
@@ -147,7 +143,7 @@ export default function TermsPage() {
         </Section>
 
         <Section title="12. Contact">
-          <address className="not-italic text-slate-700 space-y-0.5">
+          <address className="space-y-0.5 not-italic text-slate-700">
             <p className="font-semibold">AHAWC LLC</p>
             <p>
               Email:{' '}
@@ -155,13 +151,22 @@ export default function TermsPage() {
                 admin@ahawc.com
               </a>
             </p>
-            <p>Website: <a href="https://ahawc.com" className="text-blue-600 hover:underline">ahawc.com</a></p>
+            <p>
+              Website:{' '}
+              <a href="https://ahawc.com" className="text-blue-600 hover:underline">
+                ahawc.com
+              </a>
+            </p>
           </address>
         </Section>
 
-        <div className="border-t pt-6 flex gap-6 text-sm">
-          <Link href="/privacy" className="text-blue-600 hover:underline">Privacy Policy</Link>
-          <Link href="/login" className="text-blue-600 hover:underline">← Back to sign in</Link>
+        <div className="flex gap-6 border-t pt-6 text-sm">
+          <Link href="/privacy" className="text-blue-600 hover:underline">
+            Privacy Policy
+          </Link>
+          <Link href="/login" className="text-blue-600 hover:underline">
+            &lt;- Back to sign in
+          </Link>
         </div>
       </div>
     </div>
@@ -172,7 +177,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return (
     <section className="space-y-3">
       <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
-      <div className="text-slate-700 leading-relaxed space-y-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:space-y-1.5">
+      <div className="space-y-2 leading-relaxed text-slate-700 [&_ul]:list-disc [&_ul]:space-y-1.5 [&_ul]:pl-5">
         {children}
       </div>
     </section>

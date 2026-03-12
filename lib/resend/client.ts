@@ -141,3 +141,46 @@ export async function sendWelcomeEmail({
     console.error('Resend welcome email failed:', error)
   }
 }
+
+export async function sendWholesaleRequestNotification({
+  businessName,
+  businessEmail,
+  phone,
+  phoneNormalized,
+  smsOptIn,
+}: {
+  businessName: string
+  businessEmail: string
+  phone: string
+  phoneNormalized: string
+  smsOptIn: boolean
+}): Promise<void> {
+  const to = process.env.WHOLESALE_REQUEST_NOTIFICATION_EMAIL ?? 'admin@ahawc.com'
+
+  try {
+    await resend.emails.send({
+      from: process.env.RESEND_FROM_EMAIL ?? 'noreply@ahawc.com',
+      to,
+      subject: `Wholesale account request - ${businessName}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto;">
+          <div style="background: #0f2d5a; padding: 20px 24px; border-radius: 8px 8px 0 0;">
+            <h1 style="color: white; margin: 0; font-size: 20px;">New wholesale account request</h1>
+          </div>
+          <div style="background: #f8fafc; padding: 24px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 8px 8px;">
+            <p style="margin: 0 0 16px; color: #475569;">A new request was submitted from the public marketing form.</p>
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+              <tr><td style="padding: 6px 0; color: #64748b;">Business</td><td style="padding: 6px 0; font-weight: 600; color: #1e293b;">${businessName}</td></tr>
+              <tr><td style="padding: 6px 0; color: #64748b;">Email</td><td style="padding: 6px 0; font-weight: 600; color: #1e293b;">${businessEmail}</td></tr>
+              <tr><td style="padding: 6px 0; color: #64748b;">Phone</td><td style="padding: 6px 0; font-weight: 600; color: #1e293b;">${phone}</td></tr>
+              <tr><td style="padding: 6px 0; color: #64748b;">Normalized</td><td style="padding: 6px 0; font-weight: 600; color: #1e293b;">${phoneNormalized}</td></tr>
+              <tr><td style="padding: 6px 0; color: #64748b;">SMS opt-in</td><td style="padding: 6px 0; font-weight: 600; color: #1e293b;">${smsOptIn ? 'Yes' : 'No'}</td></tr>
+            </table>
+          </div>
+        </div>
+      `,
+    })
+  } catch (error) {
+    console.error('Wholesale request email failed:', error)
+  }
+}

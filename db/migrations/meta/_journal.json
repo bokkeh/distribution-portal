@@ -15,6 +15,13 @@
       "when": 1773119170600,
       "tag": "0001_wise_mimic",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1773318000000,
+      "tag": "0002_round_moon",
+      "breakpoints": true
     }
   ]
 }

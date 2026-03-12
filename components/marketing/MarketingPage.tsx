@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ShoppingCart, Star, ChevronRight, Mail, MapPin, X } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { LoginForm } from '@/components/auth/LoginForm'
+import { WholesaleAccountRequestForm } from '@/components/marketing/WholesaleAccountRequestForm'
 
 const categories = [
   'Whiskey', 'Vodka', 'Gin', 'Cognac', 'Rum',
@@ -299,16 +300,7 @@ export function MarketingPage() {
                 </div>
               </div>
             </div>
-            <div className="bg-white/10 rounded-xl p-6 space-y-3">
-              <p className="font-semibold text-sm">Request a Wholesale Account</p>
-              <input type="text" placeholder="Business name" className="w-full rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-sm text-white placeholder-blue-300 focus:outline-none focus:ring-2 focus:ring-white/30" />
-              <input type="email" placeholder="Business email" className="w-full rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-sm text-white placeholder-blue-300 focus:outline-none focus:ring-2 focus:ring-white/30" />
-              <input type="tel" placeholder="Phone number" className="w-full rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-sm text-white placeholder-blue-300 focus:outline-none focus:ring-2 focus:ring-white/30" />
-              <a href="mailto:admin@ahawc.com?subject=Wholesale Account Request"
-                className="block text-center bg-amber-400 hover:bg-amber-300 text-slate-900 font-semibold px-4 py-2.5 rounded-lg text-sm transition-colors">
-                Send Request
-              </a>
-            </div>
+            <WholesaleAccountRequestForm />
           </div>
         </div>
       </section>
