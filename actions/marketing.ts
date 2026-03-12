@@ -14,14 +14,6 @@ const requestSchema = z.object({
   smsOptIn: z.boolean(),
   source: z.string().trim().default('marketing_contact_form'),
   submissionPage: z.string().trim().optional(),
-}).superRefine((data, ctx) => {
-  if (!data.smsOptIn) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['smsOptIn'],
-      message: 'SMS consent is required',
-    })
-  }
 })
 
 export async function submitWholesaleAccountRequest(
