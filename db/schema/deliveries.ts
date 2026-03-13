@@ -25,6 +25,8 @@ export const deliveryStops = pgTable('delivery_stops', {
   lng: numeric('lng', { precision: 10, scale: 7 }),
   status: text('status', { enum: ['pending', 'delivered', 'failed'] }).notNull().default('pending'),
   notes: text('notes'),
+  proofOfDeliveryUrl: text('proof_of_delivery_url'),
+  shelfPhotoUrl: text('shelf_photo_url'),
   completedAt: timestamp('completed_at', { withTimezone: true }),
 })
 

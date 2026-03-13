@@ -184,3 +184,42 @@ export async function sendWholesaleRequestNotification({
     console.error('Wholesale request email failed:', error)
   }
 }
+
+export async function sendDeliveryCompletedEmail({
+  to,
+  companyName,
+  deliveryDate,
+  proofOfDeliveryUrl,
+  shelfPhotoUrl,
+}: {
+  to: string
+  companyName: string
+  deliveryDate: string
+  proofOfDeliveryUrl?: string | null
+  shelfPhotoUrl?: string | null
+}): Promise<void> {
+  if (!to) return
+
+  try {
+    await resend.emails.send({
+      from: process.env.RESEND_FROM_EMAIL ?? 'noreply@ahawc.com',
+      to,
+      subject: `Delivery completed for ${companyName}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto;">
+          <div style="background: #0f172a; padding: 20px 24px; border-radius: 8px 8px 0 0;">
+            <h1 style="color: white; margin: 0; font-size: 20px;">AHAWC Delivery Update</h1>
+          </div>
+          <div style="background: #f8fafc; padding: 24px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 8px 8px;">
+            <p style="margin: 0 0 16px; color: #475569;">Your delivery scheduled for <strong>${deliveryDate}</strong> has been marked delivered.</p>
+            <p style="margin: 0 0 16px; color: #475569;">Account: <strong>${companyName}</strong></p>
+            ${proofOfDeliveryUrl ? `<p style="margin: 0 0 10px;"><a href="${proofOfDeliveryUrl}" style="color: #1d4ed8;">View proof of delivery photo</a></p>` : ''}
+            ${shelfPhotoUrl ? `<p style="margin: 0;"><a href="${shelfPhotoUrl}" style="color: #1d4ed8;">View shelf photo</a></p>` : ''}
+          </div>
+        </div>
+      `,
+    })
+  } catch (error) {
+    console.error('Delivery completed email failed:', error)
+  }
+}

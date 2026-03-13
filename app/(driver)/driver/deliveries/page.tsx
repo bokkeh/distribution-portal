@@ -4,11 +4,10 @@ import { eq, and } from 'drizzle-orm'
 import { requireRole } from '@/lib/auth/session'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { formatDate } from '@/lib/utils'
-import { updateStopNotes, updateStopStatus } from '@/actions/deliveries'
-import { MapPin, CheckCircle, XCircle, Clock, Truck } from 'lucide-react'
+import { MapPin, Truck } from 'lucide-react'
 import DeliveryMapWrapper from '@/components/deliveries/DeliveryMapWrapper'
+import { DriverStopActions } from '@/components/deliveries/DriverStopCard'
 
 export default async function DriverDeliveriesPage() {
   const session = await requireRole('driver', 'admin')
@@ -58,6 +57,8 @@ export default async function DriverDeliveriesPage() {
           contactPhone: string | null
           contactEmail: string | null
           notes: string | null
+          proofOfDeliveryUrl: string | null
+          shelfPhotoUrl: string | null
           lat: string | null
           lng: string | null
           companyName: string | null
@@ -74,6 +75,8 @@ export default async function DriverDeliveriesPage() {
               contactPhone: deliveryStops.contactPhone,
               contactEmail: deliveryStops.contactEmail,
               notes: deliveryStops.notes,
+              proofOfDeliveryUrl: deliveryStops.proofOfDeliveryUrl,
+              shelfPhotoUrl: deliveryStops.shelfPhotoUrl,
               lat: deliveryStops.lat,
               lng: deliveryStops.lng,
               companyName: customerAccounts.companyName,
@@ -111,6 +114,8 @@ export default async function DriverDeliveriesPage() {
               contactName: null,
               contactPhone: null,
               contactEmail: null,
+              proofOfDeliveryUrl: null,
+              shelfPhotoUrl: null,
             })))
         }
 
@@ -158,22 +163,17 @@ export default async function DriverDeliveriesPage() {
                       <div className="flex-1">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <p className="text-sm font-medium">{stop.companyName}</p>
-                          {stop.status === 'pending' ? (
-                            <div className="flex gap-2">
-                              <form action={updateStopStatus.bind(null, stop.id, 'delivered')}>
-                                <button className="p-1 text-green-600 hover:bg-green-50 rounded" type="submit" title="Mark Delivered">
-                                  <CheckCircle className="w-5 h-5" />
-                                </button>
-                              </form>
-                              <form action={updateStopStatus.bind(null, stop.id, 'failed')}>
-                                <button className="p-1 text-red-600 hover:bg-red-50 rounded" type="submit" title="Mark Failed">
-                                  <XCircle className="w-5 h-5" />
-                                </button>
-                              </form>
-                            </div>
-                          ) : (
-                            <Badge variant={stop.status === 'delivered' ? 'success' : 'destructive'}>{stop.status}</Badge>
-                          )}
+                          <Badge
+                            variant={
+                              stop.status === 'delivered'
+                                ? 'success'
+                                : stop.status === 'failed'
+                                  ? 'destructive'
+                                  : 'secondary'
+                            }
+                          >
+                            {stop.status}
+                          </Badge>
                         </div>
                         <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
                           <MapPin className="w-3 h-3" />{stop.address}
@@ -187,22 +187,17 @@ export default async function DriverDeliveriesPage() {
                         )}
                       </div>
                     </div>
-
-                    <form action={updateStopNotes.bind(null, stop.id)} className="mt-3 space-y-2">
-                      <label htmlFor={`notes-${stop.id}`} className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                        Driver Notes
-                      </label>
-                      <textarea
-                        id={`notes-${stop.id}`}
-                        name="notes"
-                        defaultValue={stop.notes ?? ''}
-                        placeholder="Add delivery updates, gate codes, owner requests, or other notes."
-                        className="min-h-24 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    <div className="mt-3">
+                      <DriverStopActions
+                        stop={{
+                          id: stop.id,
+                          status: stop.status,
+                          notes: stop.notes,
+                          proofOfDeliveryUrl: stop.proofOfDeliveryUrl,
+                          shelfPhotoUrl: stop.shelfPhotoUrl,
+                        }}
                       />
-                      <div className="flex justify-end">
-                        <Button type="submit" variant="outline" size="sm">Save Notes</Button>
-                      </div>
-                    </form>
+                    </div>
                   </div>
                 ))}
               </div>

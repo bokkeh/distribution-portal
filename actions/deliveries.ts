@@ -9,6 +9,9 @@ import { redirect } from 'next/navigation'
 import { sendSms } from '@/lib/telnyx/client'
 import { postGoogleChat } from '@/lib/google-chat/webhook'
 import { geocodeAddress } from '@/lib/maps/geocode'
+import { generateSignedUploadUrl } from '@/lib/gcs/client'
+import { sendDeliveryCompletedEmail } from '@/lib/resend/client'
+import { v4 as uuidv4 } from 'uuid'
 
 function isMissingDeliveryStopContactColumn(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false
@@ -158,6 +161,101 @@ export async function updateStopStatus(stopId: string, status: 'delivered' | 'fa
     .set({ status, completedAt: status === 'delivered' ? new Date() : null })
     .where(eq(deliveryStops.id, stopId))
   revalidatePath('/driver/deliveries')
+}
+
+export async function getDeliveryStopUploadUrl(
+  kind: 'proof' | 'shelf',
+  contentType: string
+): Promise<{ uploadUrl: string; publicUrl: string; error?: string }> {
+  try {
+    await requireRole('driver', 'admin')
+    const ext = contentType === 'image/png' ? 'png' : contentType === 'image/webp' ? 'webp' : 'jpg'
+    const filename = `${kind}-${uuidv4()}.${ext}`
+    return await generateSignedUploadUrl(filename, contentType, 'deliveries')
+  } catch (error) {
+    return { uploadUrl: '', publicUrl: '', error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
+export async function completeDeliveryStop(stopId: string, formData: FormData) {
+  await requireRole('driver', 'admin')
+
+  const proofOfDeliveryUrl = ((formData.get('proofOfDeliveryUrl') as string) || '').trim() || null
+  const shelfPhotoUrl = ((formData.get('shelfPhotoUrl') as string) || '').trim() || null
+  const notes = ((formData.get('notes') as string) || '').trim() || null
+
+  const [stop] = await db
+    .select({
+      id: deliveryStops.id,
+      deliveryId: deliveryStops.deliveryId,
+      address: deliveryStops.address,
+      companyName: customerAccounts.companyName,
+      contactPhone: deliveryStops.contactPhone,
+      contactEmail: deliveryStops.contactEmail,
+      accountPhone: customerAccounts.phone,
+      accountEmail: customerAccounts.email,
+      businessEmail: customerAccounts.businessEmail,
+    })
+    .from(deliveryStops)
+    .leftJoin(customerAccounts, eq(deliveryStops.customerId, customerAccounts.id))
+    .where(eq(deliveryStops.id, stopId))
+    .limit(1)
+
+  if (!stop) {
+    throw new Error('Stop not found')
+  }
+
+  try {
+    await db.update(deliveryStops)
+      .set({
+        status: 'delivered',
+        completedAt: new Date(),
+        notes,
+        proofOfDeliveryUrl,
+        shelfPhotoUrl,
+      })
+      .where(eq(deliveryStops.id, stopId))
+  } catch (error) {
+    const code = (error as { code?: string; cause?: { code?: string } } | null)?.code
+      ?? (error as { cause?: { code?: string } } | null)?.cause?.code
+    const message = error instanceof Error ? error.message.toLowerCase() : ''
+
+    if (code !== '42703' && !message.includes('proof_of_delivery_url') && !message.includes('shelf_photo_url')) {
+      throw error
+    }
+
+    await db.update(deliveryStops)
+      .set({
+        status: 'delivered',
+        completedAt: new Date(),
+        notes,
+      })
+      .where(eq(deliveryStops.id, stopId))
+  }
+
+  const notificationPhone = stop.contactPhone || stop.accountPhone
+  const notificationEmail = stop.contactEmail || stop.businessEmail || stop.accountEmail
+  const deliveryDate = new Date().toLocaleDateString()
+
+  if (notificationPhone) {
+    await sendSms({
+      to: notificationPhone,
+      body: `AHAWC delivery update: your order for ${stop.companyName ?? stop.address} has been delivered.`,
+    }).catch(() => {})
+  }
+
+  if (notificationEmail) {
+    await sendDeliveryCompletedEmail({
+      to: notificationEmail,
+      companyName: stop.companyName ?? stop.address,
+      deliveryDate,
+      proofOfDeliveryUrl,
+      shelfPhotoUrl,
+    })
+  }
+
+  revalidatePath('/driver/deliveries')
+  revalidatePath('/driver/map')
 }
 
 export async function updateStopNotes(stopId: string, formData: FormData) {

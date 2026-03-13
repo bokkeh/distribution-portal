@@ -53,6 +53,7 @@ export default function DeliveryMap({
 }) {
   const [selectedStop, setSelectedStop] = useState<Stop | null>(null)
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null)
+  const [lineOffset, setLineOffset] = useState('0%')
 
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ?? '',
@@ -96,6 +97,17 @@ export default function DeliveryMap({
   useEffect(() => {
     onEstimateChange?.(estimatedTravelTime)
   }, [estimatedTravelTime, onEstimateChange])
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setLineOffset(current => {
+        const next = (parseFloat(current) + 4) % 100
+        return `${next}%`
+      })
+    }, 180)
+
+    return () => window.clearInterval(interval)
+  }, [])
 
   useEffect(() => {
     if (!isLoaded || validStops.length === 0 || (!originPoint && validStops.length < 2)) {
@@ -178,9 +190,21 @@ export default function DeliveryMap({
               preserveViewport: true,
               suppressMarkers: true,
               polylineOptions: {
-                strokeColor: '#DC2626',
+                strokeColor: 'rgba(0,0,0,0)',
                 strokeWeight: 5,
-                strokeOpacity: 0.95,
+                strokeOpacity: 0,
+                icons: [
+                  {
+                    icon: {
+                      path: 'M 0,-1 0,1',
+                      strokeOpacity: 1,
+                      strokeColor: '#DC2626',
+                      scale: 4,
+                    },
+                    offset: lineOffset,
+                    repeat: '18px',
+                  },
+                ],
               },
             }}
           />
@@ -189,10 +213,22 @@ export default function DeliveryMap({
           <Polyline
             path={fallbackPath}
             options={{
-              strokeColor: '#DC2626',
+              strokeColor: 'rgba(0,0,0,0)',
               strokeWeight: 5,
-              strokeOpacity: 0.95,
+              strokeOpacity: 0,
               geodesic: true,
+              icons: [
+                {
+                  icon: {
+                    path: 'M 0,-1 0,1',
+                    strokeOpacity: 1,
+                    strokeColor: '#DC2626',
+                    scale: 4,
+                  },
+                  offset: lineOffset,
+                  repeat: '18px',
+                },
+              ],
             }}
           />
         )}
