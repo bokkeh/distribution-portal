@@ -1,6 +1,6 @@
 import { db } from '@/db'
 import { deliveries, deliveryStops, drivers, users, customerAccounts } from '@/db/schema'
-import { eq } from 'drizzle-orm'
+import { asc, eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -9,13 +9,18 @@ import { formatDate } from '@/lib/utils'
 import DeliveryMapWrapper from '@/components/deliveries/DeliveryMapWrapper'
 import Link from 'next/link'
 import { ArrowLeft, MapPin, CheckCircle, XCircle, Clock } from 'lucide-react'
+import { addDeliveryStop } from '@/actions/deliveries'
 
 export default async function DeliveryDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ deliveryId: string }> | { deliveryId: string }
+  searchParams?: Promise<{ addStop?: string }> | { addStop?: string }
 }) {
   const resolvedParams = await Promise.resolve(params)
+  const resolvedSearchParams = await Promise.resolve(searchParams ?? {})
+  const showAddStop = resolvedSearchParams.addStop === '1'
 
   const [delivery] = await db
     .select({
@@ -31,6 +36,18 @@ export default async function DeliveryDetailPage({
     .where(eq(deliveries.id, resolvedParams.deliveryId))
 
   if (!delivery) notFound()
+
+  const accounts = await db
+    .select({
+      id: customerAccounts.id,
+      companyName: customerAccounts.companyName,
+      address: customerAccounts.address,
+      city: customerAccounts.city,
+      state: customerAccounts.state,
+      zip: customerAccounts.zip,
+    })
+    .from(customerAccounts)
+    .orderBy(asc(customerAccounts.companyName))
 
   let stops: Array<{
     id: string
@@ -106,14 +123,14 @@ export default async function DeliveryDetailPage({
     failed: <XCircle className="w-4 h-4 text-red-500" />,
   }
 
-  const mapStops = stops.map(s => ({
-    id: s.id,
-    lat: parseFloat(s.lat ?? '0'),
-    lng: parseFloat(s.lng ?? '0'),
-    label: String(s.sequenceNumber),
-    title: s.companyName ?? s.address,
-    address: s.address,
-    status: s.status,
+  const mapStops = stops.map(stop => ({
+    id: stop.id,
+    lat: parseFloat(stop.lat ?? '0'),
+    lng: parseFloat(stop.lng ?? '0'),
+    label: String(stop.sequenceNumber),
+    title: stop.companyName ?? stop.address,
+    address: stop.address,
+    status: stop.status,
   }))
 
   return (
@@ -122,15 +139,49 @@ export default async function DeliveryDetailPage({
         <Link href="/admin/deliveries"><Button variant="ghost" size="icon"><ArrowLeft className="w-4 h-4" /></Button></Link>
         <div className="flex-1">
           <h1 className="text-2xl font-bold text-slate-900">Delivery Date {formatDate(delivery.weekStartDate)}</h1>
-          <p className="text-muted-foreground mt-1">Driver: {delivery.driverName} · {delivery.driverPhone}</p>
+          <p className="text-muted-foreground mt-1">Driver: {delivery.driverName} - {delivery.driverPhone}</p>
         </div>
+        <Link href={showAddStop ? `/admin/deliveries/${resolvedParams.deliveryId}` : `/admin/deliveries/${resolvedParams.deliveryId}?addStop=1`}>
+          <Button variant="outline">Add Stop</Button>
+        </Link>
         <Badge variant={delivery.status === 'completed' ? 'success' : delivery.status === 'in_progress' ? 'warning' : 'info'}>
           {delivery.status.replace('_', ' ')}
         </Badge>
       </div>
 
+      {showAddStop && (
+        <Card>
+          <CardHeader><CardTitle>Add Stop</CardTitle></CardHeader>
+          <CardContent>
+            <form action={addDeliveryStop.bind(null, resolvedParams.deliveryId)} className="space-y-4">
+              <div className="space-y-2">
+                <label htmlFor="customerId" className="text-sm font-medium text-slate-900">Select Account</label>
+                <select
+                  id="customerId"
+                  name="customerId"
+                  required
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="">Select account...</option>
+                  {accounts.map(account => (
+                    <option key={account.id} value={account.id}>
+                      {account.companyName} - {[account.address, account.city, account.state, account.zip].filter(Boolean).join(', ')}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex gap-3">
+                <Button type="submit">Add Stop</Button>
+                <Link href={`/admin/deliveries/${resolvedParams.deliveryId}`}>
+                  <Button type="button" variant="outline">Cancel</Button>
+                </Link>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Delivery Map */}
         <Card className="lg:col-span-1">
           <CardHeader><CardTitle>Route Map</CardTitle></CardHeader>
           <CardContent className="p-0 h-96 rounded-b-xl overflow-hidden">
@@ -138,19 +189,18 @@ export default async function DeliveryDetailPage({
           </CardContent>
         </Card>
 
-        {/* Stop List */}
         <Card>
           <CardHeader><CardTitle>{stops.length} Stops</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {stops.map(stop => (
-              <div key={stop.id} className="flex items-start gap-3 p-3 border rounded-lg">
-                <div className="w-7 h-7 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
+              <div key={stop.id} className="flex items-start gap-3 rounded-lg border p-3">
+                <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
                   {stop.sequenceNumber}
                 </div>
                 <div className="flex-1">
                   <p className="text-sm font-medium">{stop.companyName}</p>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                    <MapPin className="w-3 h-3" />{stop.address}
+                  <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                    <MapPin className="h-3 w-3" />{stop.address}
                   </p>
                   {(stop.contactName || stop.contactPhone || stop.contactEmail) && (
                     <div className="mt-2 space-y-1 text-xs text-muted-foreground">
@@ -160,7 +210,7 @@ export default async function DeliveryDetailPage({
                     </div>
                   )}
                   {stop.completedAt && (
-                    <p className="text-xs text-muted-foreground mt-1">Completed {formatDate(stop.completedAt)}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Completed {formatDate(stop.completedAt)}</p>
                   )}
                 </div>
                 {stopIcon[stop.status]}

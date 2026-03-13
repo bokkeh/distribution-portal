@@ -3,7 +3,7 @@
 import { db } from '@/db'
 import { deliveries, deliveryStops, orders, drivers, users, customerAccounts } from '@/db/schema'
 import { requireAdmin, requireAdminOrStaff } from '@/lib/auth/session'
-import { desc, eq, inArray } from 'drizzle-orm'
+import { and, desc, eq, inArray } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { sendSms } from '@/lib/telnyx/client'
@@ -147,7 +147,7 @@ export async function addDeliveryStop(deliveryId: string, formData: FormData) {
   const [openOrder] = await db
     .select({ id: orders.id })
     .from(orders)
-    .where(inArray(orders.status, ['pending', 'confirmed']))
+    .where(and(eq(orders.customerId, customerId), inArray(orders.status, ['pending', 'confirmed'])))
     .limit(1)
 
   const fullAddress = [account.address, account.city, account.state, account.zip].filter(Boolean).join(', ')
