@@ -95,10 +95,10 @@ export function DriverStopActions({ stop }: { stop: Stop }) {
 
   return (
     <div className="space-y-3 sm:space-y-4">
-      <div className="grid grid-cols-2 gap-2 sm:gap-3">
+      <div className="flex flex-wrap gap-3">
         <label className="block cursor-pointer">
           <span className="mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Proof Of Delivery</span>
-          <span className="flex aspect-square w-full max-w-[7rem] sm:max-w-[9rem] flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-2.5 py-2.5 text-center text-slate-600 transition-colors hover:border-blue-400 hover:bg-blue-50">
+          <span className="flex aspect-square w-[7rem] sm:w-[9rem] flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-2.5 py-2.5 text-center text-slate-600 transition-colors hover:border-blue-400 hover:bg-blue-50">
             {uploadingProof ? <Loader2 className="mb-3 h-7 w-7 animate-spin" /> : <PackageCheck className="mb-3 h-7 w-7" />}
             <span className="text-xs sm:text-sm font-semibold text-slate-900">
               {proofOfDeliveryUrl ? 'Replace Delivery Photo' : 'Upload Delivery Photo'}
@@ -126,7 +126,7 @@ export function DriverStopActions({ stop }: { stop: Stop }) {
 
         <label className="block cursor-pointer">
           <span className="mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Shelf Photo</span>
-          <span className="flex aspect-square w-full max-w-[7rem] sm:max-w-[9rem] flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-2.5 py-2.5 text-center text-slate-600 transition-colors hover:border-blue-400 hover:bg-blue-50">
+          <span className="flex aspect-square w-[7rem] sm:w-[9rem] flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-2.5 py-2.5 text-center text-slate-600 transition-colors hover:border-blue-400 hover:bg-blue-50">
             {uploadingShelf ? <Loader2 className="mb-3 h-7 w-7 animate-spin" /> : <BottleWine className="mb-3 h-7 w-7" />}
             <span className="text-xs sm:text-sm font-semibold text-slate-900">
               {shelfPhotoUrl ? 'Replace Shelf Photo' : 'Upload Shelf Photo'}
