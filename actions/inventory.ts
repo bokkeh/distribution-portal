@@ -8,6 +8,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { sendSampleCaseAlert } from '@/lib/resend/client'
 import { auth } from '@/lib/auth/config'
+import { logInventoryTransaction } from '@/lib/inventory/history'
 
 export async function createProduct(formData: FormData) {
   await requireAdmin()
@@ -33,6 +34,18 @@ export async function createProduct(formData: FormData) {
     reorderLevel: parseInt(formData.get('reorderLevel') as string) || 10,
   })
 
+  await logInventoryTransaction({
+    productId: product.id,
+    actorUserId: (await auth())?.user?.id ?? null,
+    type: 'product_created',
+    reason: 'Product created and added to inventory',
+    deltaPaid: parseInt(formData.get('quantityPaid') as string) || 0,
+    deltaSample: parseInt(formData.get('quantitySample') as string) || 0,
+    quantityPaidAfter: parseInt(formData.get('quantityPaid') as string) || 0,
+    quantitySampleAfter: parseInt(formData.get('quantitySample') as string) || 0,
+    looseBottlePaidAfter: 0,
+  })
+
   revalidatePath('/admin/inventory')
   redirect('/admin/inventory')
 }
@@ -44,7 +57,13 @@ export async function adjustSampleCases(productId: string, delta: number): Promi
   const staffName = session?.user?.name ?? 'Staff'
 
   const [row] = await db
-    .select({ quantitySample: inventory.quantitySample, name: products.name, sku: products.sku })
+    .select({
+      quantityPaid: inventory.quantityPaid,
+      quantitySample: inventory.quantitySample,
+      looseBottlePaid: inventory.looseBottlePaid,
+      name: products.name,
+      sku: products.sku,
+    })
     .from(inventory)
     .innerJoin(products, eq(inventory.productId, products.id))
     .where(eq(inventory.productId, productId))
@@ -57,6 +76,17 @@ export async function adjustSampleCases(productId: string, delta: number): Promi
   await db.update(inventory)
     .set({ quantitySample: newQty, updatedAt: new Date() })
     .where(eq(inventory.productId, productId))
+
+  await logInventoryTransaction({
+    productId,
+    actorUserId: session?.user?.id ?? null,
+    type: 'sample_adjustment',
+    reason: `Sample cases ${delta > 0 ? 'added' : 'removed'} by staff control`,
+    deltaSample: newQty - previousQty,
+    quantityPaidAfter: row.quantityPaid ?? 0,
+    quantitySampleAfter: newQty,
+    looseBottlePaidAfter: row.looseBottlePaid ?? 0,
+  })
 
   revalidatePath('/staff/inventory')
   revalidatePath('/admin/inventory')
@@ -90,7 +120,17 @@ export async function adjustStock(formData: FormData) {
     .where(eq(inventory.productId, productId))
     .limit(1)
 
+  const nextQuantityPaid = Number.isNaN(quantityPaid) ? 0 : quantityPaid
+  const nextQuantitySample = Number.isNaN(quantitySample) ? 0 : quantitySample
+  const nextLooseBottlePaid = Number.isNaN(looseBottlePaid) ? 0 : looseBottlePaid
+
   if (existingInventory) {
+    const [currentInventory] = await db
+      .select()
+      .from(inventory)
+      .where(eq(inventory.productId, productId))
+      .limit(1)
+
     await db.update(inventory)
       .set({
         quantityPaid,
@@ -100,14 +140,40 @@ export async function adjustStock(formData: FormData) {
         updatedAt: now,
       })
       .where(eq(inventory.productId, productId))
+
+    await logInventoryTransaction({
+      productId,
+      actorUserId: (await auth())?.user?.id ?? null,
+      type: 'manual_adjustment',
+      reason: 'Inventory updated from admin inventory screen',
+      deltaPaid: nextQuantityPaid - (currentInventory?.quantityPaid ?? 0),
+      deltaSample: nextQuantitySample - (currentInventory?.quantitySample ?? 0),
+      deltaLooseBottlePaid: nextLooseBottlePaid - (currentInventory?.looseBottlePaid ?? 0),
+      quantityPaidAfter: nextQuantityPaid,
+      quantitySampleAfter: nextQuantitySample,
+      looseBottlePaidAfter: nextLooseBottlePaid,
+    })
   } else {
     await db.insert(inventory).values({
       productId,
-      quantityPaid: Number.isNaN(quantityPaid) ? 0 : quantityPaid,
-      quantitySample: Number.isNaN(quantitySample) ? 0 : quantitySample,
+      quantityPaid: nextQuantityPaid,
+      quantitySample: nextQuantitySample,
       reorderLevel: Number.isNaN(reorderLevel) ? 10 : reorderLevel,
-      looseBottlePaid: Number.isNaN(looseBottlePaid) ? 0 : looseBottlePaid,
+      looseBottlePaid: nextLooseBottlePaid,
       updatedAt: now,
+    })
+
+    await logInventoryTransaction({
+      productId,
+      actorUserId: (await auth())?.user?.id ?? null,
+      type: 'manual_adjustment',
+      reason: 'Inventory record created from admin inventory screen',
+      deltaPaid: nextQuantityPaid,
+      deltaSample: nextQuantitySample,
+      deltaLooseBottlePaid: nextLooseBottlePaid,
+      quantityPaidAfter: nextQuantityPaid,
+      quantitySampleAfter: nextQuantitySample,
+      looseBottlePaidAfter: nextLooseBottlePaid,
     })
   }
 

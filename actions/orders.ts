@@ -7,6 +7,7 @@ import { eq, inArray } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { postGoogleChat } from '@/lib/google-chat/webhook'
+import { logInventoryTransaction } from '@/lib/inventory/history'
 
 type PurchaseUnit = 'case' | 'bottle'
 
@@ -89,9 +90,22 @@ export async function createOrder(formData: FormData) {
     if (!product || !inv) continue
 
     if (purchaseUnit === 'case') {
+      const nextQuantityPaid = Math.max(0, inv.quantityPaid - item.quantity)
       await db.update(inventory)
-        .set({ quantityPaid: Math.max(0, inv.quantityPaid - item.quantity) })
+        .set({ quantityPaid: nextQuantityPaid })
         .where(eq(inventory.id, inv.id))
+
+      await logInventoryTransaction({
+        productId: item.productId,
+        actorUserId: session.user.id,
+        orderId: order.id,
+        type: 'order_allocation',
+        reason: `Allocated ${item.quantity} case(s) to order ${order.id.slice(-8).toUpperCase()}`,
+        deltaPaid: -item.quantity,
+        quantityPaidAfter: nextQuantityPaid,
+        quantitySampleAfter: inv.quantitySample,
+        looseBottlePaidAfter: inv.looseBottlePaid,
+      })
       continue
     }
 
@@ -99,13 +113,27 @@ export async function createOrder(formData: FormData) {
     const totalLoose = inv.looseBottlePaid + item.quantity
     const consumedCases = Math.floor(totalLoose / bottlesPerCase)
     const nextLooseBottlePaid = totalLoose % bottlesPerCase
+    const nextQuantityPaid = Math.max(0, inv.quantityPaid - consumedCases)
 
     await db.update(inventory)
       .set({
-        quantityPaid: Math.max(0, inv.quantityPaid - consumedCases),
+        quantityPaid: nextQuantityPaid,
         looseBottlePaid: nextLooseBottlePaid,
       })
       .where(eq(inventory.id, inv.id))
+
+    await logInventoryTransaction({
+      productId: item.productId,
+      actorUserId: session.user.id,
+      orderId: order.id,
+      type: 'order_allocation',
+      reason: `Allocated ${item.quantity} bottle(s) to order ${order.id.slice(-8).toUpperCase()}`,
+      deltaPaid: -(consumedCases || 0),
+      deltaLooseBottlePaid: nextLooseBottlePaid - inv.looseBottlePaid,
+      quantityPaidAfter: nextQuantityPaid,
+      quantitySampleAfter: inv.quantitySample,
+      looseBottlePaidAfter: nextLooseBottlePaid,
+    })
   }
 
   await postGoogleChat(

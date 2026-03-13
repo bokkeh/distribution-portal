@@ -36,6 +36,13 @@
       "when": 1773320400000,
       "tag": "0004_plain_village",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1773322200000,
+      "tag": "0005_bright_pencil",
+      "breakpoints": true
     }
   ]
 }
