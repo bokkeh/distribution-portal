@@ -17,6 +17,7 @@ const navItems = [
   { href: '/admin/invoicing',  label: 'Invoicing',         icon: FileText },
   { href: '/admin/accounts',   label: 'Chart of Accounts', icon: BookOpen },
   { href: '/admin/crm',        label: 'CRM / Accounts',    icon: Building2 },
+  { href: '/admin/wholesale-requests', label: 'Wholesale Requests', icon: FileText },
   { href: '/admin/inventory',  label: 'Inventory',         icon: Package },
   { href: '/admin/users',      label: 'User Management',   icon: Users },
   { href: '/admin/deliveries', label: 'Deliveries',        icon: Truck },
