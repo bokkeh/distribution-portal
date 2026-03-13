@@ -1,6 +1,6 @@
 'use client'
 
-import { DirectionsRenderer, GoogleMap, InfoWindow, Marker, useJsApiLoader } from '@react-google-maps/api'
+import { DirectionsRenderer, GoogleMap, InfoWindow, Marker, Polyline, useJsApiLoader } from '@react-google-maps/api'
 import { useEffect, useState } from 'react'
 
 interface Stop {
@@ -21,6 +21,20 @@ const STATUS_COLORS: Record<string, string> = {
   failed: '#EF4444',
 }
 
+function haversineMiles(a: Stop, b: Stop) {
+  const toRadians = (degrees: number) => degrees * (Math.PI / 180)
+  const earthRadiusMiles = 3958.8
+  const dLat = toRadians(b.lat - a.lat)
+  const dLng = toRadians(b.lng - a.lng)
+  const lat1 = toRadians(a.lat)
+  const lat2 = toRadians(b.lat)
+
+  const sinLat = Math.sin(dLat / 2)
+  const sinLng = Math.sin(dLng / 2)
+  const h = sinLat * sinLat + Math.cos(lat1) * Math.cos(lat2) * sinLng * sinLng
+  return 2 * earthRadiusMiles * Math.asin(Math.sqrt(h))
+}
+
 export default function DeliveryMap({ stops }: { stops: Stop[] }) {
   const [selectedStop, setSelectedStop] = useState<Stop | null>(null)
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null)
@@ -31,16 +45,23 @@ export default function DeliveryMap({ stops }: { stops: Stop[] }) {
 
   const validStops = stops.filter(s => s.lat !== 0 && s.lng !== 0)
   const routeKey = validStops.map(stop => `${stop.id}:${stop.lat}:${stop.lng}`).join('|')
+  const fallbackPath = validStops.map(stop => ({ lat: stop.lat, lng: stop.lng }))
 
   const activeStop = selectedStop ?? validStops[0] ?? null
   const center = activeStop
     ? { lat: activeStop.lat, lng: activeStop.lng }
     : { lat: 29.7604, lng: -95.3698 } // Houston default
   const totalDurationSeconds = directions?.routes[0]?.legs?.reduce((sum, leg) => sum + (leg.duration?.value ?? 0), 0) ?? 0
+  const fallbackDurationSeconds = validStops.length > 1
+    ? validStops.slice(1).reduce((sum, stop, index) => sum + ((haversineMiles(validStops[index], stop) / 30) * 3600), 0)
+    : 0
+  const durationSeconds = totalDurationSeconds || fallbackDurationSeconds
   const estimatedTravelTime = totalDurationSeconds > 0
-    ? totalDurationSeconds >= 3600
-      ? `${Math.floor(totalDurationSeconds / 3600)}h ${Math.round((totalDurationSeconds % 3600) / 60)}m`
-      : `${Math.round(totalDurationSeconds / 60)} min`
+    ? durationSeconds >= 3600
+      ? `${Math.floor(durationSeconds / 3600)}h ${Math.round((durationSeconds % 3600) / 60)}m`
+      : `${Math.round(durationSeconds / 60)} min`
+    : fallbackDurationSeconds > 0
+      ? `~${Math.round(fallbackDurationSeconds / 60)} min`
     : null
 
   useEffect(() => {
@@ -118,6 +139,17 @@ export default function DeliveryMap({ stops }: { stops: Stop[] }) {
                 strokeWeight: 5,
                 strokeOpacity: 0.95,
               },
+            }}
+          />
+        )}
+        {!directions && fallbackPath.length > 1 && (
+          <Polyline
+            path={fallbackPath}
+            options={{
+              strokeColor: '#DC2626',
+              strokeWeight: 5,
+              strokeOpacity: 0.95,
+              geodesic: true,
             }}
           />
         )}

@@ -9,7 +9,7 @@ import { formatDate } from '@/lib/utils'
 import DeliveryMapWrapper from '@/components/deliveries/DeliveryMapWrapper'
 import Link from 'next/link'
 import { ArrowLeft, MapPin, CheckCircle, XCircle, Clock } from 'lucide-react'
-import { addDeliveryStop } from '@/actions/deliveries'
+import { addDeliveryStop, removeDeliveryStop } from '@/actions/deliveries'
 
 export default async function DeliveryDetailPage({
   params,
@@ -219,7 +219,12 @@ export default async function DeliveryDetailPage({
                     <p className="mt-1 text-xs text-muted-foreground">Completed {formatDate(stop.completedAt)}</p>
                   )}
                 </div>
-                {stopIcon[stop.status]}
+                <div className="flex items-start gap-2">
+                  {stopIcon[stop.status]}
+                  <form action={removeDeliveryStop.bind(null, resolvedParams.deliveryId, stop.id)}>
+                    <Button type="submit" variant="outline" size="sm">Remove</Button>
+                  </form>
+                </div>
               </div>
             ))}
           </CardContent>

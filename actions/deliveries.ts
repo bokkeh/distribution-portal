@@ -160,6 +160,37 @@ export async function updateStopStatus(stopId: string, status: 'delivered' | 'fa
   revalidatePath('/driver/deliveries')
 }
 
+export async function removeDeliveryStop(deliveryId: string, stopId: string) {
+  await requireAdmin()
+
+  await db.delete(deliveryStops).where(eq(deliveryStops.id, stopId))
+
+  const remainingStops = await db
+    .select({
+      id: deliveryStops.id,
+      sequenceNumber: deliveryStops.sequenceNumber,
+    })
+    .from(deliveryStops)
+    .where(eq(deliveryStops.deliveryId, deliveryId))
+    .orderBy(deliveryStops.sequenceNumber)
+
+  for (let index = 0; index < remainingStops.length; index++) {
+    const stop = remainingStops[index]
+    const nextSequenceNumber = index + 1
+
+    if (stop.sequenceNumber === nextSequenceNumber) continue
+
+    await db.update(deliveryStops)
+      .set({ sequenceNumber: nextSequenceNumber })
+      .where(eq(deliveryStops.id, stop.id))
+  }
+
+  revalidatePath(`/admin/deliveries/${deliveryId}`)
+  revalidatePath('/admin/deliveries')
+  revalidatePath('/driver/deliveries')
+  revalidatePath('/driver/map')
+}
+
 export async function addDeliveryStop(deliveryId: string, formData: FormData) {
   try {
     await requireAdmin()
