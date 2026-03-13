@@ -253,6 +253,8 @@ export async function reassignDeliveryDriver(deliveryId: string, formData: FormD
 }
 
 export async function addDeliveryStop(deliveryId: string, formData: FormData) {
+  let errorMessage: string | null = null
+
   try {
     await requireAdmin()
 
@@ -338,9 +340,13 @@ export async function addDeliveryStop(deliveryId: string, formData: FormData) {
     revalidatePath(`/admin/deliveries/${deliveryId}`)
     revalidatePath('/driver/deliveries')
     revalidatePath('/driver/map')
-    redirect(`/admin/deliveries/${deliveryId}`)
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unable to add stop.'
-    redirect(`/admin/deliveries/${deliveryId}?addStop=1&error=${encodeURIComponent(message)}`)
+    errorMessage = error instanceof Error ? error.message : 'Unable to add stop.'
   }
+
+  if (errorMessage) {
+    redirect(`/admin/deliveries/${deliveryId}?addStop=1&error=${encodeURIComponent(errorMessage)}`)
+  }
+
+  redirect(`/admin/deliveries/${deliveryId}`)
 }
