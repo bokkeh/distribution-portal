@@ -52,7 +52,7 @@ export default async function WholesaleRequestsPage() {
     <div className="p-4 sm:p-8 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Wholesale Requests</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Wholesaler Requests</h1>
           <p className="mt-1 text-muted-foreground">
             {tableUnavailable
               ? 'Requests will appear here after the wholesale request table is migrated.'
