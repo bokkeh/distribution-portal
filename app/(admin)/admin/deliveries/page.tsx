@@ -35,7 +35,7 @@ export default async function DeliveriesPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Delivery Scheduling</h1>
-          <p className="text-muted-foreground mt-1">Manage weekly delivery routes</p>
+          <p className="text-muted-foreground mt-1">Manage assigned delivery dates and routes</p>
         </div>
         <Link href="/admin/deliveries/new">
           <Button><Plus className="w-4 h-4 mr-2" />Schedule Delivery</Button>
@@ -56,7 +56,7 @@ export default async function DeliveriesPage() {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="space-y-1">
                   <div className="flex items-center gap-3">
-                    <h3 className="font-semibold">Week of {formatDate(delivery.weekStartDate)}</h3>
+                    <h3 className="font-semibold">Delivery Date {formatDate(delivery.weekStartDate)}</h3>
                     <Badge variant={statusVariant[delivery.status]}>{delivery.status.replace('_', ' ')}</Badge>
                   </div>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">

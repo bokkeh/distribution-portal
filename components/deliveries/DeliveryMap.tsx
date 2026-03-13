@@ -10,6 +10,8 @@ interface Stop {
   label: string
   title: string
   address: string
+  contactName?: string | null
+  contactPhone?: string | null
   status: string
 }
 
@@ -72,6 +74,12 @@ export default function DeliveryMap({ stops }: { stops: Stop[] }) {
           <div className="p-1 min-w-36">
             <p className="font-semibold text-sm">{selectedStop.title}</p>
             <p className="text-xs text-gray-600 mt-0.5">{selectedStop.address}</p>
+            {selectedStop.contactName && (
+              <p className="text-xs text-gray-600 mt-1">POC: {selectedStop.contactName}</p>
+            )}
+            {selectedStop.contactPhone && (
+              <p className="text-xs text-gray-600">{selectedStop.contactPhone}</p>
+            )}
             <p className="text-xs font-medium mt-1 capitalize" style={{ color: STATUS_COLORS[selectedStop.status] }}>
               {selectedStop.status}
             </p>

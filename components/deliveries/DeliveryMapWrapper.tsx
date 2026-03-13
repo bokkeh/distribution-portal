@@ -18,6 +18,8 @@ interface Stop {
   label: string
   title: string
   address: string
+  contactName?: string | null
+  contactPhone?: string | null
   status: string
 }
 

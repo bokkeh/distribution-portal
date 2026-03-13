@@ -31,6 +31,9 @@ export default async function DeliveryDetailPage({ params }: { params: { deliver
       id: deliveryStops.id,
       sequenceNumber: deliveryStops.sequenceNumber,
       address: deliveryStops.address,
+      contactName: deliveryStops.contactName,
+      contactPhone: deliveryStops.contactPhone,
+      contactEmail: deliveryStops.contactEmail,
       lat: deliveryStops.lat,
       lng: deliveryStops.lng,
       status: deliveryStops.status,
@@ -64,7 +67,7 @@ export default async function DeliveryDetailPage({ params }: { params: { deliver
       <div className="flex items-center gap-4">
         <Link href="/admin/deliveries"><Button variant="ghost" size="icon"><ArrowLeft className="w-4 h-4" /></Button></Link>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-slate-900">Week of {formatDate(delivery.weekStartDate)}</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Delivery Date {formatDate(delivery.weekStartDate)}</h1>
           <p className="text-muted-foreground mt-1">Driver: {delivery.driverName} · {delivery.driverPhone}</p>
         </div>
         <Badge variant={delivery.status === 'completed' ? 'success' : delivery.status === 'in_progress' ? 'warning' : 'info'}>
@@ -95,6 +98,13 @@ export default async function DeliveryDetailPage({ params }: { params: { deliver
                   <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                     <MapPin className="w-3 h-3" />{stop.address}
                   </p>
+                  {(stop.contactName || stop.contactPhone || stop.contactEmail) && (
+                    <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                      {stop.contactName && <p>POC: {stop.contactName}</p>}
+                      {stop.contactPhone && <p>Phone: {stop.contactPhone}</p>}
+                      {stop.contactEmail && <p>Email: {stop.contactEmail}</p>}
+                    </div>
+                  )}
                   {stop.completedAt && (
                     <p className="text-xs text-muted-foreground mt-1">Completed {formatDate(stop.completedAt)}</p>
                   )}

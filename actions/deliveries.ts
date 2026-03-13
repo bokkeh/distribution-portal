@@ -23,7 +23,6 @@ export async function createDelivery(formData: FormData) {
     status: 'scheduled',
   }).returning()
 
-  // Add stops for selected orders
   if (orderIds.length > 0) {
     const selectedOrders = await db
       .select({
@@ -44,9 +43,9 @@ export async function createDelivery(formData: FormData) {
       .where(inArray(orders.id, orderIds))
 
     for (let i = 0; i < selectedOrders.length; i++) {
-      const o = selectedOrders[i]
-      const fullAddress = [o.address, o.city, o.state, o.zip].filter(Boolean).join(', ') || 'Address not provided'
-      const contactName = o.pocName || o.contactName || o.companyName || null
+      const order = selectedOrders[i]
+      const fullAddress = [order.address, order.city, order.state, order.zip].filter(Boolean).join(', ') || 'Address not provided'
+      const contactName = order.pocName || order.contactName || order.companyName || null
       let lat: number | null = null
       let lng: number | null = null
 
@@ -58,13 +57,13 @@ export async function createDelivery(formData: FormData) {
 
       await db.insert(deliveryStops).values({
         deliveryId: delivery.id,
-        orderId: o.id,
-        customerId: o.customerId,
+        orderId: order.id,
+        customerId: order.customerId,
         sequenceNumber: i + 1,
         address: fullAddress,
         contactName,
-        contactPhone: o.pocPhone ?? null,
-        contactEmail: o.pocEmail ?? null,
+        contactPhone: order.pocPhone ?? null,
+        contactEmail: order.pocEmail ?? null,
         lat: lat?.toFixed(7) ?? null,
         lng: lng?.toFixed(7) ?? null,
         status: 'pending',
@@ -72,8 +71,8 @@ export async function createDelivery(formData: FormData) {
     }
   }
 
-  // Send SMS to driver
-  const [driver] = await db.select({ phone: drivers.phone, name: users.name })
+  const [driver] = await db
+    .select({ phone: drivers.phone, name: users.name })
     .from(drivers)
     .innerJoin(users, eq(drivers.userId, users.id))
     .where(eq(drivers.id, driverId))
@@ -81,11 +80,11 @@ export async function createDelivery(formData: FormData) {
   if (driver?.phone) {
     await sendSms({
       to: driver.phone,
-      body: `AHAWC Delivery Assigned: You have ${orderIds.length} stop(s) for the week of ${weekStartDate}. Log in to view your route: ${process.env.NEXTAUTH_URL}/driver/deliveries`,
+      body: `AHAWC Delivery Assigned: You have ${orderIds.length} stop(s) scheduled for ${weekStartDate}. Log in to view your route: ${process.env.NEXTAUTH_URL}/driver/deliveries`,
     })
   }
 
-  await postGoogleChat(`🚚 *Delivery Scheduled* for week of ${weekStartDate}\nDriver: ${driver?.name}\nStops: ${orderIds.length}`)
+  await postGoogleChat(`Delivery Scheduled for ${weekStartDate}\nDriver: ${driver?.name}\nStops: ${orderIds.length}`)
 
   revalidatePath('/admin/deliveries')
   redirect(`/admin/deliveries/${delivery.id}`)

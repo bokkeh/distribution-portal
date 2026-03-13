@@ -15,6 +15,8 @@ export default async function DriverMapPage() {
       id: deliveryStops.id,
       sequenceNumber: deliveryStops.sequenceNumber,
       address: deliveryStops.address,
+      contactName: deliveryStops.contactName,
+      contactPhone: deliveryStops.contactPhone,
       lat: deliveryStops.lat,
       lng: deliveryStops.lng,
       status: deliveryStops.status,
@@ -33,6 +35,8 @@ export default async function DriverMapPage() {
     label: String(s.sequenceNumber),
     title: s.companyName ?? s.address,
     address: s.address,
+    contactName: s.contactName,
+    contactPhone: s.contactPhone,
     status: s.status,
   }))
 

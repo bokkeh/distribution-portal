@@ -53,6 +53,9 @@ export default async function DriverDeliveriesPage() {
           .select({
             id: deliveryStops.id, sequenceNumber: deliveryStops.sequenceNumber,
             address: deliveryStops.address, status: deliveryStops.status,
+            contactName: deliveryStops.contactName,
+            contactPhone: deliveryStops.contactPhone,
+            contactEmail: deliveryStops.contactEmail,
             companyName: customerAccounts.companyName,
           })
           .from(deliveryStops)
@@ -63,7 +66,7 @@ export default async function DriverDeliveriesPage() {
         return (
           <Card key={delivery.id}>
             <CardHeader>
-              <CardTitle className="text-base">Week of {formatDate(delivery.weekStartDate)}</CardTitle>
+              <CardTitle className="text-base">Delivery Date {formatDate(delivery.weekStartDate)}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {stops.map(stop => (
@@ -76,6 +79,13 @@ export default async function DriverDeliveriesPage() {
                     <p className="text-xs text-muted-foreground flex items-center gap-1">
                       <MapPin className="w-3 h-3" />{stop.address}
                     </p>
+                    {(stop.contactName || stop.contactPhone || stop.contactEmail) && (
+                      <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                        {stop.contactName && <p>POC: {stop.contactName}</p>}
+                        {stop.contactPhone && <p>Phone: {stop.contactPhone}</p>}
+                        {stop.contactEmail && <p>Email: {stop.contactEmail}</p>}
+                      </div>
+                    )}
                   </div>
                   <div className="flex gap-2">
                     {stop.status === 'pending' ? (
