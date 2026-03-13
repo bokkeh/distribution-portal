@@ -10,6 +10,33 @@ import { sendSms } from '@/lib/telnyx/client'
 import { postGoogleChat } from '@/lib/google-chat/webhook'
 import { geocodeAddress } from '@/lib/maps/geocode'
 
+function isMissingDeliveryStopContactColumn(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+
+  const dbError = error as {
+    code?: string
+    message?: string
+    column?: string
+    cause?: unknown
+  }
+
+  if (dbError.code === '42703') return true
+  if (dbError.column === 'contact_name' || dbError.column === 'contact_phone' || dbError.column === 'contact_email') {
+    return true
+  }
+
+  const message = dbError.message?.toLowerCase() ?? ''
+  if (
+    message.includes('contact_name') ||
+    message.includes('contact_phone') ||
+    message.includes('contact_email')
+  ) {
+    return true
+  }
+
+  return isMissingDeliveryStopContactColumn(dbError.cause)
+}
+
 async function insertDeliveryStopWithFallback(
   values: {
     deliveryId: string
@@ -28,11 +55,7 @@ async function insertDeliveryStopWithFallback(
   try {
     await db.insert(deliveryStops).values(values)
   } catch (error) {
-    const code = (error as { code?: string; cause?: { code?: string } } | null)?.code
-      ?? (error as { cause?: { code?: string } } | null)?.cause?.code
-    const message = error instanceof Error ? error.message.toLowerCase() : ''
-
-    if (code !== '42703' && !message.includes('contact_name') && !message.includes('contact_phone') && !message.includes('contact_email')) {
+    if (!isMissingDeliveryStopContactColumn(error)) {
       throw error
     }
 
