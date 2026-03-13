@@ -6,6 +6,7 @@ import { requireAuth } from '@/lib/auth/session'
 import { eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { generateSignedUploadUrl } from '@/lib/gcs/client'
+import { geocodeAddress } from '@/lib/maps/geocode'
 import { v4 as uuidv4 } from 'uuid'
 
 export async function updateProfile(
@@ -94,6 +95,22 @@ export async function updateDriverProfile(
 
     const driverId = formData.get('driverId') as string | null
     if (driverId) {
+      const homeAddress = (formData.get('homeAddress') as string) || null
+      const homeCity = (formData.get('homeCity') as string) || null
+      const homeState = (formData.get('homeState') as string) || null
+      const homeZip = (formData.get('homeZip') as string) || null
+      const fullHomeAddress = [homeAddress, homeCity, homeState, homeZip].filter(Boolean).join(', ')
+      let homeLat: string | null = null
+      let homeLng: string | null = null
+
+      if (fullHomeAddress) {
+        try {
+          const coords = await geocodeAddress(fullHomeAddress)
+          homeLat = coords?.lat?.toFixed(7) ?? null
+          homeLng = coords?.lng?.toFixed(7) ?? null
+        } catch {}
+      }
+
       await db.update(drivers).set({
         vehicleMake: (formData.get('vehicleMake') as string) || null,
         vehicleModel: (formData.get('vehicleModel') as string) || null,
@@ -101,6 +118,12 @@ export async function updateDriverProfile(
         vin: (formData.get('vin') as string) || null,
         licensePlate: (formData.get('licensePlate') as string) || null,
         vehicleImageUrl: (formData.get('vehicleImageUrl') as string) || null,
+        homeAddress,
+        homeCity,
+        homeState,
+        homeZip,
+        homeLat,
+        homeLng,
         phone: (formData.get('phone') as string) || '',
       }).where(eq(drivers.id, driverId))
     }

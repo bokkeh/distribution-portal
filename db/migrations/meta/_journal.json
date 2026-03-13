@@ -50,6 +50,13 @@
       "when": 1773408600000,
       "tag": "0006_fresh_route",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1773419400000,
+      "tag": "0007_driver_home_base",
+      "breakpoints": true
     }
   ]
 }

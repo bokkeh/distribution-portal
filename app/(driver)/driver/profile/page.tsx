@@ -26,6 +26,10 @@ export default async function DriverProfilePage() {
           vin: driver.vin,
           licensePlate: driver.licensePlate,
           vehicleImageUrl: driver.vehicleImageUrl,
+          homeAddress: driver.homeAddress,
+          homeCity: driver.homeCity,
+          homeState: driver.homeState,
+          homeZip: driver.homeZip,
         } : null}
       />
     </div>

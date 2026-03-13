@@ -133,7 +133,19 @@ export default async function DriverDeliveriesPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="h-[420px] overflow-hidden rounded-xl border">
-                <DeliveryMapWrapper stops={mapStops} />
+                <DeliveryMapWrapper
+                  stops={mapStops}
+                  origin={
+                    driver?.homeLat && driver?.homeLng
+                      ? {
+                          lat: parseFloat(driver.homeLat),
+                          lng: parseFloat(driver.homeLng),
+                          title: 'Home Base',
+                          address: [driver.homeAddress, driver.homeCity, driver.homeState, driver.homeZip].filter(Boolean).join(', '),
+                        }
+                      : null
+                  }
+                />
               </div>
 
               <div className="space-y-3">

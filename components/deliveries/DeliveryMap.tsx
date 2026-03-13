@@ -15,6 +15,13 @@ interface Stop {
   status: string
 }
 
+interface Origin {
+  lat: number
+  lng: number
+  title: string
+  address: string
+}
+
 const STATUS_COLORS: Record<string, string> = {
   pending: '#3B82F6',
   delivered: '#22C55E',
@@ -35,7 +42,15 @@ function haversineMiles(a: Stop, b: Stop) {
   return 2 * earthRadiusMiles * Math.asin(Math.sqrt(h))
 }
 
-export default function DeliveryMap({ stops }: { stops: Stop[] }) {
+export default function DeliveryMap({
+  stops,
+  origin,
+  onEstimateChange,
+}: {
+  stops: Stop[]
+  origin?: Origin | null
+  onEstimateChange?: (estimate: string | null) => void
+}) {
   const [selectedStop, setSelectedStop] = useState<Stop | null>(null)
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null)
 
@@ -44,16 +59,30 @@ export default function DeliveryMap({ stops }: { stops: Stop[] }) {
   })
 
   const validStops = stops.filter(s => s.lat !== 0 && s.lng !== 0)
+  const originPoint = origin && origin.lat !== 0 && origin.lng !== 0 ? origin : null
   const routeKey = validStops.map(stop => `${stop.id}:${stop.lat}:${stop.lng}`).join('|')
-  const fallbackPath = validStops.map(stop => ({ lat: stop.lat, lng: stop.lng }))
+  const fallbackPath = [
+    ...(originPoint ? [{ lat: originPoint.lat, lng: originPoint.lng }] : []),
+    ...validStops.map(stop => ({ lat: stop.lat, lng: stop.lng })),
+  ]
 
   const activeStop = selectedStop ?? validStops[0] ?? null
-  const center = activeStop
-    ? { lat: activeStop.lat, lng: activeStop.lng }
+  const center = selectedStop
+    ? { lat: selectedStop.lat, lng: selectedStop.lng }
+    : originPoint
+      ? { lat: originPoint.lat, lng: originPoint.lng }
+      : activeStop
+        ? { lat: activeStop.lat, lng: activeStop.lng }
     : { lat: 29.7604, lng: -95.3698 } // Houston default
   const totalDurationSeconds = directions?.routes[0]?.legs?.reduce((sum, leg) => sum + (leg.duration?.value ?? 0), 0) ?? 0
-  const fallbackDurationSeconds = validStops.length > 1
-    ? validStops.slice(1).reduce((sum, stop, index) => sum + ((haversineMiles(validStops[index], stop) / 30) * 3600), 0)
+  const durationStops = originPoint
+    ? [
+        { id: 'origin', lat: originPoint.lat, lng: originPoint.lng, label: 'H', title: originPoint.title, address: originPoint.address, status: 'pending' },
+        ...validStops,
+      ]
+    : validStops
+  const fallbackDurationSeconds = durationStops.length > 1
+    ? durationStops.slice(1).reduce((sum, stop, index) => sum + ((haversineMiles(durationStops[index], stop) / 30) * 3600), 0)
     : 0
   const durationSeconds = totalDurationSeconds || fallbackDurationSeconds
   const estimatedTravelTime = totalDurationSeconds > 0
@@ -65,22 +94,28 @@ export default function DeliveryMap({ stops }: { stops: Stop[] }) {
     : null
 
   useEffect(() => {
-    if (!isLoaded || validStops.length < 2) {
+    onEstimateChange?.(estimatedTravelTime)
+  }, [estimatedTravelTime, onEstimateChange])
+
+  useEffect(() => {
+    if (!isLoaded || validStops.length === 0 || (!originPoint && validStops.length < 2)) {
       setDirections(null)
       return
     }
 
     const directionsService = new google.maps.DirectionsService()
-    const origin = { lat: validStops[0].lat, lng: validStops[0].lng }
+    const routeOrigin = originPoint
+      ? { lat: originPoint.lat, lng: originPoint.lng }
+      : { lat: validStops[0].lat, lng: validStops[0].lng }
     const destination = { lat: validStops[validStops.length - 1].lat, lng: validStops[validStops.length - 1].lng }
-    const waypoints = validStops.slice(1, -1).map(stop => ({
+    const waypoints = (originPoint ? validStops : validStops.slice(1)).slice(0, -1).map(stop => ({
       location: { lat: stop.lat, lng: stop.lng },
       stopover: true,
     }))
 
     directionsService.route(
       {
-        origin,
+        origin: routeOrigin,
         destination,
         waypoints,
         optimizeWaypoints: waypoints.length > 0,
@@ -95,18 +130,12 @@ export default function DeliveryMap({ stops }: { stops: Stop[] }) {
         setDirections(null)
       }
     )
-  }, [isLoaded, routeKey])
+  }, [isLoaded, routeKey, originPoint?.lat, originPoint?.lng])
 
   if (!isLoaded) return <div className="w-full h-full flex items-center justify-center bg-slate-100"><p className="text-sm text-muted-foreground">Loading map...</p></div>
 
   return (
     <div className="relative h-full w-full">
-      {estimatedTravelTime && (
-        <div className="absolute left-3 top-3 z-10 rounded-md bg-white/95 px-3 py-2 shadow-sm ring-1 ring-slate-200">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Estimated Drive Time</p>
-          <p className="text-sm font-semibold text-slate-900">{estimatedTravelTime}</p>
-        </div>
-      )}
       <GoogleMap
         mapContainerStyle={{ width: '100%', height: '100%' }}
         center={center}
@@ -128,6 +157,20 @@ export default function DeliveryMap({ stops }: { stops: Stop[] }) {
             onClick={() => setSelectedStop(stop)}
           />
         ))}
+        {originPoint && (
+          <Marker
+            position={{ lat: originPoint.lat, lng: originPoint.lng }}
+            label={{ text: 'H', color: 'white', fontWeight: 'bold', fontSize: '12px' }}
+            icon={{
+              path: google.maps.SymbolPath.CIRCLE,
+              fillColor: '#0F172A',
+              fillOpacity: 1,
+              strokeWeight: 2,
+              strokeColor: 'white',
+              scale: 18,
+            }}
+          />
+        )}
         {directions && (
           <DirectionsRenderer
             directions={directions}

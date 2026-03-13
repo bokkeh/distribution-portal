@@ -90,7 +90,19 @@ export default async function DriverMapPage() {
       <h1 className="text-2xl font-bold text-slate-900">My Route Map</h1>
       <Card>
         <CardContent className="p-0 h-[600px] rounded-xl overflow-hidden">
-          <DeliveryMapWrapper stops={mapStops} />
+          <DeliveryMapWrapper
+            stops={mapStops}
+            origin={
+              driver?.homeLat && driver?.homeLng
+                ? {
+                    lat: parseFloat(driver.homeLat),
+                    lng: parseFloat(driver.homeLng),
+                    title: 'Home Base',
+                    address: [driver.homeAddress, driver.homeCity, driver.homeState, driver.homeZip].filter(Boolean).join(', '),
+                  }
+                : null
+            }
+          />
         </CardContent>
       </Card>
     </div>
