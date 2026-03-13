@@ -16,6 +16,19 @@ const requestSchema = z.object({
   submissionPage: z.string().trim().optional(),
 })
 
+function isMissingRequestMetadataColumnError(error: unknown) {
+  if (!error || typeof error !== 'object') return false
+
+  const dbError = error as { code?: string; message?: string }
+  if (dbError.code === '42703') return true
+
+  const message = dbError.message?.toLowerCase() ?? ''
+  return (
+    message.includes('column') &&
+    (message.includes('ip_address') || message.includes('user_agent'))
+  )
+}
+
 export async function submitWholesaleAccountRequest(
   _prev: { error?: string; success?: boolean } | null,
   formData: FormData
@@ -34,7 +47,7 @@ export async function submitWholesaleAccountRequest(
     const phone = parsed.phone
     const phoneNormalized = normalizePhone(phone)
 
-    await db.insert(wholesaleAccountRequests).values({
+    const insertValues = {
       businessName: parsed.businessName,
       businessEmail: parsed.businessEmail,
       phone,
@@ -46,7 +59,27 @@ export async function submitWholesaleAccountRequest(
       submissionPage: parsed.submissionPage ?? null,
       ipAddress: requestHeaders.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null,
       userAgent: requestHeaders.get('user-agent'),
-    })
+    }
+
+    try {
+      await db.insert(wholesaleAccountRequests).values(insertValues)
+    } catch (error) {
+      if (!isMissingRequestMetadataColumnError(error)) {
+        throw error
+      }
+
+      await db.insert(wholesaleAccountRequests).values({
+        businessName: insertValues.businessName,
+        businessEmail: insertValues.businessEmail,
+        phone: insertValues.phone,
+        phoneNormalized: insertValues.phoneNormalized,
+        smsOptIn: insertValues.smsOptIn,
+        smsOptInAt: insertValues.smsOptInAt,
+        smsConsentLanguage: insertValues.smsConsentLanguage,
+        source: insertValues.source,
+        submissionPage: insertValues.submissionPage,
+      })
+    }
 
     if (parsed.smsOptIn) {
       await setSmsSubscription({
