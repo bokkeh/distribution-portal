@@ -9,8 +9,20 @@ import { Label } from '@/components/ui/label'
 import { adjustStock } from '@/actions/inventory'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
+import { redirect } from 'next/navigation'
 
 export default async function EditProductPage({ params }: { params: { productId: string } }) {
+  async function submitAdjustStock(formData: FormData) {
+    'use server'
+
+    const result = await adjustStock(formData)
+    if (result?.error) {
+      throw new Error(result.error)
+    }
+
+    redirect(`/admin/inventory/${params.productId}`)
+  }
+
   const [record] = await db
     .select({
       product: products,
@@ -39,7 +51,7 @@ export default async function EditProductPage({ params }: { params: { productId:
       <Card className="max-w-lg">
         <CardHeader><CardTitle>Adjust Inventory</CardTitle></CardHeader>
         <CardContent>
-          <form action={adjustStock} className="space-y-4">
+          <form action={submitAdjustStock} className="space-y-4">
             <input type="hidden" name="productId" value={product.id} />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
