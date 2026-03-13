@@ -3,7 +3,8 @@
 import { z } from 'zod'
 import { headers } from 'next/headers'
 import { db } from '@/db'
-import { wholesaleAccountRequests } from '@/db/schema'
+import { wholesaleAccountRequests, type NewWholesaleAccountRequest } from '@/db/schema'
+import { sql } from 'drizzle-orm'
 import { normalizePhone, setSmsSubscription, SMS_CONFIRMATION_MESSAGE, SMS_CONSENT_COPY } from '@/lib/telnyx/compliance'
 import { sendSms } from '@/lib/telnyx/client'
 
@@ -16,27 +17,19 @@ const requestSchema = z.object({
   submissionPage: z.string().trim().optional(),
 })
 
-function isMissingRequestMetadataColumnError(error: unknown) {
-  if (!error || typeof error !== 'object') return false
+async function getWholesaleRequestColumns() {
+  const result = await db.execute(sql`
+    select column_name
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'wholesale_account_requests'
+  `)
 
-  const dbError = error as {
-    code?: string
-    message?: string
-    column?: string
-    cause?: unknown
-  }
-  if (dbError.code === '42703') return true
-  if (dbError.column === 'ip_address' || dbError.column === 'user_agent') return true
-
-  const message = dbError.message?.toLowerCase() ?? ''
-  if (
-    message.includes('column') &&
-    (message.includes('ip_address') || message.includes('user_agent'))
-  ) {
-    return true
-  }
-
-  return isMissingRequestMetadataColumnError(dbError.cause)
+  return new Set(
+    result.rows
+      .map(row => row.column_name)
+      .filter((columnName): columnName is string => typeof columnName === 'string')
+  )
 }
 
 export async function submitWholesaleAccountRequest(
@@ -71,24 +64,43 @@ export async function submitWholesaleAccountRequest(
       userAgent: requestHeaders.get('user-agent'),
     }
 
+    const fallbackInsertValues = {
+      businessName: insertValues.businessName,
+      businessEmail: insertValues.businessEmail,
+      phone: insertValues.phone,
+      phoneNormalized: insertValues.phoneNormalized,
+      smsOptIn: insertValues.smsOptIn,
+      smsOptInAt: insertValues.smsOptInAt,
+      smsConsentLanguage: insertValues.smsConsentLanguage,
+      source: insertValues.source,
+      submissionPage: insertValues.submissionPage,
+      ipAddress: insertValues.ipAddress,
+      userAgent: insertValues.userAgent,
+    }
+
     try {
       await db.insert(wholesaleAccountRequests).values(insertValues)
     } catch (error) {
-      if (!isMissingRequestMetadataColumnError(error)) {
+      const availableColumns = await getWholesaleRequestColumns().catch(() => null)
+      if (!availableColumns) {
         throw error
       }
 
-      await db.insert(wholesaleAccountRequests).values({
-        businessName: insertValues.businessName,
-        businessEmail: insertValues.businessEmail,
-        phone: insertValues.phone,
-        phoneNormalized: insertValues.phoneNormalized,
-        smsOptIn: insertValues.smsOptIn,
-        smsOptInAt: insertValues.smsOptInAt,
-        smsConsentLanguage: insertValues.smsConsentLanguage,
-        source: insertValues.source,
-        submissionPage: insertValues.submissionPage,
-      })
+      const retryValues: Partial<NewWholesaleAccountRequest> = {}
+
+      if (availableColumns.has('business_name')) retryValues.businessName = fallbackInsertValues.businessName
+      if (availableColumns.has('business_email')) retryValues.businessEmail = fallbackInsertValues.businessEmail
+      if (availableColumns.has('phone')) retryValues.phone = fallbackInsertValues.phone
+      if (availableColumns.has('phone_normalized')) retryValues.phoneNormalized = fallbackInsertValues.phoneNormalized
+      if (availableColumns.has('sms_opt_in')) retryValues.smsOptIn = fallbackInsertValues.smsOptIn
+      if (availableColumns.has('sms_opt_in_at')) retryValues.smsOptInAt = fallbackInsertValues.smsOptInAt
+      if (availableColumns.has('sms_consent_language')) retryValues.smsConsentLanguage = fallbackInsertValues.smsConsentLanguage
+      if (availableColumns.has('source')) retryValues.source = fallbackInsertValues.source
+      if (availableColumns.has('submission_page')) retryValues.submissionPage = fallbackInsertValues.submissionPage
+      if (availableColumns.has('ip_address')) retryValues.ipAddress = fallbackInsertValues.ipAddress
+      if (availableColumns.has('user_agent')) retryValues.userAgent = fallbackInsertValues.userAgent
+
+      await db.insert(wholesaleAccountRequests).values(retryValues as NewWholesaleAccountRequest)
     }
 
     if (parsed.smsOptIn) {
