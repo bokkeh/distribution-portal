@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { completeDeliveryStop, getDeliveryStopUploadUrl, updateStopStatus } from '@/actions/deliveries'
-import { CheckCircle, Loader2, UploadCloud, XCircle } from 'lucide-react'
+import { BottleWine, CheckCircle, Loader2, PackageCheck, XCircle } from 'lucide-react'
 
 type Stop = {
   id: string
@@ -93,8 +93,8 @@ export function DriverStopActions({ stop }: { stop: Stop }) {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="block cursor-pointer">
           <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-muted-foreground">Proof Of Delivery</span>
-          <span className="flex aspect-square w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-center text-slate-600 transition-colors hover:border-blue-400 hover:bg-blue-50">
-            {uploadingProof ? <Loader2 className="mb-3 h-8 w-8 animate-spin" /> : <UploadCloud className="mb-3 h-8 w-8" />}
+          <span className="flex aspect-square w-full max-w-[12.8rem] flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-center text-slate-600 transition-colors hover:border-blue-400 hover:bg-blue-50">
+            {uploadingProof ? <Loader2 className="mb-3 h-7 w-7 animate-spin" /> : <PackageCheck className="mb-3 h-7 w-7" />}
             <span className="text-sm font-semibold text-slate-900">
               {proofOfDeliveryUrl ? 'Replace Delivery Photo' : 'Upload Delivery Photo'}
             </span>
@@ -121,8 +121,8 @@ export function DriverStopActions({ stop }: { stop: Stop }) {
 
         <label className="block cursor-pointer">
           <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-muted-foreground">Shelf Photo</span>
-          <span className="flex aspect-square w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-center text-slate-600 transition-colors hover:border-blue-400 hover:bg-blue-50">
-            {uploadingShelf ? <Loader2 className="mb-3 h-8 w-8 animate-spin" /> : <UploadCloud className="mb-3 h-8 w-8" />}
+          <span className="flex aspect-square w-full max-w-[12.8rem] flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-center text-slate-600 transition-colors hover:border-blue-400 hover:bg-blue-50">
+            {uploadingShelf ? <Loader2 className="mb-3 h-7 w-7 animate-spin" /> : <BottleWine className="mb-3 h-7 w-7" />}
             <span className="text-sm font-semibold text-slate-900">
               {shelfPhotoUrl ? 'Replace Shelf Photo' : 'Upload Shelf Photo'}
             </span>

@@ -1,6 +1,6 @@
 'use client'
 
-import { DirectionsRenderer, GoogleMap, InfoWindow, Marker, Polyline, useJsApiLoader } from '@react-google-maps/api'
+import { GoogleMap, InfoWindow, Marker, Polyline, useJsApiLoader } from '@react-google-maps/api'
 import { useEffect, useState } from 'react'
 
 interface Stop {
@@ -68,6 +68,11 @@ export default function DeliveryMap({
   ]
 
   const activeStop = selectedStop ?? validStops[0] ?? null
+  const directionsPath = directions?.routes[0]?.overview_path?.map(point => ({
+    lat: point.lat(),
+    lng: point.lng(),
+  })) ?? []
+  const renderedPath = directionsPath.length > 1 ? directionsPath : fallbackPath
   const center = selectedStop
     ? { lat: selectedStop.lat, lng: selectedStop.lng }
     : originPoint
@@ -152,6 +157,11 @@ export default function DeliveryMap({
         mapContainerStyle={{ width: '100%', height: '100%' }}
         center={center}
         zoom={selectedStop ? 14 : validStops.length > 1 ? 11 : 13}
+        options={{
+          gestureHandling: 'greedy',
+          draggableCursor: 'grab',
+          draggingCursor: 'grabbing',
+        }}
       >
         {validStops.map((stop) => (
           <Marker
@@ -183,36 +193,9 @@ export default function DeliveryMap({
             }}
           />
         )}
-        {directions && (
-          <DirectionsRenderer
-            directions={directions}
-            options={{
-              preserveViewport: true,
-              suppressMarkers: true,
-              polylineOptions: {
-                clickable: false,
-                strokeColor: 'rgba(0,0,0,0)',
-                strokeWeight: 5,
-                strokeOpacity: 0,
-                icons: [
-                  {
-                    icon: {
-                      path: 'M 0,-1 0,1',
-                      strokeOpacity: 1,
-                      strokeColor: '#DC2626',
-                      scale: 4,
-                    },
-                    offset: lineOffset,
-                    repeat: '18px',
-                  },
-                ],
-              },
-            }}
-          />
-        )}
-        {!directions && fallbackPath.length > 1 && (
+        {renderedPath.length > 1 && (
           <Polyline
-            path={fallbackPath}
+            path={renderedPath}
             options={{
               clickable: false,
               strokeColor: 'rgba(0,0,0,0)',
