@@ -33,7 +33,7 @@ export default async function DriverDeliveriesPage() {
     .limit(5)
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">My Deliveries</h1>
         <p className="text-muted-foreground mt-1">Your assigned delivery runs</p>
@@ -135,8 +135,8 @@ export default async function DriverDeliveriesPage() {
             <CardHeader>
               <CardTitle className="text-base">Delivery Date {formatDate(delivery.weekStartDate)}</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="h-[420px] overflow-hidden rounded-xl border">
+            <CardContent className="space-y-3 sm:space-y-4">
+              <div className="h-[320px] sm:h-[420px] overflow-hidden rounded-xl border">
                 <DeliveryMapWrapper
                   stops={mapStops}
                   origin={

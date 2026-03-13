@@ -75,7 +75,7 @@ function SortableStopCard({
     <div
       ref={setNodeRef}
       style={style}
-      className={`rounded-lg border p-3 bg-white ${isDragging ? 'opacity-40 shadow-lg' : ''}`}
+      className={`rounded-lg border bg-white p-2.5 sm:p-3 ${isDragging ? 'opacity-40 shadow-lg' : ''}`}
     >
       <div className="flex items-start gap-3">
         <button
@@ -90,12 +90,12 @@ function SortableStopCard({
         <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
           {index + 1}
         </div>
-        <div className="flex-1">
+        <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-medium">{stop.companyName}</p>
+            <p className="text-sm font-medium leading-tight">{stop.companyName}</p>
             {mode === 'driver' ? <StopStatusBadge status={stop.status} /> : null}
           </div>
-          <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+          <p className="mt-0.5 flex items-start gap-1 text-xs text-muted-foreground">
             <MapPin className="h-3 w-3" />{stop.address}
           </p>
           {(stop.contactName || stop.contactPhone || stop.contactEmail) && (
@@ -227,7 +227,7 @@ export default function SortableStopList({
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <SortableContext items={stops.map(stop => stop.id)} strategy={verticalListSortingStrategy}>
-        <div className="space-y-3">
+        <div className="space-y-2 sm:space-y-3">
           {stops.map((stop, index) => (
             <SortableStopCard
               key={stop.id}

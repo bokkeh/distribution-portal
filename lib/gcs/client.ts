@@ -62,6 +62,28 @@ export async function generateSignedReadUrl(filePath: string): Promise<string> {
   return url
 }
 
+export async function uploadBuffer(
+  filename: string,
+  contentType: string,
+  buffer: Buffer,
+  folder: string = 'uploads'
+): Promise<{ publicUrl: string; filePath: string }> {
+  const storage = getStorage()
+  const bucket = storage.bucket(process.env.GCS_BUCKET_NAME ?? '')
+  const filePath = `${folder}/${filename}`
+  const file = bucket.file(filePath)
+
+  await file.save(buffer, {
+    metadata: { contentType },
+    resumable: false,
+  })
+
+  return {
+    publicUrl: getPublicUrl(filePath),
+    filePath,
+  }
+}
+
 export function getPublicUrl(filePath: string): string {
   return `https://storage.googleapis.com/${process.env.GCS_BUCKET_NAME}/${filePath}`
 }

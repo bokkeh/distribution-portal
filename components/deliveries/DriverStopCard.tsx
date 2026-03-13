@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { completeDeliveryStop, getDeliveryStopUploadUrl, updateStopStatus } from '@/actions/deliveries'
+import { completeDeliveryStop, updateStopStatus } from '@/actions/deliveries'
 import { BottleWine, CheckCircle, Loader2, PackageCheck, XCircle } from 'lucide-react'
 
 type Stop = {
@@ -33,18 +33,23 @@ export function DriverStopActions({ stop }: { stop: Stop }) {
 
     setUploading(true)
     try {
-      const { uploadUrl, publicUrl, error } = await getDeliveryStopUploadUrl(kind, file.type)
-      if (error) throw new Error(error)
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('folder', 'deliveries')
+      formData.append('filename', `${kind}-${file.name}`)
 
-      const response = await fetch(uploadUrl, {
-        method: 'PUT',
-        body: file,
-        headers: { 'Content-Type': file.type },
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
       })
 
-      if (!response.ok) throw new Error('Upload failed')
+      const payload = await response.json().catch(() => null)
 
-      setUrl(publicUrl)
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Upload failed')
+      }
+
+      setUrl(payload.publicUrl)
       toast.success(kind === 'proof' ? 'Proof photo uploaded' : 'Shelf photo uploaded')
     } catch (error) {
       toast.error('Upload failed', { description: error instanceof Error ? error.message : undefined })
@@ -89,16 +94,16 @@ export function DriverStopActions({ stop }: { stop: Stop }) {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <div className="space-y-3 sm:space-y-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3">
         <label className="block cursor-pointer">
-          <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-muted-foreground">Proof Of Delivery</span>
-          <span className="flex aspect-square w-full max-w-[9rem] flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-center text-slate-600 transition-colors hover:border-blue-400 hover:bg-blue-50">
+          <span className="mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Proof Of Delivery</span>
+          <span className="flex aspect-square w-full max-w-[7rem] sm:max-w-[9rem] flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-2.5 py-2.5 text-center text-slate-600 transition-colors hover:border-blue-400 hover:bg-blue-50">
             {uploadingProof ? <Loader2 className="mb-3 h-7 w-7 animate-spin" /> : <PackageCheck className="mb-3 h-7 w-7" />}
-            <span className="text-sm font-semibold text-slate-900">
+            <span className="text-xs sm:text-sm font-semibold text-slate-900">
               {proofOfDeliveryUrl ? 'Replace Delivery Photo' : 'Upload Delivery Photo'}
             </span>
-            <span className="mt-2 text-xs text-muted-foreground">
+            <span className="mt-1.5 text-[11px] text-muted-foreground">
               Driver proof at drop-off
             </span>
             {proofOfDeliveryUrl && (
@@ -120,13 +125,13 @@ export function DriverStopActions({ stop }: { stop: Stop }) {
         </label>
 
         <label className="block cursor-pointer">
-          <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-muted-foreground">Shelf Photo</span>
-          <span className="flex aspect-square w-full max-w-[9rem] flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-center text-slate-600 transition-colors hover:border-blue-400 hover:bg-blue-50">
+          <span className="mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Shelf Photo</span>
+          <span className="flex aspect-square w-full max-w-[7rem] sm:max-w-[9rem] flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-2.5 py-2.5 text-center text-slate-600 transition-colors hover:border-blue-400 hover:bg-blue-50">
             {uploadingShelf ? <Loader2 className="mb-3 h-7 w-7 animate-spin" /> : <BottleWine className="mb-3 h-7 w-7" />}
-            <span className="text-sm font-semibold text-slate-900">
+            <span className="text-xs sm:text-sm font-semibold text-slate-900">
               {shelfPhotoUrl ? 'Replace Shelf Photo' : 'Upload Shelf Photo'}
             </span>
-            <span className="mt-2 text-xs text-muted-foreground">
+            <span className="mt-1.5 text-[11px] text-muted-foreground">
               Shelf condition after delivery
             </span>
             {shelfPhotoUrl && (
@@ -155,11 +160,11 @@ export function DriverStopActions({ stop }: { stop: Stop }) {
           value={notes}
           onChange={event => setNotes(event.target.value)}
           placeholder="Add delivery updates, owner requests, or shelf notes."
-          className="min-h-24 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className="min-h-20 w-full max-w-xl rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row">
         <Button
           type="button"
           onClick={handleDelivered}
