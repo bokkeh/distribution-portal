@@ -3,7 +3,7 @@
 import { db } from '@/db'
 import { deliveries, deliveryStops, orders, drivers, users, customerAccounts } from '@/db/schema'
 import { requireAdmin, requireAdminOrStaff } from '@/lib/auth/session'
-import { eq, inArray } from 'drizzle-orm'
+import { desc, eq, inArray } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { sendSms } from '@/lib/telnyx/client'
@@ -96,4 +96,92 @@ export async function updateStopStatus(stopId: string, status: 'delivered' | 'fa
     .set({ status, completedAt: status === 'delivered' ? new Date() : null })
     .where(eq(deliveryStops.id, stopId))
   revalidatePath('/driver/deliveries')
+}
+
+export async function addDeliveryStop(deliveryId: string, formData: FormData) {
+  await requireAdmin()
+
+  const customerId = formData.get('customerId') as string
+  if (!customerId) {
+    throw new Error('Customer account is required')
+  }
+
+  const [delivery] = await db
+    .select({ id: deliveries.id })
+    .from(deliveries)
+    .where(eq(deliveries.id, deliveryId))
+    .limit(1)
+
+  if (!delivery) {
+    throw new Error('Delivery not found')
+  }
+
+  const [account] = await db
+    .select({
+      id: customerAccounts.id,
+      companyName: customerAccounts.companyName,
+      address: customerAccounts.address,
+      city: customerAccounts.city,
+      state: customerAccounts.state,
+      zip: customerAccounts.zip,
+      contactName: customerAccounts.contactName,
+      pocName: customerAccounts.pocName,
+      pocPhone: customerAccounts.pocPhone,
+      pocEmail: customerAccounts.pocEmail,
+    })
+    .from(customerAccounts)
+    .where(eq(customerAccounts.id, customerId))
+    .limit(1)
+
+  if (!account) {
+    throw new Error('Customer account not found')
+  }
+
+  const [latestStop] = await db
+    .select({ sequenceNumber: deliveryStops.sequenceNumber })
+    .from(deliveryStops)
+    .where(eq(deliveryStops.deliveryId, deliveryId))
+    .orderBy(desc(deliveryStops.sequenceNumber))
+    .limit(1)
+
+  const [openOrder] = await db
+    .select({ id: orders.id })
+    .from(orders)
+    .where(inArray(orders.status, ['pending', 'confirmed']))
+    .limit(1)
+
+  const fullAddress = [account.address, account.city, account.state, account.zip].filter(Boolean).join(', ')
+  if (!fullAddress) {
+    throw new Error('Selected account does not have a delivery address')
+  }
+
+  const contactName = account.pocName || account.contactName || account.companyName || null
+
+  let lat: number | null = null
+  let lng: number | null = null
+
+  try {
+    const coords = await geocodeAddress(fullAddress)
+    lat = coords?.lat ?? null
+    lng = coords?.lng ?? null
+  } catch {}
+
+  await db.insert(deliveryStops).values({
+    deliveryId,
+    orderId: openOrder?.id ?? null,
+    customerId: account.id,
+    sequenceNumber: (latestStop?.sequenceNumber ?? 0) + 1,
+    address: fullAddress,
+    contactName,
+    contactPhone: account.pocPhone ?? null,
+    contactEmail: account.pocEmail ?? null,
+    lat: lat?.toFixed(7) ?? null,
+    lng: lng?.toFixed(7) ?? null,
+    status: 'pending',
+  })
+
+  revalidatePath(`/admin/deliveries/${deliveryId}`)
+  revalidatePath('/driver/deliveries')
+  revalidatePath('/driver/map')
+  redirect(`/admin/deliveries/${deliveryId}`)
 }

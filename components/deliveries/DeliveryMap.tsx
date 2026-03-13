@@ -1,7 +1,7 @@
 'use client'
 
 import { GoogleMap, Marker, Polyline, InfoWindow, useJsApiLoader } from '@react-google-maps/api'
-import { useState, useCallback } from 'react'
+import { useState } from 'react'
 
 interface Stop {
   id: string
@@ -30,8 +30,9 @@ export default function DeliveryMap({ stops }: { stops: Stop[] }) {
 
   const validStops = stops.filter(s => s.lat !== 0 && s.lng !== 0)
 
-  const center = validStops.length > 0
-    ? { lat: validStops.reduce((s, p) => s + p.lat, 0) / validStops.length, lng: validStops.reduce((s, p) => s + p.lng, 0) / validStops.length }
+  const activeStop = selectedStop ?? validStops[0] ?? null
+  const center = activeStop
+    ? { lat: activeStop.lat, lng: activeStop.lng }
     : { lat: 29.7604, lng: -95.3698 } // Houston default
 
   const path = validStops.map(s => ({ lat: s.lat, lng: s.lng }))
@@ -42,7 +43,7 @@ export default function DeliveryMap({ stops }: { stops: Stop[] }) {
     <GoogleMap
       mapContainerStyle={{ width: '100%', height: '100%' }}
       center={center}
-      zoom={validStops.length > 1 ? 11 : 13}
+      zoom={selectedStop ? 14 : validStops.length > 1 ? 11 : 13}
     >
       {validStops.map((stop) => (
         <Marker
