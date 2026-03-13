@@ -26,25 +26,73 @@ export default async function DeliveryDetailPage({ params }: { params: { deliver
 
   if (!delivery) notFound()
 
-  const stops = await db
-    .select({
-      id: deliveryStops.id,
-      sequenceNumber: deliveryStops.sequenceNumber,
-      address: deliveryStops.address,
-      contactName: deliveryStops.contactName,
-      contactPhone: deliveryStops.contactPhone,
-      contactEmail: deliveryStops.contactEmail,
-      lat: deliveryStops.lat,
-      lng: deliveryStops.lng,
-      status: deliveryStops.status,
-      notes: deliveryStops.notes,
-      completedAt: deliveryStops.completedAt,
-      companyName: customerAccounts.companyName,
-    })
-    .from(deliveryStops)
-    .leftJoin(customerAccounts, eq(deliveryStops.customerId, customerAccounts.id))
-    .where(eq(deliveryStops.deliveryId, params.deliveryId))
-    .orderBy(deliveryStops.sequenceNumber)
+  let stops: Array<{
+    id: string
+    sequenceNumber: number
+    address: string
+    contactName: string | null
+    contactPhone: string | null
+    contactEmail: string | null
+    lat: string | null
+    lng: string | null
+    status: 'pending' | 'delivered' | 'failed'
+    notes: string | null
+    completedAt: Date | null
+    companyName: string | null
+  }> = []
+
+  try {
+    stops = await db
+      .select({
+        id: deliveryStops.id,
+        sequenceNumber: deliveryStops.sequenceNumber,
+        address: deliveryStops.address,
+        contactName: deliveryStops.contactName,
+        contactPhone: deliveryStops.contactPhone,
+        contactEmail: deliveryStops.contactEmail,
+        lat: deliveryStops.lat,
+        lng: deliveryStops.lng,
+        status: deliveryStops.status,
+        notes: deliveryStops.notes,
+        completedAt: deliveryStops.completedAt,
+        companyName: customerAccounts.companyName,
+      })
+      .from(deliveryStops)
+      .leftJoin(customerAccounts, eq(deliveryStops.customerId, customerAccounts.id))
+      .where(eq(deliveryStops.deliveryId, params.deliveryId))
+      .orderBy(deliveryStops.sequenceNumber)
+  } catch (error) {
+    const code = (error as { code?: string; cause?: { code?: string } } | null)?.code
+      ?? (error as { cause?: { code?: string } } | null)?.cause?.code
+    const message = error instanceof Error ? error.message.toLowerCase() : ''
+
+    if (code !== '42703' && !message.includes('contact_name') && !message.includes('contact_phone') && !message.includes('contact_email')) {
+      throw error
+    }
+
+    stops = await db
+      .select({
+        id: deliveryStops.id,
+        sequenceNumber: deliveryStops.sequenceNumber,
+        address: deliveryStops.address,
+        lat: deliveryStops.lat,
+        lng: deliveryStops.lng,
+        status: deliveryStops.status,
+        notes: deliveryStops.notes,
+        completedAt: deliveryStops.completedAt,
+        companyName: customerAccounts.companyName,
+      })
+      .from(deliveryStops)
+      .leftJoin(customerAccounts, eq(deliveryStops.customerId, customerAccounts.id))
+      .where(eq(deliveryStops.deliveryId, params.deliveryId))
+      .orderBy(deliveryStops.sequenceNumber)
+      .then(rows => rows.map(row => ({
+        ...row,
+        contactName: null,
+        contactPhone: null,
+        contactEmail: null,
+      })))
+  }
 
   const stopIcon: Record<string, React.ReactNode> = {
     pending: <Clock className="w-4 h-4 text-yellow-500" />,

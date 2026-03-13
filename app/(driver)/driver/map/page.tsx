@@ -10,23 +10,68 @@ export default async function DriverMapPage() {
 
   const [driver] = await db.select().from(drivers).where(eq(drivers.userId, session.user.id))
 
-  const stops = driver ? await db
-    .select({
-      id: deliveryStops.id,
-      sequenceNumber: deliveryStops.sequenceNumber,
-      address: deliveryStops.address,
-      contactName: deliveryStops.contactName,
-      contactPhone: deliveryStops.contactPhone,
-      lat: deliveryStops.lat,
-      lng: deliveryStops.lng,
-      status: deliveryStops.status,
-      companyName: customerAccounts.companyName,
-    })
-    .from(deliveries)
-    .innerJoin(deliveryStops, eq(deliveryStops.deliveryId, deliveries.id))
-    .leftJoin(customerAccounts, eq(deliveryStops.customerId, customerAccounts.id))
-    .where(eq(deliveries.driverId, driver.id))
-    .orderBy(deliveryStops.sequenceNumber) : []
+  let stops: Array<{
+    id: string
+    sequenceNumber: number
+    address: string
+    contactName: string | null
+    contactPhone: string | null
+    lat: string | null
+    lng: string | null
+    status: 'pending' | 'delivered' | 'failed'
+    companyName: string | null
+  }> = []
+
+  if (driver) {
+    try {
+      stops = await db
+        .select({
+          id: deliveryStops.id,
+          sequenceNumber: deliveryStops.sequenceNumber,
+          address: deliveryStops.address,
+          contactName: deliveryStops.contactName,
+          contactPhone: deliveryStops.contactPhone,
+          lat: deliveryStops.lat,
+          lng: deliveryStops.lng,
+          status: deliveryStops.status,
+          companyName: customerAccounts.companyName,
+        })
+        .from(deliveries)
+        .innerJoin(deliveryStops, eq(deliveryStops.deliveryId, deliveries.id))
+        .leftJoin(customerAccounts, eq(deliveryStops.customerId, customerAccounts.id))
+        .where(eq(deliveries.driverId, driver.id))
+        .orderBy(deliveryStops.sequenceNumber)
+    } catch (error) {
+      const code = (error as { code?: string; cause?: { code?: string } } | null)?.code
+        ?? (error as { cause?: { code?: string } } | null)?.cause?.code
+      const message = error instanceof Error ? error.message.toLowerCase() : ''
+
+      if (code !== '42703' && !message.includes('contact_name') && !message.includes('contact_phone')) {
+        throw error
+      }
+
+      stops = await db
+        .select({
+          id: deliveryStops.id,
+          sequenceNumber: deliveryStops.sequenceNumber,
+          address: deliveryStops.address,
+          lat: deliveryStops.lat,
+          lng: deliveryStops.lng,
+          status: deliveryStops.status,
+          companyName: customerAccounts.companyName,
+        })
+        .from(deliveries)
+        .innerJoin(deliveryStops, eq(deliveryStops.deliveryId, deliveries.id))
+        .leftJoin(customerAccounts, eq(deliveryStops.customerId, customerAccounts.id))
+        .where(eq(deliveries.driverId, driver.id))
+        .orderBy(deliveryStops.sequenceNumber)
+        .then(rows => rows.map(row => ({
+          ...row,
+          contactName: null,
+          contactPhone: null,
+        })))
+    }
+  }
 
   const mapStops = stops.map(s => ({
     id: s.id,

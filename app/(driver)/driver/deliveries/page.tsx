@@ -49,19 +49,57 @@ export default async function DriverDeliveriesPage() {
           </CardContent>
         </Card>
       ) : myDeliveries.map(async (delivery) => {
-        const stops = await db
-          .select({
-            id: deliveryStops.id, sequenceNumber: deliveryStops.sequenceNumber,
-            address: deliveryStops.address, status: deliveryStops.status,
-            contactName: deliveryStops.contactName,
-            contactPhone: deliveryStops.contactPhone,
-            contactEmail: deliveryStops.contactEmail,
-            companyName: customerAccounts.companyName,
-          })
-          .from(deliveryStops)
-          .leftJoin(customerAccounts, eq(deliveryStops.customerId, customerAccounts.id))
-          .where(eq(deliveryStops.deliveryId, delivery.id))
-          .orderBy(deliveryStops.sequenceNumber)
+        let stops: Array<{
+          id: string
+          sequenceNumber: number
+          address: string
+          status: 'pending' | 'delivered' | 'failed'
+          contactName: string | null
+          contactPhone: string | null
+          contactEmail: string | null
+          companyName: string | null
+        }> = []
+
+        try {
+          stops = await db
+            .select({
+              id: deliveryStops.id, sequenceNumber: deliveryStops.sequenceNumber,
+              address: deliveryStops.address, status: deliveryStops.status,
+              contactName: deliveryStops.contactName,
+              contactPhone: deliveryStops.contactPhone,
+              contactEmail: deliveryStops.contactEmail,
+              companyName: customerAccounts.companyName,
+            })
+            .from(deliveryStops)
+            .leftJoin(customerAccounts, eq(deliveryStops.customerId, customerAccounts.id))
+            .where(eq(deliveryStops.deliveryId, delivery.id))
+            .orderBy(deliveryStops.sequenceNumber)
+        } catch (error) {
+          const code = (error as { code?: string; cause?: { code?: string } } | null)?.code
+            ?? (error as { cause?: { code?: string } } | null)?.cause?.code
+          const message = error instanceof Error ? error.message.toLowerCase() : ''
+
+          if (code !== '42703' && !message.includes('contact_name') && !message.includes('contact_phone') && !message.includes('contact_email')) {
+            throw error
+          }
+
+          stops = await db
+            .select({
+              id: deliveryStops.id, sequenceNumber: deliveryStops.sequenceNumber,
+              address: deliveryStops.address, status: deliveryStops.status,
+              companyName: customerAccounts.companyName,
+            })
+            .from(deliveryStops)
+            .leftJoin(customerAccounts, eq(deliveryStops.customerId, customerAccounts.id))
+            .where(eq(deliveryStops.deliveryId, delivery.id))
+            .orderBy(deliveryStops.sequenceNumber)
+            .then(rows => rows.map(row => ({
+              ...row,
+              contactName: null,
+              contactPhone: null,
+              contactEmail: null,
+            })))
+        }
 
         return (
           <Card key={delivery.id}>
