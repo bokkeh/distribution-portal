@@ -86,6 +86,12 @@ export async function submitWholesaleAccountRequest(
         throw error
       }
 
+      const requiredColumns = ['business_name', 'business_email', 'sms_opt_in', 'source']
+      const hasRequiredColumns = requiredColumns.every(column => availableColumns.has(column))
+      if (!hasRequiredColumns) {
+        throw error
+      }
+
       const retryValues: Partial<NewWholesaleAccountRequest> = {}
 
       if (availableColumns.has('business_name')) retryValues.businessName = fallbackInsertValues.businessName
@@ -99,6 +105,10 @@ export async function submitWholesaleAccountRequest(
       if (availableColumns.has('submission_page')) retryValues.submissionPage = fallbackInsertValues.submissionPage
       if (availableColumns.has('ip_address')) retryValues.ipAddress = fallbackInsertValues.ipAddress
       if (availableColumns.has('user_agent')) retryValues.userAgent = fallbackInsertValues.userAgent
+
+      if (!retryValues.businessName || !retryValues.businessEmail) {
+        throw error
+      }
 
       await db.insert(wholesaleAccountRequests).values(retryValues as NewWholesaleAccountRequest)
     }
