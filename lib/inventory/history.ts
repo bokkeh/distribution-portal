@@ -3,6 +3,17 @@ import 'server-only'
 import { db } from '@/db'
 import { inventoryTransactions } from '@/db/schema'
 
+function isMissingInventoryTransactionsTable(error: unknown) {
+  if (!(error instanceof Error)) return false
+  const code = (error as Error & { code?: string; cause?: { code?: string } }).code
+  const causeCode = (error as Error & { cause?: { code?: string } }).cause?.code
+  const message = error.message.toLowerCase()
+  return code === '42P01'
+    || causeCode === '42P01'
+    || message.includes('inventory_transactions')
+    || message.includes('relation "inventory_transactions" does not exist')
+}
+
 export async function logInventoryTransaction({
   productId,
   actorUserId,
@@ -28,17 +39,25 @@ export async function logInventoryTransaction({
   quantitySampleAfter?: number
   looseBottlePaidAfter?: number
 }) {
-  await db.insert(inventoryTransactions).values({
-    productId,
-    actorUserId: actorUserId ?? null,
-    orderId: orderId ?? null,
-    type,
-    reason: reason ?? null,
-    deltaPaid,
-    deltaSample,
-    deltaLooseBottlePaid,
-    quantityPaidAfter,
-    quantitySampleAfter,
-    looseBottlePaidAfter,
-  })
+  try {
+    await db.insert(inventoryTransactions).values({
+      productId,
+      actorUserId: actorUserId ?? null,
+      orderId: orderId ?? null,
+      type,
+      reason: reason ?? null,
+      deltaPaid,
+      deltaSample,
+      deltaLooseBottlePaid,
+      quantityPaidAfter,
+      quantitySampleAfter,
+      looseBottlePaidAfter,
+    })
+  } catch (error) {
+    if (isMissingInventoryTransactionsTable(error)) {
+      console.warn('inventory_transactions table is missing; skipping inventory history log')
+      return
+    }
+    throw error
+  }
 }

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Minus, Plus, Trash2 } from 'lucide-react'
 import { createOrder } from '@/actions/orders'
+import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -104,7 +105,15 @@ export default function OrderFormClient({ customers, products }: { customers: Cu
     formData.append('purchaseUnit', purchaseUnit)
     formData.append('notes', notes)
     formData.append('items', JSON.stringify(lineItems.map(item => ({ productId: item.productId, quantity: item.quantity }))))
-    await createOrder(formData)
+    const result = await createOrder(formData)
+    if (result?.error) {
+      toast.error('Order creation failed', { description: result.error })
+      return
+    }
+    toast.success('Order created')
+    if (result?.redirectTo) {
+      window.location.href = result.redirectTo
+    }
   }
 
   return (

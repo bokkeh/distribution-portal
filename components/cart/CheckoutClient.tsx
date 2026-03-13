@@ -9,6 +9,7 @@ import { loadStripe } from '@stripe/stripe-js'
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js'
 import { createOrder } from '@/actions/orders'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '')
 
@@ -17,7 +18,7 @@ function PaymentForm({ customerId, orderType, items, total, onSuccess }: {
   orderType: 'paid' | 'sample'
   items: any[]
   total: number
-  onSuccess: () => void
+  onSuccess: (redirectTo?: string) => void
 }) {
   const stripe = useStripe()
   const elements = useElements()
@@ -39,6 +40,7 @@ function PaymentForm({ customerId, orderType, items, total, onSuccess }: {
 
     if (stripeError) {
       setError(stripeError.message ?? 'Payment failed')
+      toast.error('Payment failed', { description: stripeError.message ?? 'Stripe could not process the payment.' })
       setLoading(false)
       return
     }
@@ -48,8 +50,15 @@ function PaymentForm({ customerId, orderType, items, total, onSuccess }: {
     formData.append('customerId', customerId)
     formData.append('orderType', orderType)
     formData.append('items', JSON.stringify(items.map(i => ({ productId: i.productId, quantity: i.quantity }))))
-    await createOrder(formData)
-    onSuccess()
+    const result = await createOrder(formData)
+    if (result?.error) {
+      setError(result.error)
+      toast.error('Order placement failed', { description: result.error })
+      setLoading(false)
+      return
+    }
+    toast.success('Order placed')
+    onSuccess(result?.redirectTo)
   }
 
   return (
@@ -70,15 +79,23 @@ export default function CheckoutClient({ customerId, customerName }: { customerI
   const router = useRouter()
 
   async function initializePayment() {
-    setLoading(true)
-    const res = await fetch('/api/stripe/payment-intent', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ amount: Math.round(total() * 100), customerId }),
-    })
-    const { clientSecret } = await res.json()
-    setClientSecret(clientSecret)
-    setLoading(false)
+    try {
+      setLoading(true)
+      const res = await fetch('/api/stripe/payment-intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: Math.round(total() * 100), customerId }),
+      })
+      if (!res.ok) throw new Error('Unable to initialize Stripe payment')
+      const { clientSecret } = await res.json()
+      if (!clientSecret) throw new Error('Missing Stripe client secret')
+      setClientSecret(clientSecret)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to initialize payment'
+      toast.error('Payment setup failed', { description: message })
+    } finally {
+      setLoading(false)
+    }
   }
 
   if (items.length === 0) {
@@ -136,7 +153,7 @@ export default function CheckoutClient({ customerId, customerName }: { customerI
                 orderType={orderType}
                 items={items}
                 total={total()}
-                onSuccess={() => { clearCart(); router.push('/customer/orders') }}
+                onSuccess={(redirectTo) => { clearCart(); router.push(redirectTo ?? '/customer/orders') }}
               />
             </Elements>
           )}

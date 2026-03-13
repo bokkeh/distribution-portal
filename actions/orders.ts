@@ -1,8 +1,8 @@
 'use server'
 
 import { db } from '@/db'
-import { inventory, orderItems, orders, products } from '@/db/schema'
-import { requireAdminOrStaff } from '@/lib/auth/session'
+import { customerAccounts, inventory, orderItems, orders, products } from '@/db/schema'
+import { requireAuth } from '@/lib/auth/session'
 import { eq, inArray } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
@@ -12,26 +12,44 @@ import { logInventoryTransaction } from '@/lib/inventory/history'
 type PurchaseUnit = 'case' | 'bottle'
 
 export async function createOrder(formData: FormData) {
-  const session = await requireAdminOrStaff()
+  try {
+    const session = await requireAuth()
+    const userRoles = session.user.roles ?? [session.user.role as string]
+    const canCreateOrder = userRoles.some(role => ['admin', 'staff', 'customer'].includes(role))
+    if (!canCreateOrder) {
+      throw new Error('Unauthorized')
+    }
 
-  const customerId = formData.get('customerId') as string
-  const purchaseUnit = (formData.get('purchaseUnit') as PurchaseUnit) || 'case'
-  const notes = formData.get('notes') as string | null
-  const itemsJson = formData.get('items') as string
-  const items: { productId: string; quantity: number }[] = JSON.parse(itemsJson)
+    const customerId = formData.get('customerId') as string
+    const purchaseUnit = (formData.get('purchaseUnit') as PurchaseUnit) || 'case'
+    const notes = formData.get('notes') as string | null
+    const itemsJson = formData.get('items') as string
+    const items: { productId: string; quantity: number }[] = JSON.parse(itemsJson)
 
-  const productIds = items.map(item => item.productId)
-  const [productList, inventoryRows] = await Promise.all([
-    db.select().from(products).where(inArray(products.id, productIds)),
-    db.select().from(inventory).where(inArray(inventory.productId, productIds)),
-  ])
+    if (userRoles.includes('customer')) {
+      const [account] = await db
+        .select({ id: customerAccounts.id })
+        .from(customerAccounts)
+        .where(eq(customerAccounts.userId, session.user.id))
+        .limit(1)
 
-  const productMap = Object.fromEntries(productList.map(product => [product.id, product]))
-  const inventoryMap = Object.fromEntries(inventoryRows.map(row => [row.productId, row]))
+      if (!account || account.id !== customerId) {
+        throw new Error('Unauthorized customer order')
+      }
+    }
 
-  let subtotal = 0
+    const productIds = items.map(item => item.productId)
+    const [productList, inventoryRows] = await Promise.all([
+      db.select().from(products).where(inArray(products.id, productIds)),
+      db.select().from(inventory).where(inArray(inventory.productId, productIds)),
+    ])
 
-  const lineItems = items.map(item => {
+    const productMap = Object.fromEntries(productList.map(product => [product.id, product]))
+    const inventoryMap = Object.fromEntries(inventoryRows.map(row => [row.productId, row]))
+
+    let subtotal = 0
+
+    const lineItems = items.map(item => {
     const product = productMap[item.productId]
     const inv = inventoryMap[item.productId]
     if (!product) {
@@ -65,25 +83,25 @@ export async function createOrder(formData: FormData) {
       unitPrice: unitPrice.toFixed(2),
       total: total.toFixed(2),
     }
-  })
+    })
 
-  const tax = 0
-  const total = subtotal + tax
+    const tax = 0
+    const total = subtotal + tax
 
-  const [order] = await db.insert(orders).values({
-    customerId,
-    createdBy: session.user.id,
-    orderType: 'paid',
-    status: 'pending',
-    subtotal: subtotal.toFixed(2),
-    tax: tax.toFixed(2),
-    total: total.toFixed(2),
-    notes: notes || null,
-  }).returning()
+    const [order] = await db.insert(orders).values({
+      customerId,
+      createdBy: session.user.id,
+      orderType: 'paid',
+      status: 'pending',
+      subtotal: subtotal.toFixed(2),
+      tax: tax.toFixed(2),
+      total: total.toFixed(2),
+      notes: notes || null,
+    }).returning()
 
-  await db.insert(orderItems).values(lineItems.map(item => ({ ...item, orderId: order.id })))
+    await db.insert(orderItems).values(lineItems.map(item => ({ ...item, orderId: order.id })))
 
-  for (const item of items) {
+    for (const item of items) {
     const product = productMap[item.productId]
     const inv = inventoryMap[item.productId]
 
@@ -134,19 +152,31 @@ export async function createOrder(formData: FormData) {
       quantitySampleAfter: inv.quantitySample,
       looseBottlePaidAfter: nextLooseBottlePaid,
     })
+    }
+
+    await postGoogleChat(
+      `New Order created by ${session.user.name}\nCustomer ID: ${customerId}\nUnit: ${purchaseUnit.toUpperCase()}\nTotal: $${total.toFixed(2)}`
+    )
+
+    revalidatePath('/admin/invoicing')
+    revalidatePath('/staff/orders')
+    revalidatePath('/customer/orders')
+
+    return {
+      success: true as const,
+      redirectTo: userRoles.includes('customer') ? `/customer/orders/${order.id}` : `/staff/orders/${order.id}`,
+    }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to create order' }
   }
-
-  await postGoogleChat(
-    `New Order created by ${session.user.name}\nCustomer ID: ${customerId}\nUnit: ${purchaseUnit.toUpperCase()}\nTotal: $${total.toFixed(2)}`
-  )
-
-  revalidatePath('/admin/invoicing')
-  revalidatePath('/staff/orders')
-  redirect(`/staff/orders/${order.id}`)
 }
 
 export async function updateOrderStatus(orderId: string, status: 'pending' | 'confirmed' | 'fulfilled' | 'cancelled') {
-  await requireAdminOrStaff()
+  const session = await requireAuth()
+  const userRoles = session.user.roles ?? [session.user.role as string]
+  if (!userRoles.some(role => ['admin', 'staff'].includes(role))) {
+    throw new Error('Unauthorized')
+  }
   await db.update(orders).set({ status }).where(eq(orders.id, orderId))
   revalidatePath('/admin/dashboard')
   revalidatePath('/staff/orders')

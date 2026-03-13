@@ -4,11 +4,10 @@ import { desc, eq } from 'drizzle-orm'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
-import { adjustStock } from '@/actions/inventory'
 import { formatCurrency } from '@/lib/utils'
 import Link from 'next/link'
-import { Plus, AlertTriangle } from 'lucide-react'
+import { Plus } from 'lucide-react'
+import { AdminInventoryRowActions } from '@/components/inventory/AdminInventoryRowActions'
 
 export default async function InventoryPage() {
   const items = await db
@@ -17,6 +16,7 @@ export default async function InventoryPage() {
       productId: inventory.productId,
       quantityPaid: inventory.quantityPaid,
       quantitySample: inventory.quantitySample,
+      looseBottlePaid: inventory.looseBottlePaid,
       reorderLevel: inventory.reorderLevel,
       sku: products.sku,
       name: products.name,
@@ -30,26 +30,53 @@ export default async function InventoryPage() {
     .leftJoin(inventory, eq(inventory.productId, products.id))
     .orderBy(products.name)
 
-  const recentTransactions = await db
-    .select({
-      id: inventoryTransactions.id,
-      type: inventoryTransactions.type,
-      reason: inventoryTransactions.reason,
-      deltaPaid: inventoryTransactions.deltaPaid,
-      deltaSample: inventoryTransactions.deltaSample,
-      deltaLooseBottlePaid: inventoryTransactions.deltaLooseBottlePaid,
-      quantityPaidAfter: inventoryTransactions.quantityPaidAfter,
-      quantitySampleAfter: inventoryTransactions.quantitySampleAfter,
-      createdAt: inventoryTransactions.createdAt,
-      productName: products.name,
-      sku: products.sku,
-      actorName: users.name,
-    })
-    .from(inventoryTransactions)
-    .innerJoin(products, eq(inventoryTransactions.productId, products.id))
-    .leftJoin(users, eq(inventoryTransactions.actorUserId, users.id))
-    .orderBy(desc(inventoryTransactions.createdAt))
-    .limit(12)
+  let recentTransactions: Array<{
+    id: string
+    type: string
+    reason: string | null
+    deltaPaid: number
+    deltaSample: number
+    deltaLooseBottlePaid: number
+    quantityPaidAfter: number
+    quantitySampleAfter: number
+    createdAt: Date
+    productName: string
+    sku: string
+    actorName: string | null
+  }> = []
+  let inventoryHistoryUnavailable = false
+
+  try {
+    recentTransactions = await db
+      .select({
+        id: inventoryTransactions.id,
+        type: inventoryTransactions.type,
+        reason: inventoryTransactions.reason,
+        deltaPaid: inventoryTransactions.deltaPaid,
+        deltaSample: inventoryTransactions.deltaSample,
+        deltaLooseBottlePaid: inventoryTransactions.deltaLooseBottlePaid,
+        quantityPaidAfter: inventoryTransactions.quantityPaidAfter,
+        quantitySampleAfter: inventoryTransactions.quantitySampleAfter,
+        createdAt: inventoryTransactions.createdAt,
+        productName: products.name,
+        sku: products.sku,
+        actorName: users.name,
+      })
+      .from(inventoryTransactions)
+      .innerJoin(products, eq(inventoryTransactions.productId, products.id))
+      .leftJoin(users, eq(inventoryTransactions.actorUserId, users.id))
+      .orderBy(desc(inventoryTransactions.createdAt))
+      .limit(12)
+  } catch (error) {
+    const message = error instanceof Error ? error.message.toLowerCase() : ''
+    const code = (error as { code?: string; cause?: { code?: string } } | null)?.code
+      ?? (error as { cause?: { code?: string } } | null)?.cause?.code
+    if (code === '42P01' || message.includes('inventory_transactions')) {
+      inventoryHistoryUnavailable = true
+    } else {
+      throw error
+    }
+  }
 
   return (
     <div className="p-4 sm:p-8 space-y-6">
@@ -82,7 +109,6 @@ export default async function InventoryPage() {
                 {items.length === 0 ? (
                   <tr><td colSpan={7} className="px-6 py-12 text-center text-muted-foreground">No products in inventory. Add your first product.</td></tr>
                 ) : items.map(item => {
-                  const isLowStock = (item.quantityPaid ?? 0) <= (item.reorderLevel ?? 0)
                   return (
                   <tr key={item.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-6 py-4">
@@ -92,40 +118,16 @@ export default async function InventoryPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4 text-sm font-mono text-muted-foreground">{item.sku}</td>
-                      <td className="px-6 py-4">
-                        <form action={adjustStock} className="flex items-center gap-3">
-                          <input type="hidden" name="productId" value={item.productId ?? item.id} />
-                          <input type="hidden" name="reorderLevel" value={item.reorderLevel ?? 10} />
-                          <input type="hidden" name="looseBottlePaid" value={0} />
-                          <div className="flex items-center gap-2">
-                            <Input
-                              type="number"
-                              name="quantityPaid"
-                              min="0"
-                              defaultValue={item.quantityPaid ?? 0}
-                              className={`h-8 w-20 ${isLowStock ? 'border-red-300 text-red-600' : ''}`}
-                            />
-                            {isLowStock && <AlertTriangle className="w-4 h-4 text-orange-500" />}
-                          </div>
-                          <Input
-                            type="number"
-                            name="quantitySample"
-                            min="0"
-                            defaultValue={item.quantitySample ?? 0}
-                            className="h-8 w-20"
-                          />
-                          <Button type="submit" variant="outline" size="sm">Save</Button>
-                        </form>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-muted-foreground">{item.quantitySample ?? 0}</td>
+                      <AdminInventoryRowActions
+                        productId={item.productId ?? item.id}
+                        quantityPaid={item.quantityPaid ?? 0}
+                        quantitySample={item.quantitySample ?? 0}
+                        looseBottlePaid={item.looseBottlePaid ?? 0}
+                        reorderLevel={item.reorderLevel ?? 10}
+                      />
                       <td className="px-6 py-4 text-sm">{formatCurrency(item.price)}</td>
                       <td className="px-6 py-4">
                         {item.active ? <Badge variant="success">Active</Badge> : <Badge variant="secondary">Inactive</Badge>}
-                      </td>
-                      <td className="px-6 py-4">
-                        <Link href={`/admin/inventory/${item.productId ?? item.id}`}>
-                          <Button variant="ghost" size="sm">Edit</Button>
-                        </Link>
                       </td>
                     </tr>
                   )
@@ -144,7 +146,11 @@ export default async function InventoryPage() {
           </div>
           <div className="space-y-3">
             {recentTransactions.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No inventory activity recorded yet.</p>
+              <p className="text-sm text-muted-foreground">
+                {inventoryHistoryUnavailable
+                  ? 'Inventory history will appear after the latest database migration is applied.'
+                  : 'No inventory activity recorded yet.'}
+              </p>
             ) : recentTransactions.map(tx => (
               <div key={tx.id} className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-slate-200 p-3">
                 <div>

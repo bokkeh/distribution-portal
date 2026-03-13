@@ -1,9 +1,9 @@
 'use server'
 
 import { db } from '@/db'
-import { products, inventory } from '@/db/schema'
+import { products, inventory, orderItems } from '@/db/schema'
 import { requireAdmin, requireAdminOrStaff } from '@/lib/auth/session'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { sendSampleCaseAlert } from '@/lib/resend/client'
@@ -105,77 +105,113 @@ export async function adjustSampleCases(productId: string, delta: number): Promi
 }
 
 export async function adjustStock(formData: FormData) {
-  await requireAdmin()
+  try {
+    await requireAdmin()
 
-  const productId = formData.get('productId') as string
-  const quantityPaid = parseInt(formData.get('quantityPaid') as string)
-  const quantitySample = parseInt(formData.get('quantitySample') as string)
-  const reorderLevel = parseInt(formData.get('reorderLevel') as string)
-  const looseBottlePaid = parseInt(formData.get('looseBottlePaid') as string)
-  const now = new Date()
+    const productId = formData.get('productId') as string
+    const quantityPaid = parseInt(formData.get('quantityPaid') as string)
+    const quantitySample = parseInt(formData.get('quantitySample') as string)
+    const reorderLevel = parseInt(formData.get('reorderLevel') as string)
+    const looseBottlePaid = parseInt(formData.get('looseBottlePaid') as string)
+    const now = new Date()
 
-  const [existingInventory] = await db
-    .select({ productId: inventory.productId })
-    .from(inventory)
-    .where(eq(inventory.productId, productId))
-    .limit(1)
-
-  const nextQuantityPaid = Number.isNaN(quantityPaid) ? 0 : quantityPaid
-  const nextQuantitySample = Number.isNaN(quantitySample) ? 0 : quantitySample
-  const nextLooseBottlePaid = Number.isNaN(looseBottlePaid) ? 0 : looseBottlePaid
-
-  if (existingInventory) {
-    const [currentInventory] = await db
-      .select()
+    const [existingInventory] = await db
+      .select({ productId: inventory.productId })
       .from(inventory)
       .where(eq(inventory.productId, productId))
       .limit(1)
 
-    await db.update(inventory)
-      .set({
-        quantityPaid,
-        quantitySample,
-        reorderLevel: Number.isNaN(reorderLevel) ? undefined : reorderLevel,
-        looseBottlePaid: Number.isNaN(looseBottlePaid) ? undefined : looseBottlePaid,
+    const nextQuantityPaid = Number.isNaN(quantityPaid) ? 0 : quantityPaid
+    const nextQuantitySample = Number.isNaN(quantitySample) ? 0 : quantitySample
+    const nextLooseBottlePaid = Number.isNaN(looseBottlePaid) ? 0 : looseBottlePaid
+
+    if (existingInventory) {
+      const [currentInventory] = await db
+        .select()
+        .from(inventory)
+        .where(eq(inventory.productId, productId))
+        .limit(1)
+
+      await db.update(inventory)
+        .set({
+          quantityPaid: nextQuantityPaid,
+          quantitySample: nextQuantitySample,
+          reorderLevel: Number.isNaN(reorderLevel) ? undefined : reorderLevel,
+          looseBottlePaid: Number.isNaN(looseBottlePaid) ? undefined : looseBottlePaid,
+          updatedAt: now,
+        })
+        .where(eq(inventory.productId, productId))
+
+      await logInventoryTransaction({
+        productId,
+        actorUserId: (await auth())?.user?.id ?? null,
+        type: 'manual_adjustment',
+        reason: 'Inventory updated from admin inventory screen',
+        deltaPaid: nextQuantityPaid - (currentInventory?.quantityPaid ?? 0),
+        deltaSample: nextQuantitySample - (currentInventory?.quantitySample ?? 0),
+        deltaLooseBottlePaid: nextLooseBottlePaid - (currentInventory?.looseBottlePaid ?? 0),
+        quantityPaidAfter: nextQuantityPaid,
+        quantitySampleAfter: nextQuantitySample,
+        looseBottlePaidAfter: nextLooseBottlePaid,
+      })
+    } else {
+      await db.insert(inventory).values({
+        productId,
+        quantityPaid: nextQuantityPaid,
+        quantitySample: nextQuantitySample,
+        reorderLevel: Number.isNaN(reorderLevel) ? 10 : reorderLevel,
+        looseBottlePaid: nextLooseBottlePaid,
         updatedAt: now,
       })
-      .where(eq(inventory.productId, productId))
 
-    await logInventoryTransaction({
-      productId,
-      actorUserId: (await auth())?.user?.id ?? null,
-      type: 'manual_adjustment',
-      reason: 'Inventory updated from admin inventory screen',
-      deltaPaid: nextQuantityPaid - (currentInventory?.quantityPaid ?? 0),
-      deltaSample: nextQuantitySample - (currentInventory?.quantitySample ?? 0),
-      deltaLooseBottlePaid: nextLooseBottlePaid - (currentInventory?.looseBottlePaid ?? 0),
-      quantityPaidAfter: nextQuantityPaid,
-      quantitySampleAfter: nextQuantitySample,
-      looseBottlePaidAfter: nextLooseBottlePaid,
-    })
-  } else {
-    await db.insert(inventory).values({
-      productId,
-      quantityPaid: nextQuantityPaid,
-      quantitySample: nextQuantitySample,
-      reorderLevel: Number.isNaN(reorderLevel) ? 10 : reorderLevel,
-      looseBottlePaid: nextLooseBottlePaid,
-      updatedAt: now,
-    })
+      await logInventoryTransaction({
+        productId,
+        actorUserId: (await auth())?.user?.id ?? null,
+        type: 'manual_adjustment',
+        reason: 'Inventory record created from admin inventory screen',
+        deltaPaid: nextQuantityPaid,
+        deltaSample: nextQuantitySample,
+        deltaLooseBottlePaid: nextLooseBottlePaid,
+        quantityPaidAfter: nextQuantityPaid,
+        quantitySampleAfter: nextQuantitySample,
+        looseBottlePaidAfter: nextLooseBottlePaid,
+      })
+    }
 
-    await logInventoryTransaction({
-      productId,
-      actorUserId: (await auth())?.user?.id ?? null,
-      type: 'manual_adjustment',
-      reason: 'Inventory record created from admin inventory screen',
-      deltaPaid: nextQuantityPaid,
-      deltaSample: nextQuantitySample,
-      deltaLooseBottlePaid: nextLooseBottlePaid,
-      quantityPaidAfter: nextQuantityPaid,
-      quantitySampleAfter: nextQuantitySample,
-      looseBottlePaidAfter: nextLooseBottlePaid,
-    })
+    revalidatePath('/admin/inventory')
+    return { success: true as const }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to update inventory' }
   }
+}
 
-  revalidatePath('/admin/inventory')
+export async function deleteSku(formData: FormData) {
+  try {
+    await requireAdmin()
+
+    const productId = formData.get('productId') as string
+    if (!productId) {
+      throw new Error('Missing product ID')
+    }
+
+    const [usage] = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(orderItems)
+      .where(eq(orderItems.productId, productId))
+
+    const retired = Number(usage?.count ?? 0) > 0
+
+    if (retired) {
+      await db.update(products)
+        .set({ active: false })
+        .where(eq(products.id, productId))
+    } else {
+      await db.delete(products).where(eq(products.id, productId))
+    }
+
+    revalidatePath('/admin/inventory')
+    return { success: true as const, retired }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to delete SKU' }
+  }
 }
