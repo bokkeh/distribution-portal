@@ -10,6 +10,45 @@ import { sendSms } from '@/lib/telnyx/client'
 import { postGoogleChat } from '@/lib/google-chat/webhook'
 import { geocodeAddress } from '@/lib/maps/geocode'
 
+async function insertDeliveryStopWithFallback(
+  values: {
+    deliveryId: string
+    orderId: string | null
+    customerId: string
+    sequenceNumber: number
+    address: string
+    contactName: string | null
+    contactPhone: string | null
+    contactEmail: string | null
+    lat: string | null
+    lng: string | null
+    status: 'pending'
+  }
+) {
+  try {
+    await db.insert(deliveryStops).values(values)
+  } catch (error) {
+    const code = (error as { code?: string; cause?: { code?: string } } | null)?.code
+      ?? (error as { cause?: { code?: string } } | null)?.cause?.code
+    const message = error instanceof Error ? error.message.toLowerCase() : ''
+
+    if (code !== '42703' && !message.includes('contact_name') && !message.includes('contact_phone') && !message.includes('contact_email')) {
+      throw error
+    }
+
+    await db.insert(deliveryStops).values({
+      deliveryId: values.deliveryId,
+      orderId: values.orderId,
+      customerId: values.customerId,
+      sequenceNumber: values.sequenceNumber,
+      address: values.address,
+      lat: values.lat,
+      lng: values.lng,
+      status: values.status,
+    })
+  }
+}
+
 export async function createDelivery(formData: FormData) {
   await requireAdmin()
 
@@ -55,7 +94,7 @@ export async function createDelivery(formData: FormData) {
         lng = coords?.lng ?? null
       } catch {}
 
-      await db.insert(deliveryStops).values({
+      await insertDeliveryStopWithFallback({
         deliveryId: delivery.id,
         orderId: order.id,
         customerId: order.customerId,
@@ -166,7 +205,7 @@ export async function addDeliveryStop(deliveryId: string, formData: FormData) {
     lng = coords?.lng ?? null
   } catch {}
 
-  await db.insert(deliveryStops).values({
+  await insertDeliveryStopWithFallback({
     deliveryId,
     orderId: openOrder?.id ?? null,
     customerId: account.id,
