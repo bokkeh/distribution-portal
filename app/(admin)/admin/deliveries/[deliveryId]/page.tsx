@@ -10,7 +10,13 @@ import DeliveryMapWrapper from '@/components/deliveries/DeliveryMapWrapper'
 import Link from 'next/link'
 import { ArrowLeft, MapPin, CheckCircle, XCircle, Clock } from 'lucide-react'
 
-export default async function DeliveryDetailPage({ params }: { params: { deliveryId: string } }) {
+export default async function DeliveryDetailPage({
+  params,
+}: {
+  params: Promise<{ deliveryId: string }> | { deliveryId: string }
+}) {
+  const resolvedParams = await Promise.resolve(params)
+
   const [delivery] = await db
     .select({
       id: deliveries.id,
@@ -22,7 +28,7 @@ export default async function DeliveryDetailPage({ params }: { params: { deliver
     .from(deliveries)
     .leftJoin(drivers, eq(deliveries.driverId, drivers.id))
     .leftJoin(users, eq(drivers.userId, users.id))
-    .where(eq(deliveries.id, params.deliveryId))
+    .where(eq(deliveries.id, resolvedParams.deliveryId))
 
   if (!delivery) notFound()
 
@@ -59,7 +65,7 @@ export default async function DeliveryDetailPage({ params }: { params: { deliver
       })
       .from(deliveryStops)
       .leftJoin(customerAccounts, eq(deliveryStops.customerId, customerAccounts.id))
-      .where(eq(deliveryStops.deliveryId, params.deliveryId))
+      .where(eq(deliveryStops.deliveryId, resolvedParams.deliveryId))
       .orderBy(deliveryStops.sequenceNumber)
   } catch (error) {
     const code = (error as { code?: string; cause?: { code?: string } } | null)?.code
@@ -84,7 +90,7 @@ export default async function DeliveryDetailPage({ params }: { params: { deliver
       })
       .from(deliveryStops)
       .leftJoin(customerAccounts, eq(deliveryStops.customerId, customerAccounts.id))
-      .where(eq(deliveryStops.deliveryId, params.deliveryId))
+      .where(eq(deliveryStops.deliveryId, resolvedParams.deliveryId))
       .orderBy(deliveryStops.sequenceNumber)
       .then(rows => rows.map(row => ({
         ...row,
