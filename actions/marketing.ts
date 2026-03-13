@@ -32,6 +32,36 @@ async function getWholesaleRequestColumns() {
   )
 }
 
+function formatDbError(error: unknown): string {
+  if (!error || typeof error !== 'object') {
+    return 'Failed to submit request'
+  }
+
+  const err = error as {
+    message?: string
+    code?: string
+    detail?: string
+    hint?: string
+    table?: string
+    column?: string
+    constraint?: string
+    cause?: unknown
+  }
+
+  const parts = [
+    err.message,
+    err.code ? `code=${err.code}` : undefined,
+    err.table ? `table=${err.table}` : undefined,
+    err.column ? `column=${err.column}` : undefined,
+    err.constraint ? `constraint=${err.constraint}` : undefined,
+    err.detail,
+    err.hint,
+  ].filter(Boolean)
+
+  const causeMessage = err.cause ? formatDbError(err.cause) : undefined
+  return [parts.join(' | '), causeMessage].filter(Boolean).join(' <- ')
+}
+
 export async function submitWholesaleAccountRequest(
   _prev: { error?: string; success?: boolean } | null,
   formData: FormData
@@ -82,6 +112,11 @@ export async function submitWholesaleAccountRequest(
       await db.insert(wholesaleAccountRequests).values(insertValues)
     } catch (error) {
       const availableColumns = await getWholesaleRequestColumns().catch(() => null)
+      console.error('Wholesale request insert failed', {
+        error: formatDbError(error),
+        availableColumns: availableColumns ? Array.from(availableColumns).sort() : null,
+      })
+
       if (!availableColumns) {
         throw error
       }
@@ -143,6 +178,6 @@ export async function submitWholesaleAccountRequest(
     if (err instanceof z.ZodError) {
       return { error: err.issues[0]?.message ?? 'Invalid form submission' }
     }
-    return { error: err instanceof Error ? err.message : 'Failed to submit request' }
+    return { error: formatDbError(err) }
   }
 }
