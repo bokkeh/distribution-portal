@@ -3,11 +3,10 @@ import { deliveries, deliveryStops, drivers, customerAccounts } from '@/db/schem
 import { eq, and } from 'drizzle-orm'
 import { requireRole } from '@/lib/auth/session'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { formatDate } from '@/lib/utils'
-import { MapPin, Truck } from 'lucide-react'
+import { Truck } from 'lucide-react'
 import DeliveryMapWrapper from '@/components/deliveries/DeliveryMapWrapper'
-import { DriverStopActions } from '@/components/deliveries/DriverStopCard'
+import SortableStopList from '@/components/deliveries/SortableStopList'
 
 export default async function DriverDeliveriesPage() {
   const session = await requireRole('driver', 'admin')
@@ -153,54 +152,7 @@ export default async function DriverDeliveriesPage() {
                 />
               </div>
 
-              <div className="space-y-3">
-                {stops.map(stop => (
-                  <div key={stop.id} className="rounded-lg border p-3">
-                    <div className="flex items-start gap-3">
-                      <div className="w-7 h-7 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
-                        {stop.sequenceNumber}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-sm font-medium">{stop.companyName}</p>
-                          <Badge
-                            variant={
-                              stop.status === 'delivered'
-                                ? 'success'
-                                : stop.status === 'failed'
-                                  ? 'destructive'
-                                  : 'secondary'
-                            }
-                          >
-                            {stop.status}
-                          </Badge>
-                        </div>
-                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                          <MapPin className="w-3 h-3" />{stop.address}
-                        </p>
-                        {(stop.contactName || stop.contactPhone || stop.contactEmail) && (
-                          <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-                            {stop.contactName && <p>POC: {stop.contactName}</p>}
-                            {stop.contactPhone && <p>Phone: {stop.contactPhone}</p>}
-                            {stop.contactEmail && <p>Email: {stop.contactEmail}</p>}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="mt-3">
-                      <DriverStopActions
-                        stop={{
-                          id: stop.id,
-                          status: stop.status,
-                          notes: stop.notes,
-                          proofOfDeliveryUrl: stop.proofOfDeliveryUrl,
-                          shelfPhotoUrl: stop.shelfPhotoUrl,
-                        }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <SortableStopList deliveryId={delivery.id} stops={stops} mode="driver" />
             </CardContent>
           </Card>
         )

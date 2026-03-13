@@ -13,6 +13,61 @@ import { generateSignedUploadUrl } from '@/lib/gcs/client'
 import { sendDeliveryCompletedEmail } from '@/lib/resend/client'
 import { v4 as uuidv4 } from 'uuid'
 
+async function resequenceDeliveryStops(deliveryId: string) {
+  const existingStops = await db
+    .select({
+      id: deliveryStops.id,
+      sequenceNumber: deliveryStops.sequenceNumber,
+    })
+    .from(deliveryStops)
+    .where(eq(deliveryStops.deliveryId, deliveryId))
+    .orderBy(deliveryStops.sequenceNumber)
+
+  for (let index = 0; index < existingStops.length; index++) {
+    const stop = existingStops[index]
+    const nextSequenceNumber = index + 1
+
+    if (stop.sequenceNumber === nextSequenceNumber) continue
+
+    await db.update(deliveryStops)
+      .set({ sequenceNumber: nextSequenceNumber })
+      .where(eq(deliveryStops.id, stop.id))
+  }
+}
+
+async function requireDeliveryReorderAccess(deliveryId: string) {
+  const session = await requireRole('driver', 'admin')
+  const userRoles = session.user.roles ?? [session.user.role as string]
+
+  if (userRoles.includes('admin')) {
+    return
+  }
+
+  const [driver] = await db
+    .select({
+      id: drivers.id,
+    })
+    .from(drivers)
+    .where(eq(drivers.userId, session.user.id))
+    .limit(1)
+
+  if (!driver) {
+    throw new Error('Driver profile not found')
+  }
+
+  const [delivery] = await db
+    .select({
+      id: deliveries.id,
+    })
+    .from(deliveries)
+    .where(and(eq(deliveries.id, deliveryId), eq(deliveries.driverId, driver.id)))
+    .limit(1)
+
+  if (!delivery) {
+    throw new Error('Unauthorized')
+  }
+}
+
 function isMissingDeliveryStopContactColumn(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false
 
@@ -275,25 +330,40 @@ export async function removeDeliveryStop(deliveryId: string, stopId: string) {
   await requireAdmin()
 
   await db.delete(deliveryStops).where(eq(deliveryStops.id, stopId))
+  await resequenceDeliveryStops(deliveryId)
 
-  const remainingStops = await db
+  revalidatePath(`/admin/deliveries/${deliveryId}`)
+  revalidatePath('/admin/deliveries')
+  revalidatePath('/driver/deliveries')
+  revalidatePath('/driver/map')
+}
+
+export async function reorderDeliveryStops(deliveryId: string, stopIds: string[]) {
+  await requireDeliveryReorderAccess(deliveryId)
+
+  if (stopIds.length === 0) return
+
+  const existingStops = await db
     .select({
       id: deliveryStops.id,
-      sequenceNumber: deliveryStops.sequenceNumber,
     })
     .from(deliveryStops)
     .where(eq(deliveryStops.deliveryId, deliveryId))
     .orderBy(deliveryStops.sequenceNumber)
 
-  for (let index = 0; index < remainingStops.length; index++) {
-    const stop = remainingStops[index]
-    const nextSequenceNumber = index + 1
+  if (existingStops.length !== stopIds.length) {
+    throw new Error('Stop list is out of sync')
+  }
 
-    if (stop.sequenceNumber === nextSequenceNumber) continue
+  const existingStopIds = new Set(existingStops.map(stop => stop.id))
+  if (stopIds.some(id => !existingStopIds.has(id))) {
+    throw new Error('One or more stops do not belong to this delivery')
+  }
 
+  for (let index = 0; index < stopIds.length; index++) {
     await db.update(deliveryStops)
-      .set({ sequenceNumber: nextSequenceNumber })
-      .where(eq(deliveryStops.id, stop.id))
+      .set({ sequenceNumber: index + 1 })
+      .where(and(eq(deliveryStops.id, stopIds[index]), eq(deliveryStops.deliveryId, deliveryId)))
   }
 
   revalidatePath(`/admin/deliveries/${deliveryId}`)

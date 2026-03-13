@@ -8,6 +8,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { postGoogleChat } from '@/lib/google-chat/webhook'
 import { logInventoryTransaction } from '@/lib/inventory/history'
+import { getMinimumCaseQuantity, isWisherVodkaProduct } from '@/lib/orders/minimums'
 
 type PurchaseUnit = 'case' | 'bottle'
 
@@ -66,6 +67,10 @@ export async function createOrder(formData: FormData) {
 
     if (item.quantity > availableQuantity) {
       throw new Error(`Not enough ${purchaseUnit}s in stock for ${product.name}`)
+    }
+
+    if (purchaseUnit === 'case' && isWisherVodkaProduct(product) && item.quantity < getMinimumCaseQuantity(product)) {
+      throw new Error(`${product.name} requires a minimum order of ${getMinimumCaseQuantity(product)} cases`)
     }
 
     const unitPrice = purchaseUnit === 'bottle'

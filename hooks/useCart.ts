@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { CartItem } from '@/types'
+import { normalizeCaseQuantity } from '@/lib/orders/minimums'
 
 interface CartStore {
   items: CartItem[]
@@ -23,14 +24,38 @@ export const useCart = create<CartStore>()(
       addItem: (newItem) => set((state) => {
         const existing = state.items.find(i => i.productId === newItem.productId)
         if (existing) {
-          return { items: state.items.map(i => i.productId === newItem.productId ? { ...i, quantity: i.quantity + 1 } : i) }
+          return {
+            items: state.items.map(i => {
+              if (i.productId !== newItem.productId) return i
+              return {
+                ...i,
+                quantity: normalizeCaseQuantity(i, i.quantity + 1),
+              }
+            }),
+          }
         }
-        return { items: [...state.items, { ...newItem, quantity: 1 }] }
+        return {
+          items: [
+            ...state.items,
+            {
+              ...newItem,
+              quantity: normalizeCaseQuantity(newItem, 1),
+            },
+          ],
+        }
       }),
       removeItem: (productId) => set((state) => ({ items: state.items.filter(i => i.productId !== productId) })),
       updateQuantity: (productId, quantity) => set((state) => {
         if (quantity <= 0) return { items: state.items.filter(i => i.productId !== productId) }
-        return { items: state.items.map(i => i.productId === productId ? { ...i, quantity } : i) }
+        return {
+          items: state.items.map(i => {
+            if (i.productId !== productId) return i
+            return {
+              ...i,
+              quantity: normalizeCaseQuantity(i, quantity),
+            }
+          }),
+        }
       }),
       clearCart: () => set({ items: [] }),
       total: () => get().items.reduce((sum, item) => {

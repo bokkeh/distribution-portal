@@ -190,6 +190,7 @@ export default function DeliveryMap({
               preserveViewport: true,
               suppressMarkers: true,
               polylineOptions: {
+                clickable: false,
                 strokeColor: 'rgba(0,0,0,0)',
                 strokeWeight: 5,
                 strokeOpacity: 0,
@@ -213,6 +214,7 @@ export default function DeliveryMap({
           <Polyline
             path={fallbackPath}
             options={{
+              clickable: false,
               strokeColor: 'rgba(0,0,0,0)',
               strokeWeight: 5,
               strokeOpacity: 0,

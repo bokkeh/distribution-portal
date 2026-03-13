@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useCart } from '@/hooks/useCart'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -10,6 +10,7 @@ import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-
 import { createOrder } from '@/actions/orders'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { getMinimumCaseQuantity, isWisherVodkaProduct } from '@/lib/orders/minimums'
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '')
 
@@ -45,7 +46,6 @@ function PaymentForm({ customerId, orderType, items, total, onSuccess }: {
       return
     }
 
-    // Place the order after successful payment
     const formData = new FormData()
     formData.append('customerId', customerId)
     formData.append('orderType', orderType)
@@ -78,7 +78,19 @@ export default function CheckoutClient({ customerId, customerName }: { customerI
   const [loading, setLoading] = useState(false)
   const router = useRouter()
 
+  const minimumViolation = useMemo(
+    () => items.find(item => isWisherVodkaProduct(item) && item.quantity < getMinimumCaseQuantity(item)),
+    [items]
+  )
+
   async function initializePayment() {
+    if (minimumViolation) {
+      toast.error('Minimum order not met', {
+        description: `${minimumViolation.name} requires at least ${getMinimumCaseQuantity(minimumViolation)} cases.`,
+      })
+      return
+    }
+
     try {
       setLoading(true)
       const res = await fetch('/api/stripe/payment-intent', {
@@ -109,18 +121,22 @@ export default function CheckoutClient({ customerId, customerName }: { customerI
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* Order Summary */}
       <Card>
         <CardHeader><CardTitle>Order Summary</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">Customer: {customerName}</p>
           <p className="text-sm text-muted-foreground">Order Type: <strong>{orderType}</strong></p>
+          {minimumViolation && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              {minimumViolation.name} requires a minimum of {getMinimumCaseQuantity(minimumViolation)} cases before checkout.
+            </div>
+          )}
           <div className="space-y-2 border-t pt-3">
             {items.map(item => {
               const price = parseFloat(orderType === 'sample' ? item.samplePrice : item.price)
               return (
                 <div key={item.productId} className="flex justify-between text-sm">
-                  <span>{item.name} ×{item.quantity}</span>
+                  <span>{item.name} x{item.quantity}</span>
                   <span>{formatCurrency(price * item.quantity)}</span>
                 </div>
               )
@@ -132,7 +148,6 @@ export default function CheckoutClient({ customerId, customerName }: { customerI
         </CardContent>
       </Card>
 
-      {/* Payment */}
       <Card>
         <CardHeader><CardTitle>Payment</CardTitle></CardHeader>
         <CardContent>
@@ -141,7 +156,7 @@ export default function CheckoutClient({ customerId, customerName }: { customerI
               <p className="text-sm text-muted-foreground">
                 Secure payment powered by Stripe. Your card details are never stored on our servers.
               </p>
-              <Button className="w-full" onClick={initializePayment} disabled={loading}>
+              <Button className="w-full" onClick={initializePayment} disabled={loading || !!minimumViolation}>
                 {loading ? 'Preparing...' : 'Proceed to Payment'}
               </Button>
               <p className="text-xs text-center text-muted-foreground">Test card: 4242 4242 4242 4242</p>

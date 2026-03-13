@@ -10,6 +10,7 @@ import { useCart } from '@/hooks/useCart'
 import { ShoppingCart, Plus, Check } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { WISHER_VODKA_MIN_CASES, isWisherVodkaProduct } from '@/lib/orders/minimums'
 
 interface Product {
   id: string
@@ -77,6 +78,7 @@ export default function CustomerProductCatalog({ products, categories }: { produ
           const stock = product.quantityPaid
           const inCart = isInCart(product.id)
           const outOfStock = (stock ?? 0) <= 0
+          const hasMinimumCaseRequirement = isWisherVodkaProduct(product)
 
           return (
             <Card key={product.id} className={`overflow-hidden transition-shadow ${outOfStock ? 'opacity-60' : 'hover:shadow-md'}`}>
@@ -102,6 +104,9 @@ export default function CustomerProductCatalog({ products, categories }: { produ
                   <span className="font-bold text-blue-600">{formatCurrency(product.price)}</span>
                   <span className="text-xs text-muted-foreground">{stock ?? 0} avail.</span>
                 </div>
+                {hasMinimumCaseRequirement && (
+                  <p className="text-xs text-amber-700">Minimum order: {WISHER_VODKA_MIN_CASES} cases</p>
+                )}
                 <Button
                   className="w-full"
                   size="sm"
@@ -117,7 +122,7 @@ export default function CustomerProductCatalog({ products, categories }: { produ
                     orderType: 'paid',
                   })}
                 >
-                  {inCart ? <><Check className="w-4 h-4 mr-1" />Added</> : <><Plus className="w-4 h-4 mr-1" />Add to Order</>}
+                  {inCart ? <><Check className="w-4 h-4 mr-1" />Added</> : <><Plus className="w-4 h-4 mr-1" />{hasMinimumCaseRequirement ? `Add ${WISHER_VODKA_MIN_CASES} Cases` : 'Add to Order'}</>}
                 </Button>
               </CardContent>
             </Card>

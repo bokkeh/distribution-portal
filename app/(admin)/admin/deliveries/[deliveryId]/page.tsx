@@ -7,9 +7,10 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { formatDate } from '@/lib/utils'
 import DeliveryMapWrapper from '@/components/deliveries/DeliveryMapWrapper'
+import SortableStopList from '@/components/deliveries/SortableStopList'
 import Link from 'next/link'
-import { ArrowLeft, MapPin, CheckCircle, XCircle, Clock } from 'lucide-react'
-import { addDeliveryStop, reassignDeliveryDriver, removeDeliveryStop } from '@/actions/deliveries'
+import { ArrowLeft } from 'lucide-react'
+import { addDeliveryStop, reassignDeliveryDriver } from '@/actions/deliveries'
 
 export default async function DeliveryDetailPage({
   params,
@@ -131,12 +132,6 @@ export default async function DeliveryDetailPage({
       })))
   }
 
-  const stopIcon: Record<string, React.ReactNode> = {
-    pending: <Clock className="w-4 h-4 text-yellow-500" />,
-    delivered: <CheckCircle className="w-4 h-4 text-green-500" />,
-    failed: <XCircle className="w-4 h-4 text-red-500" />,
-  }
-
   const mapStops = stops.map(stop => ({
     id: stop.id,
     lat: parseFloat(stop.lat ?? '0'),
@@ -241,35 +236,7 @@ export default async function DeliveryDetailPage({
         <Card>
           <CardHeader><CardTitle>{stops.length} Stops</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            {stops.map(stop => (
-              <div key={stop.id} className="flex items-start gap-3 rounded-lg border p-3">
-                <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
-                  {stop.sequenceNumber}
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium">{stop.companyName}</p>
-                  <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
-                    <MapPin className="h-3 w-3" />{stop.address}
-                  </p>
-                  {(stop.contactName || stop.contactPhone || stop.contactEmail) && (
-                    <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-                      {stop.contactName && <p>POC: {stop.contactName}</p>}
-                      {stop.contactPhone && <p>Phone: {stop.contactPhone}</p>}
-                      {stop.contactEmail && <p>Email: {stop.contactEmail}</p>}
-                    </div>
-                  )}
-                  {stop.completedAt && (
-                    <p className="mt-1 text-xs text-muted-foreground">Completed {formatDate(stop.completedAt)}</p>
-                  )}
-                </div>
-                <div className="flex items-start gap-2">
-                  {stopIcon[stop.status]}
-                  <form action={removeDeliveryStop.bind(null, resolvedParams.deliveryId, stop.id)}>
-                    <Button type="submit" variant="outline" size="sm">Remove</Button>
-                  </form>
-                </div>
-              </div>
-            ))}
+            <SortableStopList deliveryId={resolvedParams.deliveryId} stops={stops} mode="admin" />
           </CardContent>
         </Card>
       </div>

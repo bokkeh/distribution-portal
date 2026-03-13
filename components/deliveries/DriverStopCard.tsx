@@ -89,31 +89,63 @@ export function DriverStopActions({ stop }: { stop: Stop }) {
   }
 
   return (
-    <div className="space-y-3">
-      <div className="space-y-2">
-        <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Proof of Delivery</label>
-        <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-600 hover:border-blue-400 hover:bg-slate-50">
-          {uploadingProof ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
-          <span>{proofOfDeliveryUrl ? 'Replace proof photo' : 'Upload proof photo'}</span>
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <label className="block cursor-pointer">
+          <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-muted-foreground">Proof Of Delivery</span>
+          <span className="flex aspect-square w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-center text-slate-600 transition-colors hover:border-blue-400 hover:bg-blue-50">
+            {uploadingProof ? <Loader2 className="mb-3 h-8 w-8 animate-spin" /> : <UploadCloud className="mb-3 h-8 w-8" />}
+            <span className="text-sm font-semibold text-slate-900">
+              {proofOfDeliveryUrl ? 'Replace Delivery Photo' : 'Upload Delivery Photo'}
+            </span>
+            <span className="mt-2 text-xs text-muted-foreground">
+              Driver proof at drop-off
+            </span>
+            {proofOfDeliveryUrl && (
+              <a
+                href={proofOfDeliveryUrl}
+                target="_blank"
+                rel="noreferrer"
+                onClick={event => event.stopPropagation()}
+                className="mt-3 text-xs font-medium text-blue-600 underline"
+              >
+                Preview current image
+              </a>
+            )}
+          </span>
           <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="hidden" onChange={event => {
             const file = event.target.files?.[0]
             if (file) void handleUpload(file, 'proof')
           }} />
         </label>
-        {proofOfDeliveryUrl && <a href={proofOfDeliveryUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline">Preview proof photo</a>}
-      </div>
 
-      <div className="space-y-2">
-        <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Shelf Photo</label>
-        <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-600 hover:border-blue-400 hover:bg-slate-50">
-          {uploadingShelf ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
-          <span>{shelfPhotoUrl ? 'Replace shelf photo' : 'Upload shelf photo'}</span>
+        <label className="block cursor-pointer">
+          <span className="mb-2 block text-xs font-medium uppercase tracking-wide text-muted-foreground">Shelf Photo</span>
+          <span className="flex aspect-square w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-center text-slate-600 transition-colors hover:border-blue-400 hover:bg-blue-50">
+            {uploadingShelf ? <Loader2 className="mb-3 h-8 w-8 animate-spin" /> : <UploadCloud className="mb-3 h-8 w-8" />}
+            <span className="text-sm font-semibold text-slate-900">
+              {shelfPhotoUrl ? 'Replace Shelf Photo' : 'Upload Shelf Photo'}
+            </span>
+            <span className="mt-2 text-xs text-muted-foreground">
+              Shelf condition after delivery
+            </span>
+            {shelfPhotoUrl && (
+              <a
+                href={shelfPhotoUrl}
+                target="_blank"
+                rel="noreferrer"
+                onClick={event => event.stopPropagation()}
+                className="mt-3 text-xs font-medium text-blue-600 underline"
+              >
+                Preview current image
+              </a>
+            )}
+          </span>
           <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="hidden" onChange={event => {
             const file = event.target.files?.[0]
             if (file) void handleUpload(file, 'shelf')
           }} />
         </label>
-        {shelfPhotoUrl && <a href={shelfPhotoUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline">Preview shelf photo</a>}
       </div>
 
       <div className="space-y-2">
@@ -128,11 +160,21 @@ export function DriverStopActions({ stop }: { stop: Stop }) {
       </div>
 
       <div className="flex gap-2">
-        <Button type="button" onClick={handleDelivered} disabled={isPending || uploadingProof || uploadingShelf} className="gap-2">
+        <Button
+          type="button"
+          onClick={handleDelivered}
+          disabled={isPending || uploadingProof || uploadingShelf}
+          className="gap-2 bg-green-600 text-white hover:bg-green-700"
+        >
           {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
           Mark Delivered
         </Button>
-        <Button type="button" variant="outline" onClick={handleFailed} disabled={isPending}>
+        <Button
+          type="button"
+          variant="destructive"
+          onClick={handleFailed}
+          disabled={isPending}
+        >
           <XCircle className="mr-2 h-4 w-4" />
           Mark Failed
         </Button>
