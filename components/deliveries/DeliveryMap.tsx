@@ -64,7 +64,7 @@ export default function DeliveryMap({ stops }: { stops: Stop[] }) {
       {path.length > 1 && (
         <Polyline
           path={path}
-          options={{ strokeColor: '#94A3B8', strokeWeight: 2, strokeOpacity: 0.8, geodesic: true }}
+          options={{ strokeColor: '#DC2626', strokeWeight: 5, strokeOpacity: 0.95, geodesic: true }}
         />
       )}
       {selectedStop && (
