@@ -16,11 +16,12 @@ export default async function DeliveryDetailPage({
   searchParams,
 }: {
   params: Promise<{ deliveryId: string }> | { deliveryId: string }
-  searchParams?: Promise<{ addStop?: string }> | { addStop?: string }
+  searchParams?: Promise<{ addStop?: string; error?: string }> | { addStop?: string; error?: string }
 }) {
   const resolvedParams = await Promise.resolve(params)
   const resolvedSearchParams = await Promise.resolve(searchParams ?? {})
   const showAddStop = resolvedSearchParams.addStop === '1'
+  const addStopError = resolvedSearchParams.error
 
   const [delivery] = await db
     .select({
@@ -153,6 +154,11 @@ export default async function DeliveryDetailPage({
         <Card>
           <CardHeader><CardTitle>Add Stop</CardTitle></CardHeader>
           <CardContent>
+            {addStopError && (
+              <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {addStopError}
+              </div>
+            )}
             <form action={addDeliveryStop.bind(null, resolvedParams.deliveryId)} className="space-y-4">
               <div className="space-y-2">
                 <label htmlFor="customerId" className="text-sm font-medium text-slate-900">Select Account</label>
