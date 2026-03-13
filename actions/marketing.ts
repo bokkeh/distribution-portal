@@ -19,14 +19,24 @@ const requestSchema = z.object({
 function isMissingRequestMetadataColumnError(error: unknown) {
   if (!error || typeof error !== 'object') return false
 
-  const dbError = error as { code?: string; message?: string }
+  const dbError = error as {
+    code?: string
+    message?: string
+    column?: string
+    cause?: unknown
+  }
   if (dbError.code === '42703') return true
+  if (dbError.column === 'ip_address' || dbError.column === 'user_agent') return true
 
   const message = dbError.message?.toLowerCase() ?? ''
-  return (
+  if (
     message.includes('column') &&
     (message.includes('ip_address') || message.includes('user_agent'))
-  )
+  ) {
+    return true
+  }
+
+  return isMissingRequestMetadataColumnError(dbError.cause)
 }
 
 export async function submitWholesaleAccountRequest(
