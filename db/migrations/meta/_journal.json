@@ -43,6 +43,13 @@
       "when": 1773322200000,
       "tag": "0005_bright_pencil",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1773408600000,
+      "tag": "0006_fresh_route",
+      "breakpoints": true
     }
   ]
 }

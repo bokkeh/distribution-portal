@@ -29,10 +29,15 @@ export async function createDelivery(formData: FormData) {
       .select({
         id: orders.id,
         customerId: orders.customerId,
+        companyName: customerAccounts.companyName,
         address: customerAccounts.address,
         city: customerAccounts.city,
         state: customerAccounts.state,
         zip: customerAccounts.zip,
+        contactName: customerAccounts.contactName,
+        pocName: customerAccounts.pocName,
+        pocPhone: customerAccounts.pocPhone,
+        pocEmail: customerAccounts.pocEmail,
       })
       .from(orders)
       .leftJoin(customerAccounts, eq(orders.customerId, customerAccounts.id))
@@ -40,7 +45,8 @@ export async function createDelivery(formData: FormData) {
 
     for (let i = 0; i < selectedOrders.length; i++) {
       const o = selectedOrders[i]
-      const fullAddress = [o.address, o.city, o.state, o.zip].filter(Boolean).join(', ')
+      const fullAddress = [o.address, o.city, o.state, o.zip].filter(Boolean).join(', ') || 'Address not provided'
+      const contactName = o.pocName || o.contactName || o.companyName || null
       let lat: number | null = null
       let lng: number | null = null
 
@@ -56,6 +62,9 @@ export async function createDelivery(formData: FormData) {
         customerId: o.customerId,
         sequenceNumber: i + 1,
         address: fullAddress,
+        contactName,
+        contactPhone: o.pocPhone ?? null,
+        contactEmail: o.pocEmail ?? null,
         lat: lat?.toFixed(7) ?? null,
         lng: lng?.toFixed(7) ?? null,
         status: 'pending',
