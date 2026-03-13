@@ -2,13 +2,28 @@ import { Storage } from '@google-cloud/storage'
 
 let _storage: Storage | null = null
 
+function normalizePrivateKey(value: string | undefined) {
+  if (!value) return undefined
+
+  let normalized = value.trim()
+
+  if (
+    (normalized.startsWith('"') && normalized.endsWith('"')) ||
+    (normalized.startsWith("'") && normalized.endsWith("'"))
+  ) {
+    normalized = normalized.slice(1, -1)
+  }
+
+  return normalized.replace(/\\n/g, '\n')
+}
+
 function getStorage() {
   if (!_storage) {
     _storage = new Storage({
       projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
       credentials: {
         client_email: process.env.GOOGLE_CLOUD_CLIENT_EMAIL,
-        private_key: process.env.GOOGLE_CLOUD_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+        private_key: normalizePrivateKey(process.env.GOOGLE_CLOUD_PRIVATE_KEY),
       },
     })
   }
