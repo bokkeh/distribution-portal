@@ -2,7 +2,7 @@
 
 import { db } from '@/db'
 import { deliveries, deliveryStops, orders, drivers, users, customerAccounts } from '@/db/schema'
-import { requireAdmin, requireAdminOrStaff } from '@/lib/auth/session'
+import { requireAdmin, requireAdminOrStaff, requireRole } from '@/lib/auth/session'
 import { and, desc, eq, inArray } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
@@ -160,6 +160,19 @@ export async function updateStopStatus(stopId: string, status: 'delivered' | 'fa
   revalidatePath('/driver/deliveries')
 }
 
+export async function updateStopNotes(stopId: string, formData: FormData) {
+  await requireRole('driver', 'admin')
+
+  const notes = ((formData.get('notes') as string) || '').trim()
+
+  await db.update(deliveryStops)
+    .set({ notes: notes || null })
+    .where(eq(deliveryStops.id, stopId))
+
+  revalidatePath('/driver/deliveries')
+  revalidatePath('/driver/map')
+}
+
 export async function removeDeliveryStop(deliveryId: string, stopId: string) {
   await requireAdmin()
 
@@ -189,6 +202,54 @@ export async function removeDeliveryStop(deliveryId: string, stopId: string) {
   revalidatePath('/admin/deliveries')
   revalidatePath('/driver/deliveries')
   revalidatePath('/driver/map')
+}
+
+export async function reassignDeliveryDriver(deliveryId: string, formData: FormData) {
+  await requireAdmin()
+
+  const driverId = formData.get('driverId') as string
+  if (!driverId) {
+    redirect(`/admin/deliveries/${deliveryId}?error=${encodeURIComponent('Select a driver to reassign this delivery.')}`)
+  }
+
+  const [delivery] = await db
+    .select({
+      id: deliveries.id,
+      weekStartDate: deliveries.weekStartDate,
+    })
+    .from(deliveries)
+    .where(eq(deliveries.id, deliveryId))
+    .limit(1)
+
+  if (!delivery) {
+    redirect(`/admin/deliveries/${deliveryId}?error=${encodeURIComponent('Delivery not found.')}`)
+  }
+
+  await db.update(deliveries)
+    .set({ driverId })
+    .where(eq(deliveries.id, deliveryId))
+
+  const [driver] = await db
+    .select({ phone: drivers.phone, name: users.name })
+    .from(drivers)
+    .innerJoin(users, eq(drivers.userId, users.id))
+    .where(eq(drivers.id, driverId))
+    .limit(1)
+
+  if (driver?.phone) {
+    await sendSms({
+      to: driver.phone,
+      body: `AHAWC Delivery Reassigned: You have been assigned a delivery scheduled for ${delivery.weekStartDate}. Log in to view your route: ${process.env.NEXTAUTH_URL}/driver/deliveries`,
+    }).catch(() => {})
+  }
+
+  await postGoogleChat(`Delivery Reassigned for ${delivery.weekStartDate}\nDriver: ${driver?.name ?? 'Unknown'}`)
+
+  revalidatePath(`/admin/deliveries/${deliveryId}`)
+  revalidatePath('/admin/deliveries')
+  revalidatePath('/driver/deliveries')
+  revalidatePath('/driver/map')
+  redirect(`/admin/deliveries/${deliveryId}`)
 }
 
 export async function addDeliveryStop(deliveryId: string, formData: FormData) {

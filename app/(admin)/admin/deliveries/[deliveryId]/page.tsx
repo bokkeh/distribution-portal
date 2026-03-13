@@ -9,7 +9,7 @@ import { formatDate } from '@/lib/utils'
 import DeliveryMapWrapper from '@/components/deliveries/DeliveryMapWrapper'
 import Link from 'next/link'
 import { ArrowLeft, MapPin, CheckCircle, XCircle, Clock } from 'lucide-react'
-import { addDeliveryStop, removeDeliveryStop } from '@/actions/deliveries'
+import { addDeliveryStop, reassignDeliveryDriver, removeDeliveryStop } from '@/actions/deliveries'
 
 export default async function DeliveryDetailPage({
   params,
@@ -22,12 +22,14 @@ export default async function DeliveryDetailPage({
   const resolvedSearchParams = await Promise.resolve(searchParams ?? {})
   const showAddStop = resolvedSearchParams.addStop === '1'
   const addStopError = resolvedSearchParams.error
+  const pageError = resolvedSearchParams.error
 
   const [delivery] = await db
     .select({
       id: deliveries.id,
       weekStartDate: deliveries.weekStartDate,
       status: deliveries.status,
+      driverId: deliveries.driverId,
       driverName: users.name,
       driverPhone: users.phone,
     })
@@ -49,6 +51,17 @@ export default async function DeliveryDetailPage({
     })
     .from(customerAccounts)
     .orderBy(asc(customerAccounts.companyName))
+
+  const activeDrivers = await db
+    .select({
+      id: drivers.id,
+      name: users.name,
+      phone: users.phone,
+    })
+    .from(drivers)
+    .innerJoin(users, eq(drivers.userId, users.id))
+    .where(eq(drivers.active, true))
+    .orderBy(asc(users.name))
 
   let stops: Array<{
     id: string
@@ -149,6 +162,36 @@ export default async function DeliveryDetailPage({
           {delivery.status.replace('_', ' ')}
         </Badge>
       </div>
+
+      <Card>
+        <CardHeader><CardTitle>Driver Assignment</CardTitle></CardHeader>
+        <CardContent>
+          {pageError && !showAddStop && (
+            <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {pageError}
+            </div>
+          )}
+          <form action={reassignDeliveryDriver.bind(null, resolvedParams.deliveryId)} className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="flex-1 space-y-2">
+              <label htmlFor="driverId" className="text-sm font-medium text-slate-900">Assigned Driver</label>
+              <select
+                id="driverId"
+                name="driverId"
+                defaultValue={delivery.driverId}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="">Select driver...</option>
+                {activeDrivers.map(driver => (
+                  <option key={driver.id} value={driver.id}>
+                    {driver.name} ({driver.phone})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <Button type="submit" variant="outline">Reassign Driver</Button>
+          </form>
+        </CardContent>
+      </Card>
 
       {showAddStop && (
         <Card>
