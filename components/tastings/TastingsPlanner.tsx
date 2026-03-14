@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameDay, isSameMonth, startOfMonth, startOfWeek } from 'date-fns'
 import { CalendarDays, Clock3, MapPin, Store } from 'lucide-react'
-import { createTasting, updateTastingStatus } from '@/actions/tastings'
+import { createTasting, deleteTasting, reassignTasting, updateTastingStatus } from '@/actions/tastings'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -226,6 +226,37 @@ export function TastingsPlanner({ mode, tastings, accounts, tasters, success, er
                         </Button>
                       ))}
                     </form>
+
+                    {mode !== 'taster' ? (
+                      <div className="mt-4 grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                        <form action={reassignTasting} className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                          <input type="hidden" name="tastingId" value={tasting.id} />
+                          <input type="hidden" name="mode" value={mode} />
+                          <div className="flex-1 space-y-1">
+                            <Label htmlFor={`${mode}-reassign-${tasting.id}`}>Reassign Taster</Label>
+                            <select
+                              id={`${mode}-reassign-${tasting.id}`}
+                              name="assignedUserId"
+                              defaultValue={tasting.assignedUserId}
+                              className="flex h-10 w-full rounded-md border border-input bg-white px-3 text-sm"
+                            >
+                              {tasters.map(taster => (
+                                <option key={taster.id} value={taster.id}>
+                                  {taster.name}{taster.phone ? ` (${taster.phone})` : ''}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <Button type="submit" variant="outline">Reassign</Button>
+                        </form>
+
+                        <form action={deleteTasting}>
+                          <input type="hidden" name="tastingId" value={tasting.id} />
+                          <input type="hidden" name="mode" value={mode} />
+                          <Button type="submit" variant="destructive" className="w-full sm:w-auto">Remove Tasting</Button>
+                        </form>
+                      </div>
+                    ) : null}
                   </div>
                 )) : (
                   <p className="text-sm text-slate-500">No tastings on this date yet.</p>

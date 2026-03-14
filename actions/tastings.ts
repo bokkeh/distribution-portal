@@ -52,6 +52,41 @@ async function notifyTasterAssignment({
   }
 }
 
+async function notifyTasterChange({
+  recipientName,
+  recipientPhone,
+  actorId,
+  body,
+}: {
+  recipientName: string
+  recipientPhone: string | null
+  actorId: string
+  body: string
+}) {
+  if (!recipientPhone) return
+
+  try {
+    await sendSms({ to: recipientPhone, body })
+    await db.insert(notificationsLog).values({
+      userId: actorId,
+      recipientPhone,
+      recipientName,
+      type: 'sms',
+      message: body,
+      status: 'sent',
+    })
+  } catch {
+    await db.insert(notificationsLog).values({
+      userId: actorId,
+      recipientPhone,
+      recipientName,
+      type: 'sms',
+      message: body,
+      status: 'failed',
+    })
+  }
+}
+
 export async function createTasting(formData: FormData) {
   const session = await requireFeature('tastings', 'admin', 'staff')
   const mode = (formData.get('mode') as string) || 'admin'
@@ -145,6 +180,111 @@ export async function updateTastingStatus(formData: FormData) {
   revalidatePath('/staff/tastings')
   revalidatePath('/taster/tastings')
   redirect(`/${mode}/tastings?success=${encodeURIComponent('Tasting updated.')}`)
+}
+
+export async function deleteTasting(formData: FormData) {
+  const session = await requireFeature('tastings', 'admin', 'staff')
+  const tastingId = formData.get('tastingId') as string
+  const mode = (formData.get('mode') as string) || 'admin'
+
+  const [tasting] = await db
+    .select({
+      id: tastings.id,
+      eventName: tastings.eventName,
+      scheduledAt: tastings.scheduledAt,
+      assignedUserId: tastings.assignedUserId,
+      tasterName: users.name,
+      tasterPhone: users.phone,
+    })
+    .from(tastings)
+    .innerJoin(users, eq(tastings.assignedUserId, users.id))
+    .where(eq(tastings.id, tastingId))
+    .limit(1)
+
+  if (!tasting) {
+    redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('Tasting not found.')}`)
+  }
+
+  await db.delete(tastings).where(eq(tastings.id, tastingId))
+
+  await notifyTasterChange({
+    recipientName: tasting.tasterName,
+    recipientPhone: tasting.tasterPhone,
+    actorId: session.user.id,
+    body: `AHAWC Tasting Cancelled: ${tasting.eventName} on ${tasting.scheduledAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })} has been cancelled. Please check the portal for updates.`,
+  })
+
+  revalidatePath('/admin/tastings')
+  revalidatePath('/staff/tastings')
+  revalidatePath('/taster/tastings')
+  redirect(`${tastingRedirectPath(mode)}?success=${encodeURIComponent('Tasting removed and taster notified.')}`)
+}
+
+export async function reassignTasting(formData: FormData) {
+  const session = await requireFeature('tastings', 'admin', 'staff')
+  const tastingId = formData.get('tastingId') as string
+  const nextAssignedUserId = formData.get('assignedUserId') as string
+  const mode = (formData.get('mode') as string) || 'admin'
+
+  if (!nextAssignedUserId) {
+    redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('Select a taster to reassign this tasting.')}`)
+  }
+
+  const [tasting] = await db
+    .select({
+      id: tastings.id,
+      eventName: tastings.eventName,
+      scheduledAt: tastings.scheduledAt,
+      assignedUserId: tastings.assignedUserId,
+      currentTasterName: users.name,
+      currentTasterPhone: users.phone,
+    })
+    .from(tastings)
+    .innerJoin(users, eq(tastings.assignedUserId, users.id))
+    .where(eq(tastings.id, tastingId))
+    .limit(1)
+
+  if (!tasting) {
+    redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('Tasting not found.')}`)
+  }
+
+  if (tasting.assignedUserId === nextAssignedUserId) {
+    redirect(`${tastingRedirectPath(mode)}?success=${encodeURIComponent('Tasting already assigned to that taster.')}`)
+  }
+
+  const [nextTaster] = await db
+    .select({ id: users.id, name: users.name, phone: users.phone, roles: users.roles })
+    .from(users)
+    .where(eq(users.id, nextAssignedUserId))
+    .limit(1)
+
+  if (!nextTaster || !nextTaster.roles.includes('taster')) {
+    redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('Choose a valid taster account.')}`)
+  }
+
+  await db.update(tastings).set({
+    assignedUserId: nextTaster.id,
+  }).where(eq(tastings.id, tastingId))
+
+  await Promise.all([
+    notifyTasterChange({
+      recipientName: tasting.currentTasterName,
+      recipientPhone: tasting.currentTasterPhone,
+      actorId: session.user.id,
+      body: `AHAWC Tasting Reassigned: ${tasting.eventName} on ${tasting.scheduledAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })} has been reassigned to another taster.`,
+    }),
+    notifyTasterChange({
+      recipientName: nextTaster.name,
+      recipientPhone: nextTaster.phone,
+      actorId: session.user.id,
+      body: `AHAWC Tasting Assigned: ${tasting.eventName} on ${tasting.scheduledAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })} has been assigned to you. View details: ${process.env.NEXTAUTH_URL}/taster/tastings`,
+    }),
+  ])
+
+  revalidatePath('/admin/tastings')
+  revalidatePath('/staff/tastings')
+  revalidatePath('/taster/tastings')
+  redirect(`${tastingRedirectPath(mode)}?success=${encodeURIComponent('Tasting reassigned and tasters notified.')}`)
 }
 
 export async function submitTastingReport(formData: FormData) {
