@@ -9,7 +9,7 @@ import { formatStatusLabel, orderStatusVariant, shippingStatusVariant } from '@/
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
 
-export default async function StaffOrdersPage() {
+export default async function AdminOrdersPage() {
   const allOrders = await db
     .select({
       id: orders.id,
@@ -18,7 +18,6 @@ export default async function StaffOrdersPage() {
       shippingStatus: orders.shippingStatus,
       orderType: orders.orderType,
       createdAt: orders.createdAt,
-      notes: orders.notes,
       companyName: customerAccounts.companyName,
     })
     .from(orders)
@@ -59,7 +58,7 @@ export default async function StaffOrdersPage() {
                   <td className="px-6 py-4"><Badge variant={shippingStatusVariant[order.shippingStatus]}>{formatStatusLabel(order.shippingStatus)}</Badge></td>
                   <td className="px-6 py-4 text-sm font-semibold">{formatCurrency(order.total)}</td>
                   <td className="px-6 py-4 text-sm text-muted-foreground">{formatDate(order.createdAt)}</td>
-                  <td className="px-6 py-4"><Link href={`/staff/orders/${order.id}`}><Button variant="ghost" size="sm">View</Button></Link></td>
+                  <td className="px-6 py-4"><Link href={`/admin/orders/${order.id}`}><Button variant="ghost" size="sm">View</Button></Link></td>
                 </tr>
               ))}
             </tbody>

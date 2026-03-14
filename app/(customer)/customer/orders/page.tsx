@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatStatusLabel, orderStatusVariant, shippingStatusVariant } from '@/lib/orders/status'
 import Link from 'next/link'
 import { ShoppingCart } from 'lucide-react'
 
@@ -17,15 +18,11 @@ export default async function CustomerOrdersPage() {
   const myOrders = account ? await db
     .select({
       id: orders.id, total: orders.total, status: orders.status, orderType: orders.orderType,
-      notes: orders.notes, createdAt: orders.createdAt,
+      shippingStatus: orders.shippingStatus, notes: orders.notes, createdAt: orders.createdAt,
     })
     .from(orders)
     .where(eq(orders.customerId, account.id))
     .orderBy(desc(orders.createdAt)) : []
-
-  const statusColor: Record<string, 'default' | 'success' | 'warning' | 'destructive' | 'info'> = {
-    pending: 'warning', confirmed: 'info', fulfilled: 'success', cancelled: 'destructive',
-  }
 
   return (
     <div className="space-y-6">
@@ -51,7 +48,8 @@ export default async function CustomerOrdersPage() {
                     <div className="flex items-center gap-3">
                       <p className="font-semibold">Order #{order.id.slice(-8).toUpperCase()}</p>
                       <Badge variant="outline">{order.orderType}</Badge>
-                      <Badge variant={statusColor[order.status]}>{order.status}</Badge>
+                      <Badge variant={orderStatusVariant[order.status]}>{formatStatusLabel(order.status)}</Badge>
+                      <Badge variant={shippingStatusVariant[order.shippingStatus]}>{formatStatusLabel(order.shippingStatus)}</Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">{formatDate(order.createdAt)}</p>
                     {order.notes && <p className="text-sm text-muted-foreground">{order.notes}</p>}

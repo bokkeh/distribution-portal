@@ -13,7 +13,9 @@ import { ArrowLeft } from 'lucide-react'
 
 const shippingStatuses = ['not_scheduled', 'scheduled', 'out_for_delivery', 'delivered', 'issue'] as const
 
-export default async function OrderDetailPage({ params }: { params: { orderId: string } }) {
+export default async function AdminOrderDetailPage({ params }: { params: Promise<{ orderId: string }> | { orderId: string } }) {
+  const resolvedParams = await Promise.resolve(params)
+
   const [order] = await db
     .select({
       id: orders.id,
@@ -29,7 +31,7 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
     })
     .from(orders)
     .leftJoin(customerAccounts, eq(orders.customerId, customerAccounts.id))
-    .where(eq(orders.id, params.orderId))
+    .where(eq(orders.id, resolvedParams.orderId))
 
   if (!order) notFound()
 
@@ -45,7 +47,7 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
     })
     .from(orderItems)
     .leftJoin(products, eq(orderItems.productId, products.id))
-    .where(eq(orderItems.orderId, params.orderId))
+    .where(eq(orderItems.orderId, resolvedParams.orderId))
 
   const nextStatus: Record<string, 'confirmed' | 'fulfilled' | 'cancelled'> = {
     pending: 'confirmed',
@@ -55,7 +57,7 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
   return (
     <div className="p-8 space-y-6 max-w-4xl">
       <div className="flex items-center gap-4">
-        <Link href="/staff/orders"><Button variant="ghost" size="icon"><ArrowLeft className="w-4 h-4" /></Button></Link>
+        <Link href="/admin/orders"><Button variant="ghost" size="icon"><ArrowLeft className="w-4 h-4" /></Button></Link>
         <div className="flex-1">
           <h1 className="text-2xl font-bold text-slate-900">Order #{order.id.slice(-8).toUpperCase()}</h1>
           <p className="text-muted-foreground mt-1">{order.companyName} · {formatDate(order.createdAt)}</p>

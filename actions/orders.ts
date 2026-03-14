@@ -98,6 +98,7 @@ export async function createOrder(formData: FormData) {
       createdBy: session.user.id,
       orderType: 'paid',
       status: 'pending',
+      shippingStatus: 'not_scheduled',
       subtotal: subtotal.toFixed(2),
       tax: tax.toFixed(2),
       total: total.toFixed(2),
@@ -184,5 +185,26 @@ export async function updateOrderStatus(orderId: string, status: 'pending' | 'co
   }
   await db.update(orders).set({ status }).where(eq(orders.id, orderId))
   revalidatePath('/admin/dashboard')
+  revalidatePath('/admin/orders')
   revalidatePath('/staff/orders')
+  revalidatePath(`/admin/orders/${orderId}`)
+  revalidatePath(`/staff/orders/${orderId}`)
+  revalidatePath(`/customer/orders/${orderId}`)
+}
+
+export async function updateOrderShippingStatus(orderId: string, formData: FormData) {
+  const session = await requireAuth()
+  const userRoles = session.user.roles ?? [session.user.role as string]
+  if (!userRoles.some(role => ['admin', 'staff'].includes(role))) {
+    throw new Error('Unauthorized')
+  }
+
+  const shippingStatus = formData.get('shippingStatus') as 'not_scheduled' | 'scheduled' | 'out_for_delivery' | 'delivered' | 'issue'
+
+  await db.update(orders).set({ shippingStatus }).where(eq(orders.id, orderId))
+  revalidatePath('/admin/orders')
+  revalidatePath('/staff/orders')
+  revalidatePath(`/admin/orders/${orderId}`)
+  revalidatePath(`/staff/orders/${orderId}`)
+  revalidatePath(`/customer/orders/${orderId}`)
 }

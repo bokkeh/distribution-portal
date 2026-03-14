@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatStatusLabel, orderStatusVariant, shippingStatusVariant } from '@/lib/orders/status'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 
@@ -16,7 +17,7 @@ export default async function CustomerOrderDetailPage({ params }: { params: { or
   const [order] = await db
     .select({
       id: orders.id, total: orders.total, status: orders.status, orderType: orders.orderType,
-      notes: orders.notes, createdAt: orders.createdAt, customerId: orders.customerId,
+      shippingStatus: orders.shippingStatus, notes: orders.notes, createdAt: orders.createdAt, customerId: orders.customerId,
     })
     .from(orders)
     .where(eq(orders.id, params.orderId))
@@ -36,10 +37,6 @@ export default async function CustomerOrderDetailPage({ params }: { params: { or
     .leftJoin(products, eq(orderItems.productId, products.id))
     .where(eq(orderItems.orderId, params.orderId))
 
-  const statusColor: Record<string, 'default' | 'success' | 'warning' | 'destructive' | 'info'> = {
-    pending: 'warning', confirmed: 'info', fulfilled: 'success', cancelled: 'destructive',
-  }
-
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
       <div className="flex items-center gap-4">
@@ -48,8 +45,25 @@ export default async function CustomerOrderDetailPage({ params }: { params: { or
           <h1 className="text-2xl font-bold text-slate-900">Order #{order.id.slice(-8).toUpperCase()}</h1>
           <p className="text-muted-foreground mt-1">{formatDate(order.createdAt)}</p>
         </div>
-        <Badge variant={statusColor[order.status]}>{order.status}</Badge>
+        <div className="flex flex-wrap gap-2">
+          <Badge variant={orderStatusVariant[order.status]}>{formatStatusLabel(order.status)}</Badge>
+          <Badge variant={shippingStatusVariant[order.shippingStatus]}>{formatStatusLabel(order.shippingStatus)}</Badge>
+        </div>
       </div>
+
+      <Card>
+        <CardHeader><CardTitle>Order Tracking</CardTitle></CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-lg border bg-slate-50 p-4">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Order Status</p>
+            <div className="mt-2"><Badge variant={orderStatusVariant[order.status]}>{formatStatusLabel(order.status)}</Badge></div>
+          </div>
+          <div className="rounded-lg border bg-slate-50 p-4">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Shipping Status</p>
+            <div className="mt-2"><Badge variant={shippingStatusVariant[order.shippingStatus]}>{formatStatusLabel(order.shippingStatus)}</Badge></div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader><CardTitle>Order Items</CardTitle></CardHeader>
