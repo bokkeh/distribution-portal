@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { sendSms } from '@/lib/telnyx/client'
+import { logSmsMessage } from '@/lib/telnyx/logging'
 import {
   detectSmsKeyword,
   normalizePhone,
@@ -11,10 +12,12 @@ import {
 } from '@/lib/telnyx/compliance'
 
 type TelnyxWebhookPayload = {
+  id?: string
   text?: string
   body?: string
   from?: string | { phone_number?: string }
   payload?: {
+    id?: string
     text?: string
     from?: { phone_number?: string }
   }
@@ -28,6 +31,10 @@ function getInboundFrom(payload: TelnyxWebhookPayload) {
   return (typeof payload?.from === 'object' ? payload.from?.phone_number : payload?.from)
     ?? payload?.payload?.from?.phone_number
     ?? ''
+}
+
+function getProviderMessageId(payload: TelnyxWebhookPayload) {
+  return payload?.id ?? payload?.payload?.id ?? null
 }
 
 export async function POST(req: NextRequest) {
@@ -46,6 +53,15 @@ export async function POST(req: NextRequest) {
 
   const phoneNormalized = normalizePhone(from)
   const keyword = detectSmsKeyword(text)
+  const providerMessageId = getProviderMessageId(payload)
+
+  await logSmsMessage({
+    direction: 'inbound',
+    phoneNumber: phoneNormalized,
+    body: text,
+    status: 'received',
+    providerMessageId,
+  })
 
   if (keyword === 'stop') {
     await setSmsSubscription({

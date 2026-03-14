@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, FileText, BookOpen, Users, Package,
-  Truck, Map, Building2, LogOut, ChevronRight, Menu, X, UserCircle, CalendarDays,
+  Truck, Map, Building2, LogOut, ChevronRight, Menu, X, UserCircle, CalendarDays, MessageSquare,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { signOut } from 'next-auth/react'
@@ -19,6 +19,7 @@ const navItems = [
   { href: '/admin/invoicing',  label: 'Invoicing',         icon: FileText, feature: 'invoicing' },
   { href: '/admin/accounts',   label: 'Chart of Accounts', icon: BookOpen, feature: 'accounting' },
   { href: '/admin/crm',        label: 'CRM / Accounts',    icon: Building2, feature: 'crm' },
+  { href: '/admin/inbox',      label: 'SMS Inbox',         icon: MessageSquare, feature: 'inbox' },
   { href: '/admin/wholesale-requests', label: 'Wholesaler Requests', icon: FileText, feature: 'wholesale_requests' },
   { href: '/admin/orders',     label: 'Orders',            icon: FileText, feature: 'orders' },
   { href: '/admin/inventory',  label: 'Inventory',         icon: Package, feature: 'inventory' },

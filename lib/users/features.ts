@@ -3,6 +3,7 @@ export const ALL_FEATURES = [
   { key: 'invoicing', label: 'Invoicing' },
   { key: 'accounting', label: 'Accounting' },
   { key: 'crm', label: 'CRM / Accounts' },
+  { key: 'inbox', label: 'SMS Inbox' },
   { key: 'wholesale_requests', label: 'Wholesaler Requests' },
   { key: 'orders', label: 'Orders' },
   { key: 'inventory', label: 'Inventory' },
@@ -20,8 +21,8 @@ export const ALL_FEATURES = [
 export type FeatureKey = typeof ALL_FEATURES[number]['key']
 
 const ROLE_DEFAULTS: Record<string, FeatureKey[]> = {
-  admin: ['dashboard', 'invoicing', 'accounting', 'crm', 'wholesale_requests', 'orders', 'inventory', 'users', 'deliveries', 'drivers', 'profile', 'tastings'],
-  staff: ['dashboard', 'crm', 'orders', 'inventory', 'profile', 'tastings'],
+  admin: ['dashboard', 'invoicing', 'accounting', 'crm', 'inbox', 'wholesale_requests', 'orders', 'inventory', 'users', 'deliveries', 'drivers', 'profile', 'tastings'],
+  staff: ['dashboard', 'crm', 'inbox', 'orders', 'inventory', 'profile', 'tastings'],
   driver: ['deliveries', 'map', 'profile'],
   customer: ['dashboard', 'products', 'orders', 'cart', 'invoices', 'profile'],
   taster: ['tastings', 'profile'],

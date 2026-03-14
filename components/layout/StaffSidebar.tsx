@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, ShoppingCart, Building2, Package,
-  LogOut, ChevronRight, Menu, X, UserCircle, CalendarDays,
+  LogOut, ChevronRight, Menu, X, UserCircle, CalendarDays, MessageSquare,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { signOut } from 'next-auth/react'
@@ -18,6 +18,7 @@ const navItems = [
   { href: '/staff/dashboard', label: 'Dashboard', icon: LayoutDashboard, feature: 'dashboard' },
   { href: '/staff/orders',    label: 'Orders',    icon: ShoppingCart, feature: 'orders' },
   { href: '/staff/crm',       label: 'Accounts',  icon: Building2, feature: 'crm' },
+  { href: '/staff/inbox',     label: 'SMS Inbox', icon: MessageSquare, feature: 'inbox' },
   { href: '/staff/inventory', label: 'Inventory', icon: Package, feature: 'inventory' },
   { href: '/staff/tastings',  label: 'Tastings',  icon: CalendarDays, feature: 'tastings' },
   { href: '/staff/profile',   label: 'My Profile', icon: UserCircle, feature: 'profile' },
