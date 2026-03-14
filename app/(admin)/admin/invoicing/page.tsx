@@ -1,5 +1,5 @@
 import { db } from '@/db'
-import { invoices, customerAccounts } from '@/db/schema'
+import { invoices, customerAccounts, tasterInvoices, tastings, users } from '@/db/schema'
 import { desc, eq } from 'drizzle-orm'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,17 @@ import Link from 'next/link'
 import { Plus } from 'lucide-react'
 
 export default async function InvoicingPage() {
+  let tasterInvoiceSubmissions: Array<{
+    id: string
+    totalAmount: string
+    status: string
+    submittedAt: Date
+    payeeName: string
+    payeeEmail: string
+    eventName: string
+    scheduledAt: Date
+  }> = []
+
   const allInvoices = await db
     .select({
       id: invoices.id,
@@ -23,11 +34,40 @@ export default async function InvoicingPage() {
     .leftJoin(customerAccounts, eq(invoices.customerId, customerAccounts.id))
     .orderBy(desc(invoices.createdAt))
 
+  try {
+    tasterInvoiceSubmissions = await db
+      .select({
+        id: tasterInvoices.id,
+        totalAmount: tasterInvoices.totalAmount,
+        status: tasterInvoices.status,
+        submittedAt: tasterInvoices.submittedAt,
+        payeeName: tasterInvoices.payeeName,
+        payeeEmail: tasterInvoices.payeeEmail,
+        eventName: tastings.eventName,
+        scheduledAt: tastings.scheduledAt,
+      })
+      .from(tasterInvoices)
+      .innerJoin(tastings, eq(tasterInvoices.tastingId, tastings.id))
+      .innerJoin(users, eq(tasterInvoices.submittedByUserId, users.id))
+      .orderBy(desc(tasterInvoices.submittedAt))
+  } catch (error) {
+    const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+    if (!message.includes('taster_invoices') && !message.includes('does not exist')) {
+      throw error
+    }
+  }
+
   const statusVariant: Record<string, 'default' | 'success' | 'warning' | 'destructive' | 'info'> = {
     draft: 'default',
     sent: 'info',
     paid: 'success',
     overdue: 'destructive',
+  }
+
+  const tasterStatusVariant: Record<string, 'default' | 'success' | 'warning' | 'destructive' | 'info'> = {
+    submitted: 'warning',
+    approved: 'info',
+    paid: 'success',
   }
 
   return (
@@ -71,6 +111,57 @@ export default async function InvoicingPage() {
                     <td className="px-6 py-4">
                       <Link href={`/admin/invoicing/${inv.id}`}>
                         <Button variant="ghost" size="sm">View</Button>
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Taster Invoice Submissions</CardTitle>
+          <p className="text-sm text-muted-foreground">Submitted payment requests from tasters are tracked here for accounting.</p>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="border-b bg-slate-50">
+                <tr>
+                  <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Payee</th>
+                  <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Tasting</th>
+                  <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Amount</th>
+                  <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Status</th>
+                  <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Submitted</th>
+                  <th className="px-6 py-3" />
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {tasterInvoiceSubmissions.length === 0 ? (
+                  <tr><td colSpan={6} className="px-6 py-10 text-center text-muted-foreground">No taster invoice submissions yet.</td></tr>
+                ) : tasterInvoiceSubmissions.map((invoice) => (
+                  <tr key={invoice.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-6 py-4">
+                      <div>
+                        <p className="text-sm font-medium">{invoice.payeeName}</p>
+                        <p className="text-xs text-muted-foreground">{invoice.payeeEmail}</p>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div>
+                        <p className="text-sm font-medium">{invoice.eventName}</p>
+                        <p className="text-xs text-muted-foreground">{formatDate(invoice.scheduledAt)}</p>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-sm font-semibold">{formatCurrency(invoice.totalAmount)}</td>
+                    <td className="px-6 py-4"><Badge variant={tasterStatusVariant[invoice.status] ?? 'secondary'}>{invoice.status}</Badge></td>
+                    <td className="px-6 py-4 text-sm text-muted-foreground">{formatDate(invoice.submittedAt)}</td>
+                    <td className="px-6 py-4">
+                      <Link href="/admin/tastings">
+                        <Button variant="ghost" size="sm">View Tasting</Button>
                       </Link>
                     </td>
                   </tr>
