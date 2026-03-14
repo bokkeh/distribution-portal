@@ -92,6 +92,20 @@
       "when": 1773522600000,
       "tag": "0012_tastings",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1773526200000,
+      "tag": "0013_tasting_reports",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1773526800000,
+      "tag": "0014_taster_invoices",
+      "breakpoints": true
     }
   ]
 }

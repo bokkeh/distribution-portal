@@ -3,8 +3,12 @@ import { getTastingsForView } from '@/actions/tastings'
 import { requireFeature } from '@/lib/auth/session'
 
 function isMissingTastingsTable(error: unknown) {
-  const message = error instanceof Error ? error.message : String(error)
-  return message.includes('tastings') && message.includes('does not exist')
+  const message = (error instanceof Error ? error.message : String(error)).toLowerCase()
+  return (
+    (message.includes('tastings') && message.includes('does not exist')) ||
+    (message.includes('tasting_reports') && message.includes('does not exist')) ||
+    (message.includes('taster_invoices') && message.includes('does not exist'))
+  )
 }
 
 export default async function TasterTastingsPage({

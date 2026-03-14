@@ -4,9 +4,10 @@ import { desc, eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { db } from '@/db'
-import { customerAccounts, notificationsLog, tastings, users } from '@/db/schema'
+import { customerAccounts, notificationsLog, tasterInvoices, tastingReports, tastings, users } from '@/db/schema'
 import { requireFeature, requireRole } from '@/lib/auth/session'
 import { sendSms } from '@/lib/telnyx/client'
+import { sendTasterInvoiceNotification } from '@/lib/resend/client'
 
 function tastingRedirectPath(mode: string) {
   return mode === 'staff' ? '/staff/tastings' : '/admin/tastings'
@@ -146,6 +147,148 @@ export async function updateTastingStatus(formData: FormData) {
   redirect(`/${mode}/tastings?success=${encodeURIComponent('Tasting updated.')}`)
 }
 
+export async function submitTastingReport(formData: FormData) {
+  const session = await requireFeature('tastings', 'taster', 'admin')
+  const tastingId = formData.get('tastingId') as string
+
+  const [tasting] = await db
+    .select({
+      id: tastings.id,
+      assignedUserId: tastings.assignedUserId,
+    })
+    .from(tastings)
+    .where(eq(tastings.id, tastingId))
+    .limit(1)
+
+  if (!tasting) {
+    redirect(`/taster/tastings?error=${encodeURIComponent('Tasting not found.')}`)
+  }
+
+  const roles = session.user.roles ?? [session.user.role]
+  if (!roles.includes('admin') && tasting.assignedUserId !== session.user.id) {
+    redirect('/unauthorized')
+  }
+
+  const payload = {
+    submittedByUserId: session.user.id,
+    actualStartTime: ((formData.get('actualStartTime') as string) || '').trim() || null,
+    actualEndTime: ((formData.get('actualEndTime') as string) || '').trim() || null,
+    samplesServed: Number(formData.get('samplesServed') || 0) || 0,
+    bottlesSold: Number(formData.get('bottlesSold') || 0) || 0,
+    casesSold: Number(formData.get('casesSold') || 0) || 0,
+    consumerInteractions: Number(formData.get('consumerInteractions') || 0) || 0,
+    accountFeedback: ((formData.get('accountFeedback') as string) || '').trim() || null,
+    highlights: ((formData.get('highlights') as string) || '').trim() || null,
+    issues: ((formData.get('issues') as string) || '').trim() || null,
+    followUpNeeded: formData.get('followUpNeeded') === 'on',
+    followUpNotes: ((formData.get('followUpNotes') as string) || '').trim() || null,
+  }
+
+  const [existing] = await db
+    .select({ id: tastingReports.id })
+    .from(tastingReports)
+    .where(eq(tastingReports.tastingId, tastingId))
+    .limit(1)
+
+  if (existing) {
+    await db.update(tastingReports).set(payload).where(eq(tastingReports.tastingId, tastingId))
+  } else {
+    await db.insert(tastingReports).values({
+      tastingId,
+      ...payload,
+    })
+  }
+
+  revalidatePath('/admin/tastings')
+  revalidatePath('/staff/tastings')
+  revalidatePath('/taster/tastings')
+  redirect(`/taster/tastings/${tastingId}?success=${encodeURIComponent('Tasting report submitted.')}`)
+}
+
+export async function submitTasterInvoice(formData: FormData) {
+  const session = await requireFeature('tastings', 'taster', 'admin')
+  const tastingId = formData.get('tastingId') as string
+
+  const [tasting] = await db
+    .select({
+      id: tastings.id,
+      assignedUserId: tastings.assignedUserId,
+      eventName: tastings.eventName,
+      scheduledAt: tastings.scheduledAt,
+      storeAddress: tastings.storeAddress,
+      storeCity: tastings.storeCity,
+      storeState: tastings.storeState,
+      storeZip: tastings.storeZip,
+    })
+    .from(tastings)
+    .where(eq(tastings.id, tastingId))
+    .limit(1)
+
+  if (!tasting) {
+    redirect(`/taster/tastings?error=${encodeURIComponent('Tasting not found.')}`)
+  }
+
+  const roles = session.user.roles ?? [session.user.role]
+  if (!roles.includes('admin') && tasting.assignedUserId !== session.user.id) {
+    redirect('/unauthorized')
+  }
+
+  const hourlyRate = (formData.get('hourlyRate') as string) || '0'
+  const hoursWorked = (formData.get('hoursWorked') as string) || '0'
+  const mileage = (formData.get('mileage') as string) || '0'
+  const expenseAmount = (formData.get('expenseAmount') as string) || '0'
+  const totalAmount = (formData.get('totalAmount') as string) || '0'
+
+  const payload = {
+    submittedByUserId: session.user.id,
+    payeeName: (formData.get('payeeName') as string) || session.user.name || 'Taster',
+    payeeEmail: (formData.get('payeeEmail') as string) || session.user.email || '',
+    payeePhone: (formData.get('payeePhone') as string) || null,
+    hourlyRate,
+    hoursWorked,
+    mileage,
+    expenseAmount,
+    totalAmount,
+    notes: ((formData.get('notes') as string) || '').trim() || null,
+    status: 'submitted' as const,
+  }
+
+  const [existing] = await db
+    .select({ id: tasterInvoices.id })
+    .from(tasterInvoices)
+    .where(eq(tasterInvoices.tastingId, tastingId))
+    .limit(1)
+
+  if (existing) {
+    await db.update(tasterInvoices).set(payload).where(eq(tasterInvoices.tastingId, tastingId))
+  } else {
+    await db.insert(tasterInvoices).values({
+      tastingId,
+      ...payload,
+    })
+  }
+
+  await sendTasterInvoiceNotification({
+    payeeName: payload.payeeName,
+    payeeEmail: payload.payeeEmail,
+    payeePhone: payload.payeePhone,
+    tastingName: tasting.eventName,
+    tastingDate: tasting.scheduledAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }),
+    storeAddress: [tasting.storeAddress, tasting.storeCity, tasting.storeState, tasting.storeZip].filter(Boolean).join(', '),
+    hourlyRate,
+    hoursWorked,
+    mileage,
+    expenseAmount,
+    totalAmount,
+    notes: payload.notes,
+  })
+
+  revalidatePath('/admin/tastings')
+  revalidatePath('/staff/tastings')
+  revalidatePath('/taster/tastings')
+  redirect(`/taster/tastings/${tastingId}?success=${encodeURIComponent('Invoice submitted to accounting.')}`)
+}
+
 export async function getTastingsForView({
   assignedUserId,
 }: {
@@ -169,9 +312,14 @@ export async function getTastingsForView({
       createdAt: tastings.createdAt,
       tasterName: users.name,
       tasterPhone: users.phone,
+      reportSubmittedAt: tastingReports.submittedAt,
+      invoiceSubmittedAt: tasterInvoices.submittedAt,
+      invoiceStatus: tasterInvoices.status,
     })
     .from(tastings)
     .innerJoin(users, eq(tastings.assignedUserId, users.id))
+    .leftJoin(tastingReports, eq(tastingReports.tastingId, tastings.id))
+    .leftJoin(tasterInvoices, eq(tasterInvoices.tastingId, tastings.id))
 
   const rows = assignedUserId
     ? await base.where(eq(tastings.assignedUserId, assignedUserId)).orderBy(desc(tastings.scheduledAt))

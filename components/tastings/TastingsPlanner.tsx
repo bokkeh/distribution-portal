@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameDay, isSameMonth, startOfMonth, startOfWeek } from 'date-fns'
 import { CalendarDays, Clock3, MapPin, Store } from 'lucide-react'
@@ -28,6 +29,9 @@ type TastingRow = {
   createdAt: Date
   tasterName: string
   tasterPhone: string | null
+  reportSubmittedAt?: Date | null
+  invoiceSubmittedAt?: Date | null
+  invoiceStatus?: string | null
 }
 
 interface Props {
@@ -246,8 +250,19 @@ export function TastingsPlanner({ mode, tastings, accounts, tasters, success, er
                 </div>
                 <p className="text-sm text-slate-500">{format(new Date(tasting.scheduledAt), 'MMM d, yyyy h:mm a')} with {tasting.tasterName}</p>
                 <p className="text-sm text-slate-500">{[tasting.storeAddress, tasting.storeCity, tasting.storeState, tasting.storeZip].filter(Boolean).join(', ') || 'Store address not provided'}</p>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {tasting.reportSubmittedAt ? <Badge variant="success">Report Submitted</Badge> : null}
+                  {tasting.invoiceSubmittedAt ? <Badge variant="info">Invoice {tasting.invoiceStatus ?? 'submitted'}</Badge> : null}
+                </div>
               </div>
-              <div className="text-sm text-slate-500">{tasting.storePhone ?? 'No store phone on file'}</div>
+              <div className="flex flex-col items-start gap-2 md:items-end">
+                <div className="text-sm text-slate-500">{tasting.storePhone ?? 'No store phone on file'}</div>
+                {mode === 'taster' ? (
+                  <Link href={`/taster/tastings/${tasting.id}`}>
+                    <Button size="sm">Open Report</Button>
+                  </Link>
+                ) : null}
+              </div>
             </div>
           )) : (
             <p className="text-sm text-slate-500">No tastings scheduled yet.</p>

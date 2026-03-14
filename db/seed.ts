@@ -17,6 +17,7 @@ async function seed() {
       email: 'admin@ahawc.com',
       passwordHash,
       role: 'admin',
+      roles: ['admin'],
       name: 'AHAWC Admin',
       phone: '555-0100',
     })

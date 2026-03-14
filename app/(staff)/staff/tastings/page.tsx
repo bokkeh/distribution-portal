@@ -5,8 +5,12 @@ import { requireFeature } from '@/lib/auth/session'
 import { getTastingsForView } from '@/actions/tastings'
 
 function isMissingTastingsTable(error: unknown) {
-  const message = error instanceof Error ? error.message : String(error)
-  return message.includes('tastings') && message.includes('does not exist')
+  const message = (error instanceof Error ? error.message : String(error)).toLowerCase()
+  return (
+    (message.includes('tastings') && message.includes('does not exist')) ||
+    (message.includes('tasting_reports') && message.includes('does not exist')) ||
+    (message.includes('taster_invoices') && message.includes('does not exist'))
+  )
 }
 
 export default async function StaffTastingsPage({
@@ -60,7 +64,7 @@ export default async function StaffTastingsPage({
       <div className="p-4 sm:p-8 space-y-4">
         <h1 className="text-2xl font-bold text-slate-900">Tastings</h1>
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          The `tastings` tables are not in this database yet. Run `npm run db:migrate` before using tasting scheduling in production.
+          The tasting tables are not in this database yet. Run `npm run db:migrate` before using tasting scheduling in production.
         </div>
       </div>
     )

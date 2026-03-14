@@ -223,3 +223,67 @@ export async function sendDeliveryCompletedEmail({
     console.error('Delivery completed email failed:', error)
   }
 }
+
+export async function sendTasterInvoiceNotification({
+  payeeName,
+  payeeEmail,
+  payeePhone,
+  tastingName,
+  tastingDate,
+  storeAddress,
+  hourlyRate,
+  hoursWorked,
+  mileage,
+  expenseAmount,
+  totalAmount,
+  notes,
+}: {
+  payeeName: string
+  payeeEmail: string
+  payeePhone: string | null
+  tastingName: string
+  tastingDate: string
+  storeAddress: string
+  hourlyRate: string
+  hoursWorked: string
+  mileage: string
+  expenseAmount: string
+  totalAmount: string
+  notes: string | null
+}): Promise<void> {
+  const to = process.env.TASTER_ACCOUNTING_EMAIL ?? 'kris@ahawc.com'
+
+  try {
+    await resend.emails.send({
+      from: process.env.RESEND_FROM_EMAIL ?? 'noreply@ahawc.com',
+      to,
+      subject: `Taster invoice submitted - ${payeeName} - ${tastingName}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto;">
+          <div style="background: #0f172a; padding: 20px 24px; border-radius: 8px 8px 0 0;">
+            <h1 style="color: white; margin: 0; font-size: 20px;">AHAWC Taster Invoice</h1>
+          </div>
+          <div style="background: #f8fafc; padding: 24px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 8px 8px;">
+            <p style="margin: 0 0 16px; color: #475569;">A taster submitted an invoice for payment.</p>
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+              <tr><td style="padding: 6px 0; color: #64748b;">Payee</td><td style="padding: 6px 0; font-weight: 600; color: #1e293b;">${payeeName}</td></tr>
+              <tr><td style="padding: 6px 0; color: #64748b;">Email</td><td style="padding: 6px 0; font-weight: 600; color: #1e293b;">${payeeEmail}</td></tr>
+              <tr><td style="padding: 6px 0; color: #64748b;">Phone</td><td style="padding: 6px 0; font-weight: 600; color: #1e293b;">${payeePhone ?? '-'}</td></tr>
+              <tr><td style="padding: 6px 0; color: #64748b;">Store</td><td style="padding: 6px 0; font-weight: 600; color: #1e293b;">${tastingName}</td></tr>
+              <tr><td style="padding: 6px 0; color: #64748b;">Date</td><td style="padding: 6px 0; font-weight: 600; color: #1e293b;">${tastingDate}</td></tr>
+              <tr><td style="padding: 6px 0; color: #64748b;">Location</td><td style="padding: 6px 0; font-weight: 600; color: #1e293b;">${storeAddress || '-'}</td></tr>
+              <tr><td style="padding: 6px 0; color: #64748b;">Hourly rate</td><td style="padding: 6px 0; font-weight: 600; color: #1e293b;">$${Number(hourlyRate || 0).toFixed(2)}</td></tr>
+              <tr><td style="padding: 6px 0; color: #64748b;">Hours worked</td><td style="padding: 6px 0; font-weight: 600; color: #1e293b;">${Number(hoursWorked || 0).toFixed(2)}</td></tr>
+              <tr><td style="padding: 6px 0; color: #64748b;">Mileage</td><td style="padding: 6px 0; font-weight: 600; color: #1e293b;">${Number(mileage || 0).toFixed(2)}</td></tr>
+              <tr><td style="padding: 6px 0; color: #64748b;">Expenses</td><td style="padding: 6px 0; font-weight: 600; color: #1e293b;">$${Number(expenseAmount || 0).toFixed(2)}</td></tr>
+              <tr><td style="padding: 10px 0 6px; color: #64748b; font-weight: 700;">Total due</td><td style="padding: 10px 0 6px; font-weight: 700; color: #1e293b;">$${Number(totalAmount || 0).toFixed(2)}</td></tr>
+            </table>
+            ${notes ? `<p style="margin: 16px 0 0; color: #475569;"><strong>Notes:</strong> ${notes}</p>` : ''}
+          </div>
+        </div>
+      `,
+    })
+  } catch (error) {
+    console.error('Taster invoice email failed:', error)
+  }
+}
