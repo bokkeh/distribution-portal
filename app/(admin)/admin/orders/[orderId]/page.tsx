@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { updateOrderShippingStatus, updateOrderStatus } from '@/actions/orders'
 import { formatStatusLabel, orderStatusVariant, shippingStatusVariant } from '@/lib/orders/status'
+import { isMissingShippingStatusColumn } from '@/lib/orders/shipping-fallback'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 
@@ -16,22 +17,58 @@ const shippingStatuses = ['not_scheduled', 'scheduled', 'out_for_delivery', 'del
 export default async function AdminOrderDetailPage({ params }: { params: Promise<{ orderId: string }> | { orderId: string } }) {
   const resolvedParams = await Promise.resolve(params)
 
-  const [order] = await db
-    .select({
-      id: orders.id,
-      total: orders.total,
-      subtotal: orders.subtotal,
-      tax: orders.tax,
-      status: orders.status,
-      shippingStatus: orders.shippingStatus,
-      orderType: orders.orderType,
-      notes: orders.notes,
-      createdAt: orders.createdAt,
-      companyName: customerAccounts.companyName,
-    })
-    .from(orders)
-    .leftJoin(customerAccounts, eq(orders.customerId, customerAccounts.id))
-    .where(eq(orders.id, resolvedParams.orderId))
+  let order:
+    | {
+        id: string
+        total: string
+        subtotal: string
+        tax: string
+        status: 'pending' | 'confirmed' | 'fulfilled' | 'cancelled'
+        shippingStatus: 'not_scheduled' | 'scheduled' | 'out_for_delivery' | 'delivered' | 'issue'
+        orderType: 'paid' | 'sample'
+        notes: string | null
+        createdAt: Date
+        companyName: string | null
+      }
+    | undefined
+
+  try {
+    ;[order] = await db
+      .select({
+        id: orders.id,
+        total: orders.total,
+        subtotal: orders.subtotal,
+        tax: orders.tax,
+        status: orders.status,
+        shippingStatus: orders.shippingStatus,
+        orderType: orders.orderType,
+        notes: orders.notes,
+        createdAt: orders.createdAt,
+        companyName: customerAccounts.companyName,
+      })
+      .from(orders)
+      .leftJoin(customerAccounts, eq(orders.customerId, customerAccounts.id))
+      .where(eq(orders.id, resolvedParams.orderId))
+  } catch (error) {
+    if (!isMissingShippingStatusColumn(error)) throw error
+
+    ;[order] = await db
+      .select({
+        id: orders.id,
+        total: orders.total,
+        subtotal: orders.subtotal,
+        tax: orders.tax,
+        status: orders.status,
+        orderType: orders.orderType,
+        notes: orders.notes,
+        createdAt: orders.createdAt,
+        companyName: customerAccounts.companyName,
+      })
+      .from(orders)
+      .leftJoin(customerAccounts, eq(orders.customerId, customerAccounts.id))
+      .where(eq(orders.id, resolvedParams.orderId))
+      .then(rows => rows.map(row => ({ ...row, shippingStatus: 'not_scheduled' as const })))
+  }
 
   if (!order) notFound()
 

@@ -6,24 +6,55 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { formatStatusLabel, orderStatusVariant, shippingStatusVariant } from '@/lib/orders/status'
+import { isMissingShippingStatusColumn } from '@/lib/orders/shipping-fallback'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
 
 export default async function StaffOrdersPage() {
-  const allOrders = await db
-    .select({
-      id: orders.id,
-      total: orders.total,
-      status: orders.status,
-      shippingStatus: orders.shippingStatus,
-      orderType: orders.orderType,
-      createdAt: orders.createdAt,
-      notes: orders.notes,
-      companyName: customerAccounts.companyName,
-    })
-    .from(orders)
-    .leftJoin(customerAccounts, eq(orders.customerId, customerAccounts.id))
-    .orderBy(desc(orders.createdAt))
+  let allOrders: Array<{
+    id: string
+    total: string
+    status: 'pending' | 'confirmed' | 'fulfilled' | 'cancelled'
+    shippingStatus: 'not_scheduled' | 'scheduled' | 'out_for_delivery' | 'delivered' | 'issue'
+    orderType: 'paid' | 'sample'
+    createdAt: Date
+    notes: string | null
+    companyName: string | null
+  }> = []
+
+  try {
+    allOrders = await db
+      .select({
+        id: orders.id,
+        total: orders.total,
+        status: orders.status,
+        shippingStatus: orders.shippingStatus,
+        orderType: orders.orderType,
+        createdAt: orders.createdAt,
+        notes: orders.notes,
+        companyName: customerAccounts.companyName,
+      })
+      .from(orders)
+      .leftJoin(customerAccounts, eq(orders.customerId, customerAccounts.id))
+      .orderBy(desc(orders.createdAt))
+  } catch (error) {
+    if (!isMissingShippingStatusColumn(error)) throw error
+
+    allOrders = await db
+      .select({
+        id: orders.id,
+        total: orders.total,
+        status: orders.status,
+        orderType: orders.orderType,
+        createdAt: orders.createdAt,
+        notes: orders.notes,
+        companyName: customerAccounts.companyName,
+      })
+      .from(orders)
+      .leftJoin(customerAccounts, eq(orders.customerId, customerAccounts.id))
+      .orderBy(desc(orders.createdAt))
+      .then(rows => rows.map(row => ({ ...row, shippingStatus: 'not_scheduled' as const })))
+  }
 
   return (
     <div className="p-4 sm:p-8 space-y-6">

@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { formatStatusLabel, orderStatusVariant, shippingStatusVariant } from '@/lib/orders/status'
+import { isMissingShippingStatusColumn } from '@/lib/orders/shipping-fallback'
 import Link from 'next/link'
 import { ShoppingCart } from 'lucide-react'
 
@@ -15,14 +16,40 @@ export default async function CustomerOrdersPage() {
 
   const [account] = await db.select({ id: customerAccounts.id }).from(customerAccounts).where(eq(customerAccounts.userId, session.user.id))
 
-  const myOrders = account ? await db
-    .select({
-      id: orders.id, total: orders.total, status: orders.status, orderType: orders.orderType,
-      shippingStatus: orders.shippingStatus, notes: orders.notes, createdAt: orders.createdAt,
-    })
-    .from(orders)
-    .where(eq(orders.customerId, account.id))
-    .orderBy(desc(orders.createdAt)) : []
+  let myOrders: Array<{
+    id: string
+    total: string
+    status: 'pending' | 'confirmed' | 'fulfilled' | 'cancelled'
+    orderType: 'paid' | 'sample'
+    shippingStatus: 'not_scheduled' | 'scheduled' | 'out_for_delivery' | 'delivered' | 'issue'
+    notes: string | null
+    createdAt: Date
+  }> = []
+
+  if (account) {
+    try {
+      myOrders = await db
+        .select({
+          id: orders.id, total: orders.total, status: orders.status, orderType: orders.orderType,
+          shippingStatus: orders.shippingStatus, notes: orders.notes, createdAt: orders.createdAt,
+        })
+        .from(orders)
+        .where(eq(orders.customerId, account.id))
+        .orderBy(desc(orders.createdAt))
+    } catch (error) {
+      if (!isMissingShippingStatusColumn(error)) throw error
+
+      myOrders = await db
+        .select({
+          id: orders.id, total: orders.total, status: orders.status, orderType: orders.orderType,
+          notes: orders.notes, createdAt: orders.createdAt,
+        })
+        .from(orders)
+        .where(eq(orders.customerId, account.id))
+        .orderBy(desc(orders.createdAt))
+        .then(rows => rows.map(row => ({ ...row, shippingStatus: 'not_scheduled' as const })))
+    }
+  }
 
   return (
     <div className="space-y-6">

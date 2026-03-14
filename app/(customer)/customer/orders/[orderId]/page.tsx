@@ -8,19 +8,46 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { formatStatusLabel, orderStatusVariant, shippingStatusVariant } from '@/lib/orders/status'
+import { isMissingShippingStatusColumn } from '@/lib/orders/shipping-fallback'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 
 export default async function CustomerOrderDetailPage({ params }: { params: { orderId: string } }) {
   const session = await requireRole('customer')
 
-  const [order] = await db
-    .select({
-      id: orders.id, total: orders.total, status: orders.status, orderType: orders.orderType,
-      shippingStatus: orders.shippingStatus, notes: orders.notes, createdAt: orders.createdAt, customerId: orders.customerId,
-    })
-    .from(orders)
-    .where(eq(orders.id, params.orderId))
+  let order:
+    | {
+        id: string
+        total: string
+        status: 'pending' | 'confirmed' | 'fulfilled' | 'cancelled'
+        orderType: 'paid' | 'sample'
+        shippingStatus: 'not_scheduled' | 'scheduled' | 'out_for_delivery' | 'delivered' | 'issue'
+        notes: string | null
+        createdAt: Date
+        customerId: string
+      }
+    | undefined
+
+  try {
+    ;[order] = await db
+      .select({
+        id: orders.id, total: orders.total, status: orders.status, orderType: orders.orderType,
+        shippingStatus: orders.shippingStatus, notes: orders.notes, createdAt: orders.createdAt, customerId: orders.customerId,
+      })
+      .from(orders)
+      .where(eq(orders.id, params.orderId))
+  } catch (error) {
+    if (!isMissingShippingStatusColumn(error)) throw error
+
+    ;[order] = await db
+      .select({
+        id: orders.id, total: orders.total, status: orders.status, orderType: orders.orderType,
+        notes: orders.notes, createdAt: orders.createdAt, customerId: orders.customerId,
+      })
+      .from(orders)
+      .where(eq(orders.id, params.orderId))
+      .then(rows => rows.map(row => ({ ...row, shippingStatus: 'not_scheduled' as const })))
+  }
 
   if (!order) notFound()
 
