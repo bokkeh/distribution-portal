@@ -78,6 +78,20 @@
       "when": 1773436800000,
       "tag": "0010_user_address_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1773522000000,
+      "tag": "0011_user_feature_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1773522600000,
+      "tag": "0012_tastings",
+      "breakpoints": true
     }
   ]
 }

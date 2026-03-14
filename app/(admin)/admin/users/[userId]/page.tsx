@@ -3,11 +3,16 @@ import { eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { db } from '@/db'
-import { customerAccounts, drivers, users } from '@/db/schema'
+import { customerAccounts, drivers, userFeatureSettings, users } from '@/db/schema'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { UserRoleForm } from './user-role-form'
+
+function isMissingUserFeatureTable(error: unknown) {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+  return message.includes('user_feature_settings') && message.includes('does not exist')
+}
 
 export default async function UserDetailPage({ params }: { params: Promise<{ userId: string }> }) {
   const { userId } = await params
@@ -16,6 +21,17 @@ export default async function UserDetailPage({ params }: { params: Promise<{ use
 
   const [account] = await db.select().from(customerAccounts).where(eq(customerAccounts.userId, user.id))
   const [driver] = await db.select().from(drivers).where(eq(drivers.userId, user.id))
+  let featureSettings: { features: string[] } | undefined
+
+  try {
+    ;[featureSettings] = await db
+      .select({ features: userFeatureSettings.features })
+      .from(userFeatureSettings)
+      .where(eq(userFeatureSettings.userId, user.id))
+      .limit(1)
+  } catch (error) {
+    if (!isMissingUserFeatureTable(error)) throw error
+  }
 
   return (
     <div className="p-4 sm:p-8 space-y-6">
@@ -48,7 +64,7 @@ export default async function UserDetailPage({ params }: { params: Promise<{ use
         </Card>
 
         <UserRoleForm
-          user={{ id: user.id, role: user.role, roles: user.roles, phone: user.phone, active: user.active }}
+          user={{ id: user.id, role: user.role, roles: user.roles, phone: user.phone, active: user.active, featureFlags: featureSettings?.features ?? null }}
           accountId={account?.id}
         />
 

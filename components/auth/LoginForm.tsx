@@ -50,6 +50,7 @@ export function LoginForm({ onSuccess }: Props) {
       admin: '/admin/dashboard',
       staff: '/staff/dashboard',
       driver: '/driver/deliveries',
+      taster: '/taster/tastings',
       customer: '/customer/dashboard',
     }
     router.push(map[role] ?? '/admin/dashboard')
@@ -58,7 +59,7 @@ export function LoginForm({ onSuccess }: Props) {
   async function handleGoogle() {
     setError('')
     setGoogleLoading(true)
-    await signIn('google', { callbackUrl: `${window.location.origin}/` })
+    await signIn('google', { callbackUrl: '/' })
     setGoogleLoading(false)
   }
 

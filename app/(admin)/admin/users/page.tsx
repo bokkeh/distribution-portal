@@ -12,6 +12,7 @@ const roleColors: Record<string, 'default' | 'success' | 'warning' | 'destructiv
   staff: 'info',
   driver: 'warning',
   customer: 'success',
+  taster: 'warning',
 }
 
 export default async function UsersPage() {
@@ -31,7 +32,7 @@ export default async function UsersPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">User Management</h1>
-          <p className="text-muted-foreground mt-1">{allUsers.length} total users</p>
+          <p className="text-muted-foreground mt-1">{allUsers.length} total team members and portal users</p>
         </div>
         <Link href="/admin/users/new">
           <Button><Plus className="w-4 h-4 mr-2" />Add User</Button>

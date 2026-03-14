@@ -7,7 +7,7 @@ export default async function CustomerLayout({ children }: { children: React.Rea
   const isSuperAdmin = session.user.email?.toLowerCase() === 'alex@ahawc.com'
   return (
     <div className="min-h-screen bg-slate-50">
-      <CustomerNav />
+      <CustomerNav featureFlags={session.user.featureFlags} roles={session.user.roles} />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {children}
       </main>

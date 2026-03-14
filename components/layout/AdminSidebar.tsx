@@ -6,30 +6,43 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, FileText, BookOpen, Users, Package,
-  Truck, Map, Building2, LogOut, ChevronRight, Menu, X, UserCircle,
+  Truck, Map, Building2, LogOut, ChevronRight, Menu, X, UserCircle, CalendarDays,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { signOut } from 'next-auth/react'
 import { SuperAdminViewSwitcher } from './SuperAdminViewSwitcher'
+import type { FeatureKey } from '@/lib/users/features'
+import { hasFeature } from '@/lib/users/features'
 
 const navItems = [
-  { href: '/admin/dashboard',  label: 'Dashboard',        icon: LayoutDashboard },
-  { href: '/admin/invoicing',  label: 'Invoicing',         icon: FileText },
-  { href: '/admin/accounts',   label: 'Chart of Accounts', icon: BookOpen },
-  { href: '/admin/crm',        label: 'CRM / Accounts',    icon: Building2 },
-  { href: '/admin/wholesale-requests', label: 'Wholesaler Requests', icon: FileText },
-  { href: '/admin/orders',     label: 'Orders',            icon: FileText },
-  { href: '/admin/inventory',  label: 'Inventory',         icon: Package },
-  { href: '/admin/users',      label: 'User Management',   icon: Users },
-  { href: '/admin/deliveries', label: 'Deliveries',        icon: Truck },
-  { href: '/admin/drivers',    label: 'Drivers',           icon: Map },
-  { href: '/admin/profile',   label: 'My Profile',        icon: UserCircle },
+  { href: '/admin/dashboard',  label: 'Dashboard',        icon: LayoutDashboard, feature: 'dashboard' },
+  { href: '/admin/invoicing',  label: 'Invoicing',         icon: FileText, feature: 'invoicing' },
+  { href: '/admin/accounts',   label: 'Chart of Accounts', icon: BookOpen, feature: 'accounting' },
+  { href: '/admin/crm',        label: 'CRM / Accounts',    icon: Building2, feature: 'crm' },
+  { href: '/admin/wholesale-requests', label: 'Wholesaler Requests', icon: FileText, feature: 'wholesale_requests' },
+  { href: '/admin/orders',     label: 'Orders',            icon: FileText, feature: 'orders' },
+  { href: '/admin/inventory',  label: 'Inventory',         icon: Package, feature: 'inventory' },
+  { href: '/admin/tastings',   label: 'Tastings',          icon: CalendarDays, feature: 'tastings' },
+  { href: '/admin/users',      label: 'User Management',   icon: Users, feature: 'users' },
+  { href: '/admin/deliveries', label: 'Deliveries',        icon: Truck, feature: 'deliveries' },
+  { href: '/admin/drivers',    label: 'Drivers',           icon: Map, feature: 'drivers' },
+  { href: '/admin/profile',    label: 'My Profile',        icon: UserCircle, feature: 'profile' },
 ]
 
-function NavLinks({ pathname, onNav }: { pathname: string; onNav?: () => void }) {
+function NavLinks({
+  pathname,
+  featureFlags,
+  roles,
+  onNav,
+}: {
+  pathname: string
+  featureFlags: string[]
+  roles: string[]
+  onNav?: () => void
+}) {
   return (
     <>
-      {navItems.map(({ href, label, icon: Icon }) => {
+      {navItems.filter(item => hasFeature(item.feature as FeatureKey, roles, featureFlags)).map(({ href, label, icon: Icon }) => {
         const active = pathname === href || pathname.startsWith(href + '/')
         return (
           <Link
@@ -53,7 +66,15 @@ function NavLinks({ pathname, onNav }: { pathname: string; onNav?: () => void })
   )
 }
 
-export default function AdminSidebar({ showViewSwitcher = false }: { showViewSwitcher?: boolean }) {
+export default function AdminSidebar({
+  showViewSwitcher = false,
+  featureFlags = [],
+  roles = [],
+}: {
+  showViewSwitcher?: boolean
+  featureFlags?: string[]
+  roles?: string[]
+}) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
 
@@ -81,7 +102,7 @@ export default function AdminSidebar({ showViewSwitcher = false }: { showViewSwi
           </div>
         </div>
         <nav className="flex-1 p-4 space-y-1">
-          <NavLinks pathname={pathname} />
+          <NavLinks pathname={pathname} featureFlags={featureFlags} roles={roles} />
         </nav>
         <div className="p-4 border-t border-slate-700">
           {showViewSwitcher && <div className="mb-4"><SuperAdminViewSwitcher compact /></div>}
@@ -137,7 +158,7 @@ export default function AdminSidebar({ showViewSwitcher = false }: { showViewSwi
             </div>
 
             <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-              <NavLinks pathname={pathname} onNav={() => setOpen(false)} />
+              <NavLinks pathname={pathname} featureFlags={featureFlags} roles={roles} onNav={() => setOpen(false)} />
             </nav>
 
             <div className="p-4 border-t border-slate-700">

@@ -2,10 +2,13 @@ import { requireRole } from '@/lib/auth/session'
 import Link from 'next/link'
 import { Truck, Map, LogOut, UserCircle } from 'lucide-react'
 import { SuperAdminViewSwitcher } from '@/components/layout/SuperAdminViewSwitcher'
+import { hasFeature } from '@/lib/users/features'
 
 export default async function DriverLayout({ children }: { children: React.ReactNode }) {
   const session = await requireRole('driver', 'admin')
   const isSuperAdmin = session.user.email?.toLowerCase() === 'alex@ahawc.com'
+  const roles = session.user.roles ?? [session.user.role]
+  const featureFlags = session.user.featureFlags ?? []
   return (
     <div className="min-h-screen bg-slate-50">
       <nav className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between">
@@ -16,15 +19,21 @@ export default async function DriverLayout({ children }: { children: React.React
           <span className="font-bold">AHAWC Driver Portal</span>
         </div>
         <div className="flex items-center gap-4">
-          <Link href="/driver/deliveries" className="flex items-center gap-2 text-sm text-slate-300 hover:text-white">
-            <Truck className="w-4 h-4" />Deliveries
-          </Link>
-          <Link href="/driver/map" className="flex items-center gap-2 text-sm text-slate-300 hover:text-white">
-            <Map className="w-4 h-4" />Map
-          </Link>
-          <Link href="/driver/profile" className="flex items-center gap-2 text-sm text-slate-300 hover:text-white">
-            <UserCircle className="w-4 h-4" />Profile
-          </Link>
+          {hasFeature('deliveries', roles, featureFlags) ? (
+            <Link href="/driver/deliveries" className="flex items-center gap-2 text-sm text-slate-300 hover:text-white">
+              <Truck className="w-4 h-4" />Deliveries
+            </Link>
+          ) : null}
+          {hasFeature('map', roles, featureFlags) ? (
+            <Link href="/driver/map" className="flex items-center gap-2 text-sm text-slate-300 hover:text-white">
+              <Map className="w-4 h-4" />Map
+            </Link>
+          ) : null}
+          {hasFeature('profile', roles, featureFlags) ? (
+            <Link href="/driver/profile" className="flex items-center gap-2 text-sm text-slate-300 hover:text-white">
+              <UserCircle className="w-4 h-4" />Profile
+            </Link>
+          ) : null}
           <form action="/api/auth/signout" method="post">
             <button className="flex items-center gap-2 text-sm text-slate-400 hover:text-white">
               <LogOut className="w-4 h-4" />Sign Out

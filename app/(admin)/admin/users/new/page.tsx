@@ -5,11 +5,13 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { ALL_FEATURES } from '@/lib/users/features'
 
 const allRoles = [
   { value: 'admin', label: 'Admin' },
   { value: 'staff', label: 'Staff / Sales Rep' },
   { value: 'driver', label: 'Driver' },
+  { value: 'taster', label: 'Taster' },
   { value: 'customer', label: 'Customer' },
 ]
 
@@ -69,6 +71,19 @@ export default function NewUserPage() {
                 <Label htmlFor="phone">Phone</Label>
                 <Input name="phone" id="phone" type="tel" placeholder="555-0100" />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Enabled Features</Label>
+              <div className="grid grid-cols-2 gap-3 rounded-md border border-input p-3 text-sm sm:grid-cols-3">
+                {ALL_FEATURES.map(feature => (
+                  <label key={feature.key} className="flex items-center gap-2">
+                    <input type="checkbox" name="features" value={feature.key} className="rounded" />
+                    {feature.label}
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">Leave these unchecked to use the default feature set for the chosen roles.</p>
             </div>
 
             <div className="border-t pt-4 space-y-4">

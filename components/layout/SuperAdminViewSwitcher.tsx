@@ -8,14 +8,14 @@ const VIEW_OPTIONS = [
   { id: 'staff', label: 'Staff', href: '/staff/dashboard' },
   { id: 'customer', label: 'Customer', href: '/customer/dashboard' },
   { id: 'driver', label: 'Driver', href: '/driver/deliveries' },
-  { id: 'taster', label: 'Taster', href: '/customer/products' },
+  { id: 'taster', label: 'Taster', href: '/taster/tastings' },
 ] as const
 
 function getCurrentView(pathname: string) {
   if (pathname.startsWith('/admin')) return 'admin'
   if (pathname.startsWith('/staff')) return 'staff'
   if (pathname.startsWith('/driver')) return 'driver'
-  if (pathname.startsWith('/customer/products')) return 'taster'
+  if (pathname.startsWith('/taster')) return 'taster'
   if (pathname.startsWith('/customer')) return 'customer'
   return 'admin'
 }

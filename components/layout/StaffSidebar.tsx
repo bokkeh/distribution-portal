@@ -6,24 +6,37 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, ShoppingCart, Building2, Package,
-  LogOut, ChevronRight, Menu, X, UserCircle,
+  LogOut, ChevronRight, Menu, X, UserCircle, CalendarDays,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { signOut } from 'next-auth/react'
 import { SuperAdminViewSwitcher } from './SuperAdminViewSwitcher'
+import type { FeatureKey } from '@/lib/users/features'
+import { hasFeature } from '@/lib/users/features'
 
 const navItems = [
-  { href: '/staff/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/staff/orders',    label: 'Orders',    icon: ShoppingCart },
-  { href: '/staff/crm',       label: 'Accounts',  icon: Building2 },
-  { href: '/staff/inventory', label: 'Inventory',  icon: Package },
-  { href: '/staff/profile',  label: 'My Profile', icon: UserCircle },
+  { href: '/staff/dashboard', label: 'Dashboard', icon: LayoutDashboard, feature: 'dashboard' },
+  { href: '/staff/orders',    label: 'Orders',    icon: ShoppingCart, feature: 'orders' },
+  { href: '/staff/crm',       label: 'Accounts',  icon: Building2, feature: 'crm' },
+  { href: '/staff/inventory', label: 'Inventory', icon: Package, feature: 'inventory' },
+  { href: '/staff/tastings',  label: 'Tastings',  icon: CalendarDays, feature: 'tastings' },
+  { href: '/staff/profile',   label: 'My Profile', icon: UserCircle, feature: 'profile' },
 ]
 
-function NavLinks({ pathname, onNav }: { pathname: string; onNav?: () => void }) {
+function NavLinks({
+  pathname,
+  featureFlags,
+  roles,
+  onNav,
+}: {
+  pathname: string
+  featureFlags: string[]
+  roles: string[]
+  onNav?: () => void
+}) {
   return (
     <>
-      {navItems.map(({ href, label, icon: Icon }) => {
+      {navItems.filter(item => hasFeature(item.feature as FeatureKey, roles, featureFlags)).map(({ href, label, icon: Icon }) => {
         const active = pathname === href || pathname.startsWith(href + '/')
         return (
           <Link
@@ -47,7 +60,15 @@ function NavLinks({ pathname, onNav }: { pathname: string; onNav?: () => void })
   )
 }
 
-export default function StaffSidebar({ showViewSwitcher = false }: { showViewSwitcher?: boolean }) {
+export default function StaffSidebar({
+  showViewSwitcher = false,
+  featureFlags = [],
+  roles = [],
+}: {
+  showViewSwitcher?: boolean
+  featureFlags?: string[]
+  roles?: string[]
+}) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
 
@@ -73,7 +94,7 @@ export default function StaffSidebar({ showViewSwitcher = false }: { showViewSwi
           </div>
         </div>
         <nav className="flex-1 p-4 space-y-1">
-          <NavLinks pathname={pathname} />
+          <NavLinks pathname={pathname} featureFlags={featureFlags} roles={roles} />
         </nav>
         <div className="p-4 border-t border-slate-700">
           {showViewSwitcher && <div className="mb-4"><SuperAdminViewSwitcher compact /></div>}
@@ -128,7 +149,7 @@ export default function StaffSidebar({ showViewSwitcher = false }: { showViewSwi
             </div>
 
             <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-              <NavLinks pathname={pathname} onNav={() => setOpen(false)} />
+              <NavLinks pathname={pathname} featureFlags={featureFlags} roles={roles} onNav={() => setOpen(false)} />
             </nav>
 
             <div className="p-4 border-t border-slate-700">

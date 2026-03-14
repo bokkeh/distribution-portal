@@ -157,6 +157,7 @@ export async function updateSimpleProfile(
 
     revalidatePath('/admin/profile')
     revalidatePath('/staff/profile')
+    revalidatePath('/taster/profile')
     return {}
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) }

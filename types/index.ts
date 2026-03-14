@@ -7,12 +7,14 @@ declare module 'next-auth' {
       id: string
       role: string
       roles: string[]
+      featureFlags: string[]
     } & DefaultSession['user']
   }
 
   interface User {
     role?: string
     roles?: string[]
+    featureFlags?: string[]
   }
 }
 
@@ -21,10 +23,11 @@ declare module 'next-auth/jwt' {
     id?: string
     role?: string
     roles?: string[]
+    featureFlags?: string[]
   }
 }
 
-export type UserRole = 'admin' | 'staff' | 'driver' | 'customer'
+export type UserRole = 'admin' | 'staff' | 'driver' | 'customer' | 'taster'
 
 export interface CartItem {
   productId: string

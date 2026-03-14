@@ -1,5 +1,7 @@
 import { auth } from './config'
 import { redirect } from 'next/navigation'
+import type { FeatureKey } from '@/lib/users/features'
+import { hasFeature } from '@/lib/users/features'
 
 export async function getSession() {
   return await auth()
@@ -26,4 +28,16 @@ export async function requireAdmin() {
 
 export async function requireAdminOrStaff() {
   return requireRole('admin', 'staff')
+}
+
+export async function requireFeature(feature: FeatureKey, ...roles: string[]) {
+  const session = roles.length ? await requireRole(...roles) : await requireAuth()
+  const userRoles = session.user.roles ?? [session.user.role as string]
+  const featureFlags = session.user.featureFlags ?? []
+
+  if (!hasFeature(feature, userRoles, featureFlags)) {
+    redirect('/unauthorized')
+  }
+
+  return session
 }

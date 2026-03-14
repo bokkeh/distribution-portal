@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -7,13 +8,15 @@ import { LayoutDashboard, Package, ShoppingCart, FileText, User, LogOut } from '
 import { cn } from '@/lib/utils'
 import { signOut } from 'next-auth/react'
 import { useCart } from '@/hooks/useCart'
+import type { FeatureKey } from '@/lib/users/features'
+import { hasFeature } from '@/lib/users/features'
 
 const navItems = [
-  { href: '/customer/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/customer/products', label: 'Order Products', icon: Package },
-  { href: '/customer/orders', label: 'My Orders', icon: ShoppingCart },
-  { href: '/customer/invoices', label: 'Invoices', icon: FileText },
-  { href: '/customer/profile', label: 'Profile', icon: User },
+  { href: '/customer/dashboard', label: 'Dashboard', icon: LayoutDashboard, feature: 'dashboard' },
+  { href: '/customer/products', label: 'Order Products', icon: Package, feature: 'products' },
+  { href: '/customer/orders', label: 'My Orders', icon: ShoppingCart, feature: 'orders' },
+  { href: '/customer/invoices', label: 'Invoices', icon: FileText, feature: 'invoices' },
+  { href: '/customer/profile', label: 'Profile', icon: User, feature: 'profile' },
 ]
 
 function CartButton({ count }: { count: number }) {
@@ -31,10 +34,18 @@ function CartButton({ count }: { count: number }) {
   )
 }
 
-export default function CustomerNav() {
+export default function CustomerNav({ featureFlags = [], roles = [] }: { featureFlags?: string[]; roles?: string[] }) {
   const pathname = usePathname()
   const { itemCount } = useCart()
-  const cartCount = itemCount()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  const cartCount = mounted ? itemCount() : 0
+  const visibleNavItems = navItems.filter(item => hasFeature(item.feature as FeatureKey, roles, featureFlags))
+  const canUseCart = hasFeature('cart', roles, featureFlags)
 
   return (
     <header className="border-b bg-white/95 backdrop-blur">
@@ -56,7 +67,7 @@ export default function CustomerNav() {
           </Link>
 
           <nav className="hidden md:flex items-center gap-1">
-            {navItems.map(({ href, label, icon: Icon }) => {
+            {visibleNavItems.map(({ href, label, icon: Icon }) => {
               const active = pathname === href || pathname.startsWith(href + '/')
               return (
                 <Link
@@ -75,7 +86,7 @@ export default function CustomerNav() {
           </nav>
 
           <div className="flex items-center gap-2">
-            <CartButton count={cartCount} />
+            {canUseCart ? <CartButton count={cartCount} /> : null}
             <button
               onClick={() => signOut({ callbackUrl: '/login' })}
               className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
@@ -87,7 +98,7 @@ export default function CustomerNav() {
         </div>
 
         <div className="flex items-center gap-1 overflow-x-auto pb-3 md:hidden">
-          {navItems.map(({ href, label, icon: Icon }) => {
+          {visibleNavItems.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || pathname.startsWith(href + '/')
             return (
               <Link

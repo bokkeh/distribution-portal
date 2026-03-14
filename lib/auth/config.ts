@@ -4,8 +4,9 @@ import Credentials from 'next-auth/providers/credentials'
 import Google from 'next-auth/providers/google'
 import bcrypt from 'bcryptjs'
 import { db } from '@/db'
-import { customerAccounts, users } from '@/db/schema'
+import { customerAccounts, userFeatureSettings, users } from '@/db/schema'
 import { eq } from 'drizzle-orm'
+import { resolveFeatureFlags } from '@/lib/users/features'
 
 const SUPER_ADMIN_EMAIL = 'alex@ahawc.com'
 const ADMIN_ROLE = 'admin'
@@ -14,6 +15,20 @@ function normalizeRoles(primaryRole: string, roles?: string[] | null) {
   const nextRoles = new Set((roles ?? []).filter(Boolean))
   nextRoles.add(primaryRole)
   return Array.from(nextRoles)
+}
+
+async function getFeatureFlags(userId: string, roles: string[]) {
+  try {
+    const [settings] = await db
+      .select({ features: userFeatureSettings.features })
+      .from(userFeatureSettings)
+      .where(eq(userFeatureSettings.userId, userId))
+      .limit(1)
+
+    return resolveFeatureFlags(roles, settings?.features ?? null)
+  } catch {
+    return resolveFeatureFlags(roles, null)
+  }
 }
 
 const providers: Provider[] = [
@@ -47,6 +62,7 @@ const providers: Provider[] = [
         name: user.name,
         role: user.role,
         roles: user.roles,
+        featureFlags: await getFeatureFlags(user.id, user.roles),
         image: user.avatarUrl,
       }
     },
@@ -97,6 +113,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         user.id = effectiveUser.id
         ;(user as typeof user & { role: string }).role = effectiveUser.role
         ;(user as typeof user & { roles: string[] }).roles = effectiveUser.roles
+        ;(user as typeof user & { featureFlags: string[] }).featureFlags = await getFeatureFlags(effectiveUser.id, effectiveUser.roles)
         user.name = effectiveUser.name
         user.image = effectiveUser.avatarUrl ?? user.image
         return true
@@ -134,6 +151,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       user.id = createdUser.id
       ;(user as typeof user & { role: string }).role = createdUser.role
       ;(user as typeof user & { roles: string[] }).roles = createdUser.roles
+      ;(user as typeof user & { featureFlags: string[] }).featureFlags = resolveFeatureFlags(createdUser.roles, null)
       user.name = createdUser.name
       user.image = createdUser.avatarUrl
       return true
@@ -143,14 +161,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.id = user.id
         token.role = (user as { role?: string }).role
         token.roles = (user as { roles?: string[] }).roles
+        token.featureFlags = (user as { featureFlags?: string[] }).featureFlags
       }
 
-      if (token.email && (!token.role || !token.roles)) {
+      if (token.email && (!token.role || !token.roles || !token.featureFlags)) {
         const [dbUser] = await db.select().from(users).where(eq(users.email, token.email)).limit(1)
         if (dbUser) {
           token.id = dbUser.id
           token.role = dbUser.role
           token.roles = dbUser.roles
+          token.featureFlags = await getFeatureFlags(dbUser.id, dbUser.roles)
           token.picture = dbUser.avatarUrl ?? token.picture
           token.name = dbUser.name
         }
@@ -162,6 +182,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.id = token.id as string
         session.user.role = token.role as string
         session.user.roles = (token.roles as string[] | undefined) ?? []
+        session.user.featureFlags = (token.featureFlags as string[] | undefined) ?? []
       }
       return session
     },
