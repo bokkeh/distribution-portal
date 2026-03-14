@@ -3,18 +3,41 @@ import { users } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { requireAdmin } from '@/lib/auth/session'
 import { SimpleProfileForm } from '@/components/profile/SimpleProfileForm'
+import { notFound } from 'next/navigation'
 
 export default async function AdminProfilePage() {
   const session = await requireAdmin()
-  const [user] = await db.select().from(users).where(eq(users.id, session.user.id))
+  let user:
+    | { id: string; name: string; email: string; phone: string | null; address: string | null; city: string | null; state: string | null; zip: string | null }
+    | undefined
+
+  try {
+    ;[user] = await db.select().from(users).where(eq(users.id, session.user.id))
+  } catch (error) {
+    const code = (error as { code?: string; cause?: { code?: string } } | null)?.code
+      ?? (error as { cause?: { code?: string } } | null)?.cause?.code
+    const message = error instanceof Error ? error.message.toLowerCase() : ''
+
+    if (code !== '42703' && !message.includes('address') && !message.includes('city') && !message.includes('state') && !message.includes('zip')) {
+      throw error
+    }
+
+    ;[user] = await db
+      .select({ id: users.id, name: users.name, email: users.email, phone: users.phone })
+      .from(users)
+      .where(eq(users.id, session.user.id))
+      .then(rows => rows.map(row => ({ ...row, address: null, city: null, state: null, zip: null })))
+  }
+
+  if (!user) notFound()
 
   return (
     <div className="p-4 sm:p-8 space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">My Profile</h1>
-        <p className="text-muted-foreground mt-1">Update your name, email, and phone number</p>
+        <p className="text-muted-foreground mt-1">Update your name, email, phone number, and address</p>
       </div>
-      <SimpleProfileForm user={{ id: user.id, name: user.name, email: user.email, phone: user.phone }} />
+      <SimpleProfileForm user={{ id: user.id, name: user.name, email: user.email, phone: user.phone, address: user.address, city: user.city, state: user.state, zip: user.zip }} />
     </div>
   )
 }

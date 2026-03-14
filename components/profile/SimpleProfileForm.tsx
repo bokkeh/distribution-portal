@@ -10,7 +10,16 @@ import { Label } from '@/components/ui/label'
 import { User } from 'lucide-react'
 
 interface Props {
-  user: { id: string; name: string; email: string; phone: string | null }
+  user: {
+    id: string
+    name: string
+    email: string
+    phone: string | null
+    address: string | null
+    city: string | null
+    state: string | null
+    zip: string | null
+  }
 }
 
 export function SimpleProfileForm({ user }: Props) {
@@ -46,6 +55,24 @@ export function SimpleProfileForm({ user }: Props) {
           <div className="space-y-1.5">
             <Label>Phone</Label>
             <Input name="phone" type="tel" defaultValue={user.phone ?? ''} placeholder="+1 (555) 000-0000" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Address</Label>
+            <Input name="address" defaultValue={user.address ?? ''} placeholder="123 Main St" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="space-y-1.5">
+              <Label>City</Label>
+              <Input name="city" defaultValue={user.city ?? ''} placeholder="Houston" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>State</Label>
+              <Input name="state" defaultValue={user.state ?? ''} placeholder="TX" maxLength={2} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>ZIP</Label>
+              <Input name="zip" defaultValue={user.zip ?? ''} placeholder="77001" />
+            </div>
           </div>
         </CardContent>
       </Card>

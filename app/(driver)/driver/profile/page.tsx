@@ -7,7 +7,10 @@ import { DriverProfileForm } from '@/components/profile/DriverProfileForm'
 export default async function DriverProfilePage() {
   const session = await requireRole('driver', 'admin')
 
-  const [user] = await db.select().from(users).where(eq(users.id, session.user.id))
+  const [user] = await db
+    .select({ id: users.id, name: users.name, email: users.email, phone: users.phone })
+    .from(users)
+    .where(eq(users.id, session.user.id))
   const [driver] = await db.select().from(drivers).where(eq(drivers.userId, session.user.id))
 
   return (

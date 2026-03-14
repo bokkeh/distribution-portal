@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { PhoneSmsButton } from '@/components/crm/PhoneSmsButton'
 import { DealStageSelect } from '@/components/crm/DealStageSelect'
+import { AccountEditForm } from '@/components/crm/AccountEditForm'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import Link from 'next/link'
 import { ArrowLeft, Phone, Mail, MapPin, TrendingUp } from 'lucide-react'
@@ -38,51 +39,47 @@ export default async function StaffAccountDetailPage({ params }: { params: Promi
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card>
-          <CardHeader><CardTitle>Account Info</CardTitle></CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            {account.address && (
-              <div className="flex gap-2">
-                <MapPin className="w-4 h-4 text-muted-foreground mt-0.5" />
-                <div>
-                  <p>{account.address}</p>
-                  <p>{[account.city, account.state, account.zip].filter(Boolean).join(', ')}</p>
-                </div>
+          <CardHeader><CardTitle>Edit Account</CardTitle></CardHeader>
+          <CardContent className="space-y-4 text-sm">
+            <div className="rounded-lg border bg-slate-50 p-3 text-sm">
+              <div className="flex flex-wrap items-center gap-4">
+                {account.address && (
+                  <div className="flex gap-2">
+                    <MapPin className="w-4 h-4 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p>{account.address}</p>
+                      <p>{[account.city, account.state, account.zip].filter(Boolean).join(', ')}</p>
+                    </div>
+                  </div>
+                )}
+                {account.phone && (
+                  <div className="flex gap-2">
+                    <Phone className="w-4 h-4 text-muted-foreground" />
+                    <PhoneSmsButton phone={account.phone} recipientName={account.companyName} showIcon={false} className="text-sm" />
+                  </div>
+                )}
+                {account.email && (
+                  <div className="flex gap-2">
+                    <Mail className="w-4 h-4 text-muted-foreground" />
+                    <span>{account.email}</span>
+                  </div>
+                )}
               </div>
-            )}
-            {account.phone && (
-              <div className="flex gap-2">
-                <Phone className="w-4 h-4 text-muted-foreground" />
-                <PhoneSmsButton phone={account.phone} recipientName={account.companyName} showIcon={false} className="text-sm" />
+              <div className="mt-3 flex flex-wrap gap-3">
+                <Badge variant="secondary">{account.paymentTerms ?? 'NET30'}</Badge>
+                <Badge variant="outline">Credit {formatCurrency(account.creditLimit ?? '0')}</Badge>
+                <Badge variant="outline">Balance {formatCurrency(account.balance ?? '0')}</Badge>
               </div>
-            )}
-            {account.email && (
-              <div className="flex gap-2">
-                <Mail className="w-4 h-4 text-muted-foreground" />
-                <span>{account.email}</span>
-              </div>
-            )}
-            {account.contactName && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Person of Contact</span>
-                <span>{account.contactName}</span>
-              </div>
-            )}
-            {account.state === 'DC' && account.dcAbraNumber && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">DC ABRA Number</span>
-                <span>{account.dcAbraNumber}</span>
-              </div>
-            )}
-            <div className="border-t pt-3 space-y-2">
-              <div className="flex justify-between"><span className="text-muted-foreground">Terms</span><Badge variant="secondary">{account.paymentTerms}</Badge></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Credit Limit</span><span>{formatCurrency(account.creditLimit ?? '0')}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Balance</span><span>{formatCurrency(account.balance ?? '0')}</span></div>
             </div>
+            <AccountEditForm account={account} mode="staff" />
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>Contacts</CardTitle></CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Contacts</CardTitle>
+            <Link href={`/staff/crm/${account.id}/contacts`}><Button variant="ghost" size="sm">Manage</Button></Link>
+          </CardHeader>
           <CardContent>
             {accountContacts.length === 0
               ? <p className="text-sm text-muted-foreground">No contacts.</p>

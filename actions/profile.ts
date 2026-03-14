@@ -7,7 +7,16 @@ import { eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { generateSignedUploadUrl } from '@/lib/gcs/client'
 import { geocodeAddress } from '@/lib/maps/geocode'
+import { upsertHubSpotContact, updateHubSpotCompany } from '@/lib/hubspot/client'
 import { v4 as uuidv4 } from 'uuid'
+
+function isMissingUserAddressColumn(error: unknown) {
+  const dbError = error as { code?: string; message?: string; cause?: unknown } | null
+  const code = dbError?.code ?? (dbError?.cause as { code?: string } | undefined)?.code
+  const message = error instanceof Error ? error.message.toLowerCase() : ''
+
+  return code === '42703' || message.includes('address') || message.includes('city') || message.includes('state') || message.includes('zip')
+}
 
 export async function updateProfile(
   _prev: { error?: string } | null,
@@ -19,33 +28,95 @@ export async function updateProfile(
     if (session.user.id !== userId) throw new Error('Unauthorized')
 
     // Update user record
-    await db.update(users).set({
-      name: formData.get('name') as string,
-      email: formData.get('email') as string,
-      phone: (formData.get('phone') as string) || null,
-    }).where(eq(users.id, userId))
-
-    // Update customer account if it exists
-    const accountId = formData.get('accountId') as string | null
-    if (accountId) {
-      await db.update(customerAccounts).set({
-        companyName: (formData.get('companyName') as string) || undefined,
+    try {
+      await db.update(users).set({
+        name: formData.get('name') as string,
+        email: formData.get('email') as string,
+        phone: (formData.get('phone') as string) || null,
         address: (formData.get('address') as string) || null,
         city: (formData.get('city') as string) || null,
         state: (formData.get('state') as string) || null,
         zip: (formData.get('zip') as string) || null,
+      }).where(eq(users.id, userId))
+    } catch (error) {
+      if (!isMissingUserAddressColumn(error)) throw error
+
+      await db.update(users).set({
+        name: formData.get('name') as string,
+        email: formData.get('email') as string,
+        phone: (formData.get('phone') as string) || null,
+      }).where(eq(users.id, userId))
+    }
+
+    // Update customer account if it exists
+    const accountId = formData.get('accountId') as string | null
+    if (accountId) {
+      const companyName = (formData.get('companyName') as string) || ''
+      const address = (formData.get('address') as string) || null
+      const city = (formData.get('city') as string) || null
+      const state = (formData.get('state') as string) || null
+      const zip = (formData.get('zip') as string) || null
+      const email = (formData.get('email') as string) || null
+      const phone = (formData.get('phone') as string) || null
+      const businessEmail = (formData.get('businessEmail') as string) || null
+      const businessPhone = (formData.get('businessPhone') as string) || null
+      const pocName = (formData.get('pocName') as string) || null
+      const pocPhone = (formData.get('pocPhone') as string) || null
+      const pocEmail = (formData.get('pocEmail') as string) || null
+
+      await db.update(customerAccounts).set({
+        companyName: companyName || undefined,
+        contactName: pocName || (formData.get('name') as string) || null,
+        address,
+        city,
+        state,
+        zip,
+        phone: businessPhone || phone,
+        email,
         dcAbraNumber: (formData.get('dcAbraNumber') as string) || null,
-        businessEmail: (formData.get('businessEmail') as string) || null,
-        businessPhone: (formData.get('businessPhone') as string) || null,
+        businessEmail,
+        businessPhone,
         notificationPreference: (formData.get('notificationPreference') as string) || 'email',
-        pocName: (formData.get('pocName') as string) || null,
-        pocPhone: (formData.get('pocPhone') as string) || null,
-        pocEmail: (formData.get('pocEmail') as string) || null,
+        pocName,
+        pocPhone,
+        pocEmail,
         hoursOfOperation: (formData.get('hoursOfOperation') as string) || null,
         preferredDeliveryDays: (formData.get('preferredDeliveryDays') as string) || null,
         preferredDeliveryTimes: (formData.get('preferredDeliveryTimes') as string) || null,
         additionalLocations: (formData.get('additionalLocations') as string) || null,
       }).where(eq(customerAccounts.id, accountId))
+
+      const [account] = await db.select().from(customerAccounts).where(eq(customerAccounts.id, accountId)).limit(1)
+
+      if (account) {
+        const hubspotContactId = await upsertHubSpotContact({
+          email: pocEmail || businessEmail || email || '',
+          firstname: (pocName || formData.get('name') as string || companyName).split(' ')[0] ?? companyName,
+          lastname: (pocName || formData.get('name') as string || '').split(' ').slice(1).join(' '),
+          company: companyName,
+          phone: pocPhone || businessPhone || phone || '',
+          city: city ?? '',
+          state: state ?? '',
+          credit_limit: account.creditLimit ?? '0',
+          payment_terms: account.paymentTerms ?? 'NET30',
+          account_balance: account.balance ?? '0',
+        }).catch(() => null)
+
+        if (hubspotContactId) {
+          await db.update(customerAccounts).set({ hubspotContactId }).where(eq(customerAccounts.id, accountId))
+        }
+
+        if (account.hubspotCompanyId) {
+          await updateHubSpotCompany(account.hubspotCompanyId, {
+            name: companyName,
+            phone: businessPhone || phone || '',
+            address: address ?? '',
+            city: city ?? '',
+            state: state ?? '',
+            zip: zip ?? '',
+          }).catch(() => false)
+        }
+      }
     }
 
     revalidatePath('/customer/profile')
@@ -64,11 +135,25 @@ export async function updateSimpleProfile(
     const userId = formData.get('userId') as string
     if (session.user.id !== userId) throw new Error('Unauthorized')
 
-    await db.update(users).set({
-      name: formData.get('name') as string,
-      email: formData.get('email') as string,
-      phone: (formData.get('phone') as string) || null,
-    }).where(eq(users.id, userId))
+    try {
+      await db.update(users).set({
+        name: formData.get('name') as string,
+        email: formData.get('email') as string,
+        phone: (formData.get('phone') as string) || null,
+        address: (formData.get('address') as string) || null,
+        city: (formData.get('city') as string) || null,
+        state: (formData.get('state') as string) || null,
+        zip: (formData.get('zip') as string) || null,
+      }).where(eq(users.id, userId))
+    } catch (error) {
+      if (!isMissingUserAddressColumn(error)) throw error
+
+      await db.update(users).set({
+        name: formData.get('name') as string,
+        email: formData.get('email') as string,
+        phone: (formData.get('phone') as string) || null,
+      }).where(eq(users.id, userId))
+    }
 
     revalidatePath('/admin/profile')
     revalidatePath('/staff/profile')

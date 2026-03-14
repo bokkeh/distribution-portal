@@ -7,7 +7,10 @@ import { ProfileForm } from '@/components/profile/ProfileForm'
 export default async function CustomerProfilePage() {
   const session = await requireRole('customer')
 
-  const [user] = await db.select().from(users).where(eq(users.id, session.user.id))
+  const [user] = await db
+    .select({ id: users.id, name: users.name, email: users.email, phone: users.phone })
+    .from(users)
+    .where(eq(users.id, session.user.id))
   const [account] = await db.select().from(customerAccounts).where(eq(customerAccounts.userId, session.user.id))
 
   return (

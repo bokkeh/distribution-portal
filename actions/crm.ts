@@ -51,6 +51,7 @@ export async function syncToHubSpot(accountId: string) {
   }
 
   revalidatePath(`/admin/crm/${accountId}`)
+  revalidatePath(`/staff/crm/${accountId}`)
 }
 
 export async function addContact(formData: FormData) {
@@ -72,6 +73,9 @@ export async function addContact(formData: FormData) {
   })
 
   revalidatePath(`/admin/crm/${customerId}`)
+  revalidatePath(`/admin/crm/${customerId}/contacts`)
+  revalidatePath(`/staff/crm/${customerId}`)
+  revalidatePath(`/staff/crm/${customerId}/contacts`)
 }
 
 export async function importHubSpotCompany(hubspotCompanyId: string) {
@@ -145,19 +149,77 @@ export async function updateCustomerAccount(formData: FormData) {
   await requireAdminOrStaff()
 
   const id = formData.get('id') as string
+  const mode = (formData.get('mode') as string) || 'admin'
+  const hubspotCompanyId = (formData.get('hubspotCompanyId') as string) || null
+  const companyName = formData.get('companyName') as string
+  const phone = (formData.get('phone') as string) || null
+  const email = (formData.get('email') as string) || null
+  const address = (formData.get('address') as string) || null
+  const city = (formData.get('city') as string) || null
+  const state = (formData.get('state') as string) || null
+  const zip = (formData.get('zip') as string) || null
+  const businessEmail = (formData.get('businessEmail') as string) || null
+  const businessPhone = (formData.get('businessPhone') as string) || null
+  const pocName = (formData.get('pocName') as string) || null
+  const pocPhone = (formData.get('pocPhone') as string) || null
+  const pocEmail = (formData.get('pocEmail') as string) || null
+
   await db.update(customerAccounts).set({
-    companyName: formData.get('companyName') as string,
+    companyName,
     contactName: formData.get('contactName') as string || null,
-    address: formData.get('address') as string || null,
-    city: formData.get('city') as string || null,
-    state: formData.get('state') as string || null,
-    zip: formData.get('zip') as string || null,
-    phone: formData.get('phone') as string || null,
+    address,
+    city,
+    state,
+    zip,
+    phone,
+    email,
+    businessEmail,
+    businessPhone,
+    pocName,
+    pocPhone,
+    pocEmail,
+    hoursOfOperation: formData.get('hoursOfOperation') as string || null,
     dcAbraNumber: formData.get('dcAbraNumber') as string || null,
     creditLimit: formData.get('creditLimit') as string,
     paymentTerms: formData.get('paymentTerms') as string,
   }).where(eq(customerAccounts.id, id))
 
+  if (hubspotCompanyId) {
+    await updateHubSpotCompany(hubspotCompanyId, {
+      name: companyName,
+      phone: businessPhone || phone || '',
+      address: address ?? '',
+      city: city ?? '',
+      state: state ?? '',
+      zip: zip ?? '',
+    }).catch(() => false)
+  }
+
+  const [account] = await db.select().from(customerAccounts).where(eq(customerAccounts.id, id)).limit(1)
+  if (account) {
+    const hubspotContactId = await upsertHubSpotContact({
+      email: pocEmail || businessEmail || email || '',
+      firstname: (pocName || account.contactName || account.companyName).split(' ')[0] ?? account.companyName,
+      lastname: (pocName || account.contactName || '').split(' ').slice(1).join(' '),
+      company: account.companyName,
+      phone: pocPhone || businessPhone || phone || '',
+      city: account.city ?? '',
+      state: account.state ?? '',
+      credit_limit: account.creditLimit ?? '0',
+      payment_terms: account.paymentTerms ?? 'NET30',
+      account_balance: account.balance ?? '0',
+    }).catch(() => null)
+
+    if (hubspotContactId) {
+      await db.update(customerAccounts).set({ hubspotContactId }).where(eq(customerAccounts.id, id))
+    }
+  }
+
   revalidatePath('/admin/crm')
   revalidatePath(`/admin/crm/${id}`)
+  revalidatePath(`/admin/crm/${id}/contacts`)
+  revalidatePath('/staff/crm')
+  revalidatePath(`/staff/crm/${id}`)
+  revalidatePath(`/staff/crm/${id}/contacts`)
+  revalidatePath(`/${mode}/crm/${id}`)
 }
