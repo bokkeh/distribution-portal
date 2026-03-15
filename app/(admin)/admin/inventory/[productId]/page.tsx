@@ -1,6 +1,6 @@
 import { db } from '@/db'
 import { products, inventory } from '@/db/schema'
-import { eq } from 'drizzle-orm'
+import { eq, or } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -30,7 +30,7 @@ export default async function EditProductPage({ params }: { params: { productId:
     })
     .from(products)
     .leftJoin(inventory, eq(inventory.productId, products.id))
-    .where(eq(products.id, params.productId))
+    .where(or(eq(products.id, params.productId), eq(inventory.id, params.productId)))
     .limit(1)
 
   if (!record?.product) notFound()
