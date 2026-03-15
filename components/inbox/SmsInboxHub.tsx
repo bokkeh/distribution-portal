@@ -146,8 +146,11 @@ export function SmsInboxHub({
   const [gifPickerOpen, setGifPickerOpen] = useState(false)
   const [gifLoading, setGifLoading] = useState(false)
   const [composeOpen, setComposeOpen] = useState(false)
+  const [composeMode, setComposeMode] = useState<'account' | 'custom'>('account')
   const [selectedAccountPhone, setSelectedAccountPhone] = useState('')
   const [selectedAccountName, setSelectedAccountName] = useState('')
+  const [customPhone, setCustomPhone] = useState('')
+  const [customContactName, setCustomContactName] = useState('')
   const formRef = useRef<HTMLFormElement | null>(null)
   const composeFormRef = useRef<HTMLFormElement | null>(null)
 
@@ -194,8 +197,11 @@ export function SmsInboxHub({
       toast.success('Text sent')
       composeFormRef.current?.reset()
       setComposeOpen(false)
+      setComposeMode('account')
       setSelectedAccountPhone('')
       setSelectedAccountName('')
+      setCustomPhone('')
+      setCustomContactName('')
       router.push(`${basePath}?phone=${encodeURIComponent(composeState.phone)}`)
       router.refresh()
     }
@@ -363,8 +369,54 @@ export function SmsInboxHub({
                     ))}
                   </select>
                 </div>
-                <input type="hidden" name="phone" value={selectedAccountPhone} />
-                <input type="hidden" name="contactName" value={selectedAccountName} />
+                <div className="flex gap-2 rounded-xl border border-slate-200 bg-white p-1">
+                  <button
+                    type="button"
+                    className={cn(
+                      'flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                      composeMode === 'account' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
+                    )}
+                    onClick={() => setComposeMode('account')}
+                  >
+                    Saved Account
+                  </button>
+                  <button
+                    type="button"
+                    className={cn(
+                      'flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                      composeMode === 'custom' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
+                    )}
+                    onClick={() => setComposeMode('custom')}
+                  >
+                    Custom Number
+                  </button>
+                </div>
+                {composeMode === 'account' ? null : (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Custom Contact Name</label>
+                      <input
+                        type="text"
+                        value={customContactName}
+                        onChange={(event) => setCustomContactName(event.target.value)}
+                        placeholder="Optional name"
+                        className="flex h-10 w-full rounded-md border border-input bg-white px-3 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Custom Phone Number</label>
+                      <input
+                        type="tel"
+                        value={customPhone}
+                        onChange={(event) => setCustomPhone(event.target.value)}
+                        placeholder="+1 555 000 0000"
+                        className="flex h-10 w-full rounded-md border border-input bg-white px-3 text-sm"
+                      />
+                    </div>
+                  </div>
+                )}
+                <input type="hidden" name="phone" value={composeMode === 'account' ? selectedAccountPhone : customPhone} />
+                <input type="hidden" name="contactName" value={composeMode === 'account' ? selectedAccountName : customContactName} />
                 <textarea
                   name="body"
                   className="min-h-24 w-full rounded-xl border border-input bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
@@ -372,7 +424,12 @@ export function SmsInboxHub({
                   required
                 />
                 <div className="flex gap-2">
-                  <Button type="submit" size="sm" disabled={composePending || !selectedAccountPhone} className="gap-2">
+                  <Button
+                    type="submit"
+                    size="sm"
+                    disabled={composePending || !(composeMode === 'account' ? selectedAccountPhone : customPhone.trim())}
+                    className="gap-2"
+                  >
                     <Send className="h-4 w-4" />
                     {composePending ? 'Sending...' : 'Send'}
                   </Button>
@@ -382,8 +439,11 @@ export function SmsInboxHub({
                     variant="ghost"
                     onClick={() => {
                       setComposeOpen(false)
+                      setComposeMode('account')
                       setSelectedAccountPhone('')
                       setSelectedAccountName('')
+                      setCustomPhone('')
+                      setCustomContactName('')
                     }}
                   >
                     Cancel
