@@ -18,6 +18,88 @@ function normalizeRoles(primaryRole: string, roles?: string[] | null) {
   return Array.from(nextRoles)
 }
 
+function isMissingUsersColumn(error: unknown) {
+  const code = (error as { code?: string; cause?: { code?: string } } | null)?.code
+    ?? (error as { cause?: { code?: string } } | null)?.cause?.code
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+
+  return code === '42703' || message.includes('stripe_connect_account_id')
+}
+
+async function findUserByEmail(email: string) {
+  try {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1)
+
+    return user ?? null
+  } catch (error) {
+    if (!isMissingUsersColumn(error)) throw error
+
+    const [user] = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        passwordHash: users.passwordHash,
+        role: users.role,
+        roles: users.roles,
+        name: users.name,
+        phone: users.phone,
+        address: users.address,
+        city: users.city,
+        state: users.state,
+        zip: users.zip,
+        avatarUrl: users.avatarUrl,
+        active: users.active,
+        createdAt: users.createdAt,
+      })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1)
+
+    return user ? { ...user, stripeConnectAccountId: null } : null
+  }
+}
+
+async function findUserById(id: string) {
+  try {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, id))
+      .limit(1)
+
+    return user ?? null
+  } catch (error) {
+    if (!isMissingUsersColumn(error)) throw error
+
+    const [user] = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        passwordHash: users.passwordHash,
+        role: users.role,
+        roles: users.roles,
+        name: users.name,
+        phone: users.phone,
+        address: users.address,
+        city: users.city,
+        state: users.state,
+        zip: users.zip,
+        avatarUrl: users.avatarUrl,
+        active: users.active,
+        createdAt: users.createdAt,
+      })
+      .from(users)
+      .where(eq(users.id, id))
+      .limit(1)
+
+    return user ? { ...user, stripeConnectAccountId: null } : null
+  }
+}
+
 async function getFeatureFlags(userId: string, roles: string[]) {
   try {
     const [settings] = await db
@@ -42,11 +124,7 @@ const providers: Provider[] = [
     async authorize(credentials) {
       if (!credentials?.email || !credentials?.password) return null
 
-      const [user] = await db
-        .select()
-        .from(users)
-        .where(eq(users.email, credentials.email as string))
-        .limit(1)
+      const user = await findUserByEmail(credentials.email as string)
 
       if (!user || !user.active) return null
 
@@ -114,11 +192,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const normalizedEmail = user.email.toLowerCase()
       const isSuperAdmin = normalizedEmail === SUPER_ADMIN_EMAIL
 
-      const [existingUser] = await db
-        .select()
-        .from(users)
-        .where(eq(users.email, normalizedEmail))
-        .limit(1)
+      const existingUser = await findUserByEmail(normalizedEmail)
 
       if (existingUser) {
         if (!existingUser.active) return false
@@ -191,9 +265,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
 
       if (token.id || (token.email && (!token.role || !token.roles || !token.featureFlags))) {
-        const [dbUser] = token.id
-          ? await db.select().from(users).where(eq(users.id, token.id as string)).limit(1)
-          : await db.select().from(users).where(eq(users.email, token.email as string)).limit(1)
+        const dbUser = token.id
+          ? await findUserById(token.id as string)
+          : await findUserByEmail(token.email as string)
 
         if (dbUser) {
           token.id = dbUser.id
