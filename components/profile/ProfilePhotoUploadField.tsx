@@ -1,6 +1,6 @@
 'use client'
 
-import { useId, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import Image from 'next/image'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -14,6 +14,7 @@ type ProfilePhotoUploadFieldProps = {
 
 export function ProfilePhotoUploadField({ value, onChange, disabled }: ProfilePhotoUploadFieldProps) {
   const inputId = useId()
+  const inputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
 
   async function handleUpload(file: File) {
@@ -65,14 +66,16 @@ export function ProfilePhotoUploadField({ value, onChange, disabled }: ProfilePh
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <label htmlFor={inputId}>
-            <Button type="button" variant="outline" className="gap-2" disabled={disabled || uploading} asChild>
-              <span>
-                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
-                {value ? 'Replace Photo' : 'Upload Photo'}
-              </span>
-            </Button>
-          </label>
+          <Button
+            type="button"
+            variant="outline"
+            className="gap-2"
+            disabled={disabled || uploading}
+            onClick={() => inputRef.current?.click()}
+          >
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+            {value ? 'Replace Photo' : 'Upload Photo'}
+          </Button>
           {value && (
             <Button type="button" variant="ghost" disabled={disabled || uploading} onClick={() => onChange('')}>
               Remove
@@ -82,6 +85,7 @@ export function ProfilePhotoUploadField({ value, onChange, disabled }: ProfilePh
 
         <input
           id={inputId}
+          ref={inputRef}
           type="file"
           accept="image/jpeg,image/png,image/webp"
           className="hidden"

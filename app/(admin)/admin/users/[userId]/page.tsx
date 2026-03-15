@@ -1,12 +1,13 @@
 import Link from 'next/link'
 import { eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, LogIn, LogOut } from 'lucide-react'
 import { db } from '@/db'
 import { customerAccounts, drivers, userFeatureSettings, users } from '@/db/schema'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { getRecentUserAccessEvents, getUserAccessSummaryMap } from '@/lib/auth/activity'
 import { UserRoleForm } from './user-role-form'
 import { UserProfileCard } from '@/components/admin/UserProfileCard'
 
@@ -17,11 +18,25 @@ function isMissingUserFeatureTable(error: unknown) {
 
 export default async function UserDetailPage({ params }: { params: Promise<{ userId: string }> }) {
   const { userId } = await params
-  const [user] = await db.select().from(users).where(eq(users.id, userId))
+  const [user] = await db.select({
+    id: users.id,
+    name: users.name,
+    email: users.email,
+    phone: users.phone,
+    role: users.role,
+    roles: users.roles,
+    avatarUrl: users.avatarUrl,
+    active: users.active,
+  }).from(users).where(eq(users.id, userId))
   if (!user) notFound()
 
   const [account] = await db.select().from(customerAccounts).where(eq(customerAccounts.userId, user.id))
   const [driver] = await db.select().from(drivers).where(eq(drivers.userId, user.id))
+  const [accessSummaryMap, accessEvents] = await Promise.all([
+    getUserAccessSummaryMap(),
+    getRecentUserAccessEvents(user.id),
+  ])
+  const accessSummary = accessSummaryMap.get(user.id)
   let featureSettings: { features: string[] } | undefined
 
   try {
@@ -71,6 +86,52 @@ export default async function UserDetailPage({ params }: { params: Promise<{ use
           </CardContent>
         </Card>
 
+        <Card>
+          <CardHeader><CardTitle>Access Activity</CardTitle></CardHeader>
+          <CardContent className="space-y-4 text-sm">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Most Recent Login</p>
+                <p className="mt-2 text-base font-semibold text-slate-900">
+                  {accessSummary?.lastLoginAt ? formatDateTime(accessSummary.lastLoginAt) : 'No login recorded'}
+                </p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Most Recent Logout</p>
+                <p className="mt-2 text-base font-semibold text-slate-900">
+                  {accessSummary?.lastLogoutAt ? formatDateTime(accessSummary.lastLogoutAt) : 'No logout recorded'}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Recent Sessions</p>
+              {accessEvents.length ? (
+                <div className="space-y-2">
+                  {accessEvents.map((event) => (
+                    <div key={event.id} className="flex items-center justify-between rounded-xl border border-slate-200 p-3">
+                      <div className="flex items-center gap-3">
+                        <div className="rounded-full bg-slate-100 p-2 text-slate-600">
+                          {event.eventType === 'login' ? <LogIn className="h-4 w-4" /> : <LogOut className="h-4 w-4" />}
+                        </div>
+                        <div>
+                          <p className="font-medium capitalize">{event.eventType}</p>
+                          <p className="text-xs text-muted-foreground">{event.provider ? `Provider: ${event.provider}` : 'Provider: session'}</p>
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{formatDateTime(event.createdAt)}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-slate-200 p-4 text-muted-foreground">
+                  Login and logout activity will appear here after the new access tracking migration is live.
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
         {account ? (
           <Card>
             <CardHeader><CardTitle>Customer Account</CardTitle></CardHeader>
@@ -101,4 +162,11 @@ export default async function UserDetailPage({ params }: { params: Promise<{ use
       </div>
     </div>
   )
+}
+
+function formatDateTime(value: Date | string) {
+  return new Intl.DateTimeFormat('en-US', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(typeof value === 'string' ? new Date(value) : value)
 }

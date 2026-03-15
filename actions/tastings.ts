@@ -9,45 +9,36 @@ import { requireFeature, requireRole } from '@/lib/auth/session'
 import { sendSms } from '@/lib/telnyx/client'
 import { sendTasterInvoiceNotification } from '@/lib/resend/client'
 import { clearUserNotifications, createNotificationsForRoles, createUserNotification } from '@/lib/notifications/in-app'
+import {
+  clearScheduledTastingSmsJobs,
+  formatTastingSmsPayload,
+  queueScheduledTastingSmsJobs,
+  sendTastingSmsFromTemplate,
+} from '@/lib/tastings/sms-series'
+import { getTastingById, getTastingsForViewWithFallback } from '@/lib/tastings/read'
 
 function tastingRedirectPath(mode: string) {
   return mode === 'staff' ? '/staff/tastings' : '/admin/tastings'
 }
 
 async function notifyTasterAssignment({
-  assignedName,
   assignedPhone,
-  eventName,
-  scheduledAt,
-  actorId,
+  payload,
 }: {
-  assignedName: string
   assignedPhone: string | null
-  eventName: string
-  scheduledAt: Date
-  actorId: string
+  payload: ReturnType<typeof formatTastingSmsPayload>
 }) {
   if (!assignedPhone) return
 
-  const body = `AHAWC Tasting Assigned: ${eventName} on ${scheduledAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}. View details: ${process.env.NEXTAUTH_URL}/taster/tastings`
-
   try {
-    await sendSms({ to: assignedPhone, body })
-    await db.insert(notificationsLog).values({
-      userId: actorId,
-      recipientPhone: assignedPhone,
-      recipientName: assignedName,
-      type: 'sms',
-      message: body,
-      status: 'sent',
-    })
+    await sendTastingSmsFromTemplate({ templateKey: 'assignment', payload })
   } catch {
     await db.insert(notificationsLog).values({
-      userId: actorId,
+      userId: payload.userId,
       recipientPhone: assignedPhone,
-      recipientName: assignedName,
+      recipientName: payload.store_name,
       type: 'sms',
-      message: body,
+      message: `Failed to send tasting assignment for ${payload.store_name}`,
       status: 'failed',
     })
   }
@@ -149,13 +140,28 @@ export async function createTasting(formData: FormData) {
     notes,
   }).returning({ id: tastings.id })
 
-  await notifyTasterAssignment({
-    assignedName: assignedUser.name,
-    assignedPhone: assignedUser.phone,
-    eventName: account.companyName,
+  const smsPayload = formatTastingSmsPayload({
+    tastingId: tasting.id,
+    userId: assignedUser.id,
+    phoneNumber: assignedUser.phone ?? '',
+    storeName: account.companyName,
+    storeAddress: [account.address, account.city, account.state, account.zip].filter(Boolean).join(', ') || 'Store address not provided',
     scheduledAt,
-    actorId: session.user.id,
+    endAt,
   })
+
+  await notifyTasterAssignment({
+    assignedPhone: assignedUser.phone,
+    payload: smsPayload,
+  })
+
+  if (assignedUser.phone) {
+    await queueScheduledTastingSmsJobs({
+      ...smsPayload,
+      scheduledAt,
+      endAt,
+    })
+  }
 
   await createUserNotification({
     userId: assignedUser.id,
@@ -203,6 +209,43 @@ export async function updateTastingStatus(formData: FormData) {
   }
 
   await db.update(tastings).set({ status: nextStatus }).where(eq(tastings.id, tastingId))
+
+  if (nextStatus === 'confirmed') {
+    const [assignedUser] = await db
+      .select({ phone: users.phone })
+      .from(users)
+      .where(eq(users.id, tasting.assignedUserId))
+      .limit(1)
+
+    const [tastingDetails] = await db
+      .select({
+        eventName: tastings.eventName,
+        scheduledAt: tastings.scheduledAt,
+        endAt: tastings.endAt,
+        storeAddress: tastings.storeAddress,
+        storeCity: tastings.storeCity,
+        storeState: tastings.storeState,
+        storeZip: tastings.storeZip,
+      })
+      .from(tastings)
+      .where(eq(tastings.id, tastingId))
+      .limit(1)
+
+    if (assignedUser?.phone && tastingDetails) {
+      await sendTastingSmsFromTemplate({
+        templateKey: 'confirmation_received',
+        payload: formatTastingSmsPayload({
+          tastingId,
+          userId: tasting.assignedUserId,
+          phoneNumber: assignedUser.phone,
+          storeName: tastingDetails.eventName,
+          storeAddress: [tastingDetails.storeAddress, tastingDetails.storeCity, tastingDetails.storeState, tastingDetails.storeZip].filter(Boolean).join(', ') || 'Store address not provided',
+          scheduledAt: tastingDetails.scheduledAt,
+          endAt: tastingDetails.endAt,
+        }),
+      }).catch(() => {})
+    }
+  }
 
   if (nextStatus === 'completed') {
     await Promise.all([
@@ -254,6 +297,7 @@ export async function deleteTasting(formData: FormData) {
   }
 
   await db.delete(tastings).where(eq(tastings.id, tastingId))
+  await clearScheduledTastingSmsJobs(tasting.id)
 
   await clearUserNotifications({
     userId: tasting.assignedUserId,
@@ -290,6 +334,11 @@ export async function reassignTasting(formData: FormData) {
       id: tastings.id,
       eventName: tastings.eventName,
       scheduledAt: tastings.scheduledAt,
+      endAt: tastings.endAt,
+      storeAddress: tastings.storeAddress,
+      storeCity: tastings.storeCity,
+      storeState: tastings.storeState,
+      storeZip: tastings.storeZip,
       assignedUserId: tastings.assignedUserId,
       currentTasterName: users.name,
       currentTasterPhone: users.phone,
@@ -321,6 +370,8 @@ export async function reassignTasting(formData: FormData) {
     assignedUserId: nextTaster.id,
   }).where(eq(tastings.id, tastingId))
 
+  await clearScheduledTastingSmsJobs(tasting.id)
+
   await Promise.all([
     notifyTasterChange({
       recipientName: tasting.currentTasterName,
@@ -349,6 +400,29 @@ export async function reassignTasting(formData: FormData) {
     body: `${tasting.eventName} has been assigned to you for ${tasting.scheduledAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}.`,
     href: `/taster/tastings/${tasting.id}`,
   })
+
+  if (nextTaster.phone) {
+    const payload = formatTastingSmsPayload({
+      tastingId: tasting.id,
+      userId: nextTaster.id,
+      phoneNumber: nextTaster.phone,
+      storeName: tasting.eventName,
+      storeAddress: [tasting.storeAddress, tasting.storeCity, tasting.storeState, tasting.storeZip].filter(Boolean).join(', ') || 'Store address not provided',
+      scheduledAt: tasting.scheduledAt,
+      endAt: tasting.endAt,
+    })
+
+    await sendTastingSmsFromTemplate({
+      templateKey: 'assignment',
+      payload,
+    }).catch(() => {})
+
+    await queueScheduledTastingSmsJobs({
+      ...payload,
+      scheduledAt: tasting.scheduledAt,
+      endAt: tasting.endAt,
+    })
+  }
 
   await createUserNotification({
     userId: nextTaster.id,
@@ -423,6 +497,41 @@ export async function submitTastingReport(formData: FormData) {
     href: `/taster/tastings/${tastingId}`,
     kinds: ['tasting_report_reminder'],
   })
+
+  const [tastingInfo] = await db
+    .select({
+      eventName: tastings.eventName,
+      scheduledAt: tastings.scheduledAt,
+      endAt: tastings.endAt,
+      storeAddress: tastings.storeAddress,
+      storeCity: tastings.storeCity,
+      storeState: tastings.storeState,
+      storeZip: tastings.storeZip,
+    })
+    .from(tastings)
+    .where(eq(tastings.id, tastingId))
+    .limit(1)
+
+  const [assignedUser] = await db
+    .select({ phone: users.phone })
+    .from(users)
+    .where(eq(users.id, tasting.assignedUserId))
+    .limit(1)
+
+  if (assignedUser?.phone && tastingInfo) {
+    await sendTastingSmsFromTemplate({
+      templateKey: 'report_received',
+      payload: formatTastingSmsPayload({
+        tastingId,
+        userId: tasting.assignedUserId,
+        phoneNumber: assignedUser.phone,
+        storeName: tastingInfo.eventName,
+        storeAddress: [tastingInfo.storeAddress, tastingInfo.storeCity, tastingInfo.storeState, tastingInfo.storeZip].filter(Boolean).join(', ') || 'Store address not provided',
+        scheduledAt: tastingInfo.scheduledAt,
+        endAt: tastingInfo.endAt,
+      }),
+    }).catch(() => {})
+  }
 
   revalidatePath('/admin/tastings')
   revalidatePath('/staff/tastings')
@@ -515,42 +624,34 @@ export async function submitTasterInvoice(formData: FormData) {
   redirect(`/taster/tastings/${tastingId}?success=${encodeURIComponent('Invoice submitted to accounting.')}`)
 }
 
+export async function confirmTastingAssignment(tastingId: string) {
+  const session = await requireFeature('tastings', 'taster', 'admin')
+  const tasting = await getTastingById(tastingId)
+  if (!tasting) redirect('/taster/tastings?error=Tasting%20not%20found.')
+  if (!session.user.roles.includes('admin') && tasting.assignedUserId !== session.user.id) redirect('/unauthorized')
+
+  const formData = new FormData()
+  formData.set('tastingId', tastingId)
+  formData.set('status', 'confirmed')
+  formData.set('mode', 'taster')
+  await updateTastingStatus(formData)
+}
+
+export async function checkInToTasting(tastingId: string) {
+  const session = await requireFeature('tastings', 'taster', 'admin')
+  const tasting = await getTastingById(tastingId)
+  if (!tasting) redirect('/taster/tastings?error=Tasting%20not%20found.')
+  if (!session.user.roles.includes('admin') && tasting.assignedUserId !== session.user.id) redirect('/unauthorized')
+
+  await db.update(tastings).set({ checkedInAt: new Date(), status: tasting.status === 'scheduled' ? 'confirmed' : tasting.status }).where(eq(tastings.id, tastingId))
+  revalidatePath('/taster/tastings')
+  redirect(`/taster/tastings/${tastingId}?success=${encodeURIComponent('Check-in recorded.')}`)
+}
+
 export async function getTastingsForView({
   assignedUserId,
 }: {
   assignedUserId?: string
 }) {
-  const base = db
-    .select({
-      id: tastings.id,
-      customerId: tastings.customerId,
-      assignedUserId: tastings.assignedUserId,
-      createdByUserId: tastings.createdByUserId,
-      eventName: tastings.eventName,
-      scheduledAt: tastings.scheduledAt,
-      endAt: tastings.endAt,
-      status: tastings.status,
-      storeAddress: tastings.storeAddress,
-      storeCity: tastings.storeCity,
-      storeState: tastings.storeState,
-      storeZip: tastings.storeZip,
-      storePhone: tastings.storePhone,
-      notes: tastings.notes,
-      createdAt: tastings.createdAt,
-      tasterName: users.name,
-      tasterPhone: users.phone,
-      reportSubmittedAt: tastingReports.submittedAt,
-      invoiceSubmittedAt: tasterInvoices.submittedAt,
-      invoiceStatus: tasterInvoices.status,
-    })
-    .from(tastings)
-    .innerJoin(users, eq(tastings.assignedUserId, users.id))
-    .leftJoin(tastingReports, eq(tastingReports.tastingId, tastings.id))
-    .leftJoin(tasterInvoices, eq(tasterInvoices.tastingId, tastings.id))
-
-  const rows = assignedUserId
-    ? await base.where(eq(tastings.assignedUserId, assignedUserId)).orderBy(desc(tastings.scheduledAt))
-    : await base.orderBy(desc(tastings.scheduledAt))
-
-  return rows
+  return getTastingsForViewWithFallback({ assignedUserId })
 }

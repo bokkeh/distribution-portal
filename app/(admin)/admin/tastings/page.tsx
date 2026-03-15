@@ -3,6 +3,8 @@ import { db } from '@/db'
 import { TastingsPlanner } from '@/components/tastings/TastingsPlanner'
 import { requireFeature } from '@/lib/auth/session'
 import { getTastingsForView } from '@/actions/tastings'
+import Link from 'next/link'
+import { Button } from '@/components/ui/button'
 
 function isMissingTastingsTable(error: unknown) {
   const message = (error instanceof Error ? error.message : String(error)).toLowerCase()
@@ -43,9 +45,14 @@ export default async function AdminTastingsPage({
 
     return (
       <div className="p-4 sm:p-8 space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Tastings</h1>
-          <p className="text-muted-foreground mt-1">Schedule in-store tastings, assign tasters, and track upcoming events.</p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Tastings</h1>
+            <p className="text-muted-foreground mt-1">Schedule in-store tastings, assign tasters, and track upcoming events.</p>
+          </div>
+          <Link href="/admin/tastings/messages">
+            <Button variant="outline">Manage SMS Series</Button>
+          </Link>
         </div>
         <TastingsPlanner
           mode="admin"

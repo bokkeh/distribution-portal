@@ -10,6 +10,7 @@ export const tastings = pgTable('tastings', {
   eventName: text('event_name').notNull(),
   scheduledAt: timestamp('scheduled_at', { withTimezone: true }).notNull(),
   endAt: timestamp('end_at', { withTimezone: true }),
+  checkedInAt: timestamp('checked_in_at', { withTimezone: true }),
   status: text('status', { enum: ['scheduled', 'confirmed', 'completed', 'cancelled'] }).notNull().default('scheduled'),
   storeAddress: text('store_address'),
   storeCity: text('store_city'),

@@ -7,6 +7,7 @@ import { tasterInvoices, tastingReports, tastings, users } from '@/db/schema'
 import { TastingSubmissionDetail } from '@/components/tastings/TastingSubmissionDetail'
 import { Button } from '@/components/ui/button'
 import { requireFeature } from '@/lib/auth/session'
+import { getTastingById } from '@/lib/tastings/read'
 
 function isMissingSubmissionTables(error: unknown) {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
@@ -27,11 +28,7 @@ export default async function TasterTastingDetailPage({
   const { tastingId } = await params
   const query = await searchParams
 
-  const [tasting] = await db
-    .select()
-    .from(tastings)
-    .where(eq(tastings.id, tastingId))
-    .limit(1)
+  const tasting = await getTastingById(tastingId)
 
   if (!tasting) notFound()
 

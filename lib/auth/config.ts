@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs'
 import { db } from '@/db'
 import { customerAccounts, userFeatureSettings, users } from '@/db/schema'
 import { eq } from 'drizzle-orm'
+import { recordUserAccessEvent } from '@/lib/auth/activity'
 import { resolveFeatureFlags } from '@/lib/users/features'
 
 const SUPER_ADMIN_EMAIL = 'alex@ahawc.com'
@@ -81,6 +82,29 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers,
   trustHost: true,
+  events: {
+    async signIn({ user, account }) {
+      await recordUserAccessEvent({
+        userId: user.id,
+        eventType: 'login',
+        provider: account?.provider ?? null,
+      })
+    },
+    async signOut(message) {
+      const userId =
+        'token' in message
+          ? typeof (message.token as { id?: string } | null)?.id === 'string'
+            ? (message.token as { id: string }).id
+            : null
+          : null
+
+      await recordUserAccessEvent({
+        userId,
+        eventType: 'logout',
+        provider: null,
+      })
+    },
+  },
   callbacks: {
     async signIn({ user, account, profile }) {
       if (account?.provider !== 'google' || !user.email) {
@@ -162,10 +186,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.role = (user as { role?: string }).role
         token.roles = (user as { roles?: string[] }).roles
         token.featureFlags = (user as { featureFlags?: string[] }).featureFlags
+        token.picture = user.image ?? token.picture
+        token.name = user.name ?? token.name
       }
 
-      if (token.email && (!token.role || !token.roles || !token.featureFlags)) {
-        const [dbUser] = await db.select().from(users).where(eq(users.email, token.email)).limit(1)
+      if (token.id || (token.email && (!token.role || !token.roles || !token.featureFlags))) {
+        const [dbUser] = token.id
+          ? await db.select().from(users).where(eq(users.id, token.id as string)).limit(1)
+          : await db.select().from(users).where(eq(users.email, token.email as string)).limit(1)
+
         if (dbUser) {
           token.id = dbUser.id
           token.role = dbUser.role
@@ -183,6 +212,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.role = token.role as string
         session.user.roles = (token.roles as string[] | undefined) ?? []
         session.user.featureFlags = (token.featureFlags as string[] | undefined) ?? []
+        session.user.image = (token.picture as string | undefined) ?? session.user.image
+        session.user.name = (token.name as string | undefined) ?? session.user.name
       }
       return session
     },
