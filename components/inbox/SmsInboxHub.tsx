@@ -2,8 +2,8 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { useActionState, useEffect } from 'react'
-import { MessageSquare, Send } from 'lucide-react'
+import { useActionState, useEffect, useRef, useState } from 'react'
+import { ImagePlus, Loader2, MessageSquare, Send, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { replyToSmsThread } from '@/actions/notifications'
 import { Badge } from '@/components/ui/badge'
@@ -46,14 +46,55 @@ export function SmsInboxHub({
   messages: Message[]
 }) {
   const [state, action, pending] = useActionState(replyToSmsThread, null)
+  const [mediaUrls, setMediaUrls] = useState<string[]>([])
+  const [uploading, setUploading] = useState(false)
+  const formRef = useRef<HTMLFormElement | null>(null)
 
   useEffect(() => {
     if (state?.error) {
       toast.error('Reply failed', { description: state.error })
     } else if (state?.success) {
       toast.success('Reply sent')
+      formRef.current?.reset()
+      setMediaUrls([])
     }
   }, [state])
+
+  async function handleUpload(file: File) {
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('File too large', { description: 'Maximum 10MB.' })
+      return
+    }
+
+    setUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('folder', 'sms-inbox')
+      formData.append('filename', file.name)
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const payload = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Upload failed')
+      }
+
+      setMediaUrls((prev) => [...prev, payload.publicUrl])
+      toast.success('Image attached')
+    } catch (error) {
+      toast.error('Upload failed', { description: error instanceof Error ? error.message : undefined })
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  function removeMediaUrl(url: string) {
+    setMediaUrls((prev) => prev.filter((item) => item !== url))
+  }
 
   return (
     <div className="grid gap-6 xl:grid-cols-[340px_1fr]">
@@ -166,16 +207,48 @@ export function SmsInboxHub({
                 ))}
               </div>
 
-              <form action={action} className="space-y-3">
+              <form ref={formRef} action={action} className="space-y-3">
                 <input type="hidden" name="phone" value={selectedPhone} />
                 <input type="hidden" name="contactName" value={selectedContactName} />
                 <input type="hidden" name="redirectPath" value={`${basePath}?phone=${encodeURIComponent(selectedPhone)}`} />
+                {mediaUrls.map((url) => (
+                  <input key={url} type="hidden" name="mediaUrl" value={url} />
+                ))}
                 <textarea
                   name="body"
                   className="min-h-28 w-full rounded-xl border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   placeholder="Type your reply..."
-                  required
                 />
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-100">
+                    {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+                    {uploading ? 'Uploading...' : 'Attach Image'}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0]
+                        if (file) void handleUpload(file)
+                        event.currentTarget.value = ''
+                      }}
+                    />
+                  </label>
+                  {mediaUrls.length ? (
+                    <div className="flex flex-wrap gap-2">
+                      {mediaUrls.map((url, index) => (
+                        <div key={url} className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">
+                          <a href={url} target="_blank" rel="noreferrer" className="underline">
+                            Image {index + 1}
+                          </a>
+                          <button type="button" onClick={() => removeMediaUrl(url)} className="text-slate-400 hover:text-slate-700">
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
                 <Button type="submit" disabled={pending} className="gap-2">
                   <Send className="h-4 w-4" />
                   {pending ? 'Sending...' : 'Send Reply'}

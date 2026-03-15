@@ -46,15 +46,20 @@ export async function replyToSmsThread(
   const phone = (formData.get('phone') as string) || ''
   const contactName = (formData.get('contactName') as string) || ''
   const body = ((formData.get('body') as string) || '').trim()
+  const mediaUrls = formData
+    .getAll('mediaUrl')
+    .map((value) => (typeof value === 'string' ? value : ''))
+    .filter(Boolean)
 
-  if (!phone || !body) {
-    return { error: 'Phone number and message are required.' }
+  if (!phone || (!body && mediaUrls.length === 0)) {
+    return { error: 'Add a message or image before sending.' }
   }
 
   try {
     await sendSms({
       to: phone,
       body,
+      mediaUrls,
       userId: session.user.id,
       contactName: contactName || null,
     })

@@ -4,12 +4,14 @@ import { logSmsMessage } from '@/lib/telnyx/logging'
 export async function sendSms({
   to,
   body,
+  mediaUrls,
   bypassOptOut = false,
   userId,
   contactName,
 }: {
   to: string
   body: string
+  mediaUrls?: string[]
   bypassOptOut?: boolean
   userId?: string | null
   contactName?: string | null
@@ -26,13 +28,21 @@ export async function sendSms({
     throw new Error('Recipient has opted out of SMS')
   }
 
+  const normalizedMediaUrls = (mediaUrls ?? []).filter(Boolean)
+  const loggedBody = body || (normalizedMediaUrls.length ? '[Image attachment]' : '')
+
   const res = await fetch('https://api.telnyx.com/v2/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({ from, to: normalizedTo, text: body }),
+    body: JSON.stringify({
+      from,
+      to: normalizedTo,
+      text: body,
+      media_urls: normalizedMediaUrls.length ? normalizedMediaUrls : undefined,
+    }),
   })
 
   if (!res.ok) {
@@ -42,7 +52,7 @@ export async function sendSms({
       direction: 'outbound',
       phoneNumber: normalizedTo,
       contactName,
-      body,
+      body: loggedBody,
       status: 'failed',
     })
     throw new Error(`Telnyx SMS failed: ${errorText}`)
@@ -56,7 +66,7 @@ export async function sendSms({
     direction: 'outbound',
     phoneNumber: normalizedTo,
     contactName,
-    body,
+    body: loggedBody,
     status: 'sent',
     providerMessageId,
   })
