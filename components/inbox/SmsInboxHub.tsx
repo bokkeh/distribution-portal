@@ -30,8 +30,14 @@ type Message = {
   createdAt: Date
 }
 
+type MediaAttachment = {
+  url: string
+  size: number
+}
+
 const MAX_MMS_ATTACHMENTS = 3
-const MAX_IMAGE_BYTES = 900 * 1024
+const MAX_IMAGE_BYTES = 280 * 1024
+const MAX_TOTAL_MMS_BYTES = 800 * 1024
 const MAX_IMAGE_DIMENSION = 1280
 
 async function compressImageForMms(file: File) {
@@ -109,7 +115,7 @@ export function SmsInboxHub({
   messages: Message[]
 }) {
   const [state, action, pending] = useActionState(replyToSmsThread, null)
-  const [mediaUrls, setMediaUrls] = useState<string[]>([])
+  const [attachments, setAttachments] = useState<MediaAttachment[]>([])
   const [uploading, setUploading] = useState(false)
   const formRef = useRef<HTMLFormElement | null>(null)
 
@@ -119,12 +125,12 @@ export function SmsInboxHub({
     } else if (state?.success) {
       toast.success('Reply sent')
       formRef.current?.reset()
-      setMediaUrls([])
+      setAttachments([])
     }
   }, [state])
 
   async function handleUpload(file: File) {
-    if (mediaUrls.length >= MAX_MMS_ATTACHMENTS) {
+    if (attachments.length >= MAX_MMS_ATTACHMENTS) {
       toast.error('Attachment limit reached', { description: `You can attach up to ${MAX_MMS_ATTACHMENTS} images per reply.` })
       return
     }
@@ -137,6 +143,11 @@ export function SmsInboxHub({
     setUploading(true)
     try {
       const compressedFile = await compressImageForMms(file)
+      const currentTotalBytes = attachments.reduce((sum, attachment) => sum + attachment.size, 0)
+      if (currentTotalBytes + compressedFile.size > MAX_TOTAL_MMS_BYTES) {
+        throw new Error('These attachments are too large together for MMS. Remove one or choose a smaller image.')
+      }
+
       const formData = new FormData()
       formData.append('file', compressedFile)
       formData.append('folder', 'sms-inbox')
@@ -152,7 +163,7 @@ export function SmsInboxHub({
         throw new Error(payload?.error || 'Upload failed')
       }
 
-      setMediaUrls((prev) => [...prev, payload.publicUrl])
+      setAttachments((prev) => [...prev, { url: payload.publicUrl, size: compressedFile.size }])
       toast.success('Image attached')
     } catch (error) {
       toast.error('Upload failed', { description: error instanceof Error ? error.message : undefined })
@@ -162,7 +173,7 @@ export function SmsInboxHub({
   }
 
   function removeMediaUrl(url: string) {
-    setMediaUrls((prev) => prev.filter((item) => item !== url))
+    setAttachments((prev) => prev.filter((item) => item.url !== url))
   }
 
   return (
@@ -280,8 +291,8 @@ export function SmsInboxHub({
                 <input type="hidden" name="phone" value={selectedPhone} />
                 <input type="hidden" name="contactName" value={selectedContactName} />
                 <input type="hidden" name="redirectPath" value={`${basePath}?phone=${encodeURIComponent(selectedPhone)}`} />
-                {mediaUrls.map((url) => (
-                  <input key={url} type="hidden" name="mediaUrl" value={url} />
+                {attachments.map((attachment) => (
+                  <input key={attachment.url} type="hidden" name="mediaUrl" value={attachment.url} />
                 ))}
                 <textarea
                   name="body"
@@ -304,16 +315,17 @@ export function SmsInboxHub({
                     />
                   </label>
                   <span className="text-xs text-slate-500">
-                    Up to {MAX_MMS_ATTACHMENTS} images, compressed for MMS.
+                    Up to {MAX_MMS_ATTACHMENTS} images, max {(MAX_TOTAL_MMS_BYTES / 1024).toFixed(0)} KB total.
                   </span>
-                  {mediaUrls.length ? (
+                  {attachments.length ? (
                     <div className="flex flex-wrap gap-2">
-                      {mediaUrls.map((url, index) => (
-                        <div key={url} className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">
-                          <a href={url} target="_blank" rel="noreferrer" className="underline">
+                      {attachments.map((attachment, index) => (
+                        <div key={attachment.url} className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">
+                          <a href={attachment.url} target="_blank" rel="noreferrer" className="underline">
                             Image {index + 1}
                           </a>
-                          <button type="button" onClick={() => removeMediaUrl(url)} className="text-slate-400 hover:text-slate-700">
+                          <span className="text-slate-400">{Math.round(attachment.size / 1024)} KB</span>
+                          <button type="button" onClick={() => removeMediaUrl(attachment.url)} className="text-slate-400 hover:text-slate-700">
                             <X className="h-3.5 w-3.5" />
                           </button>
                         </div>
