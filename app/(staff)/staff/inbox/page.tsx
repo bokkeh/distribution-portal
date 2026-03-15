@@ -10,6 +10,11 @@ function isMissingSmsMessagesTable(error: unknown) {
   return message.includes('sms_messages') && message.includes('does not exist')
 }
 
+function toSafeIsoString(value: unknown) {
+  const parsed = value instanceof Date ? value : new Date(String(value))
+  return Number.isNaN(parsed.getTime()) ? new Date(0).toISOString() : parsed.toISOString()
+}
+
 export default async function StaffInboxPage({
   searchParams,
 }: {
@@ -19,7 +24,7 @@ export default async function StaffInboxPage({
   const params = await searchParams
 
   try {
-    const [rows, accounts] = await Promise.all([
+    const [rowsResult, accountsResult] = await Promise.allSettled([
       getInboxMessageRows(),
       db.select({
         id: customerAccounts.id,
@@ -32,8 +37,11 @@ export default async function StaffInboxPage({
       }).from(customerAccounts),
     ])
 
+    const rows = rowsResult.status === 'fulfilled' ? rowsResult.value : []
+    const accounts = accountsResult.status === 'fulfilled' ? accountsResult.value : []
+
     const phones = Array.from(new Set(rows.map(row => row.phoneNumber)))
-    const crmMatches = await getInboxContactMatches(phones)
+    const crmMatches = phones.length ? await getInboxContactMatches(phones).catch(() => new Map()) : new Map()
     const threadMap = new Map<string, typeof rows>()
 
     for (const row of rows) {
@@ -46,13 +54,13 @@ export default async function StaffInboxPage({
       const [latest] = messages
       const crmMatch = crmMatches.get(phone)
       return {
-        phone,
-        contactName: crmMatch?.name ?? latest.contactName ?? phone,
+        phone: String(phone),
+        contactName: String(crmMatch?.name ?? latest.contactName ?? phone),
         avatarUrl: crmMatch?.avatarUrl ?? null,
-        lastBody: latest.body,
+        lastBody: String(latest.body ?? ''),
         lastDirection: latest.direction,
-        lastStatus: latest.status,
-        lastAt: latest.createdAt,
+        lastStatus: String(latest.status ?? ''),
+        lastAt: toSafeIsoString(latest.createdAt),
         unreadCount: messages.filter(message => message.direction === 'inbound').length,
       }
     })
@@ -81,20 +89,20 @@ export default async function StaffInboxPage({
               if (!phone) return null
               const contactName = account.pocName || account.contactName || account.companyName
               return {
-                id: account.id,
-                phone,
-                contactName,
+                id: String(account.id),
+                phone: String(phone),
+                contactName: String(contactName),
                 label: `${account.companyName} (${contactName}) - ${phone}`,
               }
             })
             .filter((account): account is { id: string; label: string; phone: string; contactName: string } => Boolean(account))}
           messages={selectedMessages.map(message => ({
-            id: message.id,
+            id: String(message.id),
             direction: message.direction,
-            body: message.body,
-            mediaUrls: message.mediaUrls ?? [],
-            status: message.status,
-            createdAt: message.createdAt,
+            body: String(message.body ?? ''),
+            mediaUrls: Array.isArray(message.mediaUrls) ? message.mediaUrls.filter((url): url is string => typeof url === 'string') : [],
+            status: String(message.status ?? ''),
+            createdAt: toSafeIsoString(message.createdAt),
           }))}
         />
       </div>

@@ -19,7 +19,7 @@ type Thread = {
   lastBody: string
   lastDirection: 'inbound' | 'outbound'
   lastStatus: string
-  lastAt: Date
+  lastAt: string | Date
   unreadCount: number
 }
 
@@ -36,7 +36,7 @@ type Message = {
   body: string
   mediaUrls?: string[]
   status: string
-  createdAt: Date
+  createdAt: string | Date
 }
 
 type MediaAttachment = {
@@ -153,18 +153,26 @@ export function SmsInboxHub({
   const [customContactName, setCustomContactName] = useState('')
   const formRef = useRef<HTMLFormElement | null>(null)
   const composeFormRef = useRef<HTMLFormElement | null>(null)
+  const handledReplyStateRef = useRef<typeof state>(null)
+  const pendingReplyAttachmentsRef = useRef<MediaAttachment[]>([])
 
   useEffect(() => {
     setLocalMessages(messages)
   }, [messages, selectedPhone])
 
   useEffect(() => {
-    if (state?.error) {
+    if (!state || handledReplyStateRef.current === state) {
+      return
+    }
+
+    handledReplyStateRef.current = state
+
+    if (state.error) {
       toast.error('Reply failed', { description: state.error })
-    } else if (state?.success) {
+    } else if (state.success) {
       const formData = new FormData(formRef.current ?? undefined)
       const body = ((formData.get('body') as string) || '').trim()
-      const mediaUrls = attachments.map((attachment) => attachment.url)
+      const mediaUrls = pendingReplyAttachmentsRef.current.map((attachment) => attachment.url)
 
       setLocalMessages((prev) => [
         ...prev,
@@ -180,12 +188,13 @@ export function SmsInboxHub({
       toast.success('Reply sent')
       formRef.current?.reset()
       setAttachments([])
+      pendingReplyAttachmentsRef.current = []
       setGifPickerOpen(false)
       setGifResults([])
       setGifQuery('')
       router.refresh()
     }
-  }, [attachments, router, state])
+  }, [router, state])
 
   useEffect(() => {
     if (composeState?.error) {
@@ -670,7 +679,14 @@ export function SmsInboxHub({
                     </div>
                   ) : null}
                 </div>
-                <Button type="submit" disabled={pending} className="gap-2">
+                <Button
+                  type="submit"
+                  disabled={pending}
+                  className="gap-2"
+                  onClick={() => {
+                    pendingReplyAttachmentsRef.current = [...attachments]
+                  }}
+                >
                   <Send className="h-4 w-4" />
                   {pending ? 'Sending...' : 'Send Reply'}
                 </Button>
