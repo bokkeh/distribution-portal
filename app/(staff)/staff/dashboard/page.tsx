@@ -7,13 +7,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { ShoppingCart, Users, Package } from 'lucide-react'
+import { ShoppingCart, Users, Package, MessageSquare } from 'lucide-react'
+import { getSmsInboxSummary } from '@/lib/inbox/summary'
 import Link from 'next/link'
 
 export default async function StaffDashboard() {
   const session = await requireAdminOrStaff()
 
-  const [totalOrders, totalCustomers, recentOrders] = await Promise.all([
+  const [totalOrders, totalCustomers, recentOrders, smsInboxSummary] = await Promise.all([
     db.select({ count: sql<number>`COUNT(*)` }).from(orders),
     db.select({ count: sql<number>`COUNT(*)` }).from(customerAccounts),
     db.select({
@@ -22,6 +23,7 @@ export default async function StaffDashboard() {
     }).from(orders)
       .leftJoin(customerAccounts, eq(orders.customerId, customerAccounts.id))
       .orderBy(desc(orders.createdAt)).limit(8),
+    getSmsInboxSummary(),
   ])
 
   const statusColor: Record<string, 'default' | 'success' | 'warning' | 'destructive' | 'info'> = {
@@ -34,10 +36,33 @@ export default async function StaffDashboard() {
         <h1 className="text-2xl font-bold text-slate-900">Sales Dashboard</h1>
         <p className="text-muted-foreground mt-1">Welcome back, {session.user.name}</p>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         <KpiCard title="Total Orders" value={String(totalOrders[0]?.count ?? 0)} icon={ShoppingCart} />
         <KpiCard title="Accounts" value={String(totalCustomers[0]?.count ?? 0)} icon={Users} />
-        <KpiCard title="My Orders (Today)" value="—" icon={Package} />
+        <KpiCard title="My Orders (Today)" value="-" icon={Package} />
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">SMS Inbox</p>
+                <p className="mt-1 text-2xl font-bold">{smsInboxSummary.totalTexts}</p>
+                <p className="mt-1 text-xs text-muted-foreground">Total texts logged</p>
+              </div>
+              <div className="rounded-xl bg-slate-100 p-3 text-emerald-600">
+                <MessageSquare className="h-6 w-6" />
+              </div>
+            </div>
+            <div className="mt-4 flex items-end justify-between gap-3">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Open Threads</p>
+                <p className="mt-1 text-lg font-semibold text-slate-900">{smsInboxSummary.openThreads}</p>
+              </div>
+              <Link href="/staff/inbox" className="text-xs font-medium text-primary hover:underline">
+                Open inbox
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
       </div>
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">

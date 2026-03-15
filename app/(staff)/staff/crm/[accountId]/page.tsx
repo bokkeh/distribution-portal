@@ -9,6 +9,7 @@ import { PhoneSmsButton } from '@/components/crm/PhoneSmsButton'
 import { DealStageSelect } from '@/components/crm/DealStageSelect'
 import { AccountEditForm } from '@/components/crm/AccountEditForm'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { getCRMAccountDetail } from '@/lib/crm/account-read'
 import Link from 'next/link'
 import {
   ArrowLeft, Phone, Mail, MapPin,
@@ -18,7 +19,7 @@ import {
 export default async function StaffAccountDetailPage({ params }: { params: Promise<{ accountId: string }> }) {
   const { accountId } = await params
 
-  const [account] = await db.select().from(customerAccounts).where(eq(customerAccounts.id, accountId))
+  const account = await getCRMAccountDetail(accountId)
   if (!account) notFound()
 
   const [accountContacts, recentOrders, recentInvoices, [orderCount]] = await Promise.all([

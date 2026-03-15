@@ -2,10 +2,11 @@ import { db } from '@/db'
 import { orders, invoices, customerAccounts, inventory, products } from '@/db/schema'
 import { eq, sql, desc, and, gte } from 'drizzle-orm'
 import KpiCard from '@/components/dashboard/KpiCard'
-import { DollarSign, ShoppingCart, Users, Package, TrendingUp, AlertTriangle } from 'lucide-react'
+import { DollarSign, ShoppingCart, Users, MessageSquare, AlertTriangle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { getSmsInboxSummary } from '@/lib/inbox/summary'
 import Link from 'next/link'
 
 export default async function AdminDashboard() {
@@ -16,6 +17,7 @@ export default async function AdminDashboard() {
     lowStockItems,
     recentOrders,
     outstandingInvoices,
+    smsInboxSummary,
   ] = await Promise.all([
     db.select({ total: sql<string>`COALESCE(SUM(total), 0)` }).from(invoices).where(eq(invoices.status, 'paid')),
     db.select({ count: sql<number>`COUNT(*)` }).from(orders),
@@ -24,6 +26,7 @@ export default async function AdminDashboard() {
     db.select({ id: orders.id, total: orders.total, status: orders.status, orderType: orders.orderType, createdAt: orders.createdAt })
       .from(orders).orderBy(desc(orders.createdAt)).limit(5),
     db.select({ total: sql<string>`COALESCE(SUM(total), 0)` }).from(invoices).where(eq(invoices.status, 'sent')),
+    getSmsInboxSummary(),
   ])
 
   const statusColor: Record<string, 'default' | 'success' | 'warning' | 'destructive' | 'info'> = {
@@ -41,7 +44,7 @@ export default async function AdminDashboard() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
         <KpiCard
           title="Total Revenue"
           value={formatCurrency(totalRevenue[0]?.total ?? '0')}
@@ -68,6 +71,29 @@ export default async function AdminDashboard() {
           icon={AlertTriangle}
           iconColor="text-orange-600"
         />
+        <Card className="border-slate-200">
+          <CardContent className="p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">SMS Inbox</p>
+                <p className="mt-1 text-2xl font-bold">{smsInboxSummary.totalTexts}</p>
+                <p className="mt-1 text-xs text-muted-foreground">Total texts logged</p>
+              </div>
+              <div className="rounded-xl bg-slate-100 p-3 text-emerald-600">
+                <MessageSquare className="h-6 w-6" />
+              </div>
+            </div>
+            <div className="mt-4 flex items-end justify-between gap-3">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Open Threads</p>
+                <p className="mt-1 text-lg font-semibold text-slate-900">{smsInboxSummary.openThreads}</p>
+              </div>
+              <Link href="/admin/inbox" className="text-xs font-medium text-primary hover:underline">
+                Open inbox
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
