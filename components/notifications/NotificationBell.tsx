@@ -112,6 +112,10 @@ export function NotificationBell({
     })
   }
 
+  function getItemClasses(href: string | null) {
+    return `${classes.item} w-full ${href ? 'cursor-pointer' : ''}`
+  }
+
   return (
     <div className="relative">
       <button
@@ -152,28 +156,40 @@ export function NotificationBell({
 
             <div className="max-h-[28rem] space-y-3 overflow-y-auto p-4">
               {localItems.length ? localItems.map(item => {
-                const content = (
-                  <div className={classes.item}>
+                if (item.href) {
+                  return (
+                    <Link
+                      key={item.id}
+                      href={item.href}
+                      className={getItemClasses(item.href)}
+                      onClick={() => {
+                        handleOpenNotification(item.id)
+                        setOpen(false)
+                      }}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <p className={classes.title}>{item.title}</p>
+                        {!item.readAt ? <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-blue-500" /> : null}
+                      </div>
+                      <p className={classes.body}>{item.body}</p>
+                      <p className={classes.meta}>{formatTime(item.createdAt)}</p>
+                    </Link>
+                  )
+                }
+
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={getItemClasses(item.href)}
+                    onClick={() => handleOpenNotification(item.id)}
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <p className={classes.title}>{item.title}</p>
                       {!item.readAt ? <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-blue-500" /> : null}
                     </div>
                     <p className={classes.body}>{item.body}</p>
                     <p className={classes.meta}>{formatTime(item.createdAt)}</p>
-                  </div>
-                )
-
-                if (item.href) {
-                  return (
-                    <Link key={item.id} href={item.href} onClick={() => handleOpenNotification(item.id)}>
-                      {content}
-                    </Link>
-                  )
-                }
-
-                return (
-                  <button key={item.id} type="button" className="w-full text-left" onClick={() => handleOpenNotification(item.id)}>
-                    {content}
                   </button>
                 )
               }) : (
