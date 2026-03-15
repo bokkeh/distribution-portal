@@ -2,6 +2,8 @@ import { SmsInboxHub } from '@/components/inbox/SmsInboxHub'
 import { requireFeature } from '@/lib/auth/session'
 import { getInboxContactMatches } from '@/lib/inbox/crm-match'
 import { getInboxMessageRows } from '@/lib/inbox/read'
+import { db } from '@/db'
+import { customerAccounts } from '@/db/schema'
 
 function isMissingSmsMessagesTable(error: unknown) {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
@@ -17,7 +19,18 @@ export default async function AdminInboxPage({
   const params = await searchParams
 
   try {
-    const rows = await getInboxMessageRows()
+    const [rows, accounts] = await Promise.all([
+      getInboxMessageRows(),
+      db.select({
+        id: customerAccounts.id,
+        companyName: customerAccounts.companyName,
+        contactName: customerAccounts.contactName,
+        phone: customerAccounts.phone,
+        businessPhone: customerAccounts.businessPhone,
+        pocName: customerAccounts.pocName,
+        pocPhone: customerAccounts.pocPhone,
+      }).from(customerAccounts),
+    ])
 
     const phones = Array.from(new Set(rows.map(row => row.phoneNumber)))
     const crmMatches = await getInboxContactMatches(phones)
@@ -62,6 +75,19 @@ export default async function AdminInboxPage({
           selectedPhone={selectedPhone}
           selectedContactName={selectedContactName}
           selectedAvatarUrl={selectedAvatarUrl}
+          accounts={accounts
+            .map((account) => {
+              const phone = account.pocPhone || account.businessPhone || account.phone
+              if (!phone) return null
+              const contactName = account.pocName || account.contactName || account.companyName
+              return {
+                id: account.id,
+                phone,
+                contactName,
+                label: `${account.companyName} (${contactName}) - ${phone}`,
+              }
+            })
+            .filter((account): account is { id: string; label: string; phone: string; contactName: string } => Boolean(account))}
           messages={selectedMessages.map(message => ({
             id: message.id,
             direction: message.direction,

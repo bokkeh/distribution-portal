@@ -68,3 +68,29 @@ export async function replyToSmsThread(
     return { error: error instanceof Error ? error.message : 'Failed to send reply.' }
   }
 }
+
+export async function composeSmsThread(
+  _prev: { error?: string; success?: boolean; phone?: string } | null,
+  formData: FormData
+): Promise<{ error?: string; success?: boolean; phone?: string }> {
+  const session = await requireAdminOrStaff()
+  const phone = (formData.get('phone') as string) || ''
+  const contactName = (formData.get('contactName') as string) || ''
+  const body = ((formData.get('body') as string) || '').trim()
+
+  if (!phone || !body) {
+    return { error: 'Select an account and enter a message.' }
+  }
+
+  try {
+    await sendSms({
+      to: phone,
+      body,
+      userId: session.user.id,
+      contactName: contactName || null,
+    })
+    return { success: true, phone }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to send text.' }
+  }
+}

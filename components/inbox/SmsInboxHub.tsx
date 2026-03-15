@@ -2,10 +2,11 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useActionState, useEffect, useRef, useState } from 'react'
-import { Film, ImagePlus, Loader2, MessageSquare, Search, Send, X } from 'lucide-react'
+import { Film, ImagePlus, Loader2, MessageSquare, PenSquare, Search, Send, X } from 'lucide-react'
 import { toast } from 'sonner'
-import { replyToSmsThread } from '@/actions/notifications'
+import { composeSmsThread, replyToSmsThread } from '@/actions/notifications'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -20,6 +21,13 @@ type Thread = {
   lastStatus: string
   lastAt: Date
   unreadCount: number
+}
+
+type AccountOption = {
+  id: string
+  label: string
+  phone: string
+  contactName: string
 }
 
 type Message = {
@@ -117,6 +125,7 @@ export function SmsInboxHub({
   selectedContactName,
   selectedAvatarUrl,
   messages,
+  accounts,
 }: {
   basePath: '/admin/inbox' | '/staff/inbox'
   threads: Thread[]
@@ -124,15 +133,22 @@ export function SmsInboxHub({
   selectedContactName: string
   selectedAvatarUrl: string | null
   messages: Message[]
+  accounts: AccountOption[]
 }) {
+  const router = useRouter()
   const [state, action, pending] = useActionState(replyToSmsThread, null)
+  const [composeState, composeAction, composePending] = useActionState(composeSmsThread, null)
   const [attachments, setAttachments] = useState<MediaAttachment[]>([])
   const [uploading, setUploading] = useState(false)
   const [gifQuery, setGifQuery] = useState('')
   const [gifResults, setGifResults] = useState<GiphyResult[]>([])
   const [gifPickerOpen, setGifPickerOpen] = useState(false)
   const [gifLoading, setGifLoading] = useState(false)
+  const [composeOpen, setComposeOpen] = useState(false)
+  const [selectedAccountPhone, setSelectedAccountPhone] = useState('')
+  const [selectedAccountName, setSelectedAccountName] = useState('')
   const formRef = useRef<HTMLFormElement | null>(null)
+  const composeFormRef = useRef<HTMLFormElement | null>(null)
 
   useEffect(() => {
     if (state?.error) {
@@ -146,6 +162,23 @@ export function SmsInboxHub({
       setGifQuery('')
     }
   }, [state])
+
+  useEffect(() => {
+    if (composeState?.error) {
+      toast.error('Text failed', { description: composeState.error })
+      return
+    }
+
+    if (composeState?.success && composeState.phone) {
+      toast.success('Text sent')
+      composeFormRef.current?.reset()
+      setComposeOpen(false)
+      setSelectedAccountPhone('')
+      setSelectedAccountName('')
+      router.push(`${basePath}?phone=${encodeURIComponent(composeState.phone)}`)
+      router.refresh()
+    }
+  }, [basePath, composeState, router])
 
   async function handleUpload(file: File) {
     if (attachments.length >= MAX_MMS_ATTACHMENTS) {
@@ -273,12 +306,71 @@ export function SmsInboxHub({
     <div className="grid gap-6 xl:grid-cols-[340px_1fr]">
       <Card className="overflow-hidden">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MessageSquare className="h-5 w-5 text-slate-500" />
-            Conversations
-          </CardTitle>
+          <div className="flex items-center justify-between gap-3">
+            <CardTitle className="flex items-center gap-2">
+              <MessageSquare className="h-5 w-5 text-slate-500" />
+              Conversations
+            </CardTitle>
+            <Button type="button" size="sm" variant="outline" className="gap-2" onClick={() => setComposeOpen((prev) => !prev)}>
+              <PenSquare className="h-4 w-4" />
+              New Text
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-2">
+          {composeOpen ? (
+            <form ref={composeFormRef} action={composeAction} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Account</label>
+                  <select
+                    name="accountId"
+                    className="flex h-10 w-full rounded-md border border-input bg-white px-3 text-sm"
+                    defaultValue=""
+                    onChange={(event) => {
+                      const option = accounts.find((account) => account.id === event.target.value)
+                      setSelectedAccountPhone(option?.phone ?? '')
+                      setSelectedAccountName(option?.contactName ?? '')
+                    }}
+                    required
+                  >
+                    <option value="">Select account</option>
+                    {accounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <input type="hidden" name="phone" value={selectedAccountPhone} />
+                <input type="hidden" name="contactName" value={selectedAccountName} />
+                <textarea
+                  name="body"
+                  className="min-h-24 w-full rounded-xl border border-input bg-white px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  placeholder="Start a new text thread..."
+                  required
+                />
+                <div className="flex gap-2">
+                  <Button type="submit" size="sm" disabled={composePending || !selectedAccountPhone} className="gap-2">
+                    <Send className="h-4 w-4" />
+                    {composePending ? 'Sending...' : 'Send'}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setComposeOpen(false)
+                      setSelectedAccountPhone('')
+                      setSelectedAccountName('')
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            </form>
+          ) : null}
           {threads.length === 0 ? (
             <p className="text-sm text-muted-foreground">No text messages yet.</p>
           ) : threads.map(thread => {
