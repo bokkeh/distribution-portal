@@ -69,6 +69,11 @@ export function SystemHealthPanel({
                 No missing required tables or columns detected.
               </div>
             ) : null}
+            {snapshot.missingTables.length > 0 || snapshot.missingColumns.length > 0 ? (
+              <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-3 text-sm text-blue-800">
+                Repair command: <span className="font-mono">npm run db:repair:platform-ops</span>
+              </div>
+            ) : null}
             {snapshot.missingTables.map((tableName) => (
               <div key={tableName} className="rounded-xl border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-700">
                 Missing table: <span className="font-mono">{tableName}</span>
