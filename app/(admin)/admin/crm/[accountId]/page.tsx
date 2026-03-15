@@ -23,9 +23,27 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
   if (!account) notFound()
 
   const [accountContacts, recentOrders, recentInvoices, [orderCount]] = await Promise.all([
-    db.select().from(contacts).where(eq(contacts.customerId, accountId)).orderBy(desc(contacts.createdAt)),
-    db.select().from(orders).where(eq(orders.customerId, accountId)).orderBy(desc(orders.createdAt)).limit(8),
-    db.select().from(invoices).where(eq(invoices.customerId, accountId)).orderBy(desc(invoices.createdAt)).limit(5),
+    db.select({
+      id: contacts.id,
+      name: contacts.name,
+      title: contacts.title,
+      email: contacts.email,
+      phone: contacts.phone,
+      isPrimary: contacts.isPrimary,
+    }).from(contacts).where(eq(contacts.customerId, accountId)).orderBy(desc(contacts.createdAt)),
+    db.select({
+      id: orders.id,
+      status: orders.status,
+      total: orders.total,
+      createdAt: orders.createdAt,
+    }).from(orders).where(eq(orders.customerId, accountId)).orderBy(desc(orders.createdAt)).limit(8),
+    db.select({
+      id: invoices.id,
+      invoiceNumber: invoices.invoiceNumber,
+      dueDate: invoices.dueDate,
+      total: invoices.total,
+      status: invoices.status,
+    }).from(invoices).where(eq(invoices.customerId, accountId)).orderBy(desc(invoices.createdAt)).limit(5),
     db.select({ total: count() }).from(orders).where(eq(orders.customerId, accountId)),
   ])
 
