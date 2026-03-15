@@ -33,18 +33,8 @@ async function run() {
     FROM "drizzle"."__drizzle_migrations"
   `)
 
-  let legacyRows: { rows?: unknown[] } = { rows: [] }
-  try {
-    legacyRows = await db.execute(sql`
-      SELECT "hash", "created_at"
-      FROM "__drizzle_migrations"
-    `)
-  } catch {
-    legacyRows = { rows: [] }
-  }
-
   const existingKeys = new Set(
-    [...(existingRows.rows ?? []), ...(legacyRows.rows ?? [])].map((row) => {
+    (existingRows.rows ?? []).map((row) => {
       const typedRow = row as { hash?: string; created_at?: string | number | null }
       return `${String(typedRow.hash ?? '')}:${String(typedRow.created_at ?? '')}`
     }),

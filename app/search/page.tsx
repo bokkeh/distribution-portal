@@ -8,11 +8,11 @@ import { Badge } from '@/components/ui/badge'
 import { formatDate } from '@/lib/utils'
 
 function roleBasePath(roles: string[]) {
-  if (roles.includes('admin')) return '/admin'
-  if (roles.includes('staff')) return '/staff'
-  if (roles.includes('customer')) return '/customer'
-  if (roles.includes('driver')) return '/driver'
-  if (roles.includes('taster')) return '/taster'
+  if (roles.includes('admin')) return '/admin/dashboard'
+  if (roles.includes('staff')) return '/staff/dashboard'
+  if (roles.includes('customer')) return '/customer/dashboard'
+  if (roles.includes('driver')) return '/driver/deliveries'
+  if (roles.includes('taster')) return '/taster/tastings'
   return ''
 }
 
@@ -79,7 +79,7 @@ export default async function PortalSearchPage({
           <CardHeader><CardTitle>Accounts</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {accounts.length ? accounts.map((account) => (
-              <Link key={account.id} href={`${base}/crm/${account.id}`} className="block rounded-xl border border-slate-200 px-4 py-3 hover:bg-slate-50">
+              <Link key={account.id} href={`${base.replace(/\/dashboard$|\/deliveries$|\/tastings$/, '')}/crm/${account.id}`} className="block rounded-xl border border-slate-200 px-4 py-3 hover:bg-slate-50">
                 <p className="font-medium text-slate-900">{account.name}</p>
                 <p className="text-sm text-slate-500">{account.city ?? 'No city on file'}</p>
               </Link>
@@ -91,7 +91,7 @@ export default async function PortalSearchPage({
           <CardHeader><CardTitle>Orders</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {orderRows.length ? orderRows.map((order) => (
-              <Link key={order.id} href={`${base}/orders/${order.id}`} className="block rounded-xl border border-slate-200 px-4 py-3 hover:bg-slate-50">
+              <Link key={order.id} href={`${base.replace(/\/dashboard$|\/deliveries$|\/tastings$/, '')}/orders/${order.id}`} className="block rounded-xl border border-slate-200 px-4 py-3 hover:bg-slate-50">
                 <div className="flex items-center justify-between gap-3">
                   <p className="font-medium text-slate-900">#{order.id.slice(0, 8).toUpperCase()}</p>
                   <Badge variant="secondary">{order.status}</Badge>
@@ -145,7 +145,7 @@ export default async function PortalSearchPage({
           <CardHeader><CardTitle>Inbox Threads</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {inboxRows.length ? inboxRows.map((thread, index) => (
-              <Link key={`${thread.phone}-${index}`} href={`${base}/inbox?phone=${encodeURIComponent(thread.phone)}`} className="block rounded-xl border border-slate-200 px-4 py-3 hover:bg-slate-50">
+              <Link key={`${thread.phone}-${index}`} href={`${base.replace(/\/dashboard$|\/deliveries$|\/tastings$/, '')}/inbox?phone=${encodeURIComponent(thread.phone)}`} className="block rounded-xl border border-slate-200 px-4 py-3 hover:bg-slate-50">
                 <p className="font-medium text-slate-900">{thread.phone}</p>
                 <p className="line-clamp-2 text-sm text-slate-500">{thread.body}</p>
               </Link>

@@ -27,6 +27,20 @@ const LABELS: Record<string, string> = {
   payouts: 'Payouts',
 }
 
+function hrefForSegments(segments: string[], index: number) {
+  if (index !== 0) {
+    return `/${segments.slice(0, index + 1).join('/')}`
+  }
+
+  const root = segments[0]
+  if (root === 'admin') return '/admin/dashboard'
+  if (root === 'staff') return '/staff/dashboard'
+  if (root === 'customer') return '/customer/dashboard'
+  if (root === 'driver') return '/driver/deliveries'
+  if (root === 'taster') return '/taster/tastings'
+  return `/${root}`
+}
+
 function labelForSegment(segment: string) {
   if (LABELS[segment]) return LABELS[segment]
   if (/^[0-9a-f-]{8,}$/i.test(segment)) return segment.slice(0, 8).toUpperCase()
@@ -42,7 +56,7 @@ export function PortalBreadcrumbs() {
   return (
     <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-sm text-slate-500">
       {segments.map((segment, index) => {
-        const href = `/${segments.slice(0, index + 1).join('/')}`
+        const href = hrefForSegments(segments, index)
         const isLast = index === segments.length - 1
         return (
           <div key={href} className="flex items-center gap-2">

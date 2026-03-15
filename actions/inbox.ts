@@ -100,9 +100,9 @@ export async function markNotificationSectionRead(kindPrefix: string) {
     )
 
   revalidateInboxViews()
-  revalidatePath('/customer')
-  revalidatePath('/driver')
-  revalidatePath('/taster')
+  revalidatePath('/customer/dashboard')
+  revalidatePath('/driver/deliveries')
+  revalidatePath('/taster/tastings')
   return { success: true }
 }
 
