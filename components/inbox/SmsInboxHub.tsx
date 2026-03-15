@@ -138,6 +138,7 @@ export function SmsInboxHub({
   const router = useRouter()
   const [state, action, pending] = useActionState(replyToSmsThread, null)
   const [composeState, composeAction, composePending] = useActionState(composeSmsThread, null)
+  const [localMessages, setLocalMessages] = useState(messages)
   const [attachments, setAttachments] = useState<MediaAttachment[]>([])
   const [uploading, setUploading] = useState(false)
   const [gifQuery, setGifQuery] = useState('')
@@ -151,17 +152,37 @@ export function SmsInboxHub({
   const composeFormRef = useRef<HTMLFormElement | null>(null)
 
   useEffect(() => {
+    setLocalMessages(messages)
+  }, [messages, selectedPhone])
+
+  useEffect(() => {
     if (state?.error) {
       toast.error('Reply failed', { description: state.error })
     } else if (state?.success) {
+      const formData = new FormData(formRef.current ?? undefined)
+      const body = ((formData.get('body') as string) || '').trim()
+      const mediaUrls = attachments.map((attachment) => attachment.url)
+
+      setLocalMessages((prev) => [
+        ...prev,
+        {
+          id: `local-${Date.now()}`,
+          direction: 'outbound',
+          body: body || '[Image attachment]',
+          mediaUrls,
+          status: 'sent',
+          createdAt: new Date(),
+        },
+      ])
       toast.success('Reply sent')
       formRef.current?.reset()
       setAttachments([])
       setGifPickerOpen(false)
       setGifResults([])
       setGifQuery('')
+      router.refresh()
     }
-  }, [state])
+  }, [attachments, router, state])
 
   useEffect(() => {
     if (composeState?.error) {
@@ -451,9 +472,9 @@ export function SmsInboxHub({
           ) : (
             <>
               <div className="max-h-[420px] space-y-3 overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                {messages.length === 0 ? (
+                {localMessages.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No messages in this thread yet.</p>
-                ) : messages.map(message => (
+                ) : localMessages.map(message => (
                   <div
                     key={message.id}
                     className={cn(
