@@ -163,7 +163,16 @@ export function SmsInboxHub({
         throw new Error(payload?.error || 'Upload failed')
       }
 
-      setAttachments((prev) => [...prev, { url: payload.publicUrl, size: compressedFile.size }])
+      const absoluteUrl =
+        typeof payload?.publicUrl === 'string' && payload.publicUrl.startsWith('/')
+          ? `${window.location.origin}${payload.publicUrl}`
+          : payload?.publicUrl
+
+      if (!absoluteUrl || typeof absoluteUrl !== 'string') {
+        throw new Error('Upload returned an invalid image URL.')
+      }
+
+      setAttachments((prev) => [...prev, { url: absoluteUrl, size: compressedFile.size }])
       toast.success('Image attached')
     } catch (error) {
       toast.error('Upload failed', { description: error instanceof Error ? error.message : undefined })
