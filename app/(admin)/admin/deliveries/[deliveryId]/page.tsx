@@ -11,6 +11,8 @@ import SortableStopList from '@/components/deliveries/SortableStopList'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { addDeliveryStop, reassignDeliveryDriver } from '@/actions/deliveries'
+import { getActivityTimeline } from '@/lib/activity/read'
+import { ActivityTimeline } from '@/components/activity/ActivityTimeline'
 
 export default async function DeliveryDetailPage({
   params,
@@ -142,6 +144,17 @@ export default async function DeliveryDetailPage({
     status: stop.status,
   }))
 
+  const timeline = await getActivityTimeline('delivery', delivery.id, [
+    {
+      id: `delivery-created-${delivery.id}`,
+      kind: 'delivery_created',
+      title: 'Delivery scheduled',
+      body: `Delivery scheduled for ${formatDate(delivery.weekStartDate)}.`,
+      createdAt: new Date(delivery.weekStartDate),
+      actorName: null,
+    },
+  ])
+
   return (
     <div className="p-4 sm:p-8 space-y-6">
       <div className="flex items-center gap-4">
@@ -240,6 +253,8 @@ export default async function DeliveryDetailPage({
           </CardContent>
         </Card>
       </div>
+
+      <ActivityTimeline items={timeline} title="Delivery Timeline" />
     </div>
   )
 }

@@ -15,6 +15,8 @@ import {
   ArrowLeft, RefreshCw, Phone, Mail, MapPin,
   Clock, User, CreditCard, Building2, FileText, Hash,
 } from 'lucide-react'
+import { getActivityTimeline } from '@/lib/activity/read'
+import { ActivityTimeline } from '@/components/activity/ActivityTimeline'
 
 export default async function AccountDetailPage({ params }: { params: Promise<{ accountId: string }> }) {
   const { accountId } = await params
@@ -51,6 +53,16 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
   const recentOrders = recentOrdersResult.status === 'fulfilled' ? recentOrdersResult.value : []
   const recentInvoices = recentInvoicesResult.status === 'fulfilled' ? recentInvoicesResult.value : []
   const orderCount = orderCountResult.status === 'fulfilled' ? orderCountResult.value[0] : { total: 0 }
+  const timeline = await getActivityTimeline('account', account.id, [
+    {
+      id: `account-created-${account.id}`,
+      kind: 'account_created',
+      title: 'Account created',
+      body: `${account.companyName} was added to the CRM.`,
+      createdAt: account.createdAt,
+      actorName: null,
+    },
+  ])
 
   const creditAvailable = Math.max(0, Number(account.creditLimit ?? 0) - Number(account.balance ?? 0))
 
@@ -299,6 +311,8 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
           </Card>
         </div>
       </div>
+
+      <ActivityTimeline items={timeline} title="Account Timeline" />
     </div>
   )
 }

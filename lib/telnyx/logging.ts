@@ -1,5 +1,7 @@
 import { db } from '@/db'
 import { smsMessages } from '@/db/schema'
+import { logActivityEvent } from '@/lib/activity/log'
+import { inferThreadCustomerId, upsertSmsThread } from '@/lib/inbox/thread-meta'
 
 function isMissingSmsMessagesTable(error: unknown) {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
@@ -26,6 +28,13 @@ export async function logSmsMessage({
   providerMessageId?: string | null
 }) {
   try {
+    const customerId = await inferThreadCustomerId(phoneNumber)
+    await upsertSmsThread({
+      phoneNumber,
+      customerId,
+      lastMessageAt: new Date(),
+    })
+
     await db.insert(smsMessages).values({
       userId: userId ?? null,
       direction,
@@ -35,6 +44,19 @@ export async function logSmsMessage({
       mediaUrls: mediaUrls?.length ? mediaUrls : null,
       status,
       providerMessageId: providerMessageId ?? null,
+    })
+
+    await logActivityEvent({
+      entityType: 'inbox_thread',
+      entityId: phoneNumber,
+      actorUserId: userId ?? null,
+      kind: direction === 'inbound' ? 'sms_received' : 'sms_sent',
+      title: direction === 'inbound' ? 'Text received' : 'Text sent',
+      body,
+      metadata: {
+        mediaCount: mediaUrls?.length ?? 0,
+        status,
+      },
     })
   } catch (error) {
     const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()

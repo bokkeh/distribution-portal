@@ -10,6 +10,7 @@ import { postGoogleChat } from '@/lib/google-chat/webhook'
 import { logInventoryTransaction } from '@/lib/inventory/history'
 import { getMinimumCaseQuantity, isWisherVodkaProduct } from '@/lib/orders/minimums'
 import { createUserNotification } from '@/lib/notifications/in-app'
+import { logActivityEvent } from '@/lib/activity/log'
 
 type PurchaseUnit = 'case' | 'bottle'
 
@@ -108,6 +109,15 @@ export async function createOrder(formData: FormData) {
 
     await db.insert(orderItems).values(lineItems.map(item => ({ ...item, orderId: order.id })))
 
+    await logActivityEvent({
+      entityType: 'order',
+      entityId: order.id,
+      actorUserId: session.user.id,
+      kind: 'order_created',
+      title: 'Order created',
+      body: `A ${purchaseUnit} order totaling $${total.toFixed(2)} was created.`,
+    })
+
     const [customerAccount] = await db
       .select({ userId: customerAccounts.userId, companyName: customerAccounts.companyName })
       .from(customerAccounts)
@@ -201,6 +211,14 @@ export async function updateOrderStatus(orderId: string, status: 'pending' | 'co
     throw new Error('Unauthorized')
   }
   await db.update(orders).set({ status }).where(eq(orders.id, orderId))
+  await logActivityEvent({
+    entityType: 'order',
+    entityId: orderId,
+    actorUserId: session.user.id,
+    kind: 'order_status_changed',
+    title: 'Order status changed',
+    body: `Status changed to ${status.replace(/_/g, ' ')}.`,
+  })
 
   const [order] = await db
     .select({
@@ -259,6 +277,14 @@ export async function updateOrderShippingStatus(orderId: string, formData: FormD
   const shippingStatus = formData.get('shippingStatus') as 'not_scheduled' | 'scheduled' | 'out_for_delivery' | 'delivered' | 'issue'
 
   await db.update(orders).set({ shippingStatus }).where(eq(orders.id, orderId))
+  await logActivityEvent({
+    entityType: 'order',
+    entityId: orderId,
+    actorUserId: session.user.id,
+    kind: 'shipping_status_changed',
+    title: 'Shipping status updated',
+    body: `Shipping changed to ${shippingStatus.replace(/_/g, ' ')}.`,
+  })
 
   const [order] = await db
     .select({

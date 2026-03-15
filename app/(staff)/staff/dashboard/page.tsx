@@ -1,20 +1,23 @@
 import { db } from '@/db'
-import { orders, customerAccounts } from '@/db/schema'
-import { eq, desc, sql } from 'drizzle-orm'
+import { orders, customerAccounts, tastings, tastingReports } from '@/db/schema'
+import { and, desc, eq, gte, sql } from 'drizzle-orm'
 import { requireAdminOrStaff } from '@/lib/auth/session'
 import KpiCard from '@/components/dashboard/KpiCard'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { ShoppingCart, Users, Package, MessageSquare } from 'lucide-react'
+import { ShoppingCart, Users, Package, MessageSquare, ClipboardList } from 'lucide-react'
 import { getSmsInboxSummary } from '@/lib/inbox/summary'
 import Link from 'next/link'
 
 export default async function StaffDashboard() {
   const session = await requireAdminOrStaff()
 
-  const [totalOrders, totalCustomers, recentOrders, smsInboxSummary] = await Promise.all([
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const [totalOrders, totalCustomers, recentOrders, smsInboxSummary, newOrdersToday, tastingActionsDue] = await Promise.all([
     db.select({ count: sql<number>`COUNT(*)` }).from(orders),
     db.select({ count: sql<number>`COUNT(*)` }).from(customerAccounts),
     db.select({
@@ -24,6 +27,11 @@ export default async function StaffDashboard() {
       .leftJoin(customerAccounts, eq(orders.customerId, customerAccounts.id))
       .orderBy(desc(orders.createdAt)).limit(8),
     getSmsInboxSummary(),
+    db.select({ count: sql<number>`COUNT(*)` }).from(orders).where(gte(orders.createdAt, today)),
+    db.select({ count: sql<number>`COUNT(*)` })
+      .from(tastings)
+      .leftJoin(tastingReports, eq(tastings.id, tastingReports.tastingId))
+      .where(and(eq(tastings.status, 'completed'), sql`${tastingReports.id} is null`)),
   ])
 
   const statusColor: Record<string, 'default' | 'success' | 'warning' | 'destructive' | 'info'> = {
@@ -36,10 +44,10 @@ export default async function StaffDashboard() {
         <h1 className="text-2xl font-bold text-slate-900">Sales Dashboard</h1>
         <p className="text-muted-foreground mt-1">Welcome back, {session.user.name}</p>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
         <KpiCard title="Total Orders" value={String(totalOrders[0]?.count ?? 0)} icon={ShoppingCart} />
         <KpiCard title="Accounts" value={String(totalCustomers[0]?.count ?? 0)} icon={Users} />
-        <KpiCard title="My Orders (Today)" value="-" icon={Package} />
+        <KpiCard title="New Orders Today" value={String(newOrdersToday[0]?.count ?? 0)} icon={Package} />
         <Card className="border-0 bg-white shadow-sm">
           <CardContent className="p-6">
             <div className="flex items-start justify-between gap-4">
@@ -63,6 +71,14 @@ export default async function StaffDashboard() {
             </div>
           </CardContent>
         </Card>
+        <KpiCard
+          title="Tasting Actions Due"
+          value={String(tastingActionsDue[0]?.count ?? 0)}
+          change="Completed tastings missing reports"
+          changeType={Number(tastingActionsDue[0]?.count ?? 0) > 0 ? 'negative' : 'positive'}
+          icon={ClipboardList}
+          iconColor="text-orange-600"
+        />
       </div>
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">

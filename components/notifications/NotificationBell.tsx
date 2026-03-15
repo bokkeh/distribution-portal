@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { Bell } from 'lucide-react'
-import { markAllNotificationsRead, markNotificationRead } from '@/actions/user-notifications'
+import { markAllNotificationsRead, markNotificationKindsRead, markNotificationRead } from '@/actions/user-notifications'
 
 type NotificationItem = {
   id: string
+  kind: string
   title: string
   body: string
   href: string | null
@@ -29,6 +30,27 @@ export function NotificationBell({
   const [panelStyle, setPanelStyle] = useState<{ top: number; left: number; width: number } | null>(null)
   const [isPending, startTransition] = useTransition()
   const buttonRef = useRef<HTMLButtonElement | null>(null)
+
+  const visibleItems = useMemo(() => {
+    const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000
+    return localItems.filter((item) => new Date(item.createdAt).getTime() >= cutoff || !item.readAt)
+  }, [localItems])
+
+  const groupedItems = useMemo(() => {
+    const groups = new Map<string, NotificationItem[]>()
+    for (const item of visibleItems) {
+      const key =
+        item.kind.includes('sms') ? 'Inbox' :
+        item.kind.includes('delivery') ? 'Deliveries' :
+        item.kind.includes('tasting') ? 'Tastings' :
+        item.kind.includes('order') || item.kind.includes('shipping') ? 'Orders' :
+        'General'
+      const group = groups.get(key) ?? []
+      group.push(item)
+      groups.set(key, group)
+    }
+    return Array.from(groups.entries())
+  }, [visibleItems])
 
   const classes = useMemo(() => {
     if (dark) {
@@ -101,6 +123,20 @@ export function NotificationBell({
     })
   }
 
+  function handleMarkSection(groupItems: NotificationItem[]) {
+    const kinds = Array.from(new Set(groupItems.map((item) => item.kind)))
+    startTransition(async () => {
+      await markNotificationKindsRead(kinds)
+      setLocalItems((prev) =>
+        prev.map((item) =>
+          kinds.includes(item.kind) && !item.readAt ? { ...item, readAt: new Date() } : item
+        )
+      )
+      const unreadInGroup = groupItems.filter((item) => !item.readAt).length
+      setLocalUnreadCount((prev) => Math.max(0, prev - unreadInGroup))
+    })
+  }
+
   function handleOpenNotification(notificationId: string) {
     startTransition(async () => {
       const existing = localItems.find(item => item.id === notificationId)
@@ -155,44 +191,61 @@ export function NotificationBell({
             </div>
 
             <div className="max-h-[28rem] space-y-3 overflow-y-auto p-4">
-              {localItems.length ? localItems.map(item => {
-                if (item.href) {
-                  return (
-                    <Link
-                      key={item.id}
-                      href={item.href}
-                      className={getItemClasses(item.href)}
-                      onClick={() => {
-                        handleOpenNotification(item.id)
-                        setOpen(false)
-                      }}
+              {groupedItems.length ? groupedItems.map(([groupName, groupItems]) => (
+                <div key={groupName} className="space-y-2">
+                  <div className="flex items-center justify-between gap-3 px-1">
+                    <p className={dark ? 'text-xs font-semibold uppercase tracking-wide text-slate-400' : 'text-xs font-semibold uppercase tracking-wide text-slate-500'}>
+                      {groupName}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => handleMarkSection(groupItems)}
+                      className={dark ? 'text-[11px] text-slate-400 hover:text-white' : 'text-[11px] text-slate-500 hover:text-slate-900'}
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <p className={classes.title}>{item.title}</p>
-                        {!item.readAt ? <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-blue-500" /> : null}
-                      </div>
-                      <p className={classes.body}>{item.body}</p>
-                      <p className={classes.meta}>{formatTime(item.createdAt)}</p>
-                    </Link>
-                  )
-                }
+                      Mark section read
+                    </button>
+                  </div>
+                  {groupItems.map(item => {
+                    if (item.href) {
+                      return (
+                        <Link
+                          key={item.id}
+                          href={item.href}
+                          className={getItemClasses(item.href)}
+                          onClick={() => {
+                            handleOpenNotification(item.id)
+                            setOpen(false)
+                          }}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <p className={classes.title}>{item.title}</p>
+                            {!item.readAt ? <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-blue-500" /> : null}
+                          </div>
+                          <p className={classes.body}>{item.body}</p>
+                          {item.href ? <p className="mt-2 text-[11px] font-medium text-blue-500">Open</p> : null}
+                          <p className={classes.meta}>{formatTime(item.createdAt)}</p>
+                        </Link>
+                      )
+                    }
 
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={getItemClasses(item.href)}
-                    onClick={() => handleOpenNotification(item.id)}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <p className={classes.title}>{item.title}</p>
-                      {!item.readAt ? <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-blue-500" /> : null}
-                    </div>
-                    <p className={classes.body}>{item.body}</p>
-                    <p className={classes.meta}>{formatTime(item.createdAt)}</p>
-                  </button>
-                )
-              }) : (
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className={getItemClasses(item.href)}
+                        onClick={() => handleOpenNotification(item.id)}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <p className={classes.title}>{item.title}</p>
+                          {!item.readAt ? <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-blue-500" /> : null}
+                        </div>
+                        <p className={classes.body}>{item.body}</p>
+                        <p className={classes.meta}>{formatTime(item.createdAt)}</p>
+                      </button>
+                    )
+                  })}
+                </div>
+              )) : (
                 <div className={classes.empty}>No notifications yet.</div>
               )}
             </div>

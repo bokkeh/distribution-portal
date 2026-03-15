@@ -4,6 +4,7 @@ import { requireFeature } from '@/lib/auth/session'
 import { SuperAdminViewSwitcher } from '@/components/layout/SuperAdminViewSwitcher'
 import { getBellNotificationsForUser } from '@/lib/notifications/in-app'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
+import { PortalTopBar } from '@/components/layout/PortalTopBar'
 
 export default async function TasterLayout({ children }: { children: React.ReactNode }) {
   const session = await requireFeature('tastings', 'taster', 'admin')
@@ -39,7 +40,10 @@ export default async function TasterLayout({ children }: { children: React.React
           </div>
         </div>
       </nav>
-      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">{children}</main>
+      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+        <PortalTopBar />
+        {children}
+      </main>
       {isSuperAdmin ? (
         <div className="fixed bottom-4 left-4 z-40">
           <SuperAdminViewSwitcher />

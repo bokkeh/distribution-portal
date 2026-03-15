@@ -16,6 +16,7 @@ import {
   sendTastingSmsFromTemplate,
 } from '@/lib/tastings/sms-series'
 import { getTastingById, getTastingsForViewWithFallback } from '@/lib/tastings/read'
+import { logActivityEvent } from '@/lib/activity/log'
 
 function tastingRedirectPath(mode: string) {
   return mode === 'staff' ? '/staff/tastings' : '/admin/tastings'
@@ -184,6 +185,15 @@ export async function createTasting(formData: FormData) {
   revalidatePath('/staff/tastings')
   revalidatePath('/taster/tastings')
   revalidatePath('/taster/payouts')
+  await logActivityEvent({
+    entityType: 'tasting',
+    entityId: tasting.id,
+    actorUserId: session.user.id,
+    relatedUserId: assignedUser.id,
+    kind: 'tasting_created',
+    title: 'Tasting scheduled',
+    body: `${account.companyName} was assigned to ${assignedUser.name}.`,
+  })
   redirect(`${tastingRedirectPath(mode)}?success=${encodeURIComponent('Tasting assigned.')}`)
 }
 
@@ -209,6 +219,14 @@ export async function updateTastingStatus(formData: FormData) {
   }
 
   await db.update(tastings).set({ status: nextStatus }).where(eq(tastings.id, tastingId))
+  await logActivityEvent({
+    entityType: 'tasting',
+    entityId: tastingId,
+    actorUserId: session.user.id,
+    kind: 'tasting_status_changed',
+    title: 'Tasting status updated',
+    body: `Status changed to ${nextStatus.replace(/_/g, ' ')}.`,
+  })
 
   if (nextStatus === 'confirmed') {
     const [assignedUser] = await db
@@ -298,6 +316,15 @@ export async function deleteTasting(formData: FormData) {
 
   await db.delete(tastings).where(eq(tastings.id, tastingId))
   await clearScheduledTastingSmsJobs(tasting.id)
+  await logActivityEvent({
+    entityType: 'tasting',
+    entityId: tasting.id,
+    actorUserId: session.user.id,
+    relatedUserId: tasting.assignedUserId,
+    kind: 'tasting_cancelled',
+    title: 'Tasting removed',
+    body: `${tasting.eventName} was cancelled.`,
+  })
 
   await clearUserNotifications({
     userId: tasting.assignedUserId,
@@ -369,6 +396,15 @@ export async function reassignTasting(formData: FormData) {
   await db.update(tastings).set({
     assignedUserId: nextTaster.id,
   }).where(eq(tastings.id, tastingId))
+  await logActivityEvent({
+    entityType: 'tasting',
+    entityId: tastingId,
+    actorUserId: session.user.id,
+    relatedUserId: nextTaster.id,
+    kind: 'tasting_reassigned',
+    title: 'Tasting reassigned',
+    body: `${tasting.eventName} was reassigned to ${nextTaster.name}.`,
+  })
 
   await clearScheduledTastingSmsJobs(tasting.id)
 
@@ -491,6 +527,14 @@ export async function submitTastingReport(formData: FormData) {
       ...payload,
     })
   }
+  await logActivityEvent({
+    entityType: 'tasting',
+    entityId: tastingId,
+    actorUserId: session.user.id,
+    kind: 'tasting_report_submitted',
+    title: 'Tasting report submitted',
+    body: 'A tasting report was submitted for review.',
+  })
 
   await clearUserNotifications({
     userId: tasting.assignedUserId,
@@ -601,6 +645,14 @@ export async function submitTasterInvoice(formData: FormData) {
       ...payload,
     })
   }
+  await logActivityEvent({
+    entityType: 'tasting',
+    entityId: tastingId,
+    actorUserId: session.user.id,
+    kind: 'taster_invoice_submitted',
+    title: 'Taster invoice submitted',
+    body: `Invoice submitted for $${totalAmount}.`,
+  })
 
   await sendTasterInvoiceNotification({
     payeeName: payload.payeeName,
@@ -644,6 +696,14 @@ export async function checkInToTasting(tastingId: string) {
   if (!session.user.roles.includes('admin') && tasting.assignedUserId !== session.user.id) redirect('/unauthorized')
 
   await db.update(tastings).set({ checkedInAt: new Date(), status: tasting.status === 'scheduled' ? 'confirmed' : tasting.status }).where(eq(tastings.id, tastingId))
+  await logActivityEvent({
+    entityType: 'tasting',
+    entityId: tastingId,
+    actorUserId: session.user.id,
+    kind: 'tasting_checked_in',
+    title: 'Taster checked in',
+    body: 'Check-in recorded from the tasting portal.',
+  })
   revalidatePath('/taster/tastings')
   redirect(`/taster/tastings/${tastingId}?success=${encodeURIComponent('Check-in recorded.')}`)
 }

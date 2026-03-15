@@ -6,6 +6,7 @@ import { requireAdminOrStaff } from '@/lib/auth/session'
 import { eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { upsertHubSpotContact, getHubSpotCompanies, updateHubSpotCompany } from '@/lib/hubspot/client'
+import { logActivityEvent } from '@/lib/activity/log'
 
 export async function updateDealStage(accountId: string, dealStage: string) {
   await requireAdminOrStaff()
@@ -146,7 +147,7 @@ export async function updateHubSpotCompanyAction(
 }
 
 export async function updateCustomerAccount(formData: FormData) {
-  await requireAdminOrStaff()
+  const session = await requireAdminOrStaff()
 
   const id = formData.get('id') as string
   const mode = (formData.get('mode') as string) || 'admin'
@@ -183,6 +184,15 @@ export async function updateCustomerAccount(formData: FormData) {
     creditLimit: formData.get('creditLimit') as string,
     paymentTerms: formData.get('paymentTerms') as string,
   }).where(eq(customerAccounts.id, id))
+
+  await logActivityEvent({
+    entityType: 'account',
+    entityId: id,
+    actorUserId: session.user.id,
+    kind: 'account_updated',
+    title: 'Account details updated',
+    body: `${companyName} account information was edited.`,
+  })
 
   if (hubspotCompanyId) {
     await updateHubSpotCompany(hubspotCompanyId, {

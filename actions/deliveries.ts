@@ -13,6 +13,7 @@ import { generateSignedUploadUrl } from '@/lib/gcs/client'
 import { sendDeliveryCompletedEmail } from '@/lib/resend/client'
 import { v4 as uuidv4 } from 'uuid'
 import { createNotificationsForRoles, createUserNotification } from '@/lib/notifications/in-app'
+import { logActivityEvent } from '@/lib/activity/log'
 
 async function resequenceDeliveryStops(deliveryId: string) {
   const existingStops = await db
@@ -192,6 +193,15 @@ export async function createDelivery(formData: FormData) {
     }
   }
 
+  await logActivityEvent({
+    entityType: 'delivery',
+    entityId: delivery.id,
+    actorUserId: null,
+    kind: 'delivery_created',
+    title: 'Delivery scheduled',
+    body: `${orderIds.length} stop(s) scheduled for ${weekStartDate}.`,
+  })
+
   const [driver] = await db
     .select({ phone: drivers.phone, name: users.name })
     .from(drivers)
@@ -343,18 +353,43 @@ export async function completeDeliveryStop(stopId: string, formData: FormData) {
     }),
   ])
 
+  await logActivityEvent({
+    entityType: 'delivery',
+    entityId: stop.deliveryId,
+    kind: 'delivery_stop_completed',
+    title: 'Stop marked delivered',
+    body: `${stop.companyName ?? stop.address} was completed.`,
+  })
+
   revalidatePath('/driver/deliveries')
   revalidatePath('/driver/map')
 }
 
 export async function updateStopNotes(stopId: string, formData: FormData) {
-  await requireRole('driver', 'admin')
+  const session = await requireRole('driver', 'admin')
 
   const notes = ((formData.get('notes') as string) || '').trim()
 
   await db.update(deliveryStops)
     .set({ notes: notes || null })
     .where(eq(deliveryStops.id, stopId))
+
+  const [stop] = await db
+    .select({ deliveryId: deliveryStops.deliveryId, address: deliveryStops.address })
+    .from(deliveryStops)
+    .where(eq(deliveryStops.id, stopId))
+    .limit(1)
+
+  if (stop) {
+    await logActivityEvent({
+      entityType: 'delivery',
+      entityId: stop.deliveryId,
+      actorUserId: session.user.id,
+      kind: 'delivery_notes_updated',
+      title: 'Delivery notes updated',
+      body: `Notes were updated for ${stop.address}.`,
+    })
+  }
 
   revalidatePath('/driver/deliveries')
   revalidatePath('/driver/map')
@@ -363,8 +398,22 @@ export async function updateStopNotes(stopId: string, formData: FormData) {
 export async function removeDeliveryStop(deliveryId: string, stopId: string) {
   await requireAdmin()
 
+  const [stop] = await db
+    .select({ address: deliveryStops.address })
+    .from(deliveryStops)
+    .where(eq(deliveryStops.id, stopId))
+    .limit(1)
+
   await db.delete(deliveryStops).where(eq(deliveryStops.id, stopId))
   await resequenceDeliveryStops(deliveryId)
+
+  await logActivityEvent({
+    entityType: 'delivery',
+    entityId: deliveryId,
+    kind: 'delivery_stop_removed',
+    title: 'Stop removed',
+    body: stop ? `${stop.address} was removed from the route.` : 'A stop was removed from the route.',
+  })
 
   revalidatePath(`/admin/deliveries/${deliveryId}`)
   revalidatePath('/admin/deliveries')
@@ -399,6 +448,14 @@ export async function reorderDeliveryStops(deliveryId: string, stopIds: string[]
       .set({ sequenceNumber: index + 1 })
       .where(and(eq(deliveryStops.id, stopIds[index]), eq(deliveryStops.deliveryId, deliveryId)))
   }
+
+  await logActivityEvent({
+    entityType: 'delivery',
+    entityId: deliveryId,
+    kind: 'delivery_reordered',
+    title: 'Stop order changed',
+    body: `${stopIds.length} stops were reordered.`,
+  })
 
   revalidatePath(`/admin/deliveries/${deliveryId}`)
   revalidatePath('/admin/deliveries')
@@ -450,6 +507,14 @@ export async function reassignDeliveryDriver(deliveryId: string, formData: FormD
     .from(drivers)
     .where(eq(drivers.id, driverId))
     .limit(1)
+
+  await logActivityEvent({
+    entityType: 'delivery',
+    entityId: deliveryId,
+    kind: 'delivery_reassigned',
+    title: 'Driver reassigned',
+    body: driver ? `Delivery reassigned to ${driver.name}.` : 'Delivery driver was reassigned.',
+  })
 
   if (driverUser?.userId) {
     await createUserNotification({
@@ -553,6 +618,14 @@ export async function addDeliveryStop(deliveryId: string, formData: FormData) {
       lat: lat?.toFixed(7) ?? null,
       lng: lng?.toFixed(7) ?? null,
       status: 'pending',
+    })
+
+    await logActivityEvent({
+      entityType: 'delivery',
+      entityId: deliveryId,
+      kind: 'delivery_stop_added',
+      title: 'Stop added',
+      body: `${account.companyName} was added to the route.`,
     })
 
     revalidatePath(`/admin/deliveries/${deliveryId}`)

@@ -1,12 +1,12 @@
 import { db } from '@/db'
-import { orders, invoices, customerAccounts } from '@/db/schema'
-import { eq, desc, sql } from 'drizzle-orm'
+import { orders, invoices, customerAccounts, smsMessages } from '@/db/schema'
+import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { requireRole } from '@/lib/auth/session'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { ShoppingCart, FileText, DollarSign, Package } from 'lucide-react'
+import { ShoppingCart, FileText, DollarSign, Package, MessageSquare } from 'lucide-react'
 import Link from 'next/link'
 
 export default async function CustomerDashboard() {
@@ -26,11 +26,14 @@ export default async function CustomerDashboard() {
     )
   }
 
-  const [totalOrders, outstandingInvoices, recentOrders] = await Promise.all([
+  const [totalOrders, outstandingInvoices, recentOrders, openOrders, deliveryEta, messageCount] = await Promise.all([
     db.select({ count: sql<number>`COUNT(*)` }).from(orders).where(eq(orders.customerId, account.id)),
     db.select({ total: sql<string>`COALESCE(SUM(total), 0)` }).from(invoices).where(eq(invoices.customerId, account.id)),
     db.select({ id: orders.id, total: orders.total, status: orders.status, orderType: orders.orderType, createdAt: orders.createdAt })
       .from(orders).where(eq(orders.customerId, account.id)).orderBy(desc(orders.createdAt)).limit(5),
+    db.select({ count: sql<number>`COUNT(*)` }).from(orders).where(and(eq(orders.customerId, account.id), inArray(orders.status, ['pending', 'confirmed']))),
+    db.select({ count: sql<number>`COUNT(*)` }).from(orders).where(and(eq(orders.customerId, account.id), eq(orders.shippingStatus, 'out_for_delivery'))),
+    db.select({ count: sql<number>`COUNT(*)` }).from(smsMessages).where(eq(smsMessages.phoneNumber, account.pocPhone || account.businessPhone || account.phone || '')),
   ])
 
   const statusColor: Record<string, 'default' | 'success' | 'warning' | 'destructive' | 'info'> = {
@@ -67,7 +70,7 @@ export default async function CustomerDashboard() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Outstanding Balance</p>
+                <p className="text-sm text-muted-foreground">Invoices Due</p>
                 <p className="text-2xl font-bold">{formatCurrency(outstandingInvoices[0]?.total ?? '0')}</p>
               </div>
               <DollarSign className="w-8 h-8 text-orange-500" />
@@ -78,8 +81,8 @@ export default async function CustomerDashboard() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Credit Limit</p>
-                <p className="text-2xl font-bold">{formatCurrency(account.creditLimit ?? '0')}</p>
+                <p className="text-sm text-muted-foreground">Open Orders</p>
+                <p className="text-2xl font-bold">{openOrders[0]?.count ?? 0}</p>
               </div>
               <FileText className="w-8 h-8 text-green-500" />
             </div>
@@ -89,10 +92,21 @@ export default async function CustomerDashboard() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Payment Terms</p>
-                <p className="text-2xl font-bold">{account.paymentTerms}</p>
+                <p className="text-sm text-muted-foreground">Delivery ETA</p>
+                <p className="text-2xl font-bold">{deliveryEta[0]?.count ? 'Active' : 'Not out'}</p>
               </div>
-              <FileText className="w-8 h-8 text-purple-500" />
+              <Package className="w-8 h-8 text-purple-500" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Messages</p>
+                <p className="text-2xl font-bold">{messageCount[0]?.count ?? 0}</p>
+              </div>
+              <MessageSquare className="w-8 h-8 text-blue-500" />
             </div>
           </CardContent>
         </Card>

@@ -7,6 +7,7 @@ import { wholesaleAccountRequests, type NewWholesaleAccountRequest } from '@/db/
 import { sql } from 'drizzle-orm'
 import { normalizePhone, setSmsSubscription, SMS_CONFIRMATION_MESSAGE, SMS_CONSENT_COPY } from '@/lib/telnyx/compliance'
 import { sendSms } from '@/lib/telnyx/client'
+import { createNotificationsForRoles } from '@/lib/notifications/in-app'
 
 const requestSchema = z.object({
   businessName: z.string().trim().min(2, 'Business name is required'),
@@ -171,6 +172,14 @@ export async function submitWholesaleAccountRequest(
       phone,
       phoneNormalized,
       smsOptIn: parsed.smsOptIn,
+    })
+
+    await createNotificationsForRoles({
+      roles: ['admin'],
+      kind: 'wholesale_request',
+      title: 'New wholesaler request',
+      body: `${parsed.businessName} submitted a wholesale account request.`,
+      href: '/admin/wholesale-requests',
     })
 
     return { success: true }

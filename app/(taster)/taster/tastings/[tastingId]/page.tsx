@@ -8,6 +8,8 @@ import { TastingSubmissionDetail } from '@/components/tastings/TastingSubmission
 import { Button } from '@/components/ui/button'
 import { requireFeature } from '@/lib/auth/session'
 import { getTastingById } from '@/lib/tastings/read'
+import { getActivityTimeline } from '@/lib/activity/read'
+import { ActivityTimeline } from '@/components/activity/ActivityTimeline'
 
 function isMissingSubmissionTables(error: unknown) {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
@@ -40,6 +42,17 @@ export default async function TasterTastingDetailPage({
       db.select().from(tastingReports).where(eq(tastingReports.tastingId, tastingId)).then(rows => rows[0] ?? null),
       db.select().from(tasterInvoices).where(eq(tasterInvoices.tastingId, tastingId)).then(rows => rows[0] ?? null),
       db.select({ phone: users.phone }).from(users).where(eq(users.id, tasting.assignedUserId)).then(rows => rows[0] ?? null),
+    ])
+
+    const timeline = await getActivityTimeline('tasting', tasting.id, [
+      {
+        id: `tasting-created-${tasting.id}`,
+        kind: 'tasting_created',
+        title: 'Tasting scheduled',
+        body: `${tasting.eventName} was scheduled.`,
+        createdAt: tasting.scheduledAt,
+        actorName: null,
+      },
     ])
 
     return (
@@ -84,6 +97,7 @@ export default async function TasterTastingDetailPage({
           success={query.success}
           error={query.error}
         />
+        <ActivityTimeline items={timeline} title="Tasting Timeline" />
       </div>
     )
   } catch (error) {

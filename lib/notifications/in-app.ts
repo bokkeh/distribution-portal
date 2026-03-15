@@ -9,6 +9,7 @@ function isMissingUserNotificationsTable(error: unknown) {
 
 export type BellNotification = {
   id: string
+  kind: string
   title: string
   body: string
   href: string | null
@@ -105,6 +106,7 @@ export async function getBellNotificationsForUser(userId: string) {
     const rows = await db
       .select({
         id: userNotifications.id,
+        kind: userNotifications.kind,
         title: userNotifications.title,
         body: userNotifications.body,
         href: userNotifications.href,
@@ -114,7 +116,7 @@ export async function getBellNotificationsForUser(userId: string) {
       .from(userNotifications)
       .where(and(eq(userNotifications.userId, userId), lte(userNotifications.availableAt, new Date())))
       .orderBy(desc(userNotifications.createdAt))
-      .limit(12)
+      .limit(40)
 
     const unreadCount = await db.$count(
       userNotifications,

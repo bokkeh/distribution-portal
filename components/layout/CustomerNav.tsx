@@ -43,7 +43,7 @@ export default function CustomerNav({
 }: {
   featureFlags?: string[]
   roles?: string[]
-  notifications?: Array<{ id: string; title: string; body: string; href: string | null; readAt: string | Date | null; createdAt: string | Date }>
+  notifications?: Array<{ id: string; kind: string; title: string; body: string; href: string | null; readAt: string | Date | null; createdAt: string | Date }>
   unreadCount?: number
 }) {
   const pathname = usePathname()

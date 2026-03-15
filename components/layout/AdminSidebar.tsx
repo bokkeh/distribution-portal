@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, FileText, BookOpen, Users, Package,
-  Truck, Map, Building2, LogOut, ChevronRight, Menu, X, UserCircle, CalendarDays, MessageSquare,
+  Truck, Map, Building2, LogOut, ChevronRight, Menu, X, UserCircle, CalendarDays, MessageSquare, HeartPulse, ListChecks,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { signOut } from 'next-auth/react'
@@ -21,6 +21,8 @@ const navItems = [
   { href: '/admin/accounts',   label: 'Chart of Accounts', icon: BookOpen, feature: 'accounting' },
   { href: '/admin/crm',        label: 'CRM / Accounts',    icon: Building2, feature: 'crm' },
   { href: '/admin/inbox',      label: 'SMS Inbox',         icon: MessageSquare, feature: 'inbox' },
+  { href: '/admin/system',     label: 'System Health',     icon: HeartPulse, feature: 'dashboard' },
+  { href: '/admin/jobs',       label: 'Jobs / Logs',       icon: ListChecks, feature: 'dashboard' },
   { href: '/admin/wholesale-requests', label: 'Wholesaler Requests', icon: FileText, feature: 'wholesale_requests' },
   { href: '/admin/orders',     label: 'Orders',            icon: FileText, feature: 'orders' },
   { href: '/admin/inventory',  label: 'Inventory',         icon: Package, feature: 'inventory' },
@@ -35,17 +37,20 @@ function NavLinks({
   pathname,
   featureFlags,
   roles,
+  navCounts,
   onNav,
 }: {
   pathname: string
   featureFlags: string[]
   roles: string[]
+  navCounts?: Partial<Record<string, number>>
   onNav?: () => void
 }) {
   return (
     <>
       {navItems.filter(item => hasFeature(item.feature as FeatureKey, roles, featureFlags)).map(({ href, label, icon: Icon }) => {
         const active = pathname === href || pathname.startsWith(href + '/')
+        const count = navCounts?.[href] ?? 0
         return (
           <Link
             key={href}
@@ -60,7 +65,21 @@ function NavLinks({
           >
             <Icon className="w-4 h-4 flex-shrink-0" />
             {label}
-            {active && <ChevronRight className="w-3.5 h-3.5 ml-auto" />}
+            {(count > 0 || active) && (
+              <span className="ml-auto flex items-center gap-2">
+                {count > 0 && (
+                  <span
+                    className={cn(
+                      'inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] font-semibold',
+                      active ? 'bg-white/20 text-white' : 'bg-red-500 text-white'
+                    )}
+                  >
+                    {count > 99 ? '99+' : count}
+                  </span>
+                )}
+                {active && <ChevronRight className="w-3.5 h-3.5" />}
+              </span>
+            )}
           </Link>
         )
       })}
@@ -74,12 +93,14 @@ export default function AdminSidebar({
   roles = [],
   notifications = [],
   unreadCount = 0,
+  navCounts = {},
 }: {
   showViewSwitcher?: boolean
   featureFlags?: string[]
   roles?: string[]
-  notifications?: Array<{ id: string; title: string; body: string; href: string | null; readAt: string | Date | null; createdAt: string | Date }>
+  notifications?: Array<{ id: string; kind: string; title: string; body: string; href: string | null; readAt: string | Date | null; createdAt: string | Date }>
   unreadCount?: number
+  navCounts?: Partial<Record<string, number>>
 }) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
@@ -111,7 +132,7 @@ export default function AdminSidebar({
           </div>
         </div>
         <nav className="flex-1 p-4 space-y-1">
-          <NavLinks pathname={pathname} featureFlags={featureFlags} roles={roles} />
+          <NavLinks pathname={pathname} featureFlags={featureFlags} roles={roles} navCounts={navCounts} />
         </nav>
         <div className="p-4 border-t border-slate-700">
           {showViewSwitcher && <div className="mb-4"><SuperAdminViewSwitcher compact /></div>}
@@ -170,7 +191,7 @@ export default function AdminSidebar({
             </div>
 
             <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-              <NavLinks pathname={pathname} featureFlags={featureFlags} roles={roles} onNav={() => setOpen(false)} />
+              <NavLinks pathname={pathname} featureFlags={featureFlags} roles={roles} navCounts={navCounts} onNav={() => setOpen(false)} />
             </nav>
 
             <div className="p-4 border-t border-slate-700">

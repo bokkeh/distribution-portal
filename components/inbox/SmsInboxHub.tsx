@@ -4,9 +4,10 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useActionState, useEffect, useRef, useState } from 'react'
-import { Film, ImagePlus, Loader2, MessageSquare, PenSquare, Search, Send, X } from 'lucide-react'
+import { Film, ImagePlus, Loader2, MessageSquare, PenSquare, Search, Send, Star, UserRound, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { composeSmsThread, replyToSmsThread } from '@/actions/notifications'
+import { saveReplyTemplate, updateSmsThreadMeta } from '@/actions/inbox'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -21,6 +22,11 @@ type Thread = {
   lastStatus: string
   lastAt: string | Date
   unreadCount: number
+  status: 'open' | 'resolved'
+  priority: 'normal' | 'starred'
+  assignedUserId: string | null
+  assignedUserName: string | null
+  companyName: string | null
 }
 
 type AccountOption = {
@@ -28,6 +34,11 @@ type AccountOption = {
   label: string
   phone: string
   contactName: string
+  companyName: string
+  address?: string
+  email?: string
+  businessPhone?: string
+  pocPhone?: string
 }
 
 type Message = {
@@ -51,6 +62,18 @@ type GiphyResult = {
   url: string
   size: number
   previewUrl: string
+}
+
+type ReplyTemplateOption = {
+  id: string
+  title: string
+  category: string
+  body: string
+}
+
+type AssigneeOption = {
+  id: string
+  name: string
 }
 
 const MAX_MMS_ATTACHMENTS = 3
@@ -131,6 +154,8 @@ export function SmsInboxHub({
   selectedAvatarUrl,
   messages,
   accounts,
+  templates,
+  assignees,
 }: {
   basePath: '/admin/inbox' | '/staff/inbox'
   threads: Thread[]
@@ -139,10 +164,14 @@ export function SmsInboxHub({
   selectedAvatarUrl: string | null
   messages: Message[]
   accounts: AccountOption[]
+  templates: ReplyTemplateOption[]
+  assignees: AssigneeOption[]
 }) {
   const router = useRouter()
   const [state, action, pending] = useActionState(replyToSmsThread, null)
   const [composeState, composeAction, composePending] = useActionState(composeSmsThread, null)
+  const [threadMetaState, threadMetaAction, threadMetaPending] = useActionState(updateSmsThreadMeta, null)
+  const [templateState, templateAction, templatePending] = useActionState(saveReplyTemplate, null)
   const [localMessages, setLocalMessages] = useState(messages)
   const [attachments, setAttachments] = useState<MediaAttachment[]>([])
   const [uploading, setUploading] = useState(false)
@@ -158,12 +187,28 @@ export function SmsInboxHub({
   const [customContactName, setCustomContactName] = useState('')
   const formRef = useRef<HTMLFormElement | null>(null)
   const composeFormRef = useRef<HTMLFormElement | null>(null)
+  const templateFormRef = useRef<HTMLFormElement | null>(null)
   const handledReplyStateRef = useRef<typeof state>(null)
   const pendingReplyAttachmentsRef = useRef<MediaAttachment[]>([])
+  const [threadFilter, setThreadFilter] = useState<'all' | 'unread' | 'open' | 'assigned' | 'starred'>('all')
+  const [selectedTemplateId, setSelectedTemplateId] = useState('')
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false)
 
   useEffect(() => {
     setLocalMessages(messages)
   }, [messages, selectedPhone])
+
+  useEffect(() => {
+    const storageKey = `${basePath}:thread-filter`
+    const saved = window.localStorage.getItem(storageKey)
+    if (saved === 'all' || saved === 'unread' || saved === 'open' || saved === 'assigned' || saved === 'starred') {
+      setThreadFilter(saved)
+    }
+  }, [basePath])
+
+  useEffect(() => {
+    window.localStorage.setItem(`${basePath}:thread-filter`, threadFilter)
+  }, [basePath, threadFilter])
 
   useEffect(() => {
     if (!state || handledReplyStateRef.current === state) {
@@ -220,6 +265,25 @@ export function SmsInboxHub({
       router.refresh()
     }
   }, [basePath, composeState, router])
+
+  useEffect(() => {
+    if (threadMetaState?.error) {
+      toast.error('Thread update failed', { description: threadMetaState.error })
+    } else if (threadMetaState?.success) {
+      router.refresh()
+    }
+  }, [router, threadMetaState])
+
+  useEffect(() => {
+    if (templateState?.error) {
+      toast.error('Template save failed', { description: templateState.error })
+    } else if (templateState?.success) {
+      toast.success('Reply template saved')
+      templateFormRef.current?.reset()
+      setSaveTemplateOpen(false)
+      router.refresh()
+    }
+  }, [router, templateState])
 
   async function handleUpload(file: File) {
     if (attachments.length >= MAX_MMS_ATTACHMENTS) {
@@ -343,6 +407,28 @@ export function SmsInboxHub({
     toast.success('GIF attached')
   }
 
+  const selectedThread = threads.find((thread) => thread.phone === selectedPhone) ?? null
+  const selectedAccount =
+    accounts.find((account) => account.phone === selectedPhone) ??
+    accounts.find((account) => account.contactName === selectedContactName) ??
+    null
+
+  const filteredThreads = threads.filter((thread) => {
+    if (threadFilter === 'unread') return thread.unreadCount > 0
+    if (threadFilter === 'open') return thread.status === 'open'
+    if (threadFilter === 'assigned') return Boolean(thread.assignedUserId)
+    if (threadFilter === 'starred') return thread.priority === 'starred'
+    return true
+  })
+
+  function insertTemplateBody(templateId: string) {
+    setSelectedTemplateId(templateId)
+    const template = templates.find((entry) => entry.id === templateId)
+    const textarea = formRef.current?.querySelector('textarea[name="body"]') as HTMLTextAreaElement | null
+    if (!template || !textarea) return
+    textarea.value = template.body
+  }
+
   return (
     <div className="grid gap-6 xl:grid-cols-[340px_1fr]">
       <Card className="overflow-hidden">
@@ -359,6 +445,27 @@ export function SmsInboxHub({
           </div>
         </CardHeader>
         <CardContent className="space-y-2">
+          <div className="flex flex-wrap gap-2">
+            {[
+              ['all', 'All'],
+              ['unread', 'Unread'],
+              ['open', 'Open'],
+              ['assigned', 'Assigned'],
+              ['starred', 'Starred'],
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setThreadFilter(value as typeof threadFilter)}
+                className={cn(
+                  'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+                  threadFilter === value ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           {composeOpen ? (
             <form ref={composeFormRef} action={composeAction} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
               <div className="space-y-3">
@@ -466,9 +573,9 @@ export function SmsInboxHub({
               </div>
             </form>
           ) : null}
-          {threads.length === 0 ? (
+          {filteredThreads.length === 0 ? (
             <p className="text-sm text-muted-foreground">No text messages yet.</p>
-          ) : threads.map(thread => {
+          ) : filteredThreads.map(thread => {
             const active = selectedPhone === thread.phone
             const initials = thread.contactName.trim().slice(0, 1).toUpperCase() || '?'
             return (
@@ -497,8 +604,15 @@ export function SmsInboxHub({
                       </div>
                     )}
                     <div>
-                      <p className="font-medium text-slate-900">{thread.contactName}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-slate-900">{thread.contactName}</p>
+                        {thread.priority === 'starred' ? <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" /> : null}
+                      </div>
                       <p className="text-xs text-slate-500">{thread.phone}</p>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        <Badge variant={thread.status === 'open' ? 'warning' : 'secondary'}>{thread.status}</Badge>
+                        {thread.assignedUserName ? <Badge variant="outline">{thread.assignedUserName}</Badge> : null}
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -547,6 +661,74 @@ export function SmsInboxHub({
             <p className="text-sm text-muted-foreground">Choose a thread to read and reply.</p>
           ) : (
             <>
+              <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Thread Controls</p>
+                      <p className="mt-1 text-sm text-slate-600">Route ownership, status, and priority for this conversation.</p>
+                    </div>
+                    {threadMetaPending ? <Loader2 className="h-4 w-4 animate-spin text-slate-400" /> : null}
+                  </div>
+                  {selectedThread ? (
+                    <form action={threadMetaAction} className="mt-4 grid gap-3 sm:grid-cols-3">
+                      <input type="hidden" name="phoneNumber" value={selectedThread.phone} />
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Status</label>
+                        <select name="status" defaultValue={selectedThread.status} className="flex h-10 w-full rounded-md border border-input bg-white px-3 text-sm">
+                          <option value="open">Open</option>
+                          <option value="resolved">Resolved</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Priority</label>
+                        <select name="priority" defaultValue={selectedThread.priority} className="flex h-10 w-full rounded-md border border-input bg-white px-3 text-sm">
+                          <option value="normal">Normal</option>
+                          <option value="starred">Starred</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium uppercase tracking-wide text-slate-500">Owner</label>
+                        <select name="assignedUserId" defaultValue={selectedThread.assignedUserId ?? ''} className="flex h-10 w-full rounded-md border border-input bg-white px-3 text-sm">
+                          <option value="">Unassigned</option>
+                          {assignees.map((assignee) => (
+                            <option key={assignee.id} value={assignee.id}>{assignee.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="sm:col-span-3">
+                        <Button type="submit" variant="outline">Update Thread</Button>
+                      </div>
+                    </form>
+                  ) : null}
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Account Quick View</p>
+                      <p className="mt-1 text-sm text-slate-900">{selectedAccount?.companyName ?? selectedThread?.companyName ?? 'No CRM account linked'}</p>
+                    </div>
+                    {selectedAccount ? (
+                      <Link href={`${basePath.startsWith('/admin') ? '/admin' : '/staff'}/crm/${selectedAccount.id}`} className="text-xs font-medium text-primary hover:underline">
+                        View Account
+                      </Link>
+                    ) : null}
+                  </div>
+                  <div className="mt-4 space-y-2 text-sm text-slate-600">
+                    <div className="flex items-center gap-2">
+                      <UserRound className="h-4 w-4 text-slate-400" />
+                      <span>{selectedContactName || 'Unknown contact'}</span>
+                    </div>
+                    <p>{selectedPhone}</p>
+                    {selectedAccount?.address ? <p>{selectedAccount.address}</p> : null}
+                    {selectedAccount?.email ? <p>{selectedAccount.email}</p> : null}
+                    {selectedAccount?.businessPhone ? <p>Business: {selectedAccount.businessPhone}</p> : null}
+                    {selectedAccount?.pocPhone ? <p>POC: {selectedAccount.pocPhone}</p> : null}
+                  </div>
+                </div>
+              </div>
+
               <div className="max-h-[420px] space-y-3 overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 {localMessages.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No messages in this thread yet.</p>
@@ -608,6 +790,27 @@ export function SmsInboxHub({
                   className="min-h-28 w-full rounded-xl border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                   placeholder="Type your reply..."
                 />
+                <div className="flex flex-wrap items-center gap-3">
+                  <select
+                    value={selectedTemplateId}
+                    onChange={(event) => insertTemplateBody(event.target.value)}
+                    className="flex h-10 min-w-[220px] rounded-md border border-input bg-white px-3 text-sm"
+                  >
+                    <option value="">Insert saved reply</option>
+                    {templates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.category}: {template.title}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setSaveTemplateOpen((prev) => !prev)}
+                    className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-100"
+                  >
+                    Save as template
+                  </button>
+                </div>
                 <div className="flex flex-wrap items-center gap-3">
                   <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-100">
                     {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
@@ -712,6 +915,36 @@ export function SmsInboxHub({
                   {pending ? 'Sending...' : 'Send Reply'}
                 </Button>
               </form>
+
+              {saveTemplateOpen ? (
+                <form ref={templateFormRef} action={templateAction} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <input
+                      name="title"
+                      placeholder="Template title"
+                      className="flex h-10 rounded-md border border-input bg-white px-3 text-sm"
+                      required
+                    />
+                    <input
+                      name="category"
+                      placeholder="Category"
+                      defaultValue="general"
+                      className="flex h-10 rounded-md border border-input bg-white px-3 text-sm"
+                      required
+                    />
+                    <Button type="submit" variant="outline" disabled={templatePending}>
+                      {templatePending ? 'Saving...' : 'Save Template'}
+                    </Button>
+                  </div>
+                  <textarea
+                    name="body"
+                    className="mt-3 min-h-24 w-full rounded-md border border-input bg-white px-3 py-2 text-sm"
+                    placeholder="Template body"
+                    defaultValue={(formRef.current?.querySelector('textarea[name="body"]') as HTMLTextAreaElement | null)?.value ?? ''}
+                    required
+                  />
+                </form>
+              ) : null}
             </>
           )}
         </CardContent>

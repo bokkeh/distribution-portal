@@ -11,6 +11,8 @@ import { formatStatusLabel, orderStatusVariant, shippingStatusVariant } from '@/
 import { isMissingShippingStatusColumn } from '@/lib/orders/shipping-fallback'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
+import { ActivityTimeline } from '@/components/activity/ActivityTimeline'
+import { getActivityTimeline } from '@/lib/activity/read'
 
 const shippingStatuses = ['not_scheduled', 'scheduled', 'out_for_delivery', 'delivered', 'issue'] as const
 
@@ -90,6 +92,17 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
     pending: 'confirmed',
     confirmed: 'fulfilled',
   }
+
+  const timeline = await getActivityTimeline('order', order.id, [
+    {
+      id: `created-${order.id}`,
+      kind: 'order_created',
+      title: 'Order created',
+      body: `${order.companyName ?? 'Order'} was created.`,
+      createdAt: order.createdAt,
+      actorName: null,
+    },
+  ])
 
   return (
     <div className="p-8 space-y-6 max-w-4xl">
@@ -180,6 +193,8 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
           </CardContent>
         </Card>
       </div>
+
+      <ActivityTimeline items={timeline} title="Order Timeline" />
     </div>
   )
 }

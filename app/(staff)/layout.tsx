@@ -3,6 +3,7 @@ import StaffSidebar from '@/components/layout/StaffSidebar'
 import TestSmsBar from '@/components/layout/TestSmsBar'
 import { SuperAdminViewSwitcher } from '@/components/layout/SuperAdminViewSwitcher'
 import { getBellNotificationsForUser } from '@/lib/notifications/in-app'
+import { PortalTopBar } from '@/components/layout/PortalTopBar'
 
 export default async function StaffLayout({ children }: { children: React.ReactNode }) {
   const session = await requireAdminOrStaff()
@@ -13,7 +14,10 @@ export default async function StaffLayout({ children }: { children: React.ReactN
       <StaffSidebar showViewSwitcher={isSuperAdmin} featureFlags={session.user.featureFlags} roles={session.user.roles} notifications={notifications} unreadCount={unreadCount} />
       <main className="flex-1 overflow-auto pt-14 md:pt-0">
         <TestSmsBar />
-        {children}
+        <div className="p-4 sm:p-8">
+          <PortalTopBar />
+          {children}
+        </div>
       </main>
       {isSuperAdmin ? (
         <div className="fixed bottom-4 left-4 z-40 md:hidden">

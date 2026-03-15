@@ -5,6 +5,7 @@ import { SuperAdminViewSwitcher } from '@/components/layout/SuperAdminViewSwitch
 import { hasFeature } from '@/lib/users/features'
 import { getBellNotificationsForUser } from '@/lib/notifications/in-app'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
+import { PortalTopBar } from '@/components/layout/PortalTopBar'
 
 export default async function DriverLayout({ children }: { children: React.ReactNode }) {
   const session = await requireRole('driver', 'admin')
@@ -45,7 +46,10 @@ export default async function DriverLayout({ children }: { children: React.React
           </form>
         </div>
       </nav>
-      <main className="max-w-2xl mx-auto py-8 px-4">{children}</main>
+      <main className="max-w-2xl mx-auto py-8 px-4">
+        <PortalTopBar />
+        {children}
+      </main>
       {isSuperAdmin ? (
         <div className="fixed bottom-4 left-4 z-40">
           <SuperAdminViewSwitcher />

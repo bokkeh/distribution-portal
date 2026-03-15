@@ -1,13 +1,14 @@
 import { db } from '@/db'
-import { orders, invoices, customerAccounts, inventory, products } from '@/db/schema'
+import { orders, invoices, customerAccounts, inventory, products, wholesaleAccountRequests, tastingReports, tastings, scheduledSmsJobs } from '@/db/schema'
 import { eq, sql, desc, and, gte } from 'drizzle-orm'
 import KpiCard from '@/components/dashboard/KpiCard'
-import { DollarSign, ShoppingCart, Users, MessageSquare, AlertTriangle } from 'lucide-react'
+import { DollarSign, ShoppingCart, Users, MessageSquare, AlertTriangle, HeartPulse, ClipboardList } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { getSmsInboxSummary } from '@/lib/inbox/summary'
 import Link from 'next/link'
+import { getSystemHealthSnapshot } from '@/lib/ops/system-health'
 
 export default async function AdminDashboard() {
   const [
@@ -18,6 +19,10 @@ export default async function AdminDashboard() {
     recentOrders,
     outstandingInvoices,
     smsInboxSummary,
+    wholesaleRequestsCount,
+    missingTastingReports,
+    failedJobs,
+    systemHealth,
   ] = await Promise.all([
     db.select({ total: sql<string>`COALESCE(SUM(total), 0)` }).from(invoices).where(eq(invoices.status, 'paid')),
     db.select({ count: sql<number>`COUNT(*)` }).from(orders),
@@ -27,6 +32,13 @@ export default async function AdminDashboard() {
       .from(orders).orderBy(desc(orders.createdAt)).limit(5),
     db.select({ total: sql<string>`COALESCE(SUM(total), 0)` }).from(invoices).where(eq(invoices.status, 'sent')),
     getSmsInboxSummary(),
+    db.select({ count: sql<number>`COUNT(*)` }).from(wholesaleAccountRequests),
+    db.select({ count: sql<number>`COUNT(*)` })
+      .from(tastings)
+      .leftJoin(tastingReports, eq(tastings.id, tastingReports.tastingId))
+      .where(and(eq(tastings.status, 'completed'), sql`${tastingReports.id} is null`)),
+    db.select({ count: sql<number>`COUNT(*)` }).from(scheduledSmsJobs).where(eq(scheduledSmsJobs.status, 'failed')),
+    getSystemHealthSnapshot(),
   ])
 
   const statusColor: Record<string, 'default' | 'success' | 'warning' | 'destructive' | 'info'> = {
@@ -44,7 +56,7 @@ export default async function AdminDashboard() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-4">
         <KpiCard
           title="Total Revenue"
           value={formatCurrency(totalRevenue[0]?.total ?? '0')}
@@ -94,6 +106,14 @@ export default async function AdminDashboard() {
             </div>
           </CardContent>
         </Card>
+        <KpiCard
+          title="System Health"
+          value={String(systemHealth.pendingMigrations.length + systemHealth.missingTables.length + systemHealth.missingColumns.length)}
+          change={systemHealth.pendingMigrations.length ? `${systemHealth.pendingMigrations.length} migration(s) pending` : 'No migration gap detected'}
+          changeType={systemHealth.pendingMigrations.length ? 'negative' : 'positive'}
+          icon={HeartPulse}
+          iconColor="text-rose-600"
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -136,6 +156,45 @@ export default async function AdminDashboard() {
               <div className="text-center">
                 <p className="text-3xl font-bold text-orange-600">{formatCurrency(outstandingInvoices[0]?.total ?? '0')}</p>
                 <p className="text-sm text-muted-foreground mt-1">Awaiting payment</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">Approvals And Follow-Up</CardTitle>
+            <Link href="/admin/system" className="text-xs text-primary hover:underline">Review ops</Link>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+              <div>
+                <p className="text-sm font-medium text-slate-900">New wholesale requests</p>
+                <p className="text-xs text-slate-500">Review pending account submissions</p>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-bold text-slate-950">{wholesaleRequestsCount[0]?.count ?? 0}</p>
+                <Link href="/admin/wholesale-requests" className="text-xs text-primary hover:underline">Open requests</Link>
+              </div>
+            </div>
+            <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+              <div>
+                <p className="text-sm font-medium text-slate-900">Missing tasting reports</p>
+                <p className="text-xs text-slate-500">Completed tastings still missing submission</p>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-bold text-slate-950">{missingTastingReports[0]?.count ?? 0}</p>
+                <Link href="/admin/tastings" className="text-xs text-primary hover:underline">Open tastings</Link>
+              </div>
+            </div>
+            <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+              <div>
+                <p className="text-sm font-medium text-slate-900">Failed background jobs</p>
+                <p className="text-xs text-slate-500">Scheduled texting and workflow failures</p>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-bold text-slate-950">{failedJobs[0]?.count ?? 0}</p>
+                <Link href="/admin/jobs" className="text-xs text-primary hover:underline">Open jobs</Link>
               </div>
             </div>
           </CardContent>

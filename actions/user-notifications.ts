@@ -24,3 +24,21 @@ export async function markAllNotificationsRead() {
 
   return { success: true }
 }
+
+export async function markNotificationKindsRead(kinds: string[]) {
+  const session = await requireAuth()
+  if (!kinds.length) return { success: true }
+
+  await db.update(userNotifications)
+    .set({ readAt: new Date() })
+    .where(
+      and(
+        eq(userNotifications.userId, session.user.id),
+        isNull(userNotifications.readAt),
+        lte(userNotifications.availableAt, new Date()),
+        inArray(userNotifications.kind, kinds)
+      )
+    )
+
+  return { success: true }
+}
