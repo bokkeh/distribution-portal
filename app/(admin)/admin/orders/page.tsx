@@ -9,6 +9,7 @@ import { formatStatusLabel, orderStatusVariant, shippingStatusVariant } from '@/
 import { isMissingShippingStatusColumn } from '@/lib/orders/shipping-fallback'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
+import { BulkOrderStatusForm } from '@/components/orders/BulkOrderStatusForm'
 
 export default async function AdminOrdersPage() {
   let allOrders: Array<{
@@ -62,6 +63,13 @@ export default async function AdminOrdersPage() {
         </div>
         <Link href="/staff/orders/new"><Button><Plus className="w-4 h-4 mr-2" />New Order</Button></Link>
       </div>
+      <BulkOrderStatusForm
+        mode="admin"
+        orders={allOrders.map((order) => ({
+          id: order.id,
+          label: `#${order.id.slice(-8).toUpperCase()} ${order.companyName ?? 'Unknown customer'}`,
+        }))}
+      />
       <Card>
         <CardContent className="p-0 overflow-x-auto">
           <table className="w-full min-w-[860px]">

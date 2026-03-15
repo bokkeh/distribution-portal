@@ -57,6 +57,7 @@ export default async function AdminJobsPage() {
         completedAt: job.sentAt,
         createdAt: job.createdAt,
         lastError: job.lastError,
+        retryable: job.status === 'failed',
       })),
       ...notificationRows.map((row) => ({
         id: String(row.id),
@@ -68,6 +69,7 @@ export default async function AdminJobsPage() {
         completedAt: row.sentAt,
         createdAt: row.sentAt,
         lastError: row.status === 'failed' ? 'Delivery failed' : null,
+        retryable: false,
       })),
     ]
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())

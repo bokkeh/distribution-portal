@@ -98,6 +98,15 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
   ])
 
   const creditAvailable = Math.max(0, Number(account.creditLimit ?? 0) - Number(account.balance ?? 0))
+  const accountHealthSignals = [
+    Number(account.balance ?? 0) > 0 ? { label: 'Outstanding balance', ok: false } : { label: 'No outstanding balance', ok: true },
+    recentTexts.some((message) => message.direction === 'inbound') ? { label: 'Open text activity', ok: false } : { label: 'No open text activity', ok: true },
+    recentDeliveries.some((delivery) => delivery.stopStatus === 'failed') ? { label: 'Delivery issues on file', ok: false } : { label: 'Delivery history stable', ok: true },
+    recentOrders.length === 0 ? { label: 'No recent orders', ok: false } : { label: 'Recent ordering activity', ok: true },
+    recentTastings.some((tasting) => tasting.status === 'completed') ? { label: 'Tasting activity on account', ok: true } : { label: 'No completed tastings yet', ok: true },
+  ]
+  const healthySignals = accountHealthSignals.filter((signal) => signal.ok).length
+  const healthScore = Math.round((healthySignals / accountHealthSignals.length) * 100)
 
   return (
     <div className="p-4 sm:p-8 space-y-6">
@@ -256,6 +265,27 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
                 <p className="text-xs uppercase tracking-wide text-slate-500">Deliveries</p>
                 <p className="mt-2 text-sm font-semibold text-slate-900">{recentDeliveries.length ? 'Delivery history linked' : 'No delivery history yet'}</p>
                 <p className="mt-1 text-xs text-slate-500">{recentDeliveries[0] ? `Latest stop ${recentDeliveries[0].stopStatus}` : 'Awaiting first route assignment'}</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle>Account Health</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Health score</p>
+                <p className="mt-2 text-3xl font-bold text-slate-950">{healthScore}</p>
+                <p className="mt-1 text-xs text-slate-500">Based on balance, order, delivery, tasting, and SMS activity.</p>
+              </div>
+              <div className="space-y-2">
+                {accountHealthSignals.map((signal) => (
+                  <div key={signal.label} className="flex items-center justify-between rounded-xl border border-slate-100 px-3 py-3 text-sm">
+                    <span className="text-slate-700">{signal.label}</span>
+                    <Badge variant={signal.ok ? 'success' : 'warning'}>{signal.ok ? 'Healthy' : 'Needs review'}</Badge>
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>

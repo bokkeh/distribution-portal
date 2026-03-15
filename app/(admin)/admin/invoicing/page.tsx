@@ -1,6 +1,6 @@
 import { db } from '@/db'
-import { invoices, customerAccounts, tasterInvoices, tastings, users } from '@/db/schema'
-import { desc, eq } from 'drizzle-orm'
+import { activityEvents, customerAccounts, invoices, tasterInvoices, tastings, users } from '@/db/schema'
+import { desc, eq, inArray } from 'drizzle-orm'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,7 +8,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import { markInvoicePaid } from '@/actions/invoices'
-import { payoutTasterInvoiceViaStripe } from '@/actions/taster-payouts'
+import { approveTasterInvoice, payoutTasterInvoiceViaStripe } from '@/actions/taster-payouts'
 
 export default async function InvoicingPage({
   searchParams,
@@ -26,6 +26,13 @@ export default async function InvoicingPage({
     payeeEmail: string
     eventName: string
     scheduledAt: Date
+  }> = []
+
+  let payoutEvents: Array<{
+    kind: string
+    body: string | null
+    metadata: unknown
+    createdAt: Date
   }> = []
 
   const allInvoices = await db
@@ -59,12 +66,46 @@ export default async function InvoicingPage({
       .innerJoin(tastings, eq(tasterInvoices.tastingId, tastings.id))
       .innerJoin(users, eq(tasterInvoices.submittedByUserId, users.id))
       .orderBy(desc(tasterInvoices.submittedAt))
+
+    payoutEvents = await db
+      .select({
+        kind: activityEvents.kind,
+        body: activityEvents.body,
+        metadata: activityEvents.metadata,
+        createdAt: activityEvents.createdAt,
+      })
+      .from(activityEvents)
+      .where(inArray(activityEvents.kind, ['taster_invoice_paid', 'taster_invoice_payout_failed', 'taster_invoice_approved']))
+      .orderBy(desc(activityEvents.createdAt))
   } catch (error) {
     const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
     if (!message.includes('taster_invoices') && !message.includes('does not exist')) {
       throw error
     }
   }
+
+  const payoutEventMap = new Map<string, typeof payoutEvents>()
+  for (const event of payoutEvents) {
+    const metadata = event.metadata && typeof event.metadata === 'object' ? event.metadata as Record<string, unknown> : {}
+    const invoiceId = typeof metadata.tasterInvoiceId === 'string' ? metadata.tasterInvoiceId : null
+    if (!invoiceId) continue
+    const group = payoutEventMap.get(invoiceId) ?? []
+    group.push({ ...event, metadata })
+    payoutEventMap.set(invoiceId, group)
+  }
+
+  const csvRows = [
+    ['payee_name', 'payee_email', 'event_name', 'amount', 'status', 'submitted_at'],
+    ...tasterInvoiceSubmissions.map((invoice) => [
+      invoice.payeeName,
+      invoice.payeeEmail,
+      invoice.eventName,
+      String(invoice.totalAmount),
+      invoice.status,
+      invoice.submittedAt.toISOString(),
+    ]),
+  ]
+  const csvHref = `data:text/csv;charset=utf-8,${encodeURIComponent(csvRows.map((row) => row.join(',')).join('\n'))}`
 
   const statusVariant: Record<string, 'default' | 'success' | 'warning' | 'destructive' | 'info'> = {
     draft: 'default',
@@ -92,9 +133,14 @@ export default async function InvoicingPage({
           <h1 className="text-2xl font-bold text-slate-900">Invoicing</h1>
           <p className="text-muted-foreground mt-1">Manage and track all invoices</p>
         </div>
-        <Link href="/admin/invoicing/new">
-          <Button><Plus className="mr-2 h-4 w-4" />New Invoice</Button>
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <a href={csvHref} download="taster-invoices.csv">
+            <Button variant="outline">Export Taster Invoices</Button>
+          </a>
+          <Link href="/admin/invoicing/new">
+            <Button><Plus className="mr-2 h-4 w-4" />New Invoice</Button>
+          </Link>
+        </div>
       </div>
 
       <Card>
@@ -187,7 +233,16 @@ export default async function InvoicingPage({
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm font-semibold">{formatCurrency(invoice.totalAmount)}</td>
-                    <td className="px-6 py-4"><Badge variant={tasterStatusVariant[invoice.status] ?? 'secondary'}>{invoice.status}</Badge></td>
+                    <td className="px-6 py-4">
+                      <div className="space-y-2">
+                        <Badge variant={tasterStatusVariant[invoice.status] ?? 'secondary'}>{invoice.status}</Badge>
+                        {payoutEventMap.get(invoice.id)?.[0] ? (
+                          <p className="text-xs text-muted-foreground">
+                            {payoutEventMap.get(invoice.id)?.[0]?.kind === 'taster_invoice_paid' ? 'Last payout sent' : payoutEventMap.get(invoice.id)?.[0]?.kind === 'taster_invoice_approved' ? 'Approved for payout' : 'Last payout failed'}
+                          </p>
+                        ) : null}
+                      </div>
+                    </td>
                     <td className="px-6 py-4 text-sm text-muted-foreground">{formatDate(invoice.submittedAt)}</td>
                     <td className="px-6 py-4">
                       <div className="flex flex-wrap gap-2">
@@ -197,14 +252,30 @@ export default async function InvoicingPage({
                         <Link href={`/taster/tastings/${invoice.tastingId}`}>
                           <Button variant="outline" size="sm">View Report</Button>
                         </Link>
+                        {invoice.status === 'submitted' ? (
+                          <form action={approveTasterInvoice}>
+                            <input type="hidden" name="invoiceId" value={invoice.id} />
+                            <input type="hidden" name="mode" value="admin" />
+                            <Button variant="outline" size="sm" type="submit">Approve</Button>
+                          </form>
+                        ) : null}
                         {invoice.status !== 'paid' ? (
                           <form action={payoutTasterInvoiceViaStripe}>
                             <input type="hidden" name="invoiceId" value={invoice.id} />
                             <input type="hidden" name="mode" value="admin" />
-                            <Button variant="secondary" size="sm" type="submit">Pay via Stripe</Button>
+                            <Button variant="secondary" size="sm" type="submit">{invoice.status === 'approved' ? 'Pay via Stripe' : 'Retry Payout'}</Button>
                           </form>
                         ) : null}
                       </div>
+                      {payoutEventMap.get(invoice.id)?.length ? (
+                        <div className="mt-2 space-y-1">
+                          {payoutEventMap.get(invoice.id)?.slice(0, 2).map((event, index) => (
+                            <p key={`${invoice.id}-${index}`} className={`text-xs ${event.kind === 'taster_invoice_payout_failed' ? 'text-red-600' : 'text-slate-500'}`}>
+                              {formatDate(event.createdAt)}: {event.body || event.kind}
+                            </p>
+                          ))}
+                        </div>
+                      ) : null}
                     </td>
                   </tr>
                 ))}

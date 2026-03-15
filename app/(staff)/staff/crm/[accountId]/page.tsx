@@ -53,6 +53,13 @@ export default async function StaffAccountDetailPage({ params }: { params: Promi
   const orderCount = orderCountResult.status === 'fulfilled' ? orderCountResult.value[0] : { total: 0 }
 
   const creditAvailable = Math.max(0, Number(account.creditLimit ?? 0) - Number(account.balance ?? 0))
+  const accountHealthSignals = [
+    Number(account.balance ?? 0) > 0 ? { label: 'Outstanding balance', ok: false } : { label: 'No outstanding balance', ok: true },
+    recentOrders.length === 0 ? { label: 'No recent orders', ok: false } : { label: 'Recent ordering activity', ok: true },
+    recentInvoices.some((invoice) => invoice.status !== 'paid') ? { label: 'Invoices awaiting payment', ok: false } : { label: 'Invoices current', ok: true },
+    accountContacts.length === 0 ? { label: 'No CRM contacts saved', ok: false } : { label: 'Contacts documented', ok: true },
+  ]
+  const healthScore = Math.round((accountHealthSignals.filter((signal) => signal.ok).length / accountHealthSignals.length) * 100)
 
   return (
     <div className="p-4 sm:p-8 space-y-6">
@@ -182,6 +189,26 @@ export default async function StaffAccountDetailPage({ params }: { params: Promi
             </CardHeader>
             <CardContent>
               <AccountEditForm account={account} mode="staff" />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle>Account Health</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Health score</p>
+                <p className="mt-2 text-3xl font-bold text-slate-950">{healthScore}</p>
+              </div>
+              <div className="space-y-2">
+                {accountHealthSignals.map((signal) => (
+                  <div key={signal.label} className="flex items-center justify-between rounded-xl border border-slate-100 px-3 py-3 text-sm">
+                    <span className="text-slate-700">{signal.label}</span>
+                    <Badge variant={signal.ok ? 'success' : 'warning'}>{signal.ok ? 'Healthy' : 'Needs review'}</Badge>
+                  </div>
+                ))}
+              </div>
             </CardContent>
           </Card>
         </div>

@@ -11,6 +11,7 @@ import { formatStatusLabel, orderStatusVariant, shippingStatusVariant } from '@/
 import { isMissingShippingStatusColumn } from '@/lib/orders/shipping-fallback'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
+import { reorderCustomerOrder } from '@/actions/orders'
 
 export default async function CustomerOrderDetailPage({ params }: { params: { orderId: string } }) {
   const session = await requireRole('customer')
@@ -76,6 +77,8 @@ export default async function CustomerOrderDetailPage({ params }: { params: { or
     .leftJoin(deliveries, eq(deliveryStops.deliveryId, deliveries.id))
     .where(eq(deliveryStops.orderId, params.orderId))
 
+  const supportSmsNumber = process.env.TELNYX_FROM_NUMBER
+
   const trackingEvents = [
     {
       label: 'Order received',
@@ -130,6 +133,9 @@ export default async function CustomerOrderDetailPage({ params }: { params: { or
         <div className="flex flex-wrap gap-2">
           <Badge variant={orderStatusVariant[order.status]}>{formatStatusLabel(order.status)}</Badge>
           <Badge variant={shippingStatusVariant[order.shippingStatus]}>{formatStatusLabel(order.shippingStatus)}</Badge>
+          <form action={reorderCustomerOrder.bind(null, order.id)}>
+            <Button variant="outline" size="sm" type="submit">Reorder</Button>
+          </form>
         </div>
       </div>
 
@@ -206,6 +212,20 @@ export default async function CustomerOrderDetailPage({ params }: { params: { or
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardHeader><CardTitle>Need Help?</CardTitle></CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-3">
+          {supportSmsNumber ? (
+            <a href={`sms:${supportSmsNumber}`}>
+              <Button variant="outline">Text Support</Button>
+            </a>
+          ) : null}
+          <Link href="/customer/profile">
+            <Button variant="ghost">Update Delivery Preferences</Button>
+          </Link>
+        </CardContent>
+      </Card>
     </div>
   )
 }

@@ -10,6 +10,7 @@ import { formatStatusLabel, orderStatusVariant, shippingStatusVariant } from '@/
 import { isMissingShippingStatusColumn } from '@/lib/orders/shipping-fallback'
 import Link from 'next/link'
 import { ShoppingCart } from 'lucide-react'
+import { reorderCustomerOrder } from '@/actions/orders'
 
 export default async function CustomerOrdersPage() {
   const session = await requireRole('customer')
@@ -83,9 +84,14 @@ export default async function CustomerOrdersPage() {
                   </div>
                   <div className="text-right">
                     <p className="text-xl font-bold">{formatCurrency(order.total)}</p>
-                    <Link href={`/customer/orders/${order.id}`}>
-                      <Button variant="ghost" size="sm" className="mt-1">View Details</Button>
-                    </Link>
+                    <div className="mt-1 flex flex-wrap justify-end gap-2">
+                      <Link href={`/customer/orders/${order.id}`}>
+                        <Button variant="ghost" size="sm">View Details</Button>
+                      </Link>
+                      <form action={reorderCustomerOrder.bind(null, order.id)}>
+                        <Button variant="outline" size="sm" type="submit">Reorder</Button>
+                      </form>
+                    </div>
                   </div>
                 </div>
               </CardContent>

@@ -267,6 +267,132 @@ export async function updateOrderStatus(orderId: string, status: 'pending' | 'co
   revalidatePath(`/customer/orders/${orderId}`)
 }
 
+export async function bulkUpdateOrderStatus(input: {
+  orderIds: string[]
+  status: 'pending' | 'confirmed' | 'fulfilled' | 'cancelled'
+}) {
+  const session = await requireAuth()
+  const userRoles = session.user.roles ?? [session.user.role as string]
+  if (!userRoles.some(role => ['admin', 'staff'].includes(role))) {
+    throw new Error('Unauthorized')
+  }
+
+  const orderIds = Array.from(new Set(input.orderIds.filter(Boolean)))
+  if (!orderIds.length) return
+
+  await db
+    .update(orders)
+    .set({ status: input.status })
+    .where(inArray(orders.id, orderIds))
+
+  for (const orderId of orderIds) {
+    await logActivityEvent({
+      entityType: 'order',
+      entityId: orderId,
+      actorUserId: session.user.id,
+      kind: 'order_status_changed_bulk',
+      title: 'Order status updated in bulk',
+      body: `Status changed to ${input.status.replace(/_/g, ' ')}.`,
+    })
+  }
+
+  revalidatePath('/admin/orders')
+  revalidatePath('/staff/orders')
+}
+
+export async function reorderCustomerOrder(orderId: string) {
+  const session = await requireAuth()
+  const userRoles = session.user.roles ?? [session.user.role as string]
+  if (!userRoles.includes('customer')) {
+    throw new Error('Unauthorized')
+  }
+
+  const [account] = await db
+    .select({ id: customerAccounts.id })
+    .from(customerAccounts)
+    .where(eq(customerAccounts.userId, session.user.id))
+    .limit(1)
+
+  if (!account) {
+    throw new Error('Account not found')
+  }
+
+  const [existingOrder] = await db
+    .select({
+      id: orders.id,
+      customerId: orders.customerId,
+      orderType: orders.orderType,
+      notes: orders.notes,
+    })
+    .from(orders)
+    .where(eq(orders.id, orderId))
+    .limit(1)
+
+  if (!existingOrder || existingOrder.customerId !== account.id) {
+    throw new Error('Order not found')
+  }
+
+  const existingItems = await db
+    .select({
+      productId: orderItems.productId,
+      quantity: orderItems.quantity,
+      unit: orderItems.unit,
+      unitPrice: orderItems.unitPrice,
+      total: orderItems.total,
+    })
+    .from(orderItems)
+    .where(eq(orderItems.orderId, orderId))
+
+  if (!existingItems.length) {
+    throw new Error('No order items found to reorder')
+  }
+
+  const subtotal = existingItems.reduce((sum, item) => sum + Number(item.total), 0)
+
+  const [newOrder] = await db.insert(orders).values({
+    customerId: account.id,
+    createdBy: session.user.id,
+    orderType: existingOrder.orderType,
+    status: 'pending',
+    shippingStatus: 'not_scheduled',
+    subtotal: subtotal.toFixed(2),
+    tax: '0.00',
+    total: subtotal.toFixed(2),
+    notes: existingOrder.notes,
+  }).returning()
+
+  await db.insert(orderItems).values(
+    existingItems.map((item) => ({
+      orderId: newOrder.id,
+      productId: item.productId,
+      quantity: item.quantity,
+      unit: item.unit,
+      unitPrice: item.unitPrice,
+      total: item.total,
+    }))
+  )
+
+  await logActivityEvent({
+    entityType: 'order',
+    entityId: newOrder.id,
+    actorUserId: session.user.id,
+    kind: 'order_reordered',
+    title: 'Order reordered',
+    body: `A repeat order was created from ${orderId.slice(-8).toUpperCase()}.`,
+  })
+
+  await createUserNotification({
+    userId: session.user.id,
+    kind: 'order_created',
+    title: 'Reorder submitted',
+    body: `Your repeat order has been submitted and is pending review.`,
+    href: `/customer/orders/${newOrder.id}`,
+  })
+
+  revalidatePath('/customer/orders')
+  redirect(`/customer/orders/${newOrder.id}?success=${encodeURIComponent('Your reorder has been submitted.')}`)
+}
+
 export async function updateOrderShippingStatus(orderId: string, formData: FormData) {
   const session = await requireAuth()
   const userRoles = session.user.roles ?? [session.user.role as string]

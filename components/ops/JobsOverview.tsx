@@ -1,5 +1,7 @@
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { formatDate } from '@/lib/utils'
+import { retryScheduledSmsJob } from '@/actions/jobs'
 
 export function JobsOverview({
   rows,
@@ -14,6 +16,7 @@ export function JobsOverview({
     completedAt: Date | null
     createdAt: Date
     lastError: string | null
+    retryable?: boolean
   }>
 }) {
   const counts = rows.reduce(
@@ -43,7 +46,7 @@ export function JobsOverview({
           {rows.length === 0 ? (
             <div className="px-5 py-10 text-sm text-slate-500">No jobs have been recorded yet.</div>
           ) : rows.map((row) => (
-            <div key={row.id} className="grid gap-3 px-5 py-4 lg:grid-cols-[1.2fr_0.8fr_0.8fr_1fr]">
+            <div key={row.id} className="grid gap-3 px-5 py-4 lg:grid-cols-[1.2fr_0.8fr_0.8fr_1fr_auto]">
               <div>
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-semibold text-slate-900">{row.type}</p>
@@ -69,6 +72,13 @@ export function JobsOverview({
                 <p className="mt-1 text-sm text-slate-700" suppressHydrationWarning>
                   {row.completedAt ? formatDate(row.completedAt) : formatDate(row.createdAt)}
                 </p>
+              </div>
+              <div className="flex items-start justify-end">
+                {row.retryable ? (
+                  <form action={retryScheduledSmsJob.bind(null, row.id)}>
+                    <Button size="sm" variant="outline" type="submit">Retry</Button>
+                  </form>
+                ) : null}
               </div>
             </div>
           ))}

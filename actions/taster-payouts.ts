@@ -105,6 +105,18 @@ export async function payoutTasterInvoiceViaStripe(formData: FormData) {
       description: `AHAWC tasting payout for ${invoice.eventName}`,
     })
   } catch (error) {
+    await logActivityEvent({
+      entityType: 'tasting',
+      entityId: invoice.tastingId,
+      actorUserId: session.user.id,
+      relatedUserId: invoice.submittedByUserId,
+      kind: 'taster_invoice_payout_failed',
+      title: 'Taster payout failed',
+      body: getStripeErrorMessage(error),
+      metadata: {
+        tasterInvoiceId: invoice.id,
+      },
+    })
     redirect(`/${mode}/invoicing?error=${encodeURIComponent(getStripeErrorMessage(error))}`)
   }
 
@@ -139,4 +151,52 @@ export async function payoutTasterInvoiceViaStripe(formData: FormData) {
   revalidatePath('/taster/payouts')
   revalidatePath(`/taster/tastings/${invoice.tastingId}`)
   redirect(`/${mode}/invoicing?success=${encodeURIComponent(`Stripe payout sent to ${invoice.payeeName}.`)}`)
+}
+
+export async function approveTasterInvoice(formData: FormData) {
+  const session = await requireAdminOrStaff()
+  const invoiceId = (formData.get('invoiceId') as string) || ''
+  const mode = (formData.get('mode') as string) || 'admin'
+
+  const [invoice] = await db
+    .select({
+      id: tasterInvoices.id,
+      tastingId: tasterInvoices.tastingId,
+      payeeName: tasterInvoices.payeeName,
+      submittedByUserId: tasterInvoices.submittedByUserId,
+      status: tasterInvoices.status,
+    })
+    .from(tasterInvoices)
+    .where(eq(tasterInvoices.id, invoiceId))
+    .limit(1)
+
+  if (!invoice) {
+    redirect(`/${mode}/invoicing?error=${encodeURIComponent('Taster invoice not found.')}`)
+  }
+
+  if (invoice.status === 'paid') {
+    redirect(`/${mode}/invoicing?success=${encodeURIComponent('That invoice has already been paid.')}`)
+  }
+
+  if (invoice.status !== 'approved') {
+    await db
+      .update(tasterInvoices)
+      .set({ status: 'approved' })
+      .where(eq(tasterInvoices.id, invoice.id))
+
+    await logActivityEvent({
+      entityType: 'tasting',
+      entityId: invoice.tastingId,
+      actorUserId: session.user.id,
+      relatedUserId: invoice.submittedByUserId,
+      kind: 'taster_invoice_approved',
+      title: 'Taster invoice approved',
+      body: `${invoice.payeeName}'s invoice was approved for payout.`,
+      metadata: { tasterInvoiceId: invoice.id },
+    })
+  }
+
+  revalidatePath('/admin/invoicing')
+  revalidatePath('/staff/invoicing')
+  redirect(`/${mode}/invoicing?success=${encodeURIComponent(`Approved ${invoice.payeeName}'s invoice for payout.`)}`)
 }

@@ -7,6 +7,7 @@ import { eq, sql } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import Stripe from 'stripe'
+import { logActivityEvent } from '@/lib/activity/log'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? 'sk_test_placeholder', { apiVersion: '2026-02-25.clover' })
 
@@ -81,6 +82,17 @@ export async function markInvoicePaid(invoiceId: string) {
   if (!invoice) return
 
   await db.update(invoices).set({ status: 'paid', paidAt: new Date() }).where(eq(invoices.id, invoiceId))
+
+  if (invoice.orderId) {
+    await logActivityEvent({
+      entityType: 'order',
+      entityId: invoice.orderId,
+      actorUserId: session.user.id,
+      kind: 'invoice_paid',
+      title: 'Invoice marked paid',
+      body: `${invoice.invoiceNumber} was marked paid for $${Number(invoice.total).toFixed(2)}.`,
+    })
+  }
 
   // Auto-create journal entry: DR Cash / CR Accounts Receivable
   const accounts = await db.select().from(chartOfAccounts)

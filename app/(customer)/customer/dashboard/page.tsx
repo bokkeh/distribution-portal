@@ -35,6 +35,7 @@ export default async function CustomerDashboard() {
     db.select({ count: sql<number>`COUNT(*)` }).from(orders).where(and(eq(orders.customerId, account.id), eq(orders.shippingStatus, 'out_for_delivery'))),
     db.select({ count: sql<number>`COUNT(*)` }).from(smsMessages).where(eq(smsMessages.phoneNumber, account.pocPhone || account.businessPhone || account.phone || '')),
   ])
+  const supportSmsNumber = process.env.TELNYX_FROM_NUMBER
 
   const statusColor: Record<string, 'default' | 'success' | 'warning' | 'destructive' | 'info'> = {
     pending: 'warning', confirmed: 'info', fulfilled: 'success', cancelled: 'destructive',
@@ -107,6 +108,38 @@ export default async function CustomerDashboard() {
                 <p className="text-2xl font-bold">{messageCount[0]?.count ?? 0}</p>
               </div>
               <MessageSquare className="w-8 h-8 text-blue-500" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Delivery Preferences</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm text-slate-600">
+            <p><span className="font-medium text-slate-900">Preferred days:</span> {account.preferredDeliveryDays || 'Not set'}</p>
+            <p><span className="font-medium text-slate-900">Preferred times:</span> {account.preferredDeliveryTimes || 'Not set'}</p>
+            <p><span className="font-medium text-slate-900">Notification preference:</span> {account.notificationPreference || 'email'}</p>
+            <Link href="/customer/profile"><Button variant="outline" size="sm">Update Preferences</Button></Link>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Support</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm text-slate-600">
+            <p>Reach the team directly if you need delivery help, product help, or invoice support.</p>
+            <div className="flex flex-wrap gap-2">
+              {supportSmsNumber ? (
+                <a href={`sms:${supportSmsNumber}`}>
+                  <Button variant="outline" size="sm">Text Support</Button>
+                </a>
+              ) : null}
+              <a href="mailto:support@ahawc.com">
+                <Button variant="ghost" size="sm">Email Support</Button>
+              </a>
             </div>
           </CardContent>
         </Card>
