@@ -56,12 +56,12 @@ export function NotificationBell({
     if (dark) {
       return {
         button: 'relative rounded-xl px-2 py-2 text-slate-200 hover:bg-slate-800/70 hover:text-white',
-        panel: 'fixed z-50 rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl',
-        item: 'block rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-left hover:border-slate-600',
-        title: 'text-sm font-semibold text-white',
-        body: 'mt-1 text-xs text-slate-300',
+        panel: 'fixed z-50 rounded-2xl border border-slate-200 bg-white shadow-2xl',
+        item: 'block rounded-xl border border-slate-100 bg-slate-50 p-3 text-left hover:border-slate-200',
+        title: 'text-sm font-semibold text-slate-900',
+        body: 'mt-1 text-xs text-slate-600',
         meta: 'mt-2 text-[11px] text-slate-500',
-        empty: 'px-4 py-8 text-center text-sm text-slate-400',
+        empty: 'px-4 py-8 text-center text-sm text-slate-500',
       }
     }
 
@@ -177,14 +177,14 @@ export function NotificationBell({
           >
             <div className="flex items-center justify-between border-b border-inherit px-4 py-3">
               <div>
-                <p className={dark ? 'text-sm font-semibold text-white' : 'text-sm font-semibold text-slate-900'}>Notifications</p>
-                <p className={dark ? 'text-xs text-slate-400' : 'text-xs text-slate-500'}>{localUnreadCount} unread</p>
+                <p className={dark ? 'text-sm font-semibold text-slate-900' : 'text-sm font-semibold text-slate-900'}>Notifications</p>
+                <p className={dark ? 'text-xs text-slate-500' : 'text-xs text-slate-500'}>{localUnreadCount} unread</p>
               </div>
               <button
                 type="button"
                 onClick={handleMarkAll}
                 disabled={isPending || localUnreadCount === 0}
-                className={dark ? 'text-xs text-slate-300 hover:text-white disabled:text-slate-600' : 'text-xs text-slate-600 hover:text-slate-900 disabled:text-slate-300'}
+                className={dark ? 'text-xs text-slate-600 hover:text-slate-900 disabled:text-slate-300' : 'text-xs text-slate-600 hover:text-slate-900 disabled:text-slate-300'}
               >
                 Mark all read
               </button>
@@ -194,13 +194,13 @@ export function NotificationBell({
               {groupedItems.length ? groupedItems.map(([groupName, groupItems]) => (
                 <div key={groupName} className="space-y-2">
                   <div className="flex items-center justify-between gap-3 px-1">
-                    <p className={dark ? 'text-xs font-semibold uppercase tracking-wide text-slate-400' : 'text-xs font-semibold uppercase tracking-wide text-slate-500'}>
+                    <p className={dark ? 'text-xs font-semibold uppercase tracking-wide text-slate-500' : 'text-xs font-semibold uppercase tracking-wide text-slate-500'}>
                       {groupName}
                     </p>
                     <button
                       type="button"
                       onClick={() => handleMarkSection(groupItems)}
-                      className={dark ? 'text-[11px] text-slate-400 hover:text-white' : 'text-[11px] text-slate-500 hover:text-slate-900'}
+                      className={dark ? 'text-[11px] text-slate-500 hover:text-slate-900' : 'text-[11px] text-slate-500 hover:text-slate-900'}
                     >
                       Mark section read
                     </button>
