@@ -8,6 +8,7 @@ import { customerAccounts, notificationsLog, tasterInvoices, tastingReports, tas
 import { requireFeature, requireRole } from '@/lib/auth/session'
 import { sendSms } from '@/lib/telnyx/client'
 import { sendTasterInvoiceNotification } from '@/lib/resend/client'
+import { clearUserNotifications, createNotificationsForRoles, createUserNotification } from '@/lib/notifications/in-app'
 
 function tastingRedirectPath(mode: string) {
   return mode === 'staff' ? '/staff/tastings' : '/admin/tastings'
@@ -94,6 +95,7 @@ export async function createTasting(formData: FormData) {
   const assignedUserId = formData.get('assignedUserId') as string
   const date = formData.get('date') as string
   const time = ((formData.get('time') as string) || '17:00').trim()
+  const endTime = ((formData.get('endTime') as string) || '').trim()
   const notes = ((formData.get('notes') as string) || '').trim() || null
 
   if (!customerId || !assignedUserId || !date) {
@@ -103,6 +105,13 @@ export async function createTasting(formData: FormData) {
   const scheduledAt = new Date(`${date}T${time}:00`)
   if (Number.isNaN(scheduledAt.getTime())) {
     redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('Choose a valid tasting date and time.')}`)
+  }
+  const endAt = endTime ? new Date(`${date}T${endTime}:00`) : null
+  if (endAt && Number.isNaN(endAt.getTime())) {
+    redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('Choose a valid tasting end time.')}`)
+  }
+  if (endAt && endAt <= scheduledAt) {
+    redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('End time must be after the start time.')}`)
   }
 
   const [account] = await db
@@ -131,6 +140,7 @@ export async function createTasting(formData: FormData) {
     createdByUserId: session.user.id,
     eventName: account.companyName,
     scheduledAt,
+    endAt,
     storeAddress: account.address,
     storeCity: account.city,
     storeState: account.state,
@@ -147,9 +157,27 @@ export async function createTasting(formData: FormData) {
     actorId: session.user.id,
   })
 
+  await createUserNotification({
+    userId: assignedUser.id,
+    kind: 'tasting_assigned',
+    title: 'New tasting assigned',
+    body: `${account.companyName} has been assigned to you for ${scheduledAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}.`,
+    href: `/taster/tastings/${tasting.id}`,
+  })
+
+  await createUserNotification({
+    userId: assignedUser.id,
+    kind: 'tasting_report_reminder',
+    title: 'Complete your tasting report',
+    body: `Submit your tasting report for ${account.companyName}.`,
+    href: `/taster/tastings/${tasting.id}`,
+    availableAt: new Date(scheduledAt.getTime() + 24 * 60 * 60 * 1000),
+  })
+
   revalidatePath('/admin/tastings')
   revalidatePath('/staff/tastings')
   revalidatePath('/taster/tastings')
+  revalidatePath('/taster/payouts')
   redirect(`${tastingRedirectPath(mode)}?success=${encodeURIComponent('Tasting assigned.')}`)
 }
 
@@ -176,9 +204,29 @@ export async function updateTastingStatus(formData: FormData) {
 
   await db.update(tastings).set({ status: nextStatus }).where(eq(tastings.id, tastingId))
 
+  if (nextStatus === 'completed') {
+    await Promise.all([
+      createNotificationsForRoles({
+        roles: ['admin'],
+        kind: 'tasting_completed',
+        title: 'Tasting completed',
+        body: 'A tasting has been marked complete.',
+        href: '/admin/tastings',
+      }),
+      createNotificationsForRoles({
+        roles: ['staff'],
+        kind: 'tasting_completed',
+        title: 'Tasting completed',
+        body: 'A tasting has been marked complete.',
+        href: '/staff/tastings',
+      }),
+    ])
+  }
+
   revalidatePath('/admin/tastings')
   revalidatePath('/staff/tastings')
   revalidatePath('/taster/tastings')
+  revalidatePath('/taster/payouts')
   redirect(`/${mode}/tastings?success=${encodeURIComponent('Tasting updated.')}`)
 }
 
@@ -207,6 +255,12 @@ export async function deleteTasting(formData: FormData) {
 
   await db.delete(tastings).where(eq(tastings.id, tastingId))
 
+  await clearUserNotifications({
+    userId: tasting.assignedUserId,
+    href: `/taster/tastings/${tasting.id}`,
+    kinds: ['tasting_assigned', 'tasting_report_reminder'],
+  })
+
   await notifyTasterChange({
     recipientName: tasting.tasterName,
     recipientPhone: tasting.tasterPhone,
@@ -217,6 +271,7 @@ export async function deleteTasting(formData: FormData) {
   revalidatePath('/admin/tastings')
   revalidatePath('/staff/tastings')
   revalidatePath('/taster/tastings')
+  revalidatePath('/taster/payouts')
   redirect(`${tastingRedirectPath(mode)}?success=${encodeURIComponent('Tasting removed and taster notified.')}`)
 }
 
@@ -281,9 +336,33 @@ export async function reassignTasting(formData: FormData) {
     }),
   ])
 
+  await clearUserNotifications({
+    userId: tasting.assignedUserId,
+    href: `/taster/tastings/${tasting.id}`,
+    kinds: ['tasting_assigned', 'tasting_report_reminder'],
+  })
+
+  await createUserNotification({
+    userId: nextTaster.id,
+    kind: 'tasting_assigned',
+    title: 'Tasting reassigned to you',
+    body: `${tasting.eventName} has been assigned to you for ${tasting.scheduledAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}.`,
+    href: `/taster/tastings/${tasting.id}`,
+  })
+
+  await createUserNotification({
+    userId: nextTaster.id,
+    kind: 'tasting_report_reminder',
+    title: 'Complete your tasting report',
+    body: `Submit your tasting report for ${tasting.eventName}.`,
+    href: `/taster/tastings/${tasting.id}`,
+    availableAt: new Date(tasting.scheduledAt.getTime() + 24 * 60 * 60 * 1000),
+  })
+
   revalidatePath('/admin/tastings')
   revalidatePath('/staff/tastings')
   revalidatePath('/taster/tastings')
+  revalidatePath('/taster/payouts')
   redirect(`${tastingRedirectPath(mode)}?success=${encodeURIComponent('Tasting reassigned and tasters notified.')}`)
 }
 
@@ -338,6 +417,12 @@ export async function submitTastingReport(formData: FormData) {
       ...payload,
     })
   }
+
+  await clearUserNotifications({
+    userId: tasting.assignedUserId,
+    href: `/taster/tastings/${tastingId}`,
+    kinds: ['tasting_report_reminder'],
+  })
 
   revalidatePath('/admin/tastings')
   revalidatePath('/staff/tastings')
@@ -426,6 +511,7 @@ export async function submitTasterInvoice(formData: FormData) {
   revalidatePath('/admin/tastings')
   revalidatePath('/staff/tastings')
   revalidatePath('/taster/tastings')
+  revalidatePath('/taster/payouts')
   redirect(`/taster/tastings/${tastingId}?success=${encodeURIComponent('Invoice submitted to accounting.')}`)
 }
 
@@ -442,6 +528,7 @@ export async function getTastingsForView({
       createdByUserId: tastings.createdByUserId,
       eventName: tastings.eventName,
       scheduledAt: tastings.scheduledAt,
+      endAt: tastings.endAt,
       status: tastings.status,
       storeAddress: tastings.storeAddress,
       storeCity: tastings.storeCity,

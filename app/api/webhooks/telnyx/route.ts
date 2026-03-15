@@ -10,6 +10,7 @@ import {
   SMS_START_MESSAGE,
   SMS_STOP_MESSAGE,
 } from '@/lib/telnyx/compliance'
+import { createNotificationsForRoles } from '@/lib/notifications/in-app'
 
 type TelnyxWebhookPayload = {
   id?: string
@@ -74,6 +75,23 @@ export async function POST(req: NextRequest) {
     status: 'received',
     providerMessageId,
   })
+
+  await Promise.all([
+    createNotificationsForRoles({
+      roles: ['admin'],
+      kind: 'sms_received',
+      title: 'New inbound text',
+      body: `New SMS reply from ${phoneNormalized}.`,
+      href: '/admin/inbox',
+    }),
+    createNotificationsForRoles({
+      roles: ['staff'],
+      kind: 'sms_received',
+      title: 'New inbound text',
+      body: `New SMS reply from ${phoneNormalized}.`,
+      href: '/staff/inbox',
+    }),
+  ])
 
   if (keyword === 'stop') {
     await setSmsSubscription({

@@ -2,13 +2,15 @@ import { requireAdminOrStaff } from '@/lib/auth/session'
 import StaffSidebar from '@/components/layout/StaffSidebar'
 import TestSmsBar from '@/components/layout/TestSmsBar'
 import { SuperAdminViewSwitcher } from '@/components/layout/SuperAdminViewSwitcher'
+import { getBellNotificationsForUser } from '@/lib/notifications/in-app'
 
 export default async function StaffLayout({ children }: { children: React.ReactNode }) {
   const session = await requireAdminOrStaff()
   const isSuperAdmin = session.user.email?.toLowerCase() === 'alex@ahawc.com'
+  const { notifications, unreadCount } = await getBellNotificationsForUser(session.user.id)
   return (
     <div className="flex min-h-screen bg-slate-50">
-      <StaffSidebar showViewSwitcher={isSuperAdmin} featureFlags={session.user.featureFlags} roles={session.user.roles} />
+      <StaffSidebar showViewSwitcher={isSuperAdmin} featureFlags={session.user.featureFlags} roles={session.user.roles} notifications={notifications} unreadCount={unreadCount} />
       <main className="flex-1 overflow-auto pt-14 md:pt-0">
         <TestSmsBar />
         {children}

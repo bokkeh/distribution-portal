@@ -13,6 +13,7 @@ import { signOut } from 'next-auth/react'
 import { SuperAdminViewSwitcher } from './SuperAdminViewSwitcher'
 import type { FeatureKey } from '@/lib/users/features'
 import { hasFeature } from '@/lib/users/features'
+import { NotificationBell } from '@/components/notifications/NotificationBell'
 
 const navItems = [
   { href: '/staff/dashboard', label: 'Dashboard', icon: LayoutDashboard, feature: 'dashboard' },
@@ -65,10 +66,14 @@ export default function StaffSidebar({
   showViewSwitcher = false,
   featureFlags = [],
   roles = [],
+  notifications = [],
+  unreadCount = 0,
 }: {
   showViewSwitcher?: boolean
   featureFlags?: string[]
   roles?: string[]
+  notifications?: Array<{ id: string; title: string; body: string; href: string | null; readAt: string | Date | null; createdAt: string | Date }>
+  unreadCount?: number
 }) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
@@ -85,13 +90,16 @@ export default function StaffSidebar({
       {/* ── Desktop sidebar ─────────────────────────────────── */}
       <aside className="hidden md:flex w-64 min-h-screen bg-slate-900 text-slate-100 flex-col flex-shrink-0">
         <div className="p-6 border-b border-slate-700">
-          <div className="flex items-center gap-3">
-            <Image src="/brand/logo.png" alt="AHAWC" width={40} height={40}
-              className="h-10 w-10 rounded-lg bg-white p-1 object-contain" priority />
-            <div>
-              <p className="font-bold text-white">AHAWC</p>
-              <p className="text-xs text-slate-400">Sales Portal</p>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <Image src="/brand/logo.png" alt="AHAWC" width={40} height={40}
+                className="h-10 w-10 rounded-lg bg-white p-1 object-contain" priority />
+              <div>
+                <p className="font-bold text-white">AHAWC</p>
+                <p className="text-xs text-slate-400">Sales Portal</p>
+              </div>
             </div>
+            <NotificationBell items={notifications} unreadCount={unreadCount} dark />
           </div>
         </div>
         <nav className="flex-1 p-4 space-y-1">
@@ -118,13 +126,16 @@ export default function StaffSidebar({
             <p className="text-xs text-slate-400 leading-none mt-0.5">Sales Portal</p>
           </div>
         </div>
-        <button
-          onClick={() => setOpen(true)}
-          className="p-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
-          aria-label="Open menu"
-        >
-          <Menu className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-2">
+          <NotificationBell items={notifications} unreadCount={unreadCount} dark />
+          <button
+            onClick={() => setOpen(true)}
+            className="p-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
+            aria-label="Open menu"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        </div>
       </header>
 
       {/* ── Mobile drawer overlay ───────────────────────────── */}

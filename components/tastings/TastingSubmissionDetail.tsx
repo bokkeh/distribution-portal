@@ -112,7 +112,7 @@ export function TastingSubmissionDetail({
       </Card>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <Card>
+        <Card id="report">
           <CardHeader>
             <CardTitle>Submit Tasting Report</CardTitle>
           </CardHeader>
@@ -180,7 +180,7 @@ export function TastingSubmissionDetail({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card id="invoice">
           <CardHeader>
             <CardTitle>Submit Invoice To Accounting</CardTitle>
           </CardHeader>

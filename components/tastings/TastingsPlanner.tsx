@@ -19,6 +19,7 @@ type TastingRow = {
   createdByUserId: string
   eventName: string
   scheduledAt: Date
+  endAt: Date | null
   status: string
   storeAddress: string | null
   storeCity: string | null
@@ -48,6 +49,14 @@ const statusVariant: Record<string, 'secondary' | 'success' | 'warning' | 'destr
   confirmed: 'warning',
   completed: 'success',
   cancelled: 'destructive',
+}
+
+function formatTastingTimeRange(start: Date, end: Date | null) {
+  const startDate = new Date(start)
+  if (!end) return format(startDate, 'p')
+
+  const endDate = new Date(end)
+  return `${format(startDate, 'p')} - ${format(endDate, 'p')}`
 }
 
 export function TastingsPlanner({ mode, tastings, accounts, tasters, success, error }: Props) {
@@ -156,15 +165,20 @@ export function TastingsPlanner({ mode, tastings, accounts, tasters, success, er
                   </select>
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="date">Date</Label>
-                    <Input id="date" name="date" type="date" defaultValue={format(selectedDate, 'yyyy-MM-dd')} required />
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="date">Date</Label>
+                      <Input id="date" name="date" type="date" defaultValue={format(selectedDate, 'yyyy-MM-dd')} required />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="time">Start Time</Label>
+                      <Input id="time" name="time" type="time" defaultValue="17:00" required />
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="time">Start Time</Label>
-                    <Input id="time" name="time" type="time" defaultValue="17:00" required />
-                  </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="endTime">End Time</Label>
+                  <Input id="endTime" name="endTime" type="time" defaultValue="19:00" />
                 </div>
 
                 <div className="space-y-2">
@@ -196,7 +210,7 @@ export function TastingsPlanner({ mode, tastings, accounts, tasters, success, er
                       <div>
                         <p className="text-base font-semibold text-slate-900">{tasting.eventName}</p>
                         <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-slate-500">
-                          <span className="flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" />{format(new Date(tasting.scheduledAt), 'p')}</span>
+                          <span className="flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" />{formatTastingTimeRange(new Date(tasting.scheduledAt), tasting.endAt ? new Date(tasting.endAt) : null)}</span>
                           <span className="flex items-center gap-1"><Store className="h-3.5 w-3.5" />{tasting.tasterName}</span>
                         </div>
                       </div>
@@ -279,7 +293,7 @@ export function TastingsPlanner({ mode, tastings, accounts, tasters, success, er
                   <p className="font-semibold text-slate-900">{tasting.eventName}</p>
                   <Badge variant={statusVariant[tasting.status] ?? 'secondary'}>{tasting.status}</Badge>
                 </div>
-                <p className="text-sm text-slate-500">{format(new Date(tasting.scheduledAt), 'MMM d, yyyy h:mm a')} with {tasting.tasterName}</p>
+                <p className="text-sm text-slate-500">{format(new Date(tasting.scheduledAt), 'MMM d, yyyy')} • {formatTastingTimeRange(new Date(tasting.scheduledAt), tasting.endAt ? new Date(tasting.endAt) : null)} with {tasting.tasterName}</p>
                 <p className="text-sm text-slate-500">{[tasting.storeAddress, tasting.storeCity, tasting.storeState, tasting.storeZip].filter(Boolean).join(', ') || 'Store address not provided'}</p>
                 <div className="flex flex-wrap gap-2 pt-1">
                   {tasting.reportSubmittedAt ? <Badge variant="success">Report Submitted</Badge> : null}

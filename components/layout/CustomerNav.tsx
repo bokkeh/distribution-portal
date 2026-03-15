@@ -10,6 +10,7 @@ import { signOut } from 'next-auth/react'
 import { useCart } from '@/hooks/useCart'
 import type { FeatureKey } from '@/lib/users/features'
 import { hasFeature } from '@/lib/users/features'
+import { NotificationBell } from '@/components/notifications/NotificationBell'
 
 const navItems = [
   { href: '/customer/dashboard', label: 'Dashboard', icon: LayoutDashboard, feature: 'dashboard' },
@@ -34,7 +35,17 @@ function CartButton({ count }: { count: number }) {
   )
 }
 
-export default function CustomerNav({ featureFlags = [], roles = [] }: { featureFlags?: string[]; roles?: string[] }) {
+export default function CustomerNav({
+  featureFlags = [],
+  roles = [],
+  notifications = [],
+  unreadCount = 0,
+}: {
+  featureFlags?: string[]
+  roles?: string[]
+  notifications?: Array<{ id: string; title: string; body: string; href: string | null; readAt: string | Date | null; createdAt: string | Date }>
+  unreadCount?: number
+}) {
   const pathname = usePathname()
   const { itemCount } = useCart()
   const [mounted, setMounted] = useState(false)
@@ -86,6 +97,7 @@ export default function CustomerNav({ featureFlags = [], roles = [] }: { feature
           </nav>
 
           <div className="flex items-center gap-2">
+            <NotificationBell items={notifications} unreadCount={unreadCount} />
             {canUseCart ? <CartButton count={cartCount} /> : null}
             <button
               onClick={() => signOut({ callbackUrl: '/login' })}

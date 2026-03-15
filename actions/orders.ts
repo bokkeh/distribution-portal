@@ -9,6 +9,7 @@ import { redirect } from 'next/navigation'
 import { postGoogleChat } from '@/lib/google-chat/webhook'
 import { logInventoryTransaction } from '@/lib/inventory/history'
 import { getMinimumCaseQuantity, isWisherVodkaProduct } from '@/lib/orders/minimums'
+import { createUserNotification } from '@/lib/notifications/in-app'
 
 type PurchaseUnit = 'case' | 'bottle'
 
@@ -107,6 +108,22 @@ export async function createOrder(formData: FormData) {
 
     await db.insert(orderItems).values(lineItems.map(item => ({ ...item, orderId: order.id })))
 
+    const [customerAccount] = await db
+      .select({ userId: customerAccounts.userId, companyName: customerAccounts.companyName })
+      .from(customerAccounts)
+      .where(eq(customerAccounts.id, customerId))
+      .limit(1)
+
+    if (customerAccount?.userId) {
+      await createUserNotification({
+        userId: customerAccount.userId,
+        kind: 'order_created',
+        title: 'Order received',
+        body: `Your order for ${customerAccount.companyName} has been received and is now being processed.`,
+        href: `/customer/orders/${order.id}`,
+      })
+    }
+
     for (const item of items) {
     const product = productMap[item.productId]
     const inv = inventoryMap[item.productId]
@@ -184,6 +201,46 @@ export async function updateOrderStatus(orderId: string, status: 'pending' | 'co
     throw new Error('Unauthorized')
   }
   await db.update(orders).set({ status }).where(eq(orders.id, orderId))
+
+  const [order] = await db
+    .select({
+      id: orders.id,
+      customerUserId: customerAccounts.userId,
+      companyName: customerAccounts.companyName,
+    })
+    .from(orders)
+    .leftJoin(customerAccounts, eq(orders.customerId, customerAccounts.id))
+    .where(eq(orders.id, orderId))
+    .limit(1)
+
+  if (order?.customerUserId) {
+    const details = {
+      pending: {
+        title: 'Order update',
+        body: `Your order for ${order.companyName ?? 'your account'} is pending review.`,
+      },
+      confirmed: {
+        title: 'Order processed',
+        body: `Your order for ${order.companyName ?? 'your account'} has been processed and confirmed.`,
+      },
+      fulfilled: {
+        title: 'Order complete',
+        body: `Your order for ${order.companyName ?? 'your account'} has been completed.`,
+      },
+      cancelled: {
+        title: 'Order cancelled',
+        body: `Your order for ${order.companyName ?? 'your account'} has been cancelled.`,
+      },
+    }[status]
+
+    await createUserNotification({
+      userId: order.customerUserId,
+      kind: 'order_status',
+      title: details.title,
+      body: details.body,
+      href: `/customer/orders/${orderId}`,
+    })
+  }
   revalidatePath('/admin/dashboard')
   revalidatePath('/admin/orders')
   revalidatePath('/staff/orders')
@@ -202,6 +259,49 @@ export async function updateOrderShippingStatus(orderId: string, formData: FormD
   const shippingStatus = formData.get('shippingStatus') as 'not_scheduled' | 'scheduled' | 'out_for_delivery' | 'delivered' | 'issue'
 
   await db.update(orders).set({ shippingStatus }).where(eq(orders.id, orderId))
+
+  const [order] = await db
+    .select({
+      customerUserId: customerAccounts.userId,
+      companyName: customerAccounts.companyName,
+    })
+    .from(orders)
+    .leftJoin(customerAccounts, eq(orders.customerId, customerAccounts.id))
+    .where(eq(orders.id, orderId))
+    .limit(1)
+
+  if (order?.customerUserId) {
+    const details = {
+      not_scheduled: {
+        title: 'Shipping update',
+        body: `Your order for ${order.companyName ?? 'your account'} is awaiting delivery scheduling.`,
+      },
+      scheduled: {
+        title: 'Delivery scheduled',
+        body: `Your order for ${order.companyName ?? 'your account'} has been scheduled for delivery.`,
+      },
+      out_for_delivery: {
+        title: 'Order out for delivery',
+        body: `Your order for ${order.companyName ?? 'your account'} is currently being delivered.`,
+      },
+      delivered: {
+        title: 'Order delivered',
+        body: `Your order for ${order.companyName ?? 'your account'} has been delivered.`,
+      },
+      issue: {
+        title: 'Delivery issue',
+        body: `There is a delivery issue with your order for ${order.companyName ?? 'your account'}.`,
+      },
+    }[shippingStatus]
+
+    await createUserNotification({
+      userId: order.customerUserId,
+      kind: 'shipping_status',
+      title: details.title,
+      body: details.body,
+      href: `/customer/orders/${orderId}`,
+    })
+  }
   revalidatePath('/admin/orders')
   revalidatePath('/staff/orders')
   revalidatePath(`/admin/orders/${orderId}`)

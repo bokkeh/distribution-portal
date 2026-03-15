@@ -12,6 +12,7 @@ import { geocodeAddress } from '@/lib/maps/geocode'
 import { generateSignedUploadUrl } from '@/lib/gcs/client'
 import { sendDeliveryCompletedEmail } from '@/lib/resend/client'
 import { v4 as uuidv4 } from 'uuid'
+import { createNotificationsForRoles, createUserNotification } from '@/lib/notifications/in-app'
 
 async function resequenceDeliveryStops(deliveryId: string) {
   const existingStops = await db
@@ -204,6 +205,22 @@ export async function createDelivery(formData: FormData) {
     })
   }
 
+  const [driverUser] = await db
+    .select({ userId: drivers.userId })
+    .from(drivers)
+    .where(eq(drivers.id, driverId))
+    .limit(1)
+
+  if (driverUser?.userId) {
+    await createUserNotification({
+      userId: driverUser.userId,
+      kind: 'delivery_assigned',
+      title: 'New delivery assigned',
+      body: `You have a new delivery run scheduled for ${weekStartDate}.`,
+      href: '/driver/deliveries',
+    })
+  }
+
   await postGoogleChat(`Delivery Scheduled for ${weekStartDate}\nDriver: ${driver?.name}\nStops: ${orderIds.length}`)
 
   revalidatePath('/admin/deliveries')
@@ -309,6 +326,23 @@ export async function completeDeliveryStop(stopId: string, formData: FormData) {
     })
   }
 
+  await Promise.all([
+    createNotificationsForRoles({
+      roles: ['admin'],
+      kind: 'delivery_completed',
+      title: 'Delivery completed',
+      body: `${stop.companyName ?? 'A delivery stop'} was marked delivered.`,
+      href: `/admin/deliveries/${stop.deliveryId}`,
+    }),
+    createNotificationsForRoles({
+      roles: ['staff'],
+      kind: 'delivery_completed',
+      title: 'Delivery completed',
+      body: `${stop.companyName ?? 'A delivery stop'} was marked delivered.`,
+      href: null,
+    }),
+  ])
+
   revalidatePath('/driver/deliveries')
   revalidatePath('/driver/map')
 }
@@ -409,6 +443,22 @@ export async function reassignDeliveryDriver(deliveryId: string, formData: FormD
       to: driver.phone,
       body: `AHAWC Delivery Reassigned: You have been assigned a delivery scheduled for ${delivery.weekStartDate}. Log in to view your route: ${process.env.NEXTAUTH_URL}/driver/deliveries`,
     }).catch(() => {})
+  }
+
+  const [driverUser] = await db
+    .select({ userId: drivers.userId })
+    .from(drivers)
+    .where(eq(drivers.id, driverId))
+    .limit(1)
+
+  if (driverUser?.userId) {
+    await createUserNotification({
+      userId: driverUser.userId,
+      kind: 'delivery_reassigned',
+      title: 'Delivery reassigned',
+      body: `A delivery run scheduled for ${delivery.weekStartDate} has been assigned to you.`,
+      href: '/driver/deliveries',
+    })
   }
 
   await postGoogleChat(`Delivery Reassigned for ${delivery.weekStartDate}\nDriver: ${driver?.name ?? 'Unknown'}`)

@@ -3,12 +3,15 @@ import Link from 'next/link'
 import { Truck, Map, LogOut, UserCircle } from 'lucide-react'
 import { SuperAdminViewSwitcher } from '@/components/layout/SuperAdminViewSwitcher'
 import { hasFeature } from '@/lib/users/features'
+import { getBellNotificationsForUser } from '@/lib/notifications/in-app'
+import { NotificationBell } from '@/components/notifications/NotificationBell'
 
 export default async function DriverLayout({ children }: { children: React.ReactNode }) {
   const session = await requireRole('driver', 'admin')
   const isSuperAdmin = session.user.email?.toLowerCase() === 'alex@ahawc.com'
   const roles = session.user.roles ?? [session.user.role]
   const featureFlags = session.user.featureFlags ?? []
+  const { notifications, unreadCount } = await getBellNotificationsForUser(session.user.id)
   return (
     <div className="min-h-screen bg-slate-50">
       <nav className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between">
@@ -19,6 +22,7 @@ export default async function DriverLayout({ children }: { children: React.React
           <span className="font-bold">AHAWC Driver Portal</span>
         </div>
         <div className="flex items-center gap-4">
+          <NotificationBell items={notifications} unreadCount={unreadCount} dark />
           {hasFeature('deliveries', roles, featureFlags) ? (
             <Link href="/driver/deliveries" className="flex items-center gap-2 text-sm text-slate-300 hover:text-white">
               <Truck className="w-4 h-4" />Deliveries

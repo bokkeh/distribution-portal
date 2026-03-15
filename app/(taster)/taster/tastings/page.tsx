@@ -1,4 +1,4 @@
-import { TastingsPlanner } from '@/components/tastings/TastingsPlanner'
+import { TasterTastingsHub } from '@/components/tastings/TasterTastingsHub'
 import { getTastingsForView } from '@/actions/tastings'
 import { requireFeature } from '@/lib/auth/session'
 
@@ -28,16 +28,9 @@ export default async function TasterTastingsPage({
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">My Tastings</h1>
-          <p className="text-muted-foreground mt-1">Review your scheduled store tastings and keep statuses up to date.</p>
+          <p className="text-muted-foreground mt-1">See upcoming and past tastings, then complete reports and invoices from one place.</p>
         </div>
-        <TastingsPlanner
-          mode="taster"
-          tastings={tastings}
-          accounts={[]}
-          tasters={[]}
-          success={params.success}
-          error={params.error}
-        />
+        <TasterTastingsHub tastings={tastings} success={params.success} error={params.error} />
       </div>
     )
   } catch (error) {

@@ -2,6 +2,8 @@ import Link from 'next/link'
 import { ClipboardList, LogOut, UserCircle } from 'lucide-react'
 import { requireFeature } from '@/lib/auth/session'
 import { SuperAdminViewSwitcher } from '@/components/layout/SuperAdminViewSwitcher'
+import { getBellNotificationsForUser } from '@/lib/notifications/in-app'
+import { NotificationBell } from '@/components/notifications/NotificationBell'
 
 export default async function TasterLayout({ children }: { children: React.ReactNode }) {
   const session = await requireFeature('tastings', 'taster', 'admin')
@@ -9,6 +11,7 @@ export default async function TasterLayout({ children }: { children: React.React
   const featureFlags = session.user.featureFlags ?? []
   const roles = session.user.roles ?? [session.user.role]
   const canViewProfile = roles.includes('admin') || featureFlags.includes('profile')
+  const { notifications, unreadCount } = await getBellNotificationsForUser(session.user.id)
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -24,7 +27,9 @@ export default async function TasterLayout({ children }: { children: React.React
             </div>
           </div>
           <div className="flex items-center gap-4 text-sm">
-            <Link href="/taster/tastings" className="text-slate-300 hover:text-white">Tastings</Link>
+            <NotificationBell items={notifications} unreadCount={unreadCount} dark />
+            <Link href="/taster/tastings" className="text-slate-300 hover:text-white">My Tastings</Link>
+            <Link href="/taster/payouts" className="text-slate-300 hover:text-white">My Payouts</Link>
             {canViewProfile ? <Link href="/taster/profile" className="flex items-center gap-2 text-slate-300 hover:text-white"><UserCircle className="h-4 w-4" />Profile</Link> : null}
             <form action="/api/auth/signout" method="post">
               <button className="flex items-center gap-2 text-slate-400 hover:text-white">
