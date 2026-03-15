@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn, formatDate } from '@/lib/utils'
+import { useFormDraftAutosave } from '@/hooks/useFormDraftAutosave'
 
 type Thread = {
   phone: string
@@ -193,6 +194,7 @@ export function SmsInboxHub({
   const [threadFilter, setThreadFilter] = useState<'all' | 'unread' | 'open' | 'assigned' | 'starred'>('all')
   const [selectedTemplateId, setSelectedTemplateId] = useState('')
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false)
+  const replyDraft = useFormDraftAutosave(formRef, `${basePath}:reply-draft:${selectedPhone ?? 'none'}`)
 
   useEffect(() => {
     setLocalMessages(messages)
@@ -209,6 +211,19 @@ export function SmsInboxHub({
   useEffect(() => {
     window.localStorage.setItem(`${basePath}:thread-filter`, threadFilter)
   }, [basePath, threadFilter])
+
+  useEffect(() => {
+    const key = `${basePath}:selected-phone`
+    if (selectedPhone) {
+      window.localStorage.setItem(key, selectedPhone)
+      return
+    }
+
+    const savedPhone = window.localStorage.getItem(key)
+    if (savedPhone && threads.some((thread) => thread.phone === savedPhone)) {
+      router.replace(`${basePath}?phone=${encodeURIComponent(savedPhone)}`)
+    }
+  }, [basePath, router, selectedPhone, threads])
 
   useEffect(() => {
     if (!state || handledReplyStateRef.current === state) {
@@ -239,6 +254,7 @@ export function SmsInboxHub({
       formRef.current?.reset()
       setAttachments([])
       pendingReplyAttachmentsRef.current = []
+      replyDraft.clearDraft()
       setGifPickerOpen(false)
       setGifResults([])
       setGifQuery('')
@@ -810,6 +826,10 @@ export function SmsInboxHub({
                   >
                     Save as template
                   </button>
+                </div>
+                <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs">
+                  <span className="text-slate-500">{replyDraft.statusText || 'Reply draft saves locally for this thread.'}</span>
+                  <span className="text-slate-500">{pending ? 'Sending...' : 'Ready'}</span>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                   <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-100">

@@ -1,8 +1,13 @@
+'use client'
+
 import Link from 'next/link'
+import { useActionState, useEffect, useRef } from 'react'
+import { toast } from 'sonner'
 import { updateCustomerAccount } from '@/actions/crm'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useFormDraftAutosave } from '@/hooks/useFormDraftAutosave'
 
 type Account = {
   id: string
@@ -28,12 +33,37 @@ type Account = {
 
 export function AccountEditForm({ account, mode }: { account: Account; mode: 'admin' | 'staff' }) {
   const backPath = `/${mode}/crm/${account.id}`
+  const formRef = useRef<HTMLFormElement | null>(null)
+  const [state, action, pending] = useActionState(updateCustomerAccount, null)
+  const { statusText, clearDraft } = useFormDraftAutosave(formRef, `account-edit:${mode}:${account.id}`)
+
+  useEffect(() => {
+    if (!state) return
+    if (state.error) {
+      toast.error('Failed to save account', { description: state.error })
+      return
+    }
+    clearDraft()
+    toast.success('Account saved', {
+      description: state.changedFields?.length ? `${state.changedFields.length} field(s) updated.` : 'Changes applied.',
+    })
+  }, [clearDraft, state])
 
   return (
-    <form action={updateCustomerAccount} className="space-y-4">
+    <form ref={formRef} action={action} className="space-y-4">
       <input type="hidden" name="id" value={account.id} />
       <input type="hidden" name="mode" value={mode} />
       <input type="hidden" name="hubspotCompanyId" value={account.hubspotCompanyId ?? ''} />
+
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+        <div>
+          <p className="font-medium text-slate-900">Autosave draft</p>
+          <p className="text-xs text-slate-500">{statusText || 'Changes save locally while you type.'}</p>
+        </div>
+        <div className="text-xs text-slate-500">
+          {pending ? 'Saving…' : state?.success ? 'Saved' : 'Ready'}
+        </div>
+      </div>
 
       <div className="space-y-2">
         <Label htmlFor={`${mode}-companyName`}>Company Name</Label>
@@ -128,8 +158,15 @@ export function AccountEditForm({ account, mode }: { account: Account; mode: 'ad
         </div>
       </div>
 
+      {state?.success ? (
+        <p className="text-sm text-emerald-700">Account changes saved successfully.</p>
+      ) : null}
+      {state?.error ? (
+        <p className="text-sm text-red-700">{state.error}</p>
+      ) : null}
+
       <div className="flex gap-3">
-        <Button type="submit">Save Account</Button>
+        <Button type="submit" disabled={pending}>{pending ? 'Saving…' : 'Save Account'}</Button>
         <Link href={backPath} className={buttonVariants({ variant: 'outline' })}>Cancel</Link>
       </div>
     </form>

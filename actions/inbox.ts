@@ -78,6 +78,13 @@ export async function saveReplyTemplate(
   return { success: true }
 }
 
+export async function deleteReplyTemplate(templateId: string) {
+  await requireAdminOrStaff()
+  await db.delete(replyTemplates).where(eq(replyTemplates.id, templateId))
+  revalidateInboxViews()
+  revalidatePath('/admin/inbox/templates')
+}
+
 export async function markNotificationSectionRead(kindPrefix: string) {
   const session = await requireAuth()
 

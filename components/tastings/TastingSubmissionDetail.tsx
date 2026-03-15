@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { format } from 'date-fns'
 import { submitTasterInvoice, submitTastingReport } from '@/actions/tastings'
 import { Badge } from '@/components/ui/badge'
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useFormDraftAutosave } from '@/hooks/useFormDraftAutosave'
 
 type ReportRecord = {
   actualStartTime: string | null
@@ -76,6 +77,16 @@ export function TastingSubmissionDetail({
     return (rate * hours) + mileage + expenses
   }, [invoice?.expenseAmount, invoice?.hourlyRate, invoice?.hoursWorked, invoice?.mileage])
 
+  const reportFormRef = useRef<HTMLFormElement | null>(null)
+  const invoiceFormRef = useRef<HTMLFormElement | null>(null)
+  const reportDraft = useFormDraftAutosave(reportFormRef, `tasting-report:${tasting.id}`)
+  const invoiceDraft = useFormDraftAutosave(invoiceFormRef, `tasting-invoice:${tasting.id}`)
+
+  useEffect(() => {
+    if (success === 'report_submitted') reportDraft.clearDraft()
+    if (success === 'invoice_submitted') invoiceDraft.clearDraft()
+  }, [invoiceDraft, reportDraft, success])
+
   return (
     <div className="space-y-6">
       {success ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</div> : null}
@@ -117,7 +128,7 @@ export function TastingSubmissionDetail({
             <CardTitle>Submit Tasting Report</CardTitle>
           </CardHeader>
           <CardContent>
-            <form action={submitTastingReport} className="space-y-4">
+            <form ref={reportFormRef} action={submitTastingReport} className="space-y-4">
               <input type="hidden" name="tastingId" value={tasting.id} />
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
@@ -175,6 +186,11 @@ export function TastingSubmissionDetail({
                 <textarea id="followUpNotes" name="followUpNotes" className="min-h-20 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm" defaultValue={report?.followUpNotes ?? ''} placeholder="List anything staff needs to action after this tasting." />
               </div>
 
+              <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs">
+                <span className="text-slate-500">{reportDraft.statusText || 'Report draft saves locally while you type.'}</span>
+                <span className="text-slate-500">{report ? 'Saved report exists' : 'Draft mode'}</span>
+              </div>
+
               <Button type="submit" className="w-full">{report ? 'Update Report' : 'Submit Report'}</Button>
             </form>
           </CardContent>
@@ -185,7 +201,7 @@ export function TastingSubmissionDetail({
             <CardTitle>Submit Invoice To Accounting</CardTitle>
           </CardHeader>
           <CardContent>
-            <form action={submitTasterInvoice} className="space-y-4">
+            <form ref={invoiceFormRef} action={submitTasterInvoice} className="space-y-4">
               <input type="hidden" name="tastingId" value={tasting.id} />
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
@@ -238,6 +254,11 @@ export function TastingSubmissionDetail({
                   Submitted {format(new Date(invoice.submittedAt), 'MMM d, yyyy h:mm a')} • Status: <span className="font-medium text-slate-900">{invoice.status}</span>
                 </div>
               ) : null}
+
+              <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs">
+                <span className="text-slate-500">{invoiceDraft.statusText || 'Invoice draft saves locally while you type.'}</span>
+                <span className="text-slate-500">{invoice ? `Status: ${invoice.status}` : 'Draft mode'}</span>
+              </div>
 
               <Button type="submit" className="w-full">{invoice ? 'Update Invoice' : 'Submit Invoice'}</Button>
             </form>

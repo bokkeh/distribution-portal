@@ -1,5 +1,5 @@
 import { db } from '@/db'
-import { customerAccounts, contacts, orders, invoices } from '@/db/schema'
+import { customerAccounts, contacts, deliveries, deliveryStops, invoices, orders, smsMessages, tastings } from '@/db/schema'
 import { eq, desc, count } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -13,7 +13,7 @@ import { getCRMAccountDetail } from '@/lib/crm/account-read'
 import Link from 'next/link'
 import {
   ArrowLeft, RefreshCw, Phone, Mail, MapPin,
-  Clock, User, CreditCard, Building2, FileText, Hash,
+  Clock, User, CreditCard, Building2, FileText, Hash, Truck, MessageSquare, CalendarDays, RefreshCcw,
 } from 'lucide-react'
 import { getActivityTimeline } from '@/lib/activity/read'
 import { ActivityTimeline } from '@/components/activity/ActivityTimeline'
@@ -24,7 +24,9 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
   const account = await getCRMAccountDetail(accountId)
   if (!account) notFound()
 
-  const [accountContactsResult, recentOrdersResult, recentInvoicesResult, orderCountResult] = await Promise.allSettled([
+  const accountPhones = [account.phone, account.businessPhone, account.pocPhone].filter(Boolean) as string[]
+
+  const [accountContactsResult, recentOrdersResult, recentInvoicesResult, orderCountResult, recentDeliveriesResult, recentTextsResult, recentTastingsResult] = await Promise.allSettled([
     db.select({
       id: contacts.id,
       name: contacts.name,
@@ -47,12 +49,43 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
       status: invoices.status,
     }).from(invoices).where(eq(invoices.customerId, accountId)).orderBy(desc(invoices.createdAt)).limit(5),
     db.select({ total: count() }).from(orders).where(eq(orders.customerId, accountId)),
+    db.select({
+      deliveryId: deliveries.id,
+      status: deliveries.status,
+      weekStartDate: deliveries.weekStartDate,
+      stopStatus: deliveryStops.status,
+      completedAt: deliveryStops.completedAt,
+    })
+      .from(deliveryStops)
+      .innerJoin(deliveries, eq(deliveryStops.deliveryId, deliveries.id))
+      .where(eq(deliveryStops.customerId, accountId))
+      .orderBy(desc(deliveries.createdAt))
+      .limit(6),
+    accountPhones.length
+      ? db.select({
+          id: smsMessages.id,
+          direction: smsMessages.direction,
+          body: smsMessages.body,
+          createdAt: smsMessages.createdAt,
+          phoneNumber: smsMessages.phoneNumber,
+        }).from(smsMessages).where(eq(smsMessages.phoneNumber, accountPhones[0]!)).orderBy(desc(smsMessages.createdAt)).limit(6)
+      : Promise.resolve([]),
+    db.select({
+      id: tastings.id,
+      eventName: tastings.eventName,
+      status: tastings.status,
+      scheduledAt: tastings.scheduledAt,
+      endAt: tastings.endAt,
+    }).from(tastings).where(eq(tastings.customerId, accountId)).orderBy(desc(tastings.scheduledAt)).limit(6),
   ])
 
   const accountContacts = accountContactsResult.status === 'fulfilled' ? accountContactsResult.value : []
   const recentOrders = recentOrdersResult.status === 'fulfilled' ? recentOrdersResult.value : []
   const recentInvoices = recentInvoicesResult.status === 'fulfilled' ? recentInvoicesResult.value : []
   const orderCount = orderCountResult.status === 'fulfilled' ? orderCountResult.value[0] : { total: 0 }
+  const recentDeliveries = recentDeliveriesResult.status === 'fulfilled' ? recentDeliveriesResult.value : []
+  const recentTexts = recentTextsResult.status === 'fulfilled' ? recentTextsResult.value : []
+  const recentTastings = recentTastingsResult.status === 'fulfilled' ? recentTastingsResult.value : []
   const timeline = await getActivityTimeline('account', account.id, [
     {
       id: `account-created-${account.id}`,
@@ -200,6 +233,32 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
               <AccountEditForm account={account} mode="admin" />
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2">
+                <RefreshCcw className="h-4 w-4" />
+                Sync Status Center
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">HubSpot</p>
+                <p className="mt-2 text-sm font-semibold text-slate-900">{account.hubspotContactId || account.hubspotCompanyId ? 'Connected' : 'Needs sync'}</p>
+                <p className="mt-1 text-xs text-slate-500">{account.hubspotCompanyId ? `Company ${account.hubspotCompanyId}` : 'No HubSpot company linked'}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">SMS</p>
+                <p className="mt-2 text-sm font-semibold text-slate-900">{recentTexts.length ? 'Conversation history available' : 'No texts logged yet'}</p>
+                <p className="mt-1 text-xs text-slate-500">{accountPhones[0] ?? 'No account phone on file'}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Deliveries</p>
+                <p className="mt-2 text-sm font-semibold text-slate-900">{recentDeliveries.length ? 'Delivery history linked' : 'No delivery history yet'}</p>
+                <p className="mt-1 text-xs text-slate-500">{recentDeliveries[0] ? `Latest stop ${recentDeliveries[0].stopStatus}` : 'Awaiting first route assignment'}</p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Right: Contacts, Invoices, Orders */}
@@ -304,6 +363,89 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
                         </div>
                       </div>
                     </Link>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2">
+                <Truck className="h-4 w-4" />
+                Deliveries
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {recentDeliveries.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No deliveries linked to this account yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {recentDeliveries.map((delivery) => (
+                    <Link key={`${delivery.deliveryId}-${String(delivery.completedAt ?? delivery.weekStartDate)}`} href={`/admin/deliveries/${delivery.deliveryId}`}>
+                      <div className="flex items-center justify-between rounded-xl border border-slate-100 px-3 py-3 transition-colors hover:bg-slate-50">
+                        <div>
+                          <p className="text-sm font-medium text-slate-900">Delivery {String(delivery.deliveryId).slice(-8).toUpperCase()}</p>
+                          <p className="text-xs text-muted-foreground">{String(delivery.weekStartDate)} • Stop {delivery.stopStatus}</p>
+                        </div>
+                        <Badge variant="secondary">{delivery.status}</Badge>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2">
+                <CalendarDays className="h-4 w-4" />
+                Tastings
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {recentTastings.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No tastings linked to this account yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {recentTastings.map((tasting) => (
+                    <Link key={tasting.id} href={`/taster/tastings/${tasting.id}`}>
+                      <div className="flex items-center justify-between rounded-xl border border-slate-100 px-3 py-3 transition-colors hover:bg-slate-50">
+                        <div>
+                          <p className="text-sm font-medium text-slate-900">{tasting.eventName}</p>
+                          <p className="text-xs text-muted-foreground">{formatDate(tasting.scheduledAt)}</p>
+                        </div>
+                        <Badge variant="secondary">{tasting.status}</Badge>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <CardTitle className="flex items-center gap-2">
+                <MessageSquare className="h-4 w-4" />
+                Recent Texts
+              </CardTitle>
+              {accountPhones[0] ? <Link href={`/admin/inbox?phone=${encodeURIComponent(accountPhones[0])}`} className="text-xs font-medium text-primary hover:underline">Open thread</Link> : null}
+            </CardHeader>
+            <CardContent>
+              {recentTexts.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No inbox history found for this account yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {recentTexts.map((message) => (
+                    <div key={message.id} className="rounded-xl border border-slate-100 px-3 py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <Badge variant={message.direction === 'inbound' ? 'warning' : 'secondary'}>{message.direction}</Badge>
+                        <span className="text-xs text-muted-foreground" suppressHydrationWarning>{formatDate(message.createdAt)}</span>
+                      </div>
+                      <p className="mt-2 line-clamp-2 text-sm text-slate-700">{message.body}</p>
+                    </div>
                   ))}
                 </div>
               )}

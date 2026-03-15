@@ -3,6 +3,7 @@ import { requireFeature } from '@/lib/auth/session'
 import { getInboxContactMatches } from '@/lib/inbox/crm-match'
 import { getInboxMessageRows } from '@/lib/inbox/read'
 import { getInboxThreadMeta } from '@/lib/inbox/thread-meta'
+import Link from 'next/link'
 import { db } from '@/db'
 import { customerAccounts, replyTemplates, users } from '@/db/schema'
 import { asc, eq } from 'drizzle-orm'
@@ -114,9 +115,14 @@ export default async function AdminInboxPage({
 
     return (
       <div className="p-4 sm:p-8 space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">SMS Inbox</h1>
-          <p className="text-muted-foreground mt-1">Read inbound texts and reply from the platform.</p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">SMS Inbox</h1>
+            <p className="text-muted-foreground mt-1">Read inbound texts and reply from the platform.</p>
+          </div>
+          <Link href="/admin/inbox/templates" className="text-sm font-medium text-primary hover:underline">
+            Manage reply templates
+          </Link>
         </div>
         <SmsInboxHub
           basePath="/admin/inbox"

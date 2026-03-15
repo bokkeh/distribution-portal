@@ -1,5 +1,5 @@
 import { db } from '@/db'
-import { orders, orderItems, products, customerAccounts } from '@/db/schema'
+import { customerAccounts, deliveries, deliveryStops, orderItems, orders, products } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { requireRole } from '@/lib/auth/session'
 import { notFound } from 'next/navigation'
@@ -64,6 +64,61 @@ export default async function CustomerOrderDetailPage({ params }: { params: { or
     .leftJoin(products, eq(orderItems.productId, products.id))
     .where(eq(orderItems.orderId, params.orderId))
 
+  const [deliveryStop] = await db
+    .select({
+      deliveryId: deliveryStops.deliveryId,
+      stopStatus: deliveryStops.status,
+      completedAt: deliveryStops.completedAt,
+      deliveryStatus: deliveries.status,
+      weekStartDate: deliveries.weekStartDate,
+    })
+    .from(deliveryStops)
+    .leftJoin(deliveries, eq(deliveryStops.deliveryId, deliveries.id))
+    .where(eq(deliveryStops.orderId, params.orderId))
+
+  const trackingEvents = [
+    {
+      label: 'Order received',
+      description: 'We received your order and added it to the portal.',
+      active: true,
+      completedAt: order.createdAt,
+    },
+    {
+      label: 'Order processed',
+      description: order.status === 'confirmed' || order.status === 'fulfilled'
+        ? 'Your order has been reviewed and confirmed.'
+        : 'Awaiting review and confirmation.',
+      active: order.status === 'confirmed' || order.status === 'fulfilled',
+      completedAt: order.status === 'confirmed' || order.status === 'fulfilled' ? order.createdAt : null,
+    },
+    {
+      label: 'Delivery scheduled',
+      description: order.shippingStatus === 'scheduled' || order.shippingStatus === 'out_for_delivery' || order.shippingStatus === 'delivered'
+        ? `Delivery is scheduled${deliveryStop?.weekStartDate ? ` for week of ${deliveryStop.weekStartDate}` : ''}.`
+        : 'Delivery has not been scheduled yet.',
+      active: order.shippingStatus === 'scheduled' || order.shippingStatus === 'out_for_delivery' || order.shippingStatus === 'delivered',
+      completedAt: deliveryStop?.weekStartDate ? new Date(String(deliveryStop.weekStartDate)) : null,
+    },
+    {
+      label: 'Out for delivery',
+      description: order.shippingStatus === 'out_for_delivery' || order.shippingStatus === 'delivered'
+        ? 'Your order is on the route now.'
+        : 'The driver has not started this stop yet.',
+      active: order.shippingStatus === 'out_for_delivery' || order.shippingStatus === 'delivered',
+      completedAt: null,
+    },
+    {
+      label: order.shippingStatus === 'issue' ? 'Delivery issue' : 'Delivered',
+      description: order.shippingStatus === 'delivered'
+        ? 'Delivery was completed successfully.'
+        : order.shippingStatus === 'issue'
+          ? 'There is an issue with this delivery. Our team will follow up.'
+          : 'Awaiting final delivery confirmation.',
+      active: order.shippingStatus === 'delivered' || order.shippingStatus === 'issue',
+      completedAt: deliveryStop?.completedAt ?? null,
+    },
+  ]
+
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
       <div className="flex items-center gap-4">
@@ -80,14 +135,33 @@ export default async function CustomerOrderDetailPage({ params }: { params: { or
 
       <Card>
         <CardHeader><CardTitle>Order Tracking</CardTitle></CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-2">
-          <div className="rounded-lg border bg-slate-50 p-4">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Order Status</p>
-            <div className="mt-2"><Badge variant={orderStatusVariant[order.status]}>{formatStatusLabel(order.status)}</Badge></div>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg border bg-slate-50 p-4">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Order Status</p>
+              <div className="mt-2"><Badge variant={orderStatusVariant[order.status]}>{formatStatusLabel(order.status)}</Badge></div>
+            </div>
+            <div className="rounded-lg border bg-slate-50 p-4">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Shipping Status</p>
+              <div className="mt-2"><Badge variant={shippingStatusVariant[order.shippingStatus]}>{formatStatusLabel(order.shippingStatus)}</Badge></div>
+            </div>
           </div>
-          <div className="rounded-lg border bg-slate-50 p-4">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Shipping Status</p>
-            <div className="mt-2"><Badge variant={shippingStatusVariant[order.shippingStatus]}>{formatStatusLabel(order.shippingStatus)}</Badge></div>
+          <div className="space-y-3">
+            {trackingEvents.map((event, index) => (
+              <div key={event.label} className="flex gap-3">
+                <div className="flex flex-col items-center">
+                  <div className={`mt-1 h-3 w-3 rounded-full ${event.active ? 'bg-blue-600' : 'bg-slate-300'}`} />
+                  {index < trackingEvents.length - 1 ? <div className={`mt-1 h-full w-px ${event.active ? 'bg-blue-200' : 'bg-slate-200'}`} /> : null}
+                </div>
+                <div className="pb-4">
+                  <p className="text-sm font-semibold text-slate-900">{event.label}</p>
+                  <p className="text-sm text-muted-foreground">{event.description}</p>
+                  {event.completedAt ? (
+                    <p className="mt-1 text-xs text-slate-500" suppressHydrationWarning>{formatDate(event.completedAt)}</p>
+                  ) : null}
+                </div>
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>

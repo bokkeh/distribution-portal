@@ -108,9 +108,13 @@ export default async function AdminDashboard() {
         </Card>
         <KpiCard
           title="System Health"
-          value={String(systemHealth.pendingMigrations.length + systemHealth.missingTables.length + systemHealth.missingColumns.length)}
-          change={systemHealth.pendingMigrations.length ? `${systemHealth.pendingMigrations.length} migration(s) pending` : 'No migration gap detected'}
-          changeType={systemHealth.pendingMigrations.length ? 'negative' : 'positive'}
+          value={String((systemHealth.migrationHistoryState === 'tracked' ? systemHealth.pendingMigrations.length : 0) + systemHealth.missingTables.length + systemHealth.missingColumns.length)}
+          change={
+            systemHealth.migrationHistoryState === 'tracked'
+              ? systemHealth.pendingMigrations.length ? `${systemHealth.pendingMigrations.length} migration(s) pending` : 'No migration gap detected'
+              : 'Migration history untracked'
+          }
+          changeType={(systemHealth.migrationHistoryState === 'tracked' ? systemHealth.pendingMigrations.length : 0) ? 'negative' : 'positive'}
           icon={HeartPulse}
           iconColor="text-rose-600"
         />
@@ -164,7 +168,7 @@ export default async function AdminDashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">Approvals And Follow-Up</CardTitle>
-            <Link href="/admin/system" className="text-xs text-primary hover:underline">Review ops</Link>
+            <Link href="/admin/attention" className="text-xs text-primary hover:underline">Open queue</Link>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
