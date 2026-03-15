@@ -30,6 +30,69 @@ type Message = {
   createdAt: Date
 }
 
+const MAX_MMS_ATTACHMENTS = 3
+const MAX_IMAGE_BYTES = 900 * 1024
+const MAX_IMAGE_DIMENSION = 1280
+
+async function compressImageForMms(file: File) {
+  if (!file.type.startsWith('image/')) {
+    throw new Error('Only image uploads are supported.')
+  }
+
+  const imageUrl = URL.createObjectURL(file)
+
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const nextImage = new window.Image()
+      nextImage.onload = () => resolve(nextImage)
+      nextImage.onerror = () => reject(new Error('Unable to read image.'))
+      nextImage.src = imageUrl
+    })
+
+    let width = image.width
+    let height = image.height
+    const longestSide = Math.max(width, height)
+
+    if (longestSide > MAX_IMAGE_DIMENSION) {
+      const scale = MAX_IMAGE_DIMENSION / longestSide
+      width = Math.max(1, Math.round(width * scale))
+      height = Math.max(1, Math.round(height * scale))
+    }
+
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+
+    const context = canvas.getContext('2d')
+    if (!context) {
+      throw new Error('Unable to process image.')
+    }
+
+    context.drawImage(image, 0, 0, width, height)
+
+    let quality = 0.82
+    let blob: Blob | null = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality))
+
+    while (blob && blob.size > MAX_IMAGE_BYTES && quality > 0.45) {
+      quality -= 0.1
+      blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality))
+    }
+
+    if (!blob) {
+      throw new Error('Unable to compress image.')
+    }
+
+    if (blob.size > MAX_IMAGE_BYTES) {
+      throw new Error('Image is still too large after compression. Please choose a smaller image.')
+    }
+
+    const normalizedName = file.name.replace(/\.[^.]+$/, '') || 'attachment'
+    return new File([blob], `${normalizedName}.jpg`, { type: 'image/jpeg' })
+  } finally {
+    URL.revokeObjectURL(imageUrl)
+  }
+}
+
 export function SmsInboxHub({
   basePath,
   threads,
@@ -61,6 +124,11 @@ export function SmsInboxHub({
   }, [state])
 
   async function handleUpload(file: File) {
+    if (mediaUrls.length >= MAX_MMS_ATTACHMENTS) {
+      toast.error('Attachment limit reached', { description: `You can attach up to ${MAX_MMS_ATTACHMENTS} images per reply.` })
+      return
+    }
+
     if (file.size > 10 * 1024 * 1024) {
       toast.error('File too large', { description: 'Maximum 10MB.' })
       return
@@ -68,10 +136,11 @@ export function SmsInboxHub({
 
     setUploading(true)
     try {
+      const compressedFile = await compressImageForMms(file)
       const formData = new FormData()
-      formData.append('file', file)
+      formData.append('file', compressedFile)
       formData.append('folder', 'sms-inbox')
-      formData.append('filename', file.name)
+      formData.append('filename', compressedFile.name)
 
       const response = await fetch('/api/upload', {
         method: 'POST',
@@ -234,6 +303,9 @@ export function SmsInboxHub({
                       }}
                     />
                   </label>
+                  <span className="text-xs text-slate-500">
+                    Up to {MAX_MMS_ATTACHMENTS} images, compressed for MMS.
+                  </span>
                   {mediaUrls.length ? (
                     <div className="flex flex-wrap gap-2">
                       {mediaUrls.map((url, index) => (
