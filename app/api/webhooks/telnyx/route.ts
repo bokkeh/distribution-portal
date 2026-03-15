@@ -13,11 +13,13 @@ import {
 
 type TelnyxWebhookPayload = {
   id?: string
+  event_type?: string
   text?: string
   body?: string
   from?: string | { phone_number?: string }
   payload?: {
     id?: string
+    event_type?: string
     text?: string
     from?: { phone_number?: string }
   }
@@ -37,6 +39,10 @@ function getProviderMessageId(payload: TelnyxWebhookPayload) {
   return payload?.id ?? payload?.payload?.id ?? null
 }
 
+function getEventType(body: any, payload: TelnyxWebhookPayload) {
+  return body?.data?.event_type ?? body?.event_type ?? payload?.event_type ?? payload?.payload?.event_type ?? ''
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null)
   if (!body) {
@@ -44,8 +50,14 @@ export async function POST(req: NextRequest) {
   }
 
   const payload = (body?.data?.payload ?? body?.data ?? body) as TelnyxWebhookPayload
+  const eventType = getEventType(body, payload)
   const text = getInboundText(payload)
   const from = getInboundFrom(payload)
+
+  // Ignore outbound delivery/status events. The inbox only tracks actual inbound replies.
+  if (eventType && eventType !== 'message.received') {
+    return NextResponse.json({ received: true, ignored: eventType })
+  }
 
   if (!text || !from) {
     return NextResponse.json({ received: true })
