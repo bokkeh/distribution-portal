@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { db } from '@/db'
@@ -53,9 +54,20 @@ export async function getSystemHealthSnapshot() {
     },
   ]
 
-  const journalPath = path.join(process.cwd(), 'db', 'migrations', 'meta', '_journal.json')
-  const journal = JSON.parse(await fs.readFile(journalPath, 'utf8')) as { entries: Array<{ tag: string }> }
-  const expectedMigrations = journal.entries.map((entry) => entry.tag)
+  const migrationsDir = path.join(process.cwd(), 'db', 'migrations')
+  const journalPath = path.join(migrationsDir, 'meta', '_journal.json')
+  const journal = JSON.parse(await fs.readFile(journalPath, 'utf8')) as {
+    entries: Array<{ tag: string; when: number }>
+  }
+  const expectedMigrationEntries = await Promise.all(journal.entries.map(async (entry) => {
+    const migrationSql = await fs.readFile(path.join(migrationsDir, `${entry.tag}.sql`), 'utf8')
+    return {
+      tag: entry.tag,
+      when: entry.when,
+      hash: crypto.createHash('sha256').update(migrationSql).digest('hex'),
+    }
+  }))
+  const expectedMigrations = expectedMigrationEntries.map((entry) => entry.tag)
   let appliedMigrations: string[] = []
   let migrationHistoryState: MigrationHistoryState = 'missing'
 
@@ -84,14 +96,23 @@ export async function getSystemHealthSnapshot() {
       const value = (migrationRows.rows?.[0] as { names?: string } | undefined)?.names ?? ''
       appliedMigrations = value ? value.split(',').filter(Boolean) : []
       migrationHistoryState = appliedMigrations.length > 0 ? 'tracked' : 'missing'
-    } else {
-      const countRows = await db.execute(sql`
-        select count(*)::int as count
+    } else if (migrationTableColumns.has('hash') && migrationTableColumns.has('created_at')) {
+      const migrationRows = await db.execute(sql`
+        select hash, created_at
         from "drizzle"."__drizzle_migrations"
       `)
-      const appliedCount = Number((countRows.rows?.[0] as { count?: number | string } | undefined)?.count ?? 0)
-      appliedMigrations = expectedMigrations.slice(0, Math.max(0, Math.min(appliedCount, expectedMigrations.length)))
-      migrationHistoryState = appliedCount > 0 ? 'tracked' : 'missing'
+      const appliedKeys = new Set(
+        (migrationRows.rows ?? []).map((row) => {
+          const typedRow = row as { hash?: string; created_at?: string | number | null }
+          return `${String(typedRow.hash ?? '')}:${String(typedRow.created_at ?? '')}`
+        }),
+      )
+      appliedMigrations = expectedMigrationEntries
+        .filter((entry) => appliedKeys.has(`${entry.hash}:${entry.when}`))
+        .map((entry) => entry.tag)
+      migrationHistoryState = migrationRows.rows?.length ? 'tracked' : 'missing'
+    } else {
+      migrationHistoryState = 'missing'
     }
   } catch {
     appliedMigrations = []
