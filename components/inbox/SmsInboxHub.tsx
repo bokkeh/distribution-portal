@@ -59,6 +59,11 @@ const MAX_TOTAL_MMS_BYTES = 800 * 1024
 const MAX_IMAGE_DIMENSION = 1280
 const GIPHY_API_KEY = process.env.NEXT_PUBLIC_GIPHY_API_KEY
 
+function isGifUrl(url: string) {
+  const normalized = url.toLowerCase()
+  return normalized.includes('.gif') || normalized.includes('giphy.com/media') || normalized.includes('media.giphy.com')
+}
+
 async function compressImageForMms(file: File) {
   if (!file.type.startsWith('image/')) {
     throw new Error('Only image uploads are supported.')
@@ -559,8 +564,24 @@ export function SmsInboxHub({
                       <div className="mb-2 grid gap-2">
                         {message.mediaUrls.map((url) => (
                           <a key={url} href={url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-xl">
-                            <div className="relative h-48 w-full overflow-hidden rounded-xl bg-black/10">
-                              <img src={url} alt="Message attachment" className="h-full w-full object-cover" loading="lazy" />
+                            <div className={cn(
+                              'relative h-48 w-full overflow-hidden rounded-xl',
+                              isGifUrl(url) ? 'bg-slate-900/85' : 'bg-black/10'
+                            )}>
+                              <img
+                                src={url}
+                                alt={isGifUrl(url) ? 'GIF attachment' : 'Message attachment'}
+                                className={cn(
+                                  'h-full w-full',
+                                  isGifUrl(url) ? 'object-contain' : 'object-cover'
+                                )}
+                                loading="lazy"
+                              />
+                              {isGifUrl(url) ? (
+                                <span className="absolute left-2 top-2 rounded-full bg-black/70 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
+                                  GIF
+                                </span>
+                              ) : null}
                             </div>
                           </a>
                         ))}
