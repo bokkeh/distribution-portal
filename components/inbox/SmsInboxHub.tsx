@@ -489,7 +489,9 @@ export function SmsInboxHub({
                   </div>
                   <div className="flex items-center gap-2">
                     {thread.unreadCount > 0 ? <Badge variant="destructive">{thread.unreadCount}</Badge> : null}
-                    <span className="text-[11px] text-slate-400">{formatDate(thread.lastAt)}</span>
+                    <span className="text-[11px] text-slate-400" suppressHydrationWarning>
+                      {formatDate(thread.lastAt)}
+                    </span>
                   </div>
                 </div>
                 <p className="mt-2 line-clamp-2 text-sm text-slate-600">{thread.lastBody}</p>
@@ -558,7 +560,7 @@ export function SmsInboxHub({
                     {message.body && message.body !== '[Image attachment]' ? <p>{message.body}</p> : null}
                     <div className={cn('mt-2 flex items-center justify-between gap-3 text-[11px]', message.direction === 'outbound' ? 'text-blue-100' : 'text-slate-400')}>
                       <span>{message.direction === 'outbound' ? 'Outgoing' : 'Incoming'}</span>
-                      <span>{formatDate(message.createdAt)}</span>
+                      <span suppressHydrationWarning>{formatDate(message.createdAt)}</span>
                     </div>
                   </div>
                 ))}
