@@ -18,31 +18,23 @@ export function ProfilePhotoUploadField({ value, onChange, disabled }: ProfilePh
   const [uploading, setUploading] = useState(false)
 
   async function handleUpload(file: File) {
-    if (file.size > 10 * 1024 * 1024) {
-      toast.error('File too large', { description: 'Maximum 10MB.' })
+    if (file.size > 4 * 1024 * 1024) {
+      toast.error('File too large', { description: 'Maximum 4MB for profile photos.' })
       return
     }
 
     setUploading(true)
     try {
-      // Step 1: get a signed upload URL from the server
-      const signRes = await fetch('/api/upload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: file.name, contentType: file.type, folder: 'avatars' }),
-      })
-      const signPayload = await signRes.json().catch(() => null)
-      if (!signRes.ok) throw new Error(signPayload?.error || 'Could not get upload URL')
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('folder', 'avatars')
+      formData.append('filename', file.name)
 
-      // Step 2: PUT the file directly to GCS (bypasses serverless size limits)
-      const putRes = await fetch(signPayload.uploadUrl, {
-        method: 'PUT',
-        headers: { 'Content-Type': file.type },
-        body: file,
-      })
-      if (!putRes.ok) throw new Error(`Storage upload failed (${putRes.status})`)
+      const res = await fetch('/api/upload', { method: 'POST', body: formData })
+      const payload = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(payload?.error || 'Upload failed')
 
-      onChange(signPayload.publicUrl)
+      onChange(payload.publicUrl)
       toast.success('Profile photo uploaded')
     } catch (error) {
       toast.error('Upload failed', { description: error instanceof Error ? error.message : undefined })

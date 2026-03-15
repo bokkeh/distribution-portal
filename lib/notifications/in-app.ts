@@ -126,7 +126,7 @@ export async function getBellNotificationsForUser(userId: string) {
       unreadCount,
     }
   } catch (error) {
-    if (!isMissingUserNotificationsTable(error)) throw error
+    console.error('[notifications] getBellNotificationsForUser failed:', error)
     return {
       notifications: [] as BellNotification[],
       unreadCount: 0,
