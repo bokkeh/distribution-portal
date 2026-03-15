@@ -11,12 +11,14 @@ import Link from 'next/link'
 
 export function AdminInventoryRowActions({
   productId,
+  editHref,
   quantityPaid,
   quantitySample,
   looseBottlePaid,
   reorderLevel,
 }: {
   productId: string
+  editHref?: string
   quantityPaid: number
   quantitySample: number
   looseBottlePaid: number
@@ -92,7 +94,7 @@ export function AdminInventoryRowActions({
       </td>
       <td className="px-6 py-4">
         <div className="flex items-center justify-end gap-2">
-          <Link href={`/admin/inventory/${productId}`}>
+          <Link href={editHref ?? `/admin/inventory/${productId}`}>
             <Button type="button" variant="ghost" size="sm">
               Edit
             </Button>

@@ -2,9 +2,11 @@ import { db } from '@/db'
 import { inventory, products } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { formatCurrency } from '@/lib/utils'
 import { SampleCaseAdjuster } from '@/components/inventory/SampleCaseAdjuster'
 import { AlertTriangle, FlaskConical } from 'lucide-react'
+import Link from 'next/link'
 
 export default async function StaffInventoryPage() {
   const items = await db
@@ -47,6 +49,7 @@ export default async function StaffInventoryPage() {
                   </span>
                 </th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Price</th>
+                <th className="px-6 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -74,6 +77,13 @@ export default async function StaffInventoryPage() {
                       />
                     </td>
                     <td className="px-6 py-4 text-sm">{formatCurrency(item.price)}</td>
+                    <td className="px-6 py-4 text-right">
+                      <Link href={`/staff/inventory/${item.productId}`}>
+                        <Button type="button" variant="ghost" size="sm">
+                          Edit
+                        </Button>
+                      </Link>
+                    </td>
                   </tr>
                 )
               })}

@@ -90,6 +90,8 @@ export async function updateProductDetails(formData: FormData) {
 
     revalidatePath('/admin/inventory')
     revalidatePath(`/admin/inventory/${productId}`)
+    revalidatePath('/staff/inventory')
+    revalidatePath(`/staff/inventory/${productId}`)
     return { success: true as const }
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Failed to update product details' }

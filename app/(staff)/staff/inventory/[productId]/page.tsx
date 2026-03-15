@@ -1,7 +1,7 @@
 import { db } from '@/db'
-import { products, inventory } from '@/db/schema'
+import { inventory, products } from '@/db/schema'
 import { eq } from 'drizzle-orm'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,9 +9,8 @@ import { Label } from '@/components/ui/label'
 import { updateProductDetails } from '@/actions/inventory'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
-import { redirect } from 'next/navigation'
 
-export default async function EditProductPage({ params }: { params: { productId: string } }) {
+export default async function StaffEditProductPage({ params }: { params: { productId: string } }) {
   async function submitProductUpdate(formData: FormData) {
     'use server'
 
@@ -20,7 +19,7 @@ export default async function EditProductPage({ params }: { params: { productId:
       throw new Error(result.error)
     }
 
-    redirect(`/admin/inventory/${params.productId}`)
+    redirect('/staff/inventory')
   }
 
   const [record] = await db
@@ -41,7 +40,7 @@ export default async function EditProductPage({ params }: { params: { productId:
   return (
     <div className="p-4 sm:p-8 space-y-6">
       <div className="flex items-center gap-4">
-        <Link href="/admin/inventory"><Button variant="ghost" size="icon"><ArrowLeft className="w-4 h-4" /></Button></Link>
+        <Link href="/staff/inventory"><Button variant="ghost" size="icon"><ArrowLeft className="w-4 h-4" /></Button></Link>
         <div>
           <h1 className="text-2xl font-bold text-slate-900">{product.name}</h1>
           <p className="text-muted-foreground mt-1">SKU: {product.sku}</p>
@@ -131,7 +130,7 @@ export default async function EditProductPage({ params }: { params: { productId:
             </label>
             <div className="flex gap-3">
               <Button type="submit">Save Product</Button>
-              <Link href="/admin/inventory"><Button variant="outline">Cancel</Button></Link>
+              <Link href="/staff/inventory"><Button variant="outline">Cancel</Button></Link>
             </div>
           </form>
         </CardContent>
