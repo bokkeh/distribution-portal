@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useEffect } from 'react'
+import { useActionState, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { updateSimpleProfile } from '@/actions/profile'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { User } from 'lucide-react'
+import { ProfilePhotoUploadField } from '@/components/profile/ProfilePhotoUploadField'
 
 interface Props {
   user: {
@@ -15,6 +16,7 @@ interface Props {
     name: string
     email: string
     phone: string | null
+    avatarUrl: string | null
     address: string | null
     city: string | null
     state: string | null
@@ -24,6 +26,7 @@ interface Props {
 
 export function SimpleProfileForm({ user }: Props) {
   const [state, action, pending] = useActionState(updateSimpleProfile, null)
+  const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl ?? '')
 
   useEffect(() => {
     if (state?.error) toast.error('Failed to save', { description: state.error })
@@ -33,6 +36,7 @@ export function SimpleProfileForm({ user }: Props) {
   return (
     <form action={action} className="space-y-6 max-w-lg">
       <input type="hidden" name="userId" value={user.id} />
+      <input type="hidden" name="avatarUrl" value={avatarUrl} />
 
       <Card>
         <CardHeader>
@@ -42,6 +46,7 @@ export function SimpleProfileForm({ user }: Props) {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          <ProfilePhotoUploadField value={avatarUrl} onChange={setAvatarUrl} disabled={pending} />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label>Full Name</Label>

@@ -9,9 +9,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { User, Car, Camera, Loader2, MapPin, Search } from 'lucide-react'
 import Image from 'next/image'
+import { ProfilePhotoUploadField } from '@/components/profile/ProfilePhotoUploadField'
 
 interface Props {
-  user: { id: string; name: string; email: string; phone: string | null }
+  user: { id: string; name: string; email: string; phone: string | null; avatarUrl: string | null }
   driver: {
     id: string
     vehicleMake: string | null
@@ -55,6 +56,7 @@ async function decodeVin(vin: string): Promise<VinResult | null> {
 export function DriverProfileForm({ user, driver }: Props) {
   const [state, action, pending] = useActionState(updateDriverProfile, null)
 
+  const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl ?? '')
   const [vehicleImageUrl, setVehicleImageUrl] = useState(driver?.vehicleImageUrl ?? '')
   const [make, setMake] = useState(driver?.vehicleMake ?? '')
   const [model, setModel] = useState(driver?.vehicleModel ?? '')
@@ -123,6 +125,7 @@ export function DriverProfileForm({ user, driver }: Props) {
   return (
     <form action={action} className="max-w-lg space-y-6">
       <input type="hidden" name="userId" value={user.id} />
+      <input type="hidden" name="avatarUrl" value={avatarUrl} />
       {driver && <input type="hidden" name="driverId" value={driver.id} />}
       <input type="hidden" name="vehicleImageUrl" value={vehicleImageUrl} />
       <input type="hidden" name="vehicleMake" value={make} />
@@ -137,6 +140,7 @@ export function DriverProfileForm({ user, driver }: Props) {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          <ProfilePhotoUploadField value={avatarUrl} onChange={setAvatarUrl} disabled={pending || uploading} />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Full Name</Label>

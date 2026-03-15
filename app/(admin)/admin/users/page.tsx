@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import Image from 'next/image'
 import { Plus, User } from 'lucide-react'
 import { db } from '@/db'
 import { users } from '@/db/schema'
@@ -23,6 +24,7 @@ export default async function UsersPage() {
     role: users.role,
     roles: users.roles,
     phone: users.phone,
+    avatarUrl: users.avatarUrl,
     active: users.active,
     createdAt: users.createdAt,
   }).from(users).orderBy(users.role, users.name)
@@ -59,7 +61,11 @@ export default async function UsersPage() {
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
                       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200">
-                        <User className="h-4 w-4 text-slate-500" />
+                        {user.avatarUrl ? (
+                          <Image src={user.avatarUrl} alt={user.name} width={32} height={32} className="h-8 w-8 rounded-full object-cover" />
+                        ) : (
+                          <User className="h-4 w-4 text-slate-500" />
+                        )}
                       </div>
                       <div>
                         <p className="text-sm font-medium">{user.name}</p>

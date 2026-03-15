@@ -10,11 +10,12 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency } from '@/lib/utils'
 import { User, Building2, Bell, UserCircle, Clock, Truck, MapPin, Plus, Trash2, CreditCard } from 'lucide-react'
+import { ProfilePhotoUploadField } from '@/components/profile/ProfilePhotoUploadField'
 
 interface Location { address: string; city: string; state: string; zip: string }
 
 interface Props {
-  user: { id: string; name: string; email: string; phone: string | null }
+  user: { id: string; name: string; email: string; phone: string | null; avatarUrl: string | null }
   account: {
     id: string
     companyName: string
@@ -70,6 +71,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 export function ProfileForm({ user, account }: Props) {
   const formRef = useRef<HTMLFormElement>(null)
   const [state, action, pending] = useActionState(updateProfile, null)
+  const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl ?? '')
 
   // Local state for reactive fields
   const [state_, setState_] = useState(account?.state ?? '')
@@ -111,6 +113,7 @@ export function ProfileForm({ user, account }: Props) {
   return (
     <form ref={formRef} action={action} className="space-y-6 max-w-2xl">
       <input type="hidden" name="userId" value={user.id} />
+      <input type="hidden" name="avatarUrl" value={avatarUrl} />
       {account && <input type="hidden" name="accountId" value={account.id} />}
       {/* Serialise dynamic fields as hidden inputs */}
       <input type="hidden" name="preferredDeliveryDays" value={selectedDays.join(', ')} />
@@ -120,6 +123,7 @@ export function ProfileForm({ user, account }: Props) {
       <Card>
         <CardHeader><SectionTitle icon={User}>Personal Information</SectionTitle></CardHeader>
         <CardContent className="space-y-4">
+          <ProfilePhotoUploadField value={avatarUrl} onChange={setAvatarUrl} disabled={pending} />
           <FieldRow>
             <Field label="Full Name">
               <Input name="name" defaultValue={user.name} required />

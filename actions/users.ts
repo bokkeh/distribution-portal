@@ -154,3 +154,26 @@ export async function updateUserRole(
 
   redirect(`/admin/users/${(formData.get('userId') as string)}`)
 }
+
+export async function updateUserProfile(
+  _prev: { error?: string } | null,
+  formData: FormData
+): Promise<{ error?: string }> {
+  try {
+    await requireAdmin()
+
+    const userId = formData.get('userId') as string
+    await db.update(users).set({
+      name: formData.get('name') as string,
+      email: formData.get('email') as string,
+      phone: (formData.get('phone') as string) || null,
+      avatarUrl: (formData.get('avatarUrl') as string) || null,
+    }).where(eq(users.id, userId))
+
+    revalidatePath('/admin/users')
+    revalidatePath(`/admin/users/${userId}`)
+    return {}
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) }
+  }
+}

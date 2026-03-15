@@ -13,6 +13,7 @@ export default async function TasterProfilePage() {
       name: users.name,
       email: users.email,
       phone: users.phone,
+      avatarUrl: users.avatarUrl,
       address: users.address,
       city: users.city,
       state: users.state,

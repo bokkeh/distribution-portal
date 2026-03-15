@@ -8,7 +8,7 @@ export default async function CustomerProfilePage() {
   const session = await requireRole('customer')
 
   const [user] = await db
-    .select({ id: users.id, name: users.name, email: users.email, phone: users.phone })
+    .select({ id: users.id, name: users.name, email: users.email, phone: users.phone, avatarUrl: users.avatarUrl })
     .from(users)
     .where(eq(users.id, session.user.id))
   const [account] = await db.select().from(customerAccounts).where(eq(customerAccounts.userId, session.user.id))
@@ -21,7 +21,7 @@ export default async function CustomerProfilePage() {
       </div>
 
       <ProfileForm
-        user={{ id: user.id, name: user.name, email: user.email, phone: user.phone }}
+        user={{ id: user.id, name: user.name, email: user.email, phone: user.phone, avatarUrl: user.avatarUrl }}
         account={account ?? null}
       />
     </div>

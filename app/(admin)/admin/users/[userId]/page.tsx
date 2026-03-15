@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { UserRoleForm } from './user-role-form'
+import { UserProfileCard } from '@/components/admin/UserProfileCard'
 
 function isMissingUserFeatureTable(error: unknown) {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
@@ -45,13 +46,20 @@ export default async function UserDetailPage({ params }: { params: Promise<{ use
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <UserProfileCard
+          user={{ id: user.id, name: user.name, email: user.email, phone: user.phone, avatarUrl: user.avatarUrl }}
+        />
+
+        <UserRoleForm
+          user={{ id: user.id, role: user.role, roles: user.roles, phone: user.phone, active: user.active, featureFlags: featureSettings?.features ?? null }}
+          accountId={account?.id}
+        />
+
         <Card>
-          <CardHeader><CardTitle>User Information</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Role Summary</CardTitle></CardHeader>
           <CardContent className="space-y-3 text-sm">
             <div className="grid grid-cols-2 gap-4">
-              <div><p className="text-muted-foreground">Name</p><p className="font-medium">{user.name}</p></div>
               <div><p className="text-muted-foreground">Primary Role</p><Badge variant="outline" className="capitalize">{user.role}</Badge></div>
-              <div><p className="text-muted-foreground">Email</p><p className="font-medium">{user.email}</p></div>
               <div><p className="text-muted-foreground">Phone</p><p className="font-medium">{user.phone ?? '-'}</p></div>
             </div>
             <div>
@@ -62,11 +70,6 @@ export default async function UserDetailPage({ params }: { params: Promise<{ use
             </div>
           </CardContent>
         </Card>
-
-        <UserRoleForm
-          user={{ id: user.id, role: user.role, roles: user.roles, phone: user.phone, active: user.active, featureFlags: featureSettings?.features ?? null }}
-          accountId={account?.id}
-        />
 
         {account ? (
           <Card>

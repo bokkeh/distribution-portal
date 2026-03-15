@@ -33,6 +33,7 @@ export async function updateProfile(
         name: formData.get('name') as string,
         email: formData.get('email') as string,
         phone: (formData.get('phone') as string) || null,
+        avatarUrl: (formData.get('avatarUrl') as string) || null,
         address: (formData.get('address') as string) || null,
         city: (formData.get('city') as string) || null,
         state: (formData.get('state') as string) || null,
@@ -45,6 +46,7 @@ export async function updateProfile(
         name: formData.get('name') as string,
         email: formData.get('email') as string,
         phone: (formData.get('phone') as string) || null,
+        avatarUrl: (formData.get('avatarUrl') as string) || null,
       }).where(eq(users.id, userId))
     }
 
@@ -140,6 +142,7 @@ export async function updateSimpleProfile(
         name: formData.get('name') as string,
         email: formData.get('email') as string,
         phone: (formData.get('phone') as string) || null,
+        avatarUrl: (formData.get('avatarUrl') as string) || null,
         address: (formData.get('address') as string) || null,
         city: (formData.get('city') as string) || null,
         state: (formData.get('state') as string) || null,
@@ -152,6 +155,7 @@ export async function updateSimpleProfile(
         name: formData.get('name') as string,
         email: formData.get('email') as string,
         phone: (formData.get('phone') as string) || null,
+        avatarUrl: (formData.get('avatarUrl') as string) || null,
       }).where(eq(users.id, userId))
     }
 
@@ -177,6 +181,7 @@ export async function updateDriverProfile(
       name: formData.get('name') as string,
       email: formData.get('email') as string,
       phone: (formData.get('phone') as string) || null,
+      avatarUrl: (formData.get('avatarUrl') as string) || null,
     }).where(eq(users.id, userId))
 
     const driverId = formData.get('driverId') as string | null

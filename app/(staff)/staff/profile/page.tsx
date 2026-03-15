@@ -8,7 +8,7 @@ import { notFound } from 'next/navigation'
 export default async function StaffProfilePage() {
   const session = await requireAdminOrStaff()
   let user:
-    | { id: string; name: string; email: string; phone: string | null; address: string | null; city: string | null; state: string | null; zip: string | null }
+    | { id: string; name: string; email: string; phone: string | null; avatarUrl: string | null; address: string | null; city: string | null; state: string | null; zip: string | null }
     | undefined
 
   try {
@@ -23,7 +23,7 @@ export default async function StaffProfilePage() {
     }
 
     ;[user] = await db
-      .select({ id: users.id, name: users.name, email: users.email, phone: users.phone })
+      .select({ id: users.id, name: users.name, email: users.email, phone: users.phone, avatarUrl: users.avatarUrl })
       .from(users)
       .where(eq(users.id, session.user.id))
       .then(rows => rows.map(row => ({ ...row, address: null, city: null, state: null, zip: null })))
@@ -37,7 +37,7 @@ export default async function StaffProfilePage() {
         <h1 className="text-2xl font-bold text-slate-900">My Profile</h1>
         <p className="text-muted-foreground mt-1">Update your name, email, phone number, and address</p>
       </div>
-      <SimpleProfileForm user={{ id: user.id, name: user.name, email: user.email, phone: user.phone, address: user.address, city: user.city, state: user.state, zip: user.zip }} />
+      <SimpleProfileForm user={{ id: user.id, name: user.name, email: user.email, phone: user.phone, avatarUrl: user.avatarUrl, address: user.address, city: user.city, state: user.state, zip: user.zip }} />
     </div>
   )
 }

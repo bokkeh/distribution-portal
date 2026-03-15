@@ -8,7 +8,7 @@ export default async function DriverProfilePage() {
   const session = await requireRole('driver', 'admin')
 
   const [user] = await db
-    .select({ id: users.id, name: users.name, email: users.email, phone: users.phone })
+    .select({ id: users.id, name: users.name, email: users.email, phone: users.phone, avatarUrl: users.avatarUrl })
     .from(users)
     .where(eq(users.id, session.user.id))
   const [driver] = await db.select().from(drivers).where(eq(drivers.userId, session.user.id))
@@ -20,7 +20,7 @@ export default async function DriverProfilePage() {
         <p className="text-muted-foreground mt-1">Update your personal info and vehicle details</p>
       </div>
       <DriverProfileForm
-        user={{ id: user.id, name: user.name, email: user.email, phone: user.phone }}
+        user={{ id: user.id, name: user.name, email: user.email, phone: user.phone, avatarUrl: user.avatarUrl }}
         driver={driver ? {
           id: driver.id,
           vehicleMake: driver.vehicleMake,
