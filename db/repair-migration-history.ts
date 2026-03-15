@@ -18,8 +18,10 @@ async function run() {
     entries: JournalEntry[]
   }
 
+  await db.execute(sql`CREATE SCHEMA IF NOT EXISTS "drizzle";`)
+
   await db.execute(sql`
-    CREATE TABLE IF NOT EXISTS "__drizzle_migrations" (
+    CREATE TABLE IF NOT EXISTS "drizzle"."__drizzle_migrations" (
       "id" serial PRIMARY KEY,
       "hash" text NOT NULL,
       "created_at" bigint
@@ -28,11 +30,21 @@ async function run() {
 
   const existingRows = await db.execute(sql`
     SELECT "hash", "created_at"
-    FROM "__drizzle_migrations"
+    FROM "drizzle"."__drizzle_migrations"
   `)
 
+  let legacyRows: { rows?: unknown[] } = { rows: [] }
+  try {
+    legacyRows = await db.execute(sql`
+      SELECT "hash", "created_at"
+      FROM "__drizzle_migrations"
+    `)
+  } catch {
+    legacyRows = { rows: [] }
+  }
+
   const existingKeys = new Set(
-    (existingRows.rows ?? []).map((row) => {
+    [...(existingRows.rows ?? []), ...(legacyRows.rows ?? [])].map((row) => {
       const typedRow = row as { hash?: string; created_at?: string | number | null }
       return `${String(typedRow.hash ?? '')}:${String(typedRow.created_at ?? '')}`
     }),
@@ -49,7 +61,7 @@ async function run() {
     }
 
     await db.execute(sql`
-      INSERT INTO "__drizzle_migrations" ("hash", "created_at")
+      INSERT INTO "drizzle"."__drizzle_migrations" ("hash", "created_at")
       VALUES (${hash}, ${entry.when})
     `)
 
