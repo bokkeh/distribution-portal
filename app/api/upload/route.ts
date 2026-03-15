@@ -42,7 +42,10 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer())
     const uploaded = await uploadBuffer(uniqueFilename, file.type || 'application/octet-stream', buffer, folder)
 
-    return NextResponse.json(uploaded)
+    return NextResponse.json({
+      ...uploaded,
+      publicUrl: `/api/image?path=${encodeURIComponent(uploaded.filePath)}`,
+    })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Upload failed'
     console.error('[/api/upload]', err)
