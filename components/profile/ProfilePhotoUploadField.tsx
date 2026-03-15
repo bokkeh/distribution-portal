@@ -25,22 +25,24 @@ export function ProfilePhotoUploadField({ value, onChange, disabled }: ProfilePh
 
     setUploading(true)
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('folder', 'avatars')
-      formData.append('filename', `avatar-${file.name}`)
-
-      const response = await fetch('/api/upload', {
+      // Step 1: get a signed upload URL from the server
+      const signRes = await fetch('/api/upload', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name, contentType: file.type, folder: 'avatars' }),
       })
+      const signPayload = await signRes.json().catch(() => null)
+      if (!signRes.ok) throw new Error(signPayload?.error || 'Could not get upload URL')
 
-      const payload = await response.json().catch(() => null)
-      if (!response.ok) {
-        throw new Error(payload?.error || 'Upload failed')
-      }
+      // Step 2: PUT the file directly to GCS (bypasses serverless size limits)
+      const putRes = await fetch(signPayload.uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      })
+      if (!putRes.ok) throw new Error(`Storage upload failed (${putRes.status})`)
 
-      onChange(payload.publicUrl)
+      onChange(signPayload.publicUrl)
       toast.success('Profile photo uploaded')
     } catch (error) {
       toast.error('Upload failed', { description: error instanceof Error ? error.message : undefined })
