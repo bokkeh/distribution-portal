@@ -14,6 +14,8 @@ type SchemaItem = {
   requiredColumns: string[]
 }
 
+type MigrationHistoryState = 'tracked' | 'untracked' | 'missing'
+
 const REQUIRED_SCHEMA: SchemaItem[] = [
   { tableName: 'wholesale_account_requests', requiredColumns: ['id', 'business_name', 'business_email', 'created_at'] },
   { tableName: 'delivery_stops', requiredColumns: ['contact_name', 'contact_phone', 'contact_email', 'proof_of_delivery_url', 'shelf_photo_url'] },
@@ -55,6 +57,7 @@ export async function getSystemHealthSnapshot() {
   const journal = JSON.parse(await fs.readFile(journalPath, 'utf8')) as { entries: Array<{ tag: string }> }
   const expectedMigrations = journal.entries.map((entry) => entry.tag)
   let appliedMigrations: string[] = []
+  let migrationHistoryState: MigrationHistoryState = 'missing'
 
   try {
     const migrationTableColumnsRows = await db.execute(sql`
@@ -68,7 +71,9 @@ export async function getSystemHealthSnapshot() {
       (migrationTableColumnsRows.rows ?? []).map((row) => String((row as { column_name: string }).column_name))
     )
 
-    if (migrationTableColumns.has('name')) {
+    if (migrationTableColumns.size === 0) {
+      migrationHistoryState = 'missing'
+    } else if (migrationTableColumns.has('name')) {
       const migrationRows = await db.execute(sql`
         select coalesce(string_agg(name::text, ',' order by created_at), '') as names
         from (
@@ -78,6 +83,7 @@ export async function getSystemHealthSnapshot() {
       `)
       const value = (migrationRows.rows?.[0] as { names?: string } | undefined)?.names ?? ''
       appliedMigrations = value ? value.split(',').filter(Boolean) : []
+      migrationHistoryState = appliedMigrations.length > 0 ? 'tracked' : 'missing'
     } else {
       const countRows = await db.execute(sql`
         select count(*)::int as count
@@ -85,12 +91,12 @@ export async function getSystemHealthSnapshot() {
       `)
       const appliedCount = Number((countRows.rows?.[0] as { count?: number | string } | undefined)?.count ?? 0)
       appliedMigrations = expectedMigrations.slice(0, Math.max(0, Math.min(appliedCount, expectedMigrations.length)))
+      migrationHistoryState = appliedCount > 0 ? 'tracked' : 'missing'
     }
   } catch {
     appliedMigrations = []
+    migrationHistoryState = 'missing'
   }
-
-  const pendingMigrations = expectedMigrations.filter((entry) => !appliedMigrations.includes(entry))
 
   const existingTablesRows = await db.execute(sql`
     select table_name
@@ -129,11 +135,26 @@ export async function getSystemHealthSnapshot() {
     }
   }
 
+  const hasCoreSchemaObjects = existingTables.has('users')
+    && existingTables.has('orders')
+    && existingTables.has('delivery_stops')
+    && existingTables.has('wholesale_account_requests')
+    && existingTables.has('sms_messages')
+
+  if (migrationHistoryState === 'missing' && hasCoreSchemaObjects) {
+    migrationHistoryState = 'untracked'
+  }
+
+  const pendingMigrations = migrationHistoryState === 'tracked'
+    ? expectedMigrations.filter((entry) => !appliedMigrations.includes(entry))
+    : []
+
   return {
     appVersion,
     deploymentId,
     expectedMigrations,
     appliedMigrations,
+    migrationHistoryState,
     pendingMigrations,
     missingTables,
     missingColumns,

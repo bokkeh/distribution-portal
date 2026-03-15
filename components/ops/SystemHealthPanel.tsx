@@ -15,8 +15,16 @@ export function SystemHealthPanel({
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-xs uppercase tracking-wide text-slate-400">Pending Migrations</p>
-          <p className="mt-2 text-2xl font-bold text-slate-950">{snapshot.pendingMigrations.length}</p>
-          <p className="mt-2 text-xs text-slate-500">Expected {snapshot.expectedMigrations.length}</p>
+          <p className="mt-2 text-2xl font-bold text-slate-950">
+            {snapshot.migrationHistoryState === 'tracked' ? snapshot.pendingMigrations.length : '—'}
+          </p>
+          <p className="mt-2 text-xs text-slate-500">
+            {snapshot.migrationHistoryState === 'tracked'
+              ? `Expected ${snapshot.expectedMigrations.length}`
+              : snapshot.migrationHistoryState === 'untracked'
+                ? 'Migration history not tracked in this database'
+                : 'Migration table not found'}
+          </p>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-xs uppercase tracking-wide text-slate-400">Missing Tables</p>
@@ -49,12 +57,29 @@ export function SystemHealthPanel({
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-1">
           <h2 className="text-base font-semibold text-slate-900">Migration Status</h2>
           <div className="mt-4 space-y-2">
+            {snapshot.migrationHistoryState !== 'tracked' ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-800">
+                {snapshot.migrationHistoryState === 'untracked'
+                  ? 'This database has application tables, but Drizzle migration history is not recorded. Migration status is unavailable, so entries are shown as untracked instead of pending.'
+                  : 'The __drizzle_migrations table was not found. Migration status is unavailable for this database.'}
+              </div>
+            ) : null}
             {snapshot.expectedMigrations.map((migration) => {
               const applied = snapshot.appliedMigrations.includes(migration)
               return (
                 <div key={migration} className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
                   <span className="font-mono text-xs text-slate-700">{migration}</span>
-                  <Badge variant={applied ? 'success' : 'warning'}>{applied ? 'Applied' : 'Pending'}</Badge>
+                  <Badge
+                    variant={
+                      snapshot.migrationHistoryState === 'tracked'
+                        ? applied ? 'success' : 'warning'
+                        : 'secondary'
+                    }
+                  >
+                    {snapshot.migrationHistoryState === 'tracked'
+                      ? applied ? 'Applied' : 'Pending'
+                      : 'Untracked'}
+                  </Badge>
                 </div>
               )
             })}
