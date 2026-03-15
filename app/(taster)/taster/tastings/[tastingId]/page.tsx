@@ -10,6 +10,7 @@ import { requireFeature } from '@/lib/auth/session'
 import { getTastingById } from '@/lib/tastings/read'
 import { getActivityTimeline } from '@/lib/activity/read'
 import { ActivityTimeline } from '@/components/activity/ActivityTimeline'
+import { confirmTastingAssignment, declineTastingAssignment } from '@/actions/tastings'
 
 function isMissingSubmissionTables(error: unknown) {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
@@ -64,6 +65,16 @@ export default async function TasterTastingDetailPage({
             <p className="text-muted-foreground mt-1">Complete your event report and submit your payment request.</p>
           </div>
         </div>
+        {tasting.status === 'scheduled' ? (
+          <div className="flex flex-wrap gap-3 rounded-2xl border border-slate-200 bg-white p-4">
+            <form action={confirmTastingAssignment.bind(null, tasting.id)}>
+              <Button type="submit">Confirm Assignment</Button>
+            </form>
+            <form action={declineTastingAssignment.bind(null, tasting.id)}>
+              <Button type="submit" variant="destructive">Decline Assignment</Button>
+            </form>
+          </div>
+        ) : null}
         <TastingSubmissionDetail
           tasting={tasting}
           report={report ? {

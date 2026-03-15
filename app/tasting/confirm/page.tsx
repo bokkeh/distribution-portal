@@ -1,12 +1,9 @@
 import Link from 'next/link'
-import { eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
-import { db } from '@/db'
-import { tastings } from '@/db/schema'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { requireFeature } from '@/lib/auth/session'
-import { confirmTastingAssignment } from '@/actions/tastings'
+import { confirmTastingAssignment, declineTastingAssignment } from '@/actions/tastings'
 import { getTastingById } from '@/lib/tastings/read'
 
 export default async function TastingConfirmPage({ searchParams }: { searchParams: Promise<{ tastingId?: string }> }) {
@@ -26,9 +23,14 @@ export default async function TastingConfirmPage({ searchParams }: { searchParam
           <p className="font-medium text-slate-900">{tasting.eventName}</p>
           <p>{new Date(tasting.scheduledAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</p>
           <p>{[tasting.storeAddress, tasting.storeCity, tasting.storeState, tasting.storeZip].filter(Boolean).join(', ') || 'Store address not provided'}</p>
-          <form action={confirmTastingAssignment.bind(null, tasting.id)} className="pt-2">
-            <Button type="submit">Confirm This Tasting</Button>
-          </form>
+          <div className="flex flex-wrap gap-3 pt-2">
+            <form action={confirmTastingAssignment.bind(null, tasting.id)}>
+              <Button type="submit">Confirm This Tasting</Button>
+            </form>
+            <form action={declineTastingAssignment.bind(null, tasting.id)}>
+              <Button type="submit" variant="destructive">Decline This Tasting</Button>
+            </form>
+          </div>
           <Link href={`/taster/tastings/${tasting.id}`} className="block text-sm text-blue-600 underline">Open full tasting details</Link>
         </CardContent>
       </Card>

@@ -9,8 +9,10 @@ import { CRMTabs } from '@/components/crm/CRMTabs'
 import { sql, eq, and, inArray } from 'drizzle-orm'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
+import { requireFeature } from '@/lib/auth/session'
 
 export default async function CRMPage() {
+  const session = await requireFeature('crm', 'admin')
   const [accounts, hsResult] = await Promise.all([
     db.select({
       id: customerAccounts.id,
@@ -99,7 +101,7 @@ export default async function CRMPage() {
               { id: 'hubspot', label: 'HubSpot Companies', count: hsCompanies.length },
             ]}
           >
-            <LocalAccountsTable initialAccounts={accountRows} />
+            <LocalAccountsTable initialAccounts={accountRows} userId={session.user.id} />
             <HubSpotCompaniesTab
               companies={hsCompanies}
               importedIds={importedHsIds}

@@ -80,6 +80,63 @@ async function notifyTasterChange({
   }
 }
 
+async function notifyTeamAboutDeclinedTasting({
+  tastingId,
+  eventName,
+  scheduledAt,
+  declinedByName,
+}: {
+  tastingId: string
+  eventName: string
+  scheduledAt: Date
+  declinedByName: string
+}) {
+  const teamMessage = `AHAWC Tasting Declined: ${declinedByName} declined ${eventName} on ${scheduledAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}. Review it in the portal.`
+
+  await createNotificationsForRoles({
+    roles: ['admin', 'staff'],
+    kind: 'tasting_declined',
+    title: 'Tasting declined',
+    body: `${declinedByName} declined ${eventName}.`,
+    href: '/admin/tastings',
+  })
+
+  const teamMembers = await db
+    .select({ id: users.id, phone: users.phone, roles: users.roles, active: users.active })
+    .from(users)
+
+  const recipients = new Map<string, string>()
+  for (const member of teamMembers) {
+    if (!member.active) continue
+    if (!member.phone) continue
+    if (!member.roles.includes('staff') && !member.roles.includes('admin')) continue
+    recipients.set(member.phone, member.id)
+  }
+
+  await Promise.all(Array.from(recipients.entries()).map(async ([phone, userId]) => {
+    try {
+      await sendSms({ to: phone, body: teamMessage, userId, contactName: 'AHAWC team' })
+    } catch {
+      await db.insert(notificationsLog).values({
+        userId,
+        recipientPhone: phone,
+        recipientName: 'AHAWC team',
+        type: 'sms',
+        message: teamMessage,
+        status: 'failed',
+      })
+    }
+  }))
+
+  await logActivityEvent({
+    entityType: 'tasting',
+    entityId: tastingId,
+    kind: 'tasting_declined_notified',
+    title: 'Team notified of decline',
+    body: `${declinedByName} declined ${eventName} and the team was notified.`,
+  })
+}
+
 export async function createTasting(formData: FormData) {
   const session = await requireFeature('tastings', 'admin', 'staff')
   const mode = (formData.get('mode') as string) || 'admin'
@@ -200,11 +257,16 @@ export async function createTasting(formData: FormData) {
 export async function updateTastingStatus(formData: FormData) {
   const session = await requireRole('admin', 'staff', 'taster')
   const tastingId = formData.get('tastingId') as string
-  const nextStatus = formData.get('status') as 'scheduled' | 'confirmed' | 'completed' | 'cancelled'
+  const nextStatus = formData.get('status') as 'scheduled' | 'confirmed' | 'completed' | 'cancelled' | 'declined'
   const mode = (formData.get('mode') as string) || 'taster'
 
   const [tasting] = await db
-    .select({ id: tastings.id, assignedUserId: tastings.assignedUserId })
+    .select({
+      id: tastings.id,
+      assignedUserId: tastings.assignedUserId,
+      eventName: tastings.eventName,
+      scheduledAt: tastings.scheduledAt,
+    })
     .from(tastings)
     .where(eq(tastings.id, tastingId))
     .limit(1)
@@ -263,6 +325,23 @@ export async function updateTastingStatus(formData: FormData) {
         }),
       }).catch(() => {})
     }
+  }
+
+  if (nextStatus === 'declined') {
+    await clearScheduledTastingSmsJobs(tastingId)
+
+    await clearUserNotifications({
+      userId: tasting.assignedUserId,
+      href: `/taster/tastings/${tastingId}`,
+      kinds: ['tasting_assigned', 'tasting_report_reminder'],
+    })
+
+    await notifyTeamAboutDeclinedTasting({
+      tastingId,
+      eventName: tasting.eventName,
+      scheduledAt: tasting.scheduledAt,
+      declinedByName: session.user.name || 'The assigned taster',
+    })
   }
 
   if (nextStatus === 'completed') {
@@ -685,6 +764,19 @@ export async function confirmTastingAssignment(tastingId: string) {
   const formData = new FormData()
   formData.set('tastingId', tastingId)
   formData.set('status', 'confirmed')
+  formData.set('mode', 'taster')
+  await updateTastingStatus(formData)
+}
+
+export async function declineTastingAssignment(tastingId: string) {
+  const session = await requireFeature('tastings', 'taster', 'admin')
+  const tasting = await getTastingById(tastingId)
+  if (!tasting) redirect('/taster/tastings?error=Tasting%20not%20found.')
+  if (!session.user.roles.includes('admin') && tasting.assignedUserId !== session.user.id) redirect('/unauthorized')
+
+  const formData = new FormData()
+  formData.set('tastingId', tastingId)
+  formData.set('status', 'declined')
   formData.set('mode', 'taster')
   await updateTastingStatus(formData)
 }

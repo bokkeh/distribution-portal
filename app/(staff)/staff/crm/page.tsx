@@ -11,12 +11,14 @@ import { DealStageSelect } from '@/components/crm/DealStageSelect'
 import { PipelineBoard } from '@/components/crm/PipelineBoard'
 import Link from 'next/link'
 import { LayoutList, Kanban } from 'lucide-react'
+import { requireFeature } from '@/lib/auth/session'
 
 export default async function StaffCRMPage({
   searchParams,
 }: {
   searchParams: Promise<{ view?: string }>
 }) {
+  const session = await requireFeature('crm', 'staff')
   const { view } = await searchParams
   const isPipeline = view === 'pipeline'
 
@@ -110,11 +112,11 @@ export default async function StaffCRMPage({
           <CardContent className="p-0">
             <CRMTabs
               tabs={[
-                { id: 'local', label: 'Local Accounts', count: accounts.length },
-                { id: 'hubspot', label: 'HubSpot Companies', count: hsCompanies.length },
-              ]}
-            >
-              <LocalAccountsTable initialAccounts={accountRows} basePath="/staff/crm" />
+              { id: 'local', label: 'Local Accounts', count: accounts.length },
+              { id: 'hubspot', label: 'HubSpot Companies', count: hsCompanies.length },
+            ]}
+          >
+              <LocalAccountsTable initialAccounts={accountRows} basePath="/staff/crm" userId={session.user.id} />
               <HubSpotCompaniesTab
                 companies={hsCompanies}
                 importedIds={importedHsIds}
