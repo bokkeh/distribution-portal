@@ -11,6 +11,7 @@ import { upsertHubSpotContact, updateHubSpotCompany } from '@/lib/hubspot/client
 import { v4 as uuidv4 } from 'uuid'
 import Stripe from 'stripe'
 import { redirect } from 'next/navigation'
+import { isRedirectError } from 'next/dist/client/components/redirect-error'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? 'sk_test_placeholder', { apiVersion: '2026-02-25.clover' })
 
@@ -254,6 +255,10 @@ export async function createTasterStripeOnboardingLink() {
 
     redirect(accountLink.url)
   } catch (error) {
+    if (isRedirectError(error)) {
+      throw error
+    }
+
     if (isMissingStripeConnectColumn(error)) {
       redirect('/taster/profile?error=' + encodeURIComponent('Run db:migrate before using Stripe payouts.'))
     }
