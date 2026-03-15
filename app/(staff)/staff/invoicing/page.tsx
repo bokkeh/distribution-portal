@@ -1,16 +1,16 @@
 import { db } from '@/db'
-import { invoices, customerAccounts, tasterInvoices, tastings, users } from '@/db/schema'
+import { invoices, customerAccounts } from '@/db/schema'
 import { desc, eq } from 'drizzle-orm'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import Link from 'next/link'
-import { Plus } from 'lucide-react'
 import { markInvoicePaid } from '@/actions/invoices'
+import { tasterInvoices, tastings, users } from '@/db/schema'
 import { payoutTasterInvoiceViaStripe } from '@/actions/taster-payouts'
 
-export default async function InvoicingPage({
+export default async function StaffInvoicingPage({
   searchParams,
 }: {
   searchParams: Promise<{ success?: string; error?: string }>
@@ -87,14 +87,9 @@ export default async function InvoicingPage({
       {query.error ? (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{query.error}</div>
       ) : null}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Invoicing</h1>
-          <p className="text-muted-foreground mt-1">Manage and track all invoices</p>
-        </div>
-        <Link href="/admin/invoicing/new">
-          <Button><Plus className="mr-2 h-4 w-4" />New Invoice</Button>
-        </Link>
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900">Invoicing</h1>
+        <p className="text-muted-foreground mt-1">Review invoices and mark payments received.</p>
       </div>
 
       <Card>
@@ -115,9 +110,7 @@ export default async function InvoicingPage({
               <tbody className="divide-y">
                 {allInvoices.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-muted-foreground">
-                      No invoices yet. Create your first invoice.
-                    </td>
+                    <td colSpan={7} className="px-6 py-12 text-center text-muted-foreground">No invoices found.</td>
                   </tr>
                 ) : allInvoices.map((inv) => (
                   <tr key={inv.id} className="transition-colors hover:bg-slate-50">
@@ -129,7 +122,7 @@ export default async function InvoicingPage({
                     <td className="px-6 py-4 text-sm text-muted-foreground">{formatDate(inv.createdAt)}</td>
                     <td className="px-6 py-4">
                       <div className="flex flex-wrap gap-2">
-                        <Link href={`/admin/invoicing/${inv.id}`}>
+                        <Link href={`/staff/invoicing/${inv.id}`}>
                           <Button variant="ghost" size="sm">View</Button>
                         </Link>
                         {inv.status !== 'paid' ? (
@@ -150,7 +143,7 @@ export default async function InvoicingPage({
       <Card>
         <CardHeader>
           <CardTitle>Taster Invoice Submissions</CardTitle>
-          <p className="text-sm text-muted-foreground">Submitted payment requests from tasters are tracked here for accounting.</p>
+          <p className="text-sm text-muted-foreground">Submitted tasting invoices can be paid out via Stripe once the taster has connected payouts.</p>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -168,9 +161,7 @@ export default async function InvoicingPage({
               <tbody className="divide-y">
                 {tasterInvoiceSubmissions.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-10 text-center text-muted-foreground">
-                      No taster invoice submissions yet.
-                    </td>
+                    <td colSpan={6} className="px-6 py-10 text-center text-muted-foreground">No taster invoice submissions yet.</td>
                   </tr>
                 ) : tasterInvoiceSubmissions.map((invoice) => (
                   <tr key={invoice.id} className="transition-colors hover:bg-slate-50">
@@ -191,16 +182,13 @@ export default async function InvoicingPage({
                     <td className="px-6 py-4 text-sm text-muted-foreground">{formatDate(invoice.submittedAt)}</td>
                     <td className="px-6 py-4">
                       <div className="flex flex-wrap gap-2">
-                        <Link href="/admin/tastings">
-                          <Button variant="ghost" size="sm">View Tasting</Button>
-                        </Link>
                         <Link href={`/taster/tastings/${invoice.tastingId}`}>
                           <Button variant="outline" size="sm">View Report</Button>
                         </Link>
                         {invoice.status !== 'paid' ? (
                           <form action={payoutTasterInvoiceViaStripe}>
                             <input type="hidden" name="invoiceId" value={invoice.id} />
-                            <input type="hidden" name="mode" value="admin" />
+                            <input type="hidden" name="mode" value="staff" />
                             <Button variant="secondary" size="sm" type="submit">Pay via Stripe</Button>
                           </form>
                         ) : null}

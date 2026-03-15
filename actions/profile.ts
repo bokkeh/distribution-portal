@@ -9,6 +9,10 @@ import { generateSignedUploadUrl } from '@/lib/gcs/client'
 import { geocodeAddress } from '@/lib/maps/geocode'
 import { upsertHubSpotContact, updateHubSpotCompany } from '@/lib/hubspot/client'
 import { v4 as uuidv4 } from 'uuid'
+import Stripe from 'stripe'
+import { redirect } from 'next/navigation'
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? 'sk_test_placeholder', { apiVersion: '2026-02-25.clover' })
 
 function isMissingUserAddressColumn(error: unknown) {
   const dbError = error as { code?: string; message?: string; cause?: unknown } | null
@@ -166,6 +170,59 @@ export async function updateSimpleProfile(
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) }
   }
+}
+
+export async function createTasterStripeOnboardingLink() {
+  const session = await requireAuth()
+  const roles = session.user.roles ?? [session.user.role]
+  if (!roles.includes('taster') && !roles.includes('admin')) throw new Error('Unauthorized')
+
+  const [user] = await db
+    .select({
+      id: users.id,
+      email: users.email,
+      name: users.name,
+      stripeConnectAccountId: users.stripeConnectAccountId,
+    })
+    .from(users)
+    .where(eq(users.id, session.user.id))
+    .limit(1)
+
+  if (!user) throw new Error('User not found')
+
+  let stripeConnectAccountId = user.stripeConnectAccountId
+
+  if (!stripeConnectAccountId) {
+    const account = await stripe.accounts.create({
+      type: 'express',
+      country: 'US',
+      email: user.email,
+      business_type: 'individual',
+      capabilities: {
+        transfers: { requested: true },
+      },
+      metadata: {
+        userId: user.id,
+        role: 'taster',
+      },
+    })
+
+    stripeConnectAccountId = account.id
+
+    await db.update(users)
+      .set({ stripeConnectAccountId })
+      .where(eq(users.id, user.id))
+  }
+
+  const baseUrl = process.env.NEXTAUTH_URL ?? 'http://localhost:3000'
+  const accountLink = await stripe.accountLinks.create({
+    account: stripeConnectAccountId,
+    refresh_url: `${baseUrl}/taster/profile?stripe=refresh`,
+    return_url: `${baseUrl}/taster/profile?stripe=return`,
+    type: 'account_onboarding',
+  })
+
+  redirect(accountLink.url)
 }
 
 export async function updateDriverProfile(

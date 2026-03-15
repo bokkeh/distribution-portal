@@ -22,7 +22,7 @@ export type FeatureKey = typeof ALL_FEATURES[number]['key']
 
 const ROLE_DEFAULTS: Record<string, FeatureKey[]> = {
   admin: ['dashboard', 'invoicing', 'accounting', 'crm', 'inbox', 'wholesale_requests', 'orders', 'inventory', 'users', 'deliveries', 'drivers', 'profile', 'tastings'],
-  staff: ['dashboard', 'crm', 'inbox', 'orders', 'inventory', 'profile', 'tastings'],
+  staff: ['dashboard', 'invoicing', 'crm', 'inbox', 'orders', 'inventory', 'profile', 'tastings'],
   driver: ['deliveries', 'map', 'profile'],
   customer: ['dashboard', 'products', 'orders', 'cart', 'invoices', 'profile'],
   taster: ['tastings', 'profile'],

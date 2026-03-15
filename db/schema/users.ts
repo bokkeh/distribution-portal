@@ -14,6 +14,7 @@ export const users = pgTable('users', {
   state: text('state'),
   zip: text('zip'),
   avatarUrl: text('avatar_url'),
+  stripeConnectAccountId: text('stripe_connect_account_id'),
   active: boolean('active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
