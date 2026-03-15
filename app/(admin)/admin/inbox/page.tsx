@@ -1,9 +1,7 @@
-import { desc, eq, inArray } from 'drizzle-orm'
-import { db } from '@/db'
 import { SmsInboxHub } from '@/components/inbox/SmsInboxHub'
 import { requireFeature } from '@/lib/auth/session'
-import { smsMessages } from '@/db/schema'
 import { getInboxContactMatches } from '@/lib/inbox/crm-match'
+import { getInboxMessageRows } from '@/lib/inbox/read'
 
 function isMissingSmsMessagesTable(error: unknown) {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
@@ -19,10 +17,7 @@ export default async function AdminInboxPage({
   const params = await searchParams
 
   try {
-    const rows = await db
-      .select()
-      .from(smsMessages)
-      .orderBy(desc(smsMessages.createdAt))
+    const rows = await getInboxMessageRows()
 
     const phones = Array.from(new Set(rows.map(row => row.phoneNumber)))
     const crmMatches = await getInboxContactMatches(phones)
@@ -71,6 +66,7 @@ export default async function AdminInboxPage({
             id: message.id,
             direction: message.direction,
             body: message.body,
+            mediaUrls: message.mediaUrls ?? [],
             status: message.status,
             createdAt: message.createdAt,
           }))}

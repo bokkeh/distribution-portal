@@ -8,6 +8,7 @@ export const smsMessages = pgTable('sms_messages', {
   phoneNumber: text('phone_number').notNull(),
   contactName: text('contact_name'),
   body: text('body').notNull(),
+  mediaUrls: text('media_urls').array(),
   status: text('status', { enum: ['received', 'sent', 'failed'] }).notNull(),
   providerMessageId: text('provider_message_id'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

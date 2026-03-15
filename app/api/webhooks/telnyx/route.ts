@@ -24,6 +24,7 @@ type TelnyxWebhookPayload = {
     text?: string
     from?: { phone_number?: string }
   }
+  media?: Array<{ url?: string }>
 }
 
 function getInboundText(payload: TelnyxWebhookPayload) {
@@ -40,6 +41,14 @@ function getProviderMessageId(payload: TelnyxWebhookPayload) {
   return payload?.id ?? payload?.payload?.id ?? null
 }
 
+function getInboundMediaUrls(body: any, payload: TelnyxWebhookPayload) {
+  const media = body?.data?.payload?.media ?? body?.data?.media ?? payload?.media ?? []
+  if (!Array.isArray(media)) return []
+  return media
+    .map((item: { url?: string }) => item?.url)
+    .filter((url: string | undefined): url is string => Boolean(url))
+}
+
 function getEventType(body: any, payload: TelnyxWebhookPayload) {
   return body?.data?.event_type ?? body?.event_type ?? payload?.event_type ?? payload?.payload?.event_type ?? ''
 }
@@ -54,13 +63,14 @@ export async function POST(req: NextRequest) {
   const eventType = getEventType(body, payload)
   const text = getInboundText(payload)
   const from = getInboundFrom(payload)
+  const mediaUrls = getInboundMediaUrls(body, payload)
 
   // Ignore outbound delivery/status events. The inbox only tracks actual inbound replies.
   if (eventType && eventType !== 'message.received') {
     return NextResponse.json({ received: true, ignored: eventType })
   }
 
-  if (!text || !from) {
+  if ((!text && mediaUrls.length === 0) || !from) {
     return NextResponse.json({ received: true })
   }
 
@@ -71,7 +81,8 @@ export async function POST(req: NextRequest) {
   await logSmsMessage({
     direction: 'inbound',
     phoneNumber: phoneNormalized,
-    body: text,
+    body: text || '[Image attachment]',
+    mediaUrls,
     status: 'received',
     providerMessageId,
   })

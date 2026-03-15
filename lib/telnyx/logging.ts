@@ -12,6 +12,7 @@ export async function logSmsMessage({
   phoneNumber,
   contactName,
   body,
+  mediaUrls,
   status,
   providerMessageId,
 }: {
@@ -20,6 +21,7 @@ export async function logSmsMessage({
   phoneNumber: string
   contactName?: string | null
   body: string
+  mediaUrls?: string[] | null
   status: 'received' | 'sent' | 'failed'
   providerMessageId?: string | null
 }) {
@@ -30,10 +32,32 @@ export async function logSmsMessage({
       phoneNumber,
       contactName: contactName ?? null,
       body,
+      mediaUrls: mediaUrls?.length ? mediaUrls : null,
       status,
       providerMessageId: providerMessageId ?? null,
     })
   } catch (error) {
+    const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+    if (message.includes('sms_messages') && message.includes('media_urls')) {
+      try {
+        await db.insert(smsMessages).values({
+          userId: userId ?? null,
+          direction,
+          phoneNumber,
+          contactName: contactName ?? null,
+          body,
+          status,
+          providerMessageId: providerMessageId ?? null,
+        })
+        return
+      } catch (fallbackError) {
+        if (!isMissingSmsMessagesTable(fallbackError)) {
+          console.error('SMS message log fallback failed:', fallbackError)
+        }
+        return
+      }
+    }
+
     if (!isMissingSmsMessagesTable(error)) {
       console.error('SMS message log failed:', error)
     }

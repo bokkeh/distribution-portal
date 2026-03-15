@@ -53,6 +53,7 @@ export async function sendSms({
       phoneNumber: normalizedTo,
       contactName,
       body: loggedBody,
+      mediaUrls: normalizedMediaUrls,
       status: 'failed',
     })
     throw new Error(`Telnyx SMS failed: ${errorText}`)
@@ -67,6 +68,7 @@ export async function sendSms({
     phoneNumber: normalizedTo,
     contactName,
     body: loggedBody,
+    mediaUrls: normalizedMediaUrls,
     status: 'sent',
     providerMessageId,
   })
