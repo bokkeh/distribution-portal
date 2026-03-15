@@ -113,6 +113,55 @@
       "when": 1773530400000,
       "tag": "0015_sms_messages",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1773543022000,
+      "tag": "0016_user_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1773543355000,
+      "tag": "0017_tasting_end_time",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1773543788000,
+      "tag": "0018_tasting_sms_series",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1773544299000,
+      "tag": "0019_user_access_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1773552667000,
+      "tag": "0020_sms_message_media",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1773557383000,
+      "tag": "0021_platform_ops",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1773584479000,
+      "tag": "0022_taster_stripe_connect",
+      "breakpoints": true
     }
   ]
 }
