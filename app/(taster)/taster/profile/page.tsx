@@ -19,7 +19,7 @@ function isMissingStripeConnectColumn(error: unknown) {
 export default async function TasterProfilePage({
   searchParams,
 }: {
-  searchParams: Promise<{ stripe?: string }>
+  searchParams: Promise<{ stripe?: string; error?: string }>
 }) {
   const session = await requireFeature('profile', 'taster', 'admin')
   const query = await searchParams
@@ -118,6 +118,11 @@ export default async function TasterProfilePage({
           ) : null}
           {query.stripe === 'refresh' ? (
             <p className="text-sm text-amber-700">Stripe asked to refresh the onboarding flow. Reopen it below to continue.</p>
+          ) : null}
+          {query.error ? (
+            <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-700">
+              {query.error}
+            </p>
           ) : null}
           <form action={createTasterStripeOnboardingLink}>
             <Button type="submit" className="w-full">
