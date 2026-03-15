@@ -17,21 +17,21 @@ import { NotificationBell } from '@/components/notifications/NotificationBell'
 
 const navItems = [
   { href: '/admin/dashboard',  label: 'Dashboard',        icon: LayoutDashboard, feature: 'dashboard' },
-  { href: '/admin/invoicing',  label: 'Invoicing',         icon: FileText, feature: 'invoicing' },
-  { href: '/admin/accounts',   label: 'Chart of Accounts', icon: BookOpen, feature: 'accounting' },
-  { href: '/admin/crm',        label: 'CRM / Accounts',    icon: Building2, feature: 'crm' },
-  { href: '/admin/inbox',      label: 'SMS Inbox',         icon: MessageSquare, feature: 'inbox' },
   { href: '/admin/attention',  label: 'Needs Attention',   icon: ClipboardList, feature: 'dashboard' },
-  { href: '/admin/system',     label: 'System Health',     icon: HeartPulse, feature: 'dashboard' },
-  { href: '/admin/jobs',       label: 'Jobs / Logs',       icon: ListChecks, feature: 'dashboard' },
-  { href: '/admin/wholesale-requests', label: 'Wholesaler Requests', icon: FileText, feature: 'wholesale_requests' },
   { href: '/admin/orders',     label: 'Orders',            icon: FileText, feature: 'orders' },
-  { href: '/admin/inventory',  label: 'Inventory',         icon: Package, feature: 'inventory' },
-  { href: '/admin/tastings',   label: 'Tastings',          icon: CalendarDays, feature: 'tastings' },
-  { href: '/admin/users',      label: 'User Management',   icon: Users, feature: 'users' },
   { href: '/admin/deliveries', label: 'Deliveries',        icon: Truck, feature: 'deliveries' },
   { href: '/admin/drivers',    label: 'Drivers',           icon: Map, feature: 'drivers' },
+  { href: '/admin/tastings',   label: 'Tastings',          icon: CalendarDays, feature: 'tastings' },
+  { href: '/admin/inventory',  label: 'Inventory',         icon: Package, feature: 'inventory' },
+  { href: '/admin/inbox',      label: 'SMS Inbox',         icon: MessageSquare, feature: 'inbox' },
+  { href: '/admin/crm',        label: 'CRM / Accounts',    icon: Building2, feature: 'crm' },
+  { href: '/admin/wholesale-requests', label: 'Wholesaler Requests', icon: FileText, feature: 'wholesale_requests' },
+  { href: '/admin/invoicing',  label: 'Invoicing',         icon: FileText, feature: 'invoicing' },
+  { href: '/admin/accounts',   label: 'Chart of Accounts', icon: BookOpen, feature: 'accounting' },
   { href: '/admin/profile',    label: 'My Profile',        icon: UserCircle, feature: 'profile' },
+  { href: '/admin/jobs',       label: 'Jobs / Logs',       icon: ListChecks, feature: 'dashboard' },
+  { href: '/admin/system',     label: 'System Health',     icon: HeartPulse, feature: 'dashboard' },
+  { href: '/admin/users',      label: 'User Management',   icon: Users, feature: 'users' },
 ]
 
 function NavLinks({

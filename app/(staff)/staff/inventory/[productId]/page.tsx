@@ -29,7 +29,13 @@ export default async function StaffEditProductPage({ params }: { params: { produ
     })
     .from(products)
     .leftJoin(inventory, eq(inventory.productId, products.id))
-    .where(or(eq(products.id, params.productId), eq(inventory.id, params.productId)))
+    .where(
+      or(
+        eq(products.id, params.productId),
+        eq(inventory.id, params.productId),
+        eq(products.sku, params.productId),
+      ),
+    )
     .limit(1)
 
   if (!record?.product) notFound()
