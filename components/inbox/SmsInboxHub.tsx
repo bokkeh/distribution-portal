@@ -88,6 +88,7 @@ export function SmsInboxHub({
                         width={40}
                         height={40}
                         className="h-10 w-10 rounded-full object-cover"
+                        unoptimized={thread.avatarUrl.startsWith('/api/')}
                       />
                     ) : (
                       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 text-sm font-semibold text-slate-600">
@@ -122,6 +123,7 @@ export function SmsInboxHub({
                   width={44}
                   height={44}
                   className="h-11 w-11 rounded-full object-cover"
+                  unoptimized={selectedAvatarUrl.startsWith('/api/')}
                 />
               ) : (
                 <div className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-200 text-sm font-semibold text-slate-600">
