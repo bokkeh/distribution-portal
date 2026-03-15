@@ -33,7 +33,7 @@ export function NotificationBell({
   const classes = useMemo(() => {
     if (dark) {
       return {
-        button: 'relative rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-slate-200 hover:border-slate-500 hover:text-white',
+        button: 'relative rounded-xl px-2 py-2 text-slate-200 hover:bg-slate-800/70 hover:text-white',
         panel: 'fixed z-50 rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl',
         item: 'block rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-left hover:border-slate-600',
         title: 'text-sm font-semibold text-white',

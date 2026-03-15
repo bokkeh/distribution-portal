@@ -241,7 +241,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
                       <div>
                         <p className="text-sm font-medium">{invoice.invoiceNumber}</p>
                         {invoice.dueDate && (
-                          <p className="text-xs text-muted-foreground">Due {invoice.dueDate}</p>
+                          <p className="text-xs text-muted-foreground">Due {formatDate(invoice.dueDate)}</p>
                         )}
                       </div>
                       <div className="text-right">
