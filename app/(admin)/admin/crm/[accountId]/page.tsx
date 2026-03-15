@@ -83,7 +83,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
         <Card>
           <CardContent className="p-4">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Member Since</p>
-            <p className="text-lg font-bold mt-1">{formatDate(account.createdAt)}</p>
+            <p className="text-lg font-bold mt-1" suppressHydrationWarning>{formatDate(account.createdAt)}</p>
           </CardContent>
         </Card>
       </div>
@@ -261,7 +261,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
                       <div className="flex items-center justify-between py-2 border-b last:border-0 hover:bg-slate-50 -mx-2 px-2 rounded transition-colors cursor-pointer">
                         <div>
                           <p className="text-sm font-medium">#{order.id.slice(-8).toUpperCase()}</p>
-                          <p className="text-xs text-muted-foreground">{formatDate(order.createdAt)}</p>
+                          <p className="text-xs text-muted-foreground" suppressHydrationWarning>{formatDate(order.createdAt)}</p>
                         </div>
                         <div className="text-right">
                           <p className="text-sm font-semibold">{formatCurrency(order.total)}</p>

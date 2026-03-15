@@ -1,5 +1,6 @@
+import Link from 'next/link'
 import { updateCustomerAccount } from '@/actions/crm'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
@@ -129,7 +130,7 @@ export function AccountEditForm({ account, mode }: { account: Account; mode: 'ad
 
       <div className="flex gap-3">
         <Button type="submit">Save Account</Button>
-        <a href={backPath}><Button type="button" variant="outline">Cancel</Button></a>
+        <Link href={backPath} className={buttonVariants({ variant: 'outline' })}>Cancel</Link>
       </div>
     </form>
   )

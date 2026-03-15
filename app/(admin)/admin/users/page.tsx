@@ -75,7 +75,7 @@ export default async function UsersPage() {
                         <div className="flex items-center gap-3">
                           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200">
                             {user.avatarUrl ? (
-                              <Image src={user.avatarUrl} alt={user.name} width={32} height={32} className="h-8 w-8 rounded-full object-cover" />
+                              <Image src={user.avatarUrl} alt={user.name ?? ''} width={32} height={32} className="h-8 w-8 rounded-full object-cover" unoptimized={user.avatarUrl.includes('googleusercontent.com')} />
                             ) : (
                               <User className="h-4 w-4 text-slate-500" />
                             )}
@@ -97,13 +97,13 @@ export default async function UsersPage() {
                       </td>
                       <td className="px-6 py-4 text-sm">
                         <div className="space-y-1">
-                          <p className="font-medium">{access?.lastLoginAt ? formatDateTime(access.lastLoginAt) : 'No login yet'}</p>
-                          <p className="text-xs text-muted-foreground">
+                          <p className="font-medium" suppressHydrationWarning>{access?.lastLoginAt ? formatDateTime(access.lastLoginAt) : 'No login yet'}</p>
+                          <p className="text-xs text-muted-foreground" suppressHydrationWarning>
                             Last logout: {access?.lastLogoutAt ? formatDateTime(access.lastLogoutAt) : '-'}
                           </p>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-muted-foreground">{formatDate(user.createdAt)}</td>
+                      <td className="px-6 py-4 text-sm text-muted-foreground" suppressHydrationWarning>{formatDate(user.createdAt)}</td>
                       <td className="px-6 py-4">
                         <Link href={`/admin/users/${user.id}`}>
                           <Button variant="ghost" size="sm">Edit</Button>
