@@ -10,6 +10,15 @@ type ContactMatch = {
   avatarUrl: string | null
 }
 
+function toProxyUrl(avatarUrl: string | null | undefined): string | null {
+  if (!avatarUrl) return null
+  if (avatarUrl.startsWith('https://storage.googleapis.com/')) {
+    const filePath = avatarUrl.replace(/^https:\/\/storage\.googleapis\.com\/[^/]+\//, '')
+    return `/api/image?path=${encodeURIComponent(filePath)}`
+  }
+  return avatarUrl
+}
+
 function safeNormalizePhone(value: string | null | undefined) {
   if (!value) return null
   try {
@@ -63,7 +72,7 @@ export async function getInboxContactMatches(phones: string[]) {
       if (!normalized || !targetPhones.has(normalized) || results.has(normalized)) continue
       results.set(normalized, {
         name: candidate.name || account.companyName,
-        avatarUrl: account.avatarUrl ?? null,
+        avatarUrl: toProxyUrl(account.avatarUrl),
       })
     }
   }
@@ -73,7 +82,7 @@ export async function getInboxContactMatches(phones: string[]) {
     if (!normalized || !targetPhones.has(normalized) || results.has(normalized)) continue
     results.set(normalized, {
       name: user.name,
-      avatarUrl: user.avatarUrl ?? null,
+      avatarUrl: toProxyUrl(user.avatarUrl),
     })
   }
 
