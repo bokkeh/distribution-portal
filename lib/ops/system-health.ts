@@ -46,8 +46,8 @@ export async function getSystemHealthSnapshot() {
     },
     {
       label: 'HubSpot',
-      ok: Boolean(process.env.HUBSPOT_ACCESS_TOKEN),
-      detail: process.env.HUBSPOT_ACCESS_TOKEN ? 'Configured' : 'Missing access token',
+      ok: Boolean(process.env.HUBSPOT_API_KEY),
+      detail: process.env.HUBSPOT_API_KEY ? 'Configured' : 'Missing API key',
     },
   ]
 
