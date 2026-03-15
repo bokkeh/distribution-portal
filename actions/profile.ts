@@ -22,6 +22,14 @@ function isMissingUserAddressColumn(error: unknown) {
   return code === '42703' || message.includes('address') || message.includes('city') || message.includes('state') || message.includes('zip')
 }
 
+function isMissingStripeConnectColumn(error: unknown) {
+  const dbError = error as { code?: string; message?: string; cause?: unknown } | null
+  const code = dbError?.code ?? (dbError?.cause as { code?: string } | undefined)?.code
+  const message = error instanceof Error ? error.message.toLowerCase() : ''
+
+  return code === '42703' || message.includes('stripe_connect_account_id')
+}
+
 export async function updateProfile(
   _prev: { error?: string } | null,
   formData: FormData
@@ -177,52 +185,87 @@ export async function createTasterStripeOnboardingLink() {
   const roles = session.user.roles ?? [session.user.role]
   if (!roles.includes('taster') && !roles.includes('admin')) throw new Error('Unauthorized')
 
-  const [user] = await db
-    .select({
-      id: users.id,
-      email: users.email,
-      name: users.name,
-      stripeConnectAccountId: users.stripeConnectAccountId,
-    })
-    .from(users)
-    .where(eq(users.id, session.user.id))
-    .limit(1)
+  if (!process.env.STRIPE_SECRET_KEY) {
+    redirect('/taster/profile?error=' + encodeURIComponent('Stripe is not configured yet.'))
+  }
+
+  let user:
+    | {
+        id: string
+        email: string
+        name: string | null
+        stripeConnectAccountId: string | null
+      }
+    | undefined
+
+  try {
+    ;[user] = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        stripeConnectAccountId: users.stripeConnectAccountId,
+      })
+      .from(users)
+      .where(eq(users.id, session.user.id))
+      .limit(1)
+  } catch (error) {
+    if (isMissingStripeConnectColumn(error)) {
+      redirect('/taster/profile?error=' + encodeURIComponent('Run db:migrate before using Stripe payouts.'))
+    }
+
+    throw error
+  }
 
   if (!user) throw new Error('User not found')
 
   let stripeConnectAccountId = user.stripeConnectAccountId
 
-  if (!stripeConnectAccountId) {
-    const account = await stripe.accounts.create({
-      type: 'express',
-      country: 'US',
-      email: user.email,
-      business_type: 'individual',
-      capabilities: {
-        transfers: { requested: true },
-      },
-      metadata: {
-        userId: user.id,
-        role: 'taster',
-      },
+  try {
+    if (!stripeConnectAccountId) {
+      const account = await stripe.accounts.create({
+        type: 'express',
+        country: 'US',
+        email: user.email,
+        business_type: 'individual',
+        capabilities: {
+          transfers: { requested: true },
+        },
+        metadata: {
+          userId: user.id,
+          role: 'taster',
+        },
+      })
+
+      stripeConnectAccountId = account.id
+
+      await db.update(users)
+        .set({ stripeConnectAccountId })
+        .where(eq(users.id, user.id))
+    }
+
+    const baseUrl = process.env.NEXTAUTH_URL ?? 'http://localhost:3000'
+    const accountLink = await stripe.accountLinks.create({
+      account: stripeConnectAccountId,
+      refresh_url: `${baseUrl}/taster/profile?stripe=refresh`,
+      return_url: `${baseUrl}/taster/profile?stripe=return`,
+      type: 'account_onboarding',
     })
 
-    stripeConnectAccountId = account.id
+    redirect(accountLink.url)
+  } catch (error) {
+    if (isMissingStripeConnectColumn(error)) {
+      redirect('/taster/profile?error=' + encodeURIComponent('Run db:migrate before using Stripe payouts.'))
+    }
 
-    await db.update(users)
-      .set({ stripeConnectAccountId })
-      .where(eq(users.id, user.id))
+    const message = error instanceof Stripe.errors.StripeError
+      ? error.message
+      : error instanceof Error
+        ? error.message
+        : 'Stripe payout setup failed.'
+
+    redirect('/taster/profile?error=' + encodeURIComponent(message))
   }
-
-  const baseUrl = process.env.NEXTAUTH_URL ?? 'http://localhost:3000'
-  const accountLink = await stripe.accountLinks.create({
-    account: stripeConnectAccountId,
-    refresh_url: `${baseUrl}/taster/profile?stripe=refresh`,
-    return_url: `${baseUrl}/taster/profile?stripe=return`,
-    type: 'account_onboarding',
-  })
-
-  redirect(accountLink.url)
 }
 
 export async function updateDriverProfile(

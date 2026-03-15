@@ -12,27 +12,66 @@ import { createUserNotification } from '@/lib/notifications/in-app'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? 'sk_test_placeholder', { apiVersion: '2026-02-25.clover' })
 
+function isMissingStripeConnectColumn(error: unknown) {
+  const dbError = error as { code?: string; message?: string; cause?: unknown } | null
+  const code = dbError?.code ?? (dbError?.cause as { code?: string } | undefined)?.code
+  const message = error instanceof Error ? error.message.toLowerCase() : ''
+
+  return code === '42703' || message.includes('stripe_connect_account_id')
+}
+
+function getStripeErrorMessage(error: unknown) {
+  if (error instanceof Stripe.errors.StripeError) {
+    return error.message
+  }
+
+  return error instanceof Error ? error.message : 'Stripe payout failed.'
+}
+
 export async function payoutTasterInvoiceViaStripe(formData: FormData) {
   const session = await requireAdminOrStaff()
   const invoiceId = (formData.get('invoiceId') as string) || ''
   const mode = (formData.get('mode') as string) || 'admin'
 
-  const [invoice] = await db
-    .select({
-      id: tasterInvoices.id,
-      totalAmount: tasterInvoices.totalAmount,
-      status: tasterInvoices.status,
-      submittedByUserId: tasterInvoices.submittedByUserId,
-      payeeName: tasterInvoices.payeeName,
-      tastingId: tasterInvoices.tastingId,
-      eventName: tastings.eventName,
-      stripeConnectAccountId: users.stripeConnectAccountId,
-    })
-    .from(tasterInvoices)
-    .innerJoin(tastings, eq(tasterInvoices.tastingId, tastings.id))
-    .innerJoin(users, eq(tasterInvoices.submittedByUserId, users.id))
-    .where(eq(tasterInvoices.id, invoiceId))
-    .limit(1)
+  if (!process.env.STRIPE_SECRET_KEY) {
+    redirect(`/${mode}/invoicing?error=${encodeURIComponent('Stripe is not configured yet.')}`)
+  }
+
+  let invoice: {
+    id: string
+    totalAmount: string
+    status: string
+    submittedByUserId: string
+    payeeName: string
+    tastingId: string
+    eventName: string
+    stripeConnectAccountId: string | null
+  } | undefined
+
+  try {
+    ;[invoice] = await db
+      .select({
+        id: tasterInvoices.id,
+        totalAmount: tasterInvoices.totalAmount,
+        status: tasterInvoices.status,
+        submittedByUserId: tasterInvoices.submittedByUserId,
+        payeeName: tasterInvoices.payeeName,
+        tastingId: tasterInvoices.tastingId,
+        eventName: tastings.eventName,
+        stripeConnectAccountId: users.stripeConnectAccountId,
+      })
+      .from(tasterInvoices)
+      .innerJoin(tastings, eq(tasterInvoices.tastingId, tastings.id))
+      .innerJoin(users, eq(tasterInvoices.submittedByUserId, users.id))
+      .where(eq(tasterInvoices.id, invoiceId))
+      .limit(1)
+  } catch (error) {
+    if (isMissingStripeConnectColumn(error)) {
+      redirect(`/${mode}/invoicing?error=${encodeURIComponent('Run db:migrate before using Stripe payouts.')}`)
+    }
+
+    throw error
+  }
 
   if (!invoice) {
     redirect(`/${mode}/invoicing?error=${encodeURIComponent('Taster invoice not found.')}`)
@@ -46,22 +85,28 @@ export async function payoutTasterInvoiceViaStripe(formData: FormData) {
     redirect(`/${mode}/invoicing?error=${encodeURIComponent(`${invoice.payeeName} has not connected Stripe payouts yet.`)}`)
   }
 
-  const account = await stripe.accounts.retrieve(invoice.stripeConnectAccountId)
-  if (!account.payouts_enabled) {
-    redirect(`/${mode}/invoicing?error=${encodeURIComponent(`${invoice.payeeName}'s Stripe account is not ready for payouts yet.`)}`)
-  }
+  let transfer: Stripe.Transfer
 
-  const transfer = await stripe.transfers.create({
-    amount: Math.round(Number(invoice.totalAmount) * 100),
-    currency: 'usd',
-    destination: invoice.stripeConnectAccountId,
-    metadata: {
-      tasterInvoiceId: invoice.id,
-      tastingId: invoice.tastingId,
-      paidByUserId: session.user.id,
-    },
-    description: `AHAWC tasting payout for ${invoice.eventName}`,
-  })
+  try {
+    const account = await stripe.accounts.retrieve(invoice.stripeConnectAccountId)
+    if (!account.payouts_enabled) {
+      redirect(`/${mode}/invoicing?error=${encodeURIComponent(`${invoice.payeeName}'s Stripe account is not ready for payouts yet.`)}`)
+    }
+
+    transfer = await stripe.transfers.create({
+      amount: Math.round(Number(invoice.totalAmount) * 100),
+      currency: 'usd',
+      destination: invoice.stripeConnectAccountId,
+      metadata: {
+        tasterInvoiceId: invoice.id,
+        tastingId: invoice.tastingId,
+        paidByUserId: session.user.id,
+      },
+      description: `AHAWC tasting payout for ${invoice.eventName}`,
+    })
+  } catch (error) {
+    redirect(`/${mode}/invoicing?error=${encodeURIComponent(getStripeErrorMessage(error))}`)
+  }
 
   await db.update(tasterInvoices)
     .set({ status: 'paid' })
