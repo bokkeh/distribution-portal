@@ -42,8 +42,14 @@ export function getDefaultFeaturesForRoles(roles: string[]) {
 }
 
 export function resolveFeatureFlags(roles: string[], explicitFeatures?: string[] | null) {
-  if (explicitFeatures) return explicitFeatures.filter(Boolean) as FeatureKey[]
-  return getDefaultFeaturesForRoles(roles)
+  const defaults = getDefaultFeaturesForRoles(roles)
+  if (!explicitFeatures) return defaults
+
+  const next = new Set<FeatureKey>(defaults)
+  for (const feature of explicitFeatures.filter(Boolean) as FeatureKey[]) {
+    next.add(feature)
+  }
+  return Array.from(next)
 }
 
 export function hasFeature(feature: FeatureKey, roles: string[], explicitFeatures?: string[] | null) {

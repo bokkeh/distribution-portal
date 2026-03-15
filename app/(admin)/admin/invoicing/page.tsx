@@ -11,6 +11,7 @@ import { Plus } from 'lucide-react'
 export default async function InvoicingPage() {
   let tasterInvoiceSubmissions: Array<{
     id: string
+    tastingId: string
     totalAmount: string
     status: string
     submittedAt: Date
@@ -38,6 +39,7 @@ export default async function InvoicingPage() {
     tasterInvoiceSubmissions = await db
       .select({
         id: tasterInvoices.id,
+        tastingId: tasterInvoices.tastingId,
         totalAmount: tasterInvoices.totalAmount,
         status: tasterInvoices.status,
         submittedAt: tasterInvoices.submittedAt,
@@ -160,9 +162,14 @@ export default async function InvoicingPage() {
                     <td className="px-6 py-4"><Badge variant={tasterStatusVariant[invoice.status] ?? 'secondary'}>{invoice.status}</Badge></td>
                     <td className="px-6 py-4 text-sm text-muted-foreground">{formatDate(invoice.submittedAt)}</td>
                     <td className="px-6 py-4">
-                      <Link href="/admin/tastings">
-                        <Button variant="ghost" size="sm">View Tasting</Button>
-                      </Link>
+                      <div className="flex flex-wrap gap-2">
+                        <Link href="/admin/tastings">
+                          <Button variant="ghost" size="sm">View Tasting</Button>
+                        </Link>
+                        <Link href={`/taster/tastings/${invoice.tastingId}`}>
+                          <Button variant="outline" size="sm">View Report</Button>
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))}
