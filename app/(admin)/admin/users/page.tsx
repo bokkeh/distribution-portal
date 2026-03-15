@@ -75,7 +75,7 @@ export default async function UsersPage() {
                         <div className="flex items-center gap-3">
                           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200">
                             {user.avatarUrl ? (
-                              <Image src={user.avatarUrl} alt={user.name ?? ''} width={32} height={32} className="h-8 w-8 rounded-full object-cover" unoptimized={user.avatarUrl.includes('googleusercontent.com')} />
+                              <Image src={user.avatarUrl} alt={user.name ?? ''} width={32} height={32} className="h-8 w-8 rounded-full object-cover" unoptimized={user.avatarUrl.includes('googleusercontent.com') || user.avatarUrl.startsWith('/api/')} />
                             ) : (
                               <User className="h-4 w-4 text-slate-500" />
                             )}

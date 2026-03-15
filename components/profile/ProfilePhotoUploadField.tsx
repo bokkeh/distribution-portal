@@ -47,7 +47,7 @@ export function ProfilePhotoUploadField({ value, onChange, disabled }: ProfilePh
     <div className="flex flex-col gap-4 rounded-xl border bg-slate-50/70 p-4 sm:flex-row sm:items-center">
       <div className="relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full border bg-white">
         {value ? (
-          <Image src={value} alt="Profile photo" fill className="object-cover" />
+          <Image src={value} alt="Profile photo" fill className="object-cover" unoptimized />
         ) : (
           <UserCircle2 className="h-12 w-12 text-slate-300" />
         )}
