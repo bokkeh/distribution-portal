@@ -13,14 +13,14 @@ interface KpiCardProps {
 
 export default function KpiCard({ title, value, change, changeType = 'neutral', icon: Icon, iconColor = 'text-blue-600' }: KpiCardProps) {
   return (
-    <Card>
+    <Card className="border-0 bg-white shadow-sm">
       <CardContent className="p-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-sm font-medium text-muted-foreground">{title}</p>
-            <p className="text-2xl font-bold mt-1">{value}</p>
+            <p className="text-sm font-medium text-slate-500">{title}</p>
+            <p className="mt-6 text-4xl font-bold tracking-tight text-slate-950">{value}</p>
             {change && (
-              <p className={cn('text-xs mt-1', {
+              <p className={cn('mt-2 text-sm font-medium', {
                 'text-green-600': changeType === 'positive',
                 'text-red-600': changeType === 'negative',
                 'text-muted-foreground': changeType === 'neutral',
@@ -29,8 +29,8 @@ export default function KpiCard({ title, value, change, changeType = 'neutral', 
               </p>
             )}
           </div>
-          <div className={cn('p-3 rounded-xl bg-slate-100', iconColor)}>
-            <Icon className="w-6 h-6" />
+          <div className={cn('rounded-xl bg-slate-100 p-3', iconColor)}>
+            <Icon className="h-5 w-5" />
           </div>
         </div>
       </CardContent>

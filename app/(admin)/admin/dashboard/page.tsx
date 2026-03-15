@@ -71,21 +71,21 @@ export default async function AdminDashboard() {
           icon={AlertTriangle}
           iconColor="text-orange-600"
         />
-        <Card className="border-slate-200">
+        <Card className="border-0 bg-white shadow-sm">
           <CardContent className="p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">SMS Inbox</p>
-                <p className="mt-1 text-2xl font-bold">{smsInboxSummary.totalTexts}</p>
-                <p className="mt-1 text-xs text-muted-foreground">Total texts logged</p>
+                <p className="text-sm font-medium text-slate-500">SMS Inbox</p>
+                <p className="mt-6 text-4xl font-bold tracking-tight text-slate-950">{smsInboxSummary.totalTexts}</p>
+                <p className="mt-2 text-sm font-medium text-slate-500">Total texts logged</p>
               </div>
               <div className="rounded-xl bg-slate-100 p-3 text-emerald-600">
-                <MessageSquare className="h-6 w-6" />
+                <MessageSquare className="h-5 w-5" />
               </div>
             </div>
-            <div className="mt-4 flex items-end justify-between gap-3">
+            <div className="mt-6 flex items-end justify-between gap-3">
               <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Open Threads</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Open Threads</p>
                 <p className="mt-1 text-lg font-semibold text-slate-900">{smsInboxSummary.openThreads}</p>
               </div>
               <Link href="/admin/inbox" className="text-xs font-medium text-primary hover:underline">
