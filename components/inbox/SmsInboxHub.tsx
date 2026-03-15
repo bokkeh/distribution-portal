@@ -549,7 +549,7 @@ export function SmsInboxHub({
                         {message.mediaUrls.map((url) => (
                           <a key={url} href={url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-xl">
                             <div className="relative h-48 w-full overflow-hidden rounded-xl bg-black/10">
-                              <Image src={url} alt="Message attachment" fill unoptimized className="object-cover" />
+                              <img src={url} alt="Message attachment" className="h-full w-full object-cover" loading="lazy" />
                             </div>
                           </a>
                         ))}
@@ -638,7 +638,7 @@ export function SmsInboxHub({
                               className="overflow-hidden rounded-xl border border-slate-200 bg-white text-left hover:border-slate-300"
                             >
                               <div className="relative aspect-square bg-slate-100">
-                                <Image src={gif.previewUrl} alt={gif.title} fill unoptimized className="object-cover" />
+                                <img src={gif.previewUrl} alt={gif.title} className="h-full w-full object-cover" loading="lazy" />
                               </div>
                               <div className="px-2 py-2">
                                 <p className="line-clamp-2 text-xs font-medium text-slate-700">{gif.title || 'GIF'}</p>

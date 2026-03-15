@@ -11,9 +11,12 @@ export function formatCurrency(amount: string | number) {
 }
 
 export function formatDate(date: string | Date) {
-  return new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(
-    typeof date === 'string' ? new Date(date) : date
-  )
+  const parsed = typeof date === 'string' ? new Date(date) : date
+  if (!(parsed instanceof Date) || Number.isNaN(parsed.getTime())) {
+    return '—'
+  }
+
+  return new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' }).format(parsed)
 }
 
 export function generateInvoiceNumber(sequence: number) {

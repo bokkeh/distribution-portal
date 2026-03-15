@@ -22,7 +22,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
   const account = await getCRMAccountDetail(accountId)
   if (!account) notFound()
 
-  const [accountContacts, recentOrders, recentInvoices, [orderCount]] = await Promise.all([
+  const [accountContactsResult, recentOrdersResult, recentInvoicesResult, orderCountResult] = await Promise.allSettled([
     db.select({
       id: contacts.id,
       name: contacts.name,
@@ -46,6 +46,11 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
     }).from(invoices).where(eq(invoices.customerId, accountId)).orderBy(desc(invoices.createdAt)).limit(5),
     db.select({ total: count() }).from(orders).where(eq(orders.customerId, accountId)),
   ])
+
+  const accountContacts = accountContactsResult.status === 'fulfilled' ? accountContactsResult.value : []
+  const recentOrders = recentOrdersResult.status === 'fulfilled' ? recentOrdersResult.value : []
+  const recentInvoices = recentInvoicesResult.status === 'fulfilled' ? recentInvoicesResult.value : []
+  const orderCount = orderCountResult.status === 'fulfilled' ? orderCountResult.value[0] : { total: 0 }
 
   const creditAvailable = Math.max(0, Number(account.creditLimit ?? 0) - Number(account.balance ?? 0))
 
