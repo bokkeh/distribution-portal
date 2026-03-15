@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { adjustStock, deleteSku } from '@/actions/inventory'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import Link from 'next/link'
 
 export function AdminInventoryRowActions({
   productId,
@@ -91,6 +92,11 @@ export function AdminInventoryRowActions({
       </td>
       <td className="px-6 py-4">
         <div className="flex items-center justify-end gap-2">
+          <Link href={`/admin/inventory/${productId}`}>
+            <Button type="button" variant="ghost" size="sm">
+              Edit
+            </Button>
+          </Link>
           <Button type="button" variant="outline" size="sm" onClick={handleSave} disabled={isPending}>
             {isPending ? 'Saving...' : 'Save'}
           </Button>

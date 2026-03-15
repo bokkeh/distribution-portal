@@ -6,16 +6,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { adjustStock } from '@/actions/inventory'
+import { updateProductDetails } from '@/actions/inventory'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { redirect } from 'next/navigation'
 
 export default async function EditProductPage({ params }: { params: { productId: string } }) {
-  async function submitAdjustStock(formData: FormData) {
+  async function submitProductUpdate(formData: FormData) {
     'use server'
 
-    const result = await adjustStock(formData)
+    const result = await updateProductDetails(formData)
     if (result?.error) {
       throw new Error(result.error)
     }
@@ -48,11 +48,63 @@ export default async function EditProductPage({ params }: { params: { productId:
         </div>
       </div>
 
-      <Card className="max-w-lg">
-        <CardHeader><CardTitle>Adjust Inventory</CardTitle></CardHeader>
+      <Card className="max-w-4xl">
+        <CardHeader><CardTitle>Edit Product And Inventory</CardTitle></CardHeader>
         <CardContent>
-          <form action={submitAdjustStock} className="space-y-4">
+          <form action={submitProductUpdate} className="space-y-5">
             <input type="hidden" name="productId" value={product.id} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>SKU</Label>
+                <Input name="sku" required defaultValue={product.sku} />
+              </div>
+              <div className="space-y-2">
+                <Label>Product Name</Label>
+                <Input name="name" required defaultValue={product.name} />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Brand</Label>
+                <Input name="brand" defaultValue={product.brand ?? ''} />
+              </div>
+              <div className="space-y-2">
+                <Label>Category</Label>
+                <Input name="category" defaultValue={product.category ?? ''} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Description</Label>
+              <Input name="description" defaultValue={product.description ?? ''} />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>Price per Case ($)</Label>
+                <Input type="number" step="0.01" min="0" name="price" defaultValue={product.price} />
+              </div>
+              <div className="space-y-2">
+                <Label>Price per Bottle ($)</Label>
+                <Input type="number" step="0.01" min="0" name="bottlePrice" defaultValue={product.bottlePrice} />
+              </div>
+              <div className="space-y-2">
+                <Label>Sample Price ($)</Label>
+                <Input type="number" step="0.01" min="0" name="samplePrice" defaultValue={product.samplePrice} />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>Bottles per Case</Label>
+                <Input type="number" min="1" name="bottlesPerCase" defaultValue={product.bottlesPerCase} />
+              </div>
+              <div className="space-y-2">
+                <Label>Cases per Pallet</Label>
+                <Input type="number" min="0" name="casesPerPallet" defaultValue={product.casesPerPallet ?? ''} />
+              </div>
+              <div className="space-y-2">
+                <Label>Image URL</Label>
+                <Input name="imageUrl" defaultValue={product.imageUrl ?? ''} />
+              </div>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Paid Cases</Label>
@@ -73,8 +125,12 @@ export default async function EditProductPage({ params }: { params: { productId:
                 <Input type="number" name="reorderLevel" min="0" defaultValue={inv?.reorderLevel ?? 10} />
               </div>
             </div>
+            <label className="flex items-center gap-3 text-sm text-slate-700">
+              <input type="checkbox" name="active" defaultChecked={product.active} />
+              <span>Active product</span>
+            </label>
             <div className="flex gap-3">
-              <Button type="submit">Update Stock</Button>
+              <Button type="submit">Save Product</Button>
               <Link href="/admin/inventory"><Button variant="outline">Cancel</Button></Link>
             </div>
           </form>

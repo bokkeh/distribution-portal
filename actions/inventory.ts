@@ -50,6 +50,52 @@ export async function createProduct(formData: FormData) {
   redirect('/admin/inventory')
 }
 
+export async function updateProductDetails(formData: FormData) {
+  try {
+    await requireAdminOrStaff()
+
+    const productId = formData.get('productId') as string
+    if (!productId) {
+      throw new Error('Missing product ID')
+    }
+
+    const quantityPaid = parseInt(formData.get('quantityPaid') as string)
+    const quantitySample = parseInt(formData.get('quantitySample') as string)
+    const reorderLevel = parseInt(formData.get('reorderLevel') as string)
+    const looseBottlePaid = parseInt(formData.get('looseBottlePaid') as string)
+    const bottlesPerCase = parseInt(formData.get('bottlesPerCase') as string)
+    const casesPerPallet = parseInt(formData.get('casesPerPallet') as string)
+
+    await db.update(products)
+      .set({
+        sku: (formData.get('sku') as string) || '',
+        name: (formData.get('name') as string) || '',
+        description: (formData.get('description') as string) || null,
+        category: (formData.get('category') as string) || null,
+        brand: (formData.get('brand') as string) || null,
+        price: (formData.get('price') as string) || '0',
+        samplePrice: (formData.get('samplePrice') as string) || '0',
+        bottlePrice: (formData.get('bottlePrice') as string) || '0',
+        bottlesPerCase: Number.isNaN(bottlesPerCase) ? 12 : bottlesPerCase,
+        casesPerPallet: Number.isNaN(casesPerPallet) ? null : casesPerPallet,
+        imageUrl: (formData.get('imageUrl') as string) || null,
+        active: formData.get('active') === 'on',
+      })
+      .where(eq(products.id, productId))
+
+    const stockResult = await adjustStock(formData)
+    if (stockResult?.error) {
+      throw new Error(stockResult.error)
+    }
+
+    revalidatePath('/admin/inventory')
+    revalidatePath(`/admin/inventory/${productId}`)
+    return { success: true as const }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to update product details' }
+  }
+}
+
 export async function adjustSampleCases(productId: string, delta: number): Promise<{ error?: string }> {
   await requireAdminOrStaff()
 
