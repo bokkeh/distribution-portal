@@ -63,7 +63,7 @@ export async function getSystemHealthSnapshot() {
     const migrationTableColumnsRows = await db.execute(sql`
       select column_name
       from information_schema.columns
-      where table_schema = 'public'
+      where table_schema = 'drizzle'
         and table_name = '__drizzle_migrations'
     `)
 
@@ -78,7 +78,7 @@ export async function getSystemHealthSnapshot() {
         select coalesce(string_agg(name::text, ',' order by created_at), '') as names
         from (
           select name, created_at
-          from "__drizzle_migrations"
+          from "drizzle"."__drizzle_migrations"
         ) migration_rows
       `)
       const value = (migrationRows.rows?.[0] as { names?: string } | undefined)?.names ?? ''
@@ -87,7 +87,7 @@ export async function getSystemHealthSnapshot() {
     } else {
       const countRows = await db.execute(sql`
         select count(*)::int as count
-        from "__drizzle_migrations"
+        from "drizzle"."__drizzle_migrations"
       `)
       const appliedCount = Number((countRows.rows?.[0] as { count?: number | string } | undefined)?.count ?? 0)
       appliedMigrations = expectedMigrations.slice(0, Math.max(0, Math.min(appliedCount, expectedMigrations.length)))
