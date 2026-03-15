@@ -1,8 +1,9 @@
-import { desc, inArray } from 'drizzle-orm'
+import { desc } from 'drizzle-orm'
 import { db } from '@/db'
-import { customerAccounts, smsMessages, users } from '@/db/schema'
 import { SmsInboxHub } from '@/components/inbox/SmsInboxHub'
 import { requireFeature } from '@/lib/auth/session'
+import { smsMessages } from '@/db/schema'
+import { getInboxContactMatches } from '@/lib/inbox/crm-match'
 
 function isMissingSmsMessagesTable(error: unknown) {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
@@ -24,17 +25,7 @@ export default async function StaffInboxPage({
       .orderBy(desc(smsMessages.createdAt))
 
     const phones = Array.from(new Set(rows.map(row => row.phoneNumber)))
-    const [accounts, matchingUsers] = await Promise.all([
-      phones.length
-        ? db.select({ phone: customerAccounts.phone, companyName: customerAccounts.companyName }).from(customerAccounts).where(inArray(customerAccounts.phone, phones))
-        : Promise.resolve([]),
-      phones.length
-        ? db.select({ phone: users.phone, name: users.name }).from(users).where(inArray(users.phone, phones))
-        : Promise.resolve([]),
-    ])
-
-    const accountMap = new Map(accounts.map(account => [account.phone, account.companyName]))
-    const userMap = new Map(matchingUsers.map(user => [user.phone, user.name]))
+    const crmMatches = await getInboxContactMatches(phones)
     const threadMap = new Map<string, typeof rows>()
 
     for (const row of rows) {
@@ -45,9 +36,11 @@ export default async function StaffInboxPage({
 
     const threads = Array.from(threadMap.entries()).map(([phone, messages]) => {
       const [latest] = messages
+      const crmMatch = crmMatches.get(phone)
       return {
         phone,
-        contactName: latest.contactName ?? accountMap.get(phone) ?? userMap.get(phone) ?? phone,
+        contactName: crmMatch?.name ?? latest.contactName ?? phone,
+        avatarUrl: crmMatch?.avatarUrl ?? null,
         lastBody: latest.body,
         lastDirection: latest.direction,
         lastStatus: latest.status,
@@ -58,9 +51,9 @@ export default async function StaffInboxPage({
 
     const selectedPhone = params.phone && threadMap.has(params.phone) ? params.phone : threads[0]?.phone ?? null
     const selectedMessages = selectedPhone ? (threadMap.get(selectedPhone) ?? []).slice().reverse() : []
-    const selectedContactName = selectedPhone
-      ? (threads.find(thread => thread.phone === selectedPhone)?.contactName ?? selectedPhone)
-      : ''
+    const selectedThread = selectedPhone ? threads.find(thread => thread.phone === selectedPhone) ?? null : null
+    const selectedContactName = selectedThread?.contactName ?? ''
+    const selectedAvatarUrl = selectedThread?.avatarUrl ?? null
 
     return (
       <div className="p-4 sm:p-8 space-y-6">
@@ -73,6 +66,7 @@ export default async function StaffInboxPage({
           threads={threads}
           selectedPhone={selectedPhone}
           selectedContactName={selectedContactName}
+          selectedAvatarUrl={selectedAvatarUrl}
           messages={selectedMessages.map(message => ({
             id: message.id,
             direction: message.direction,

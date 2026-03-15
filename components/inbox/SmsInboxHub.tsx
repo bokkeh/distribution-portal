@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import { useActionState, useEffect } from 'react'
 import { MessageSquare, Send } from 'lucide-react'
@@ -13,6 +14,7 @@ import { cn, formatDate } from '@/lib/utils'
 type Thread = {
   phone: string
   contactName: string
+  avatarUrl: string | null
   lastBody: string
   lastDirection: 'inbound' | 'outbound'
   lastStatus: string
@@ -33,12 +35,14 @@ export function SmsInboxHub({
   threads,
   selectedPhone,
   selectedContactName,
+  selectedAvatarUrl,
   messages,
 }: {
   basePath: '/admin/inbox' | '/staff/inbox'
   threads: Thread[]
   selectedPhone: string | null
   selectedContactName: string
+  selectedAvatarUrl: string | null
   messages: Message[]
 }) {
   const [state, action, pending] = useActionState(replyToSmsThread, null)
@@ -65,6 +69,7 @@ export function SmsInboxHub({
             <p className="text-sm text-muted-foreground">No text messages yet.</p>
           ) : threads.map(thread => {
             const active = selectedPhone === thread.phone
+            const initials = thread.contactName.trim().slice(0, 1).toUpperCase() || '?'
             return (
               <Link
                 key={thread.phone}
@@ -75,9 +80,24 @@ export function SmsInboxHub({
                 )}
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-medium text-slate-900">{thread.contactName}</p>
-                    <p className="text-xs text-slate-500">{thread.phone}</p>
+                  <div className="flex items-start gap-3">
+                    {thread.avatarUrl ? (
+                      <Image
+                        src={thread.avatarUrl}
+                        alt={thread.contactName}
+                        width={40}
+                        height={40}
+                        className="h-10 w-10 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-200 text-sm font-semibold text-slate-600">
+                        {initials}
+                      </div>
+                    )}
+                    <div>
+                      <p className="font-medium text-slate-900">{thread.contactName}</p>
+                      <p className="text-xs text-slate-500">{thread.phone}</p>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     {thread.unreadCount > 0 ? <Badge variant="destructive">{thread.unreadCount}</Badge> : null}
@@ -93,8 +113,29 @@ export function SmsInboxHub({
 
       <Card className="min-h-[520px]">
         <CardHeader>
-          <CardTitle>{selectedPhone ? selectedContactName : 'Select a conversation'}</CardTitle>
-          {selectedPhone ? <p className="text-sm text-muted-foreground">{selectedPhone}</p> : null}
+          {selectedPhone ? (
+            <div className="flex items-center gap-3">
+              {selectedAvatarUrl ? (
+                <Image
+                  src={selectedAvatarUrl}
+                  alt={selectedContactName}
+                  width={44}
+                  height={44}
+                  className="h-11 w-11 rounded-full object-cover"
+                />
+              ) : (
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-200 text-sm font-semibold text-slate-600">
+                  {selectedContactName.trim().slice(0, 1).toUpperCase() || '?'}
+                </div>
+              )}
+              <div>
+                <CardTitle>{selectedContactName}</CardTitle>
+                <p className="text-sm text-muted-foreground">{selectedPhone}</p>
+              </div>
+            </div>
+          ) : (
+            <CardTitle>Select a conversation</CardTitle>
+          )}
         </CardHeader>
         <CardContent className="space-y-4">
           {!selectedPhone ? (
