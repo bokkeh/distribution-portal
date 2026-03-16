@@ -10,8 +10,9 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import InvoicePaymentClient from '@/components/invoices/InvoicePaymentClient'
 import { Download } from 'lucide-react'
 
-export default async function CustomerInvoiceDetailPage({ params }: { params: { invoiceId: string } }) {
+export default async function CustomerInvoiceDetailPage({ params }: { params: Promise<{ invoiceId: string }> }) {
   const session = await requireRole('customer')
+  const { invoiceId } = await params
 
   const [invoice] = await db
     .select({
@@ -22,7 +23,7 @@ export default async function CustomerInvoiceDetailPage({ params }: { params: { 
     })
     .from(invoices)
     .leftJoin(customerAccounts, eq(invoices.customerId, customerAccounts.id))
-    .where(eq(invoices.id, params.invoiceId))
+    .where(eq(invoices.id, invoiceId))
 
   if (!invoice) notFound()
 

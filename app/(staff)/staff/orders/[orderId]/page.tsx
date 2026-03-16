@@ -14,7 +14,9 @@ import { ArrowLeft } from 'lucide-react'
 
 const shippingStatuses = ['not_scheduled', 'scheduled', 'out_for_delivery', 'delivered', 'issue'] as const
 
-export default async function OrderDetailPage({ params }: { params: { orderId: string } }) {
+export default async function OrderDetailPage({ params }: { params: Promise<{ orderId: string }> }) {
+  const { orderId } = await params
+
   let order:
     | {
         id: string
@@ -46,7 +48,7 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
       })
       .from(orders)
       .leftJoin(customerAccounts, eq(orders.customerId, customerAccounts.id))
-      .where(eq(orders.id, params.orderId))
+      .where(eq(orders.id, orderId))
   } catch (error) {
     if (!isMissingShippingStatusColumn(error)) throw error
 
@@ -64,7 +66,7 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
       })
       .from(orders)
       .leftJoin(customerAccounts, eq(orders.customerId, customerAccounts.id))
-      .where(eq(orders.id, params.orderId))
+      .where(eq(orders.id, orderId))
       .then(rows => rows.map(row => ({ ...row, shippingStatus: 'not_scheduled' as const })))
   }
 
@@ -82,7 +84,7 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
     })
     .from(orderItems)
     .leftJoin(products, eq(orderItems.productId, products.id))
-    .where(eq(orderItems.orderId, params.orderId))
+    .where(eq(orderItems.orderId, orderId))
 
   const nextStatus: Record<string, 'confirmed' | 'fulfilled' | 'cancelled'> = {
     pending: 'confirmed',

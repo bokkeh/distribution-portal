@@ -12,7 +12,9 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { redirect } from 'next/navigation'
 
-export default async function EditProductPage({ params }: { params: { productId: string } }) {
+export default async function EditProductPage({ params }: { params: Promise<{ productId: string }> }) {
+  const { productId } = await params
+
   async function submitProductUpdate(formData: FormData) {
     'use server'
 
@@ -21,7 +23,7 @@ export default async function EditProductPage({ params }: { params: { productId:
       throw new Error(result.error)
     }
 
-    redirect(`/admin/inventory/${params.productId}`)
+    redirect(`/admin/inventory/${productId}`)
   }
 
   const [record] = await db
@@ -33,9 +35,9 @@ export default async function EditProductPage({ params }: { params: { productId:
     .leftJoin(inventory, eq(inventory.productId, products.id))
     .where(
       or(
-        eq(products.id, params.productId),
-        eq(inventory.id, params.productId),
-        eq(products.sku, params.productId),
+        eq(products.id, productId),
+        eq(inventory.id, productId),
+        eq(products.sku, productId),
       ),
     )
     .limit(1)

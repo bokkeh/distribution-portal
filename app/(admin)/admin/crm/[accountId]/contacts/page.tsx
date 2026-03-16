@@ -12,16 +12,18 @@ import { addContact } from '@/actions/crm'
 import Link from 'next/link'
 import { ArrowLeft, User } from 'lucide-react'
 
-export default async function ContactsPage({ params }: { params: { accountId: string } }) {
-  const [account] = await db.select({ id: customerAccounts.id, companyName: customerAccounts.companyName }).from(customerAccounts).where(eq(customerAccounts.id, params.accountId))
+export default async function ContactsPage({ params }: { params: Promise<{ accountId: string }> }) {
+  const { accountId } = await params
+
+  const [account] = await db.select({ id: customerAccounts.id, companyName: customerAccounts.companyName }).from(customerAccounts).where(eq(customerAccounts.id, accountId))
   if (!account) notFound()
 
-  const accountContacts = await db.select().from(contacts).where(eq(contacts.customerId, params.accountId))
+  const accountContacts = await db.select().from(contacts).where(eq(contacts.customerId, accountId))
 
   return (
     <div className="p-4 sm:p-8 space-y-6">
       <div className="flex items-center gap-4">
-        <Link href={`/admin/crm/${params.accountId}`}><Button variant="ghost" size="icon"><ArrowLeft className="w-4 h-4" /></Button></Link>
+        <Link href={`/admin/crm/${accountId}`}><Button variant="ghost" size="icon"><ArrowLeft className="w-4 h-4" /></Button></Link>
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Contacts</h1>
           <p className="text-muted-foreground mt-1">{account.companyName}</p>
@@ -59,7 +61,7 @@ export default async function ContactsPage({ params }: { params: { accountId: st
           <CardHeader><CardTitle>Add Contact</CardTitle></CardHeader>
           <CardContent>
             <form action={addContact} className="space-y-4">
-              <input type="hidden" name="customerId" value={params.accountId} />
+              <input type="hidden" name="customerId" value={accountId} />
               <div className="space-y-2">
                 <Label htmlFor="name">Name</Label>
                 <Input name="name" id="name" required placeholder="Jane Smith" />
