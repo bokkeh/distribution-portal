@@ -10,6 +10,8 @@ export const userPreferences = pgTable('user_preferences', {
   inAppNotificationsEnabled: boolean('in_app_notifications_enabled').notNull().default(true),
   quietHoursStart: text('quiet_hours_start'),
   quietHoursEnd: text('quiet_hours_end'),
+  tasterOnboardingCompletedAt: timestamp('taster_onboarding_completed_at', { withTimezone: true }),
+  driverOnboardingCompletedAt: timestamp('driver_onboarding_completed_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })

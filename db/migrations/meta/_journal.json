@@ -162,6 +162,20 @@
       "when": 1773584479000,
       "tag": "0022_taster_stripe_connect",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1773666000000,
+      "tag": "0024_preferences_and_automations",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1773669600000,
+      "tag": "0025_role_onboarding",
+      "breakpoints": true
     }
   ]
 }

@@ -15,7 +15,8 @@ function AutomationSection({
     audience: string
     name: string
     trigger: string
-    destination: string
+    portalDestination: string
+    adminDestination: string
   }>
 }) {
   return (
@@ -35,9 +36,12 @@ function AutomationSection({
               <p className="mt-1 text-sm text-slate-600">{item.trigger}</p>
             </div>
             <div className="mt-3 flex items-center justify-between gap-3">
-              <p className="text-xs text-slate-500">{item.destination}</p>
-              <Link href={item.destination}>
-                <Button variant="outline" size="sm">Open</Button>
+              <div className="space-y-1">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Portal Path</p>
+                <p className="text-xs text-slate-500">{item.portalDestination}</p>
+              </div>
+              <Link href={item.adminDestination}>
+                <Button variant="outline" size="sm">Open Admin View</Button>
               </Link>
             </div>
           </div>

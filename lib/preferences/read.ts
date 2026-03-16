@@ -22,6 +22,8 @@ export async function getUserPreferences(userId: string) {
       inAppNotificationsEnabled: true,
       quietHoursStart: null,
       quietHoursEnd: null,
+      tasterOnboardingCompletedAt: null,
+      driverOnboardingCompletedAt: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     }
@@ -36,6 +38,8 @@ export async function getUserPreferences(userId: string) {
       inAppNotificationsEnabled: true,
       quietHoursStart: null,
       quietHoursEnd: null,
+      tasterOnboardingCompletedAt: null,
+      driverOnboardingCompletedAt: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     }
