@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { updateProductDetails } from '@/actions/inventory'
+import { ProductImageUploadField } from '@/components/inventory/ProductImageUploadField'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { redirect } from 'next/navigation'
@@ -97,7 +98,7 @@ export default async function EditProductPage({ params }: { params: { productId:
                 <Input type="number" step="0.01" min="0" name="samplePrice" defaultValue={product.samplePrice} />
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Bottles per Case</Label>
                 <Input type="number" min="1" name="bottlesPerCase" defaultValue={product.bottlesPerCase} />
@@ -106,10 +107,10 @@ export default async function EditProductPage({ params }: { params: { productId:
                 <Label>Cases per Pallet</Label>
                 <Input type="number" min="0" name="casesPerPallet" defaultValue={product.casesPerPallet ?? ''} />
               </div>
-              <div className="space-y-2">
-                <Label>Image URL</Label>
-                <Input name="imageUrl" defaultValue={product.imageUrl ?? ''} />
-              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Product Image</Label>
+              <ProductImageUploadField value={product.imageUrl ?? ''} />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">

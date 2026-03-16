@@ -1,15 +1,15 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
+import Link from 'next/link'
+import { Check, ImageIcon, Plus, ShoppingCart } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency } from '@/lib/utils'
 import { useCart } from '@/hooks/useCart'
-import { ShoppingCart, Plus, Check } from 'lucide-react'
-import Link from 'next/link'
-import Image from 'next/image'
 import { WISHER_VODKA_MIN_CASES, isWisherVodkaProduct } from '@/lib/orders/minimums'
 
 interface Product {
@@ -26,103 +26,135 @@ interface Product {
   quantitySample: number | null
 }
 
-export default function CustomerProductCatalog({ products, categories }: { products: Product[]; categories: string[] }) {
+export default function CustomerProductCatalog({
+  products,
+  categories,
+}: {
+  products: Product[]
+  categories: string[]
+}) {
   const [search, setSearch] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const { items, addItem, itemCount } = useCart()
 
-  const filtered = products.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
-      (p.brand ?? '').toLowerCase().includes(search.toLowerCase())
-    const matchesCategory = selectedCategory === 'all' || p.category === selectedCategory
+  const filtered = products.filter((product) => {
+    const matchesSearch =
+      product.name.toLowerCase().includes(search.toLowerCase()) ||
+      (product.brand ?? '').toLowerCase().includes(search.toLowerCase())
+    const matchesCategory = selectedCategory === 'all' || product.category === selectedCategory
     return matchesSearch && matchesCategory
   })
 
-  const isInCart = (productId: string) => items.some(i => i.productId === productId)
+  const isInCart = (productId: string) => items.some((item) => item.productId === productId)
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+      <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <div className="flex gap-3">
-          <Input className="max-w-xs" placeholder="Search products..." value={search} onChange={e => setSearch(e.target.value)} />
-          <div className="flex gap-2 flex-wrap">
+          <Input
+            className="max-w-xs"
+            placeholder="Search products..."
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setSelectedCategory('all')}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${selectedCategory === 'all' ? 'bg-slate-900 text-white' : 'bg-white border hover:bg-slate-50'}`}>
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${selectedCategory === 'all' ? 'bg-slate-900 text-white' : 'border bg-white hover:bg-slate-50'}`}
+            >
               All
             </button>
-            {categories.map(cat => (
-              <button key={cat}
-                onClick={() => setSelectedCategory(cat)}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${selectedCategory === cat ? 'bg-slate-900 text-white' : 'bg-white border hover:bg-slate-50'}`}>
-                {cat}
+            {categories.map((category) => (
+              <button
+                key={category}
+                onClick={() => setSelectedCategory(category)}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${selectedCategory === category ? 'bg-slate-900 text-white' : 'border bg-white hover:bg-slate-50'}`}
+              >
+                {category}
               </button>
             ))}
           </div>
         </div>
-        {itemCount() > 0 && (
+        {itemCount() > 0 ? (
           <Link href="/customer/cart">
             <Button variant="outline" className="relative">
-              <ShoppingCart className="w-4 h-4 mr-2" />
+              <ShoppingCart className="mr-2 h-4 w-4" />
               Cart
-              <span className="ml-2 bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+              <span className="ml-2 flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-xs text-white">
                 {itemCount()}
               </span>
             </Button>
           </Link>
-        )}
+        ) : null}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {filtered.map(product => {
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {filtered.map((product) => {
           const stock = product.quantityPaid
           const inCart = isInCart(product.id)
           const outOfStock = (stock ?? 0) <= 0
           const hasMinimumCaseRequirement = isWisherVodkaProduct(product)
 
           return (
-            <Card key={product.id} className={`overflow-hidden transition-shadow ${outOfStock ? 'opacity-60' : 'hover:shadow-md'}`}>
-              <div className="aspect-video bg-slate-100 relative">
+            <Card
+              key={product.id}
+              className={`overflow-hidden transition-shadow ${outOfStock ? 'opacity-60' : 'hover:shadow-md'}`}
+            >
+              <div className="relative aspect-video bg-slate-100">
                 {product.imageUrl ? (
-                  <Image src={product.imageUrl} alt={product.name} fill className="object-cover" />
+                  <Image src={product.imageUrl} alt={product.name} fill className="object-cover" unoptimized />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-3xl">🍷</div>
-                )}
-                {outOfStock && (
-                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                    <Badge variant="destructive">Out of Stock</Badge>
+                  <div className="flex h-full w-full items-center justify-center text-slate-400">
+                    <ImageIcon className="h-10 w-10" />
                   </div>
                 )}
+                {outOfStock ? (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                    <Badge variant="destructive">Out of Stock</Badge>
+                  </div>
+                ) : null}
               </div>
-              <CardContent className="p-4 space-y-3">
+              <CardContent className="space-y-3 p-4">
                 <div>
-                  <p className="font-semibold text-sm leading-tight">{product.name}</p>
-                  {product.brand && <p className="text-xs text-muted-foreground">{product.brand}</p>}
-                  {product.category && <Badge variant="secondary" className="text-xs mt-1">{product.category}</Badge>}
+                  <p className="text-sm font-semibold leading-tight">{product.name}</p>
+                  {product.brand ? <p className="text-xs text-muted-foreground">{product.brand}</p> : null}
+                  {product.category ? <Badge variant="secondary" className="mt-1 text-xs">{product.category}</Badge> : null}
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-blue-600">{formatCurrency(product.price)}</span>
                   <span className="text-xs text-muted-foreground">{stock ?? 0} avail.</span>
                 </div>
-                {hasMinimumCaseRequirement && (
+                {hasMinimumCaseRequirement ? (
                   <p className="text-xs text-amber-700">Minimum order: {WISHER_VODKA_MIN_CASES} cases</p>
-                )}
+                ) : null}
                 <Button
                   className="w-full"
                   size="sm"
                   variant={inCart ? 'secondary' : 'default'}
                   disabled={outOfStock}
-                  onClick={() => addItem({
-                    productId: product.id,
-                    name: product.name,
-                    sku: product.sku,
-                    price: product.price,
-                    samplePrice: product.samplePrice,
-                    imageUrl: product.imageUrl,
-                    orderType: 'paid',
-                  })}
+                  onClick={() =>
+                    addItem({
+                      productId: product.id,
+                      name: product.name,
+                      sku: product.sku,
+                      price: product.price,
+                      samplePrice: product.samplePrice,
+                      imageUrl: product.imageUrl,
+                      orderType: 'paid',
+                    })
+                  }
                 >
-                  {inCart ? <><Check className="w-4 h-4 mr-1" />Added</> : <><Plus className="w-4 h-4 mr-1" />{hasMinimumCaseRequirement ? `Add ${WISHER_VODKA_MIN_CASES} Cases` : 'Add to Order'}</>}
+                  {inCart ? (
+                    <>
+                      <Check className="mr-1 h-4 w-4" />
+                      Added
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="mr-1 h-4 w-4" />
+                      {hasMinimumCaseRequirement ? `Add ${WISHER_VODKA_MIN_CASES} Cases` : 'Add to Order'}
+                    </>
+                  )}
                 </Button>
               </CardContent>
             </Card>
@@ -130,11 +162,11 @@ export default function CustomerProductCatalog({ products, categories }: { produ
         })}
       </div>
 
-      {filtered.length === 0 && (
-        <div className="text-center py-12 text-muted-foreground">
+      {filtered.length === 0 ? (
+        <div className="py-12 text-center text-muted-foreground">
           <p>No products found matching your search.</p>
         </div>
-      )}
+      ) : null}
     </div>
   )
 }

@@ -13,8 +13,9 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { reorderCustomerOrder } from '@/actions/orders'
 
-export default async function CustomerOrderDetailPage({ params }: { params: { orderId: string } }) {
+export default async function CustomerOrderDetailPage({ params }: { params: Promise<{ orderId: string }> }) {
   const session = await requireRole('customer')
+  const { orderId } = await params
 
   let order:
     | {
@@ -36,7 +37,7 @@ export default async function CustomerOrderDetailPage({ params }: { params: { or
         shippingStatus: orders.shippingStatus, notes: orders.notes, createdAt: orders.createdAt, customerId: orders.customerId,
       })
       .from(orders)
-      .where(eq(orders.id, params.orderId))
+      .where(eq(orders.id, orderId))
   } catch (error) {
     if (!isMissingShippingStatusColumn(error)) throw error
 
@@ -46,7 +47,7 @@ export default async function CustomerOrderDetailPage({ params }: { params: { or
         notes: orders.notes, createdAt: orders.createdAt, customerId: orders.customerId,
       })
       .from(orders)
-      .where(eq(orders.id, params.orderId))
+      .where(eq(orders.id, orderId))
       .then(rows => rows.map(row => ({ ...row, shippingStatus: 'not_scheduled' as const })))
   }
 
@@ -63,7 +64,7 @@ export default async function CustomerOrderDetailPage({ params }: { params: { or
     })
     .from(orderItems)
     .leftJoin(products, eq(orderItems.productId, products.id))
-    .where(eq(orderItems.orderId, params.orderId))
+    .where(eq(orderItems.orderId, orderId))
 
   const [deliveryStop] = await db
     .select({
@@ -75,7 +76,7 @@ export default async function CustomerOrderDetailPage({ params }: { params: { or
     })
     .from(deliveryStops)
     .leftJoin(deliveries, eq(deliveryStops.deliveryId, deliveries.id))
-    .where(eq(deliveryStops.orderId, params.orderId))
+    .where(eq(deliveryStops.orderId, orderId))
 
   const supportSmsNumber = process.env.TELNYX_FROM_NUMBER
 

@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { createProduct } from '@/actions/inventory'
+import { ProductImageUploadField } from '@/components/inventory/ProductImageUploadField'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 
@@ -44,6 +45,10 @@ export default function NewProductPage() {
             <div className="space-y-2">
               <Label htmlFor="description">Description</Label>
               <Input name="description" id="description" placeholder="Tennessee whiskey..." />
+            </div>
+            <div className="space-y-2">
+              <Label>Product Image</Label>
+              <ProductImageUploadField value="" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">

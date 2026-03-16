@@ -10,7 +10,9 @@ import { sendInvoiceEmail, markInvoicePaid } from '@/actions/invoices'
 import Link from 'next/link'
 import { ArrowLeft, Send, Download } from 'lucide-react'
 
-export default async function InvoiceDetailPage({ params }: { params: { id: string } }) {
+export default async function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+
   const [invoice] = await db
     .select({
       id: invoices.id,
@@ -31,7 +33,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
     })
     .from(invoices)
     .leftJoin(customerAccounts, eq(invoices.customerId, customerAccounts.id))
-    .where(eq(invoices.id, params.id))
+    .where(eq(invoices.id, id))
 
   if (!invoice) notFound()
 
