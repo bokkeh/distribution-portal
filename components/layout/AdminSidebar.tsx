@@ -15,23 +15,53 @@ import type { FeatureKey } from '@/lib/users/features'
 import { hasFeature } from '@/lib/users/features'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
 
-const navItems = [
-  { href: '/admin/dashboard',  label: 'Dashboard',        icon: LayoutDashboard, feature: 'dashboard' },
-  { href: '/admin/attention',  label: 'Needs Attention',   icon: ClipboardList, feature: 'dashboard' },
-  { href: '/admin/orders',     label: 'Orders',            icon: FileText, feature: 'orders' },
-  { href: '/admin/deliveries', label: 'Deliveries',        icon: Truck, feature: 'deliveries' },
-  { href: '/admin/drivers',    label: 'Drivers',           icon: Map, feature: 'drivers' },
-  { href: '/admin/tastings',   label: 'Tastings',          icon: CalendarDays, feature: 'tastings' },
-  { href: '/admin/inventory',  label: 'Inventory',         icon: Package, feature: 'inventory' },
-  { href: '/admin/inbox',      label: 'SMS Inbox',         icon: MessageSquare, feature: 'inbox' },
-  { href: '/admin/crm',        label: 'CRM / Accounts',    icon: Building2, feature: 'crm' },
-  { href: '/admin/wholesale-requests', label: 'Wholesaler Requests', icon: FileText, feature: 'wholesale_requests' },
-  { href: '/admin/invoicing',  label: 'Invoicing',         icon: FileText, feature: 'invoicing' },
-  { href: '/admin/accounts',   label: 'Chart of Accounts', icon: BookOpen, feature: 'accounting' },
-  { href: '/admin/profile',    label: 'My Profile',        icon: UserCircle, feature: 'profile' },
-  { href: '/admin/jobs',       label: 'Jobs / Logs',       icon: ListChecks, feature: 'dashboard' },
-  { href: '/admin/system',     label: 'System Health',     icon: HeartPulse, feature: 'dashboard' },
-  { href: '/admin/users',      label: 'User Management',   icon: Users, feature: 'users' },
+const navSections = [
+  {
+    title: 'Overview',
+    items: [
+      { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard, feature: 'dashboard' },
+      { href: '/admin/attention', label: 'Needs Attention', icon: ClipboardList, feature: 'dashboard' },
+      { href: '/admin/system', label: 'System Health', icon: HeartPulse, feature: 'dashboard' },
+    ],
+  },
+  {
+    title: 'Sales & Orders',
+    items: [
+      { href: '/admin/orders', label: 'Orders', icon: FileText, feature: 'orders' },
+      { href: '/admin/deliveries', label: 'Deliveries', icon: Truck, feature: 'deliveries' },
+      { href: '/admin/invoicing', label: 'Invoicing', icon: FileText, feature: 'invoicing' },
+      { href: '/admin/wholesale-requests', label: 'Wholesaler Requests', icon: FileText, feature: 'wholesale_requests' },
+    ],
+  },
+  {
+    title: 'Operations',
+    items: [
+      { href: '/admin/drivers', label: 'Drivers', icon: Map, feature: 'drivers' },
+      { href: '/admin/inventory', label: 'Inventory', icon: Package, feature: 'inventory' },
+      { href: '/admin/jobs', label: 'Jobs / Logs', icon: ListChecks, feature: 'dashboard' },
+      { href: '/admin/tastings', label: 'Tastings', icon: CalendarDays, feature: 'tastings' },
+    ],
+  },
+  {
+    title: 'Customers',
+    items: [
+      { href: '/admin/crm', label: 'CRM / Accounts', icon: Building2, feature: 'crm' },
+      { href: '/admin/inbox', label: 'SMS Inbox', icon: MessageSquare, feature: 'inbox' },
+    ],
+  },
+  {
+    title: 'Finance',
+    items: [
+      { href: '/admin/accounts', label: 'Chart of Accounts', icon: BookOpen, feature: 'accounting' },
+    ],
+  },
+  {
+    title: 'Admin',
+    items: [
+      { href: '/admin/users', label: 'User Management', icon: Users, feature: 'users' },
+      { href: '/admin/profile', label: 'My Profile', icon: UserCircle, feature: 'profile' },
+    ],
+  },
 ]
 
 function NavLinks({
@@ -49,39 +79,51 @@ function NavLinks({
 }) {
   return (
     <>
-      {navItems.filter(item => hasFeature(item.feature as FeatureKey, roles, featureFlags)).map(({ href, label, icon: Icon }) => {
-        const active = pathname === href || pathname.startsWith(href + '/')
-        const count = navCounts?.[href] ?? 0
+      {navSections.map(section => {
+        const items = section.items.filter(item => hasFeature(item.feature as FeatureKey, roles, featureFlags))
+        if (items.length === 0) return null
+
         return (
-          <Link
-            key={href}
-            href={href}
-            onClick={onNav}
-            className={cn(
-              'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-              active
-                ? 'bg-blue-600 text-white'
-                : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-            )}
-          >
-            <Icon className="w-4 h-4 flex-shrink-0" />
-            {label}
-            {(count > 0 || active) && (
-              <span className="ml-auto flex items-center gap-2">
-                {count > 0 && (
-                  <span
-                    className={cn(
-                      'inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] font-semibold',
-                      active ? 'bg-white/20 text-white' : 'bg-red-500 text-white'
-                    )}
-                  >
-                    {count > 99 ? '99+' : count}
-                  </span>
-                )}
-                {active && <ChevronRight className="w-3.5 h-3.5" />}
-              </span>
-            )}
-          </Link>
+          <div key={section.title} className="space-y-1.5">
+            <p className="px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+              {section.title}
+            </p>
+            {items.map(({ href, label, icon: Icon }) => {
+              const active = pathname === href || pathname.startsWith(href + '/')
+              const count = navCounts?.[href] ?? 0
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  onClick={onNav}
+                  className={cn(
+                    'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                    active
+                      ? 'bg-blue-600 text-white'
+                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                  )}
+                >
+                  <Icon className="w-4 h-4 flex-shrink-0" />
+                  {label}
+                  {(count > 0 || active) && (
+                    <span className="ml-auto flex items-center gap-2">
+                      {count > 0 && (
+                        <span
+                          className={cn(
+                            'inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] font-semibold',
+                            active ? 'bg-white/20 text-white' : 'bg-red-500 text-white'
+                          )}
+                        >
+                          {count > 99 ? '99+' : count}
+                        </span>
+                      )}
+                      {active && <ChevronRight className="w-3.5 h-3.5" />}
+                    </span>
+                  )}
+                </Link>
+              )
+            })}
+          </div>
         )
       })}
     </>
