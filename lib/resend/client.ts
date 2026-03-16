@@ -1,5 +1,6 @@
 import { db } from '@/db'
 import { notificationsLog } from '@/db/schema'
+import { formatEasternDateTime, formatEasternTimeRange } from '@/lib/tastings/time'
 import { Resend } from 'resend'
 
 const resend = new Resend(process.env.RESEND_API_KEY ?? 're_placeholder')
@@ -480,9 +481,8 @@ export async function sendTasterAssignmentEmail({
   endAt?: Date | null
   notes?: string | null
 }) {
-  const timeRange = endAt
-    ? `${scheduledAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })} - ${endAt.toLocaleTimeString('en-US', { timeStyle: 'short' })}`
-    : scheduledAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
+  const timeRange = formatEasternTimeRange(scheduledAt, endAt ?? null).replace(' ET', '')
+  const scheduledLabel = formatEasternDateTime(scheduledAt).replace(' ET', '')
 
   await sendEmail({
     to,
@@ -493,7 +493,7 @@ export async function sendTasterAssignmentEmail({
       title: 'New tasting assigned',
       intro: `${escapeHtml(tasterName)}, you have been assigned to ${escapeHtml(storeName)}.`,
       body: `
-        <p style="margin: 0 0 10px;"><strong>When:</strong> ${escapeHtml(timeRange)}</p>
+        <p style="margin: 0 0 10px;"><strong>When:</strong> ${escapeHtml(`${scheduledLabel}${endAt ? ` - ${timeRange.split(' - ')[1]}` : ''} ET`)}</p>
         <p style="margin: 0 0 10px;"><strong>Store:</strong> ${escapeHtml(storeName)}</p>
         ${notes ? `<p style="margin: 0;"><strong>Notes:</strong> ${escapeHtml(notes)}</p>` : ''}
       `,
@@ -537,7 +537,7 @@ export async function sendTastingStatusEmail({
       eyebrow: 'Tasting update',
       title: copy.title,
       intro: copy.intro,
-      body: `<p style="margin: 0;"><strong>Scheduled for:</strong> ${escapeHtml(scheduledAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }))}</p>`,
+      body: `<p style="margin: 0;"><strong>Scheduled for:</strong> ${escapeHtml(formatEasternDateTime(scheduledAt))}</p>`,
       ctaLabel: status === 'declined' ? 'Open tastings' : 'Open tasting portal',
       ctaHref: portalUrl(status === 'declined' ? '/admin/tastings' : '/taster/tastings'),
     }),

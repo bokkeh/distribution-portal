@@ -22,6 +22,7 @@ import {
   sendTastingSmsFromTemplate,
 } from '@/lib/tastings/sms-series'
 import { getTastingById, getTastingsForViewWithFallback } from '@/lib/tastings/read'
+import { formatEasternDateTime, parseDateTimeInTimeZone } from '@/lib/tastings/time'
 import { logActivityEvent } from '@/lib/activity/log'
 
 function tastingRedirectPath(mode: string) {
@@ -101,7 +102,7 @@ async function notifyTeamAboutDeclinedTasting({
   scheduledAt: Date
   declinedByName: string
 }) {
-  const teamMessage = `AHAWC Tasting Declined: ${declinedByName} declined ${eventName} on ${scheduledAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}. Review it in the portal.`
+  const teamMessage = `AHAWC Tasting Declined: ${declinedByName} declined ${eventName} on ${formatEasternDateTime(scheduledAt)}. Review it in the portal.`
 
   await createNotificationsForRoles({
     roles: ['admin', 'staff'],
@@ -163,7 +164,7 @@ async function notifyTeamAboutDeclinedTasting({
       to: Array.from(emailRecipients),
       subject: `Tasting declined - ${eventName}`,
       title: 'Tasting declined',
-      body: `${declinedByName} declined ${eventName} scheduled for ${scheduledAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}.`,
+      body: `${declinedByName} declined ${eventName} scheduled for ${formatEasternDateTime(scheduledAt)}.`,
       href: '/admin/tastings',
     })
   }
@@ -183,11 +184,11 @@ export async function createTasting(formData: FormData) {
     redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('Store, taster, and date are required.')}`)
   }
 
-  const scheduledAt = new Date(`${date}T${time}:00`)
+  const scheduledAt = parseDateTimeInTimeZone(date, time)
   if (Number.isNaN(scheduledAt.getTime())) {
     redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('Choose a valid tasting date and time.')}`)
   }
-  const endAt = endTime ? new Date(`${date}T${endTime}:00`) : null
+  const endAt = endTime ? parseDateTimeInTimeZone(date, endTime) : null
   if (endAt && Number.isNaN(endAt.getTime())) {
     redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('Choose a valid tasting end time.')}`)
   }
@@ -257,7 +258,7 @@ export async function createTasting(formData: FormData) {
     userId: assignedUser.id,
     kind: 'tasting_assigned',
     title: 'New tasting assigned',
-    body: `${account.companyName} has been assigned to you for ${scheduledAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}.`,
+    body: `${account.companyName} has been assigned to you for ${formatEasternDateTime(scheduledAt)}.`,
     href: `/taster/tastings/${tasting.id}`,
   })
 
@@ -467,7 +468,7 @@ export async function deleteTasting(formData: FormData) {
     recipientName: tasting.tasterName,
     recipientPhone: tasting.tasterPhone,
     actorId: session.user.id,
-    body: `AHAWC Tasting Cancelled: ${tasting.eventName} on ${tasting.scheduledAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })} has been cancelled. Please check the portal for updates.`,
+    body: `AHAWC Tasting Cancelled: ${tasting.eventName} on ${formatEasternDateTime(tasting.scheduledAt)} has been cancelled. Please check the portal for updates.`,
   })
 
   revalidatePath('/admin/tastings')
@@ -544,13 +545,13 @@ export async function reassignTasting(formData: FormData) {
       recipientName: tasting.currentTasterName,
       recipientPhone: tasting.currentTasterPhone,
       actorId: session.user.id,
-      body: `AHAWC Tasting Reassigned: ${tasting.eventName} on ${tasting.scheduledAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })} has been reassigned to another taster.`,
+      body: `AHAWC Tasting Reassigned: ${tasting.eventName} on ${formatEasternDateTime(tasting.scheduledAt)} has been reassigned to another taster.`,
     }),
     notifyTasterChange({
       recipientName: nextTaster.name,
       recipientPhone: nextTaster.phone,
       actorId: session.user.id,
-      body: `AHAWC Tasting Assigned: ${tasting.eventName} on ${tasting.scheduledAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })} has been assigned to you. View details: ${process.env.NEXTAUTH_URL}/taster/tastings`,
+      body: `AHAWC Tasting Assigned: ${tasting.eventName} on ${formatEasternDateTime(tasting.scheduledAt)} has been assigned to you. View details: ${process.env.NEXTAUTH_URL}/taster/tastings`,
     }),
   ])
 
@@ -564,7 +565,7 @@ export async function reassignTasting(formData: FormData) {
     userId: nextTaster.id,
     kind: 'tasting_assigned',
     title: 'Tasting reassigned to you',
-    body: `${tasting.eventName} has been assigned to you for ${tasting.scheduledAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}.`,
+    body: `${tasting.eventName} has been assigned to you for ${formatEasternDateTime(tasting.scheduledAt)}.`,
     href: `/taster/tastings/${tasting.id}`,
   })
 
@@ -809,7 +810,7 @@ export async function submitTasterInvoice(formData: FormData) {
     payeeEmail: payload.payeeEmail,
     payeePhone: payload.payeePhone,
     tastingName: tasting.eventName,
-    tastingDate: tasting.scheduledAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }),
+    tastingDate: formatEasternDateTime(tasting.scheduledAt),
     storeAddress: [tasting.storeAddress, tasting.storeCity, tasting.storeState, tasting.storeZip].filter(Boolean).join(', '),
     hourlyRate,
     hoursWorked,

@@ -1,11 +1,12 @@
 'use client'
 
 import Link from 'next/link'
-import { format, isBefore } from 'date-fns'
+import { isBefore } from 'date-fns'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ClipboardCheck, Clock3, FileText, Receipt, Store } from 'lucide-react'
+import { formatEasternDate, formatEasternTimeRange } from '@/lib/tastings/time'
 
 type TastingRow = {
   id: string
@@ -25,8 +26,7 @@ type TastingRow = {
 }
 
 function formatTimeRange(start: Date, end: Date | null) {
-  if (!end) return format(new Date(start), 'p')
-  return `${format(new Date(start), 'p')} - ${format(new Date(end), 'p')}`
+  return formatEasternTimeRange(start, end)
 }
 
 const statusVariant: Record<string, 'secondary' | 'success' | 'warning' | 'destructive' | 'info'> = {
@@ -50,7 +50,7 @@ function TastingCard({ tasting, compact = false }: { tasting: TastingRow; compac
             <Badge variant={statusVariant[tasting.status] ?? 'secondary'}>{tasting.status}</Badge>
           </div>
           <p className="text-sm text-slate-500">
-            {format(tastingDate, 'EEEE, MMM d, yyyy')} • {formatTimeRange(tastingDate, tasting.endAt ? new Date(tasting.endAt) : null)}
+            {formatEasternDate(tastingDate)} • {formatTimeRange(tastingDate, tasting.endAt ? new Date(tasting.endAt) : null)}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

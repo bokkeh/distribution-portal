@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { requireFeature } from '@/lib/auth/session'
 import { confirmTastingAssignment, declineTastingAssignment } from '@/actions/tastings'
 import { getTastingById } from '@/lib/tastings/read'
+import { formatEasternDateTime } from '@/lib/tastings/time'
 
 export default async function TastingConfirmPage({ searchParams }: { searchParams: Promise<{ tastingId?: string }> }) {
   const session = await requireFeature('tastings', 'taster', 'admin')
@@ -21,7 +22,7 @@ export default async function TastingConfirmPage({ searchParams }: { searchParam
         <CardHeader><CardTitle>Confirm Tasting Assignment</CardTitle></CardHeader>
         <CardContent className="space-y-4 text-sm text-slate-600">
           <p className="font-medium text-slate-900">{tasting.eventName}</p>
-          <p>{new Date(tasting.scheduledAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+          <p>{formatEasternDateTime(tasting.scheduledAt)}</p>
           <p>{[tasting.storeAddress, tasting.storeCity, tasting.storeState, tasting.storeZip].filter(Boolean).join(', ') || 'Store address not provided'}</p>
           <div className="flex flex-wrap gap-3 pt-2">
             <form action={confirmTastingAssignment.bind(null, tasting.id)}>

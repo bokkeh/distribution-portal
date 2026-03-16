@@ -2,6 +2,13 @@ import { and, desc, eq } from 'drizzle-orm'
 import { db } from '@/db'
 import { notificationsLog, scheduledSmsJobs, tastingSmsTemplates } from '@/db/schema'
 import { sendSms } from '@/lib/telnyx/client'
+import {
+  formatEasternDate,
+  formatEasternTime,
+  formatEasternTimeRange,
+  getEasternDateKey,
+  parseDateTimeInTimeZone,
+} from '@/lib/tastings/time'
 
 export const TASTING_SMS_SEQUENCE = [
   {
@@ -150,11 +157,9 @@ export function formatTastingSmsPayload(input: {
     phoneNumber: input.phoneNumber,
     store_name: input.storeName,
     store_address: input.storeAddress,
-    date: scheduledAt.toLocaleDateString('en-US', { dateStyle: 'medium' }),
-    start_time: scheduledAt.toLocaleTimeString('en-US', { timeStyle: 'short' }),
-    time_range: endAt
-      ? `${scheduledAt.toLocaleTimeString('en-US', { timeStyle: 'short' })}–${endAt.toLocaleTimeString('en-US', { timeStyle: 'short' })}`
-      : scheduledAt.toLocaleTimeString('en-US', { timeStyle: 'short' }),
+    date: formatEasternDate(scheduledAt),
+    start_time: formatEasternTime(scheduledAt),
+    time_range: formatEasternTimeRange(scheduledAt, endAt),
   }
 }
 
@@ -244,7 +249,8 @@ export async function queueScheduledTastingSmsJobs(payload: SmsPayload & { sched
   const endAt = payload.endAt ? new Date(payload.endAt) : new Date(startAt.getTime() + 2 * 60 * 60 * 1000)
   const midpoint = new Date(startAt.getTime() + Math.max(30, Math.round((endAt.getTime() - startAt.getTime()) / 2 / 60000)) * 60000)
   const dayBefore = new Date(startAt.getTime() - 24 * 60 * 60 * 1000)
-  const dayOfReminder = new Date(Math.max(new Date(startAt.getFullYear(), startAt.getMonth(), startAt.getDate(), 9, 0, 0).getTime(), startAt.getTime() - 2 * 60 * 60 * 1000))
+  const easternReminderStart = parseDateTimeInTimeZone(getEasternDateKey(startAt), '09:00')
+  const dayOfReminder = new Date(Math.max(easternReminderStart.getTime(), startAt.getTime() - 2 * 60 * 60 * 1000))
 
   const jobs: Array<{ templateKey: TemplateKey; sendAt: Date }> = [
     { templateKey: 'day_before_reminder', sendAt: dayBefore },

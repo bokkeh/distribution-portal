@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useMemo, useRef } from 'react'
-import { format } from 'date-fns'
 import { submitTasterInvoice, submitTastingReport } from '@/actions/tastings'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -9,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useFormDraftAutosave } from '@/hooks/useFormDraftAutosave'
+import { formatEasternDateTime, formatEasternTimeInput } from '@/lib/tastings/time'
 
 type ReportRecord = {
   actualStartTime: string | null
@@ -99,7 +99,7 @@ export function TastingSubmissionDetail({
         <CardContent className="grid gap-3 text-sm text-slate-600 md:grid-cols-2">
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-500">Assigned time</p>
-            <p className="font-medium text-slate-900">{format(new Date(tasting.scheduledAt), 'EEEE, MMM d yyyy h:mm a')}</p>
+            <p className="font-medium text-slate-900">{formatEasternDateTime(tasting.scheduledAt)}</p>
           </div>
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-500">Status</p>
@@ -133,7 +133,7 @@ export function TastingSubmissionDetail({
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="actualStartTime">Actual Start Time</Label>
-                  <Input id="actualStartTime" name="actualStartTime" type="time" defaultValue={report?.actualStartTime ?? format(new Date(tasting.scheduledAt), 'HH:mm')} />
+                  <Input id="actualStartTime" name="actualStartTime" type="time" defaultValue={report?.actualStartTime ?? formatEasternTimeInput(tasting.scheduledAt)} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="actualEndTime">Actual End Time</Label>
@@ -251,7 +251,7 @@ export function TastingSubmissionDetail({
 
               {invoice ? (
                 <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                  Submitted {format(new Date(invoice.submittedAt), 'MMM d, yyyy h:mm a')} • Status: <span className="font-medium text-slate-900">{invoice.status}</span>
+                  Submitted {formatEasternDateTime(invoice.submittedAt)} • Status: <span className="font-medium text-slate-900">{invoice.status}</span>
                 </div>
               ) : null}
 

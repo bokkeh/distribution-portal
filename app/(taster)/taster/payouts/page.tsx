@@ -6,6 +6,7 @@ import { requireFeature } from '@/lib/auth/session'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { formatEasternDateTime } from '@/lib/tastings/time'
 
 function asNumber(value: string | null | undefined) {
   return Number(value ?? '0')
@@ -74,7 +75,7 @@ export default async function TasterPayoutsPage() {
             <div key={tasting.id} className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="font-semibold text-slate-900">{tasting.eventName}</p>
-                <p className="text-sm text-slate-600">{new Date(tasting.scheduledAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                <p className="text-sm text-slate-600">{formatEasternDateTime(tasting.scheduledAt)}</p>
               </div>
               <Link href={`/taster/tastings/${tasting.id}#invoice`}>
                 <Button>Submit Missing Invoice</Button>
@@ -99,7 +100,7 @@ export default async function TasterPayoutsPage() {
                   </Badge>
                 </div>
                 <p className="text-sm text-slate-500">
-                  Submitted {new Date(invoice.submittedAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}
+                  Submitted {formatEasternDateTime(invoice.submittedAt)}
                 </p>
               </div>
               <div className="flex items-center gap-3">
