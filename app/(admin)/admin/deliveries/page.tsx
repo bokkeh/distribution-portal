@@ -16,6 +16,21 @@ const statusVariant: Record<string, 'default' | 'success' | 'warning' | 'destruc
 }
 
 export default async function DeliveriesPage() {
+  const allDrivers = await db
+    .select({
+      id: drivers.id,
+      vehicleMake: drivers.vehicleMake,
+      vehicleModel: drivers.vehicleModel,
+      licensePlate: drivers.licensePlate,
+      active: drivers.active,
+      name: users.name,
+      email: users.email,
+      phone: users.phone,
+    })
+    .from(drivers)
+    .innerJoin(users, eq(drivers.userId, users.id))
+    .orderBy(users.name)
+
   const allDeliveries = await db
     .select({
       id: deliveries.id,
@@ -34,13 +49,48 @@ export default async function DeliveriesPage() {
     <div className="p-4 sm:p-8 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Delivery Scheduling</h1>
-          <p className="text-muted-foreground mt-1">Manage assigned delivery dates and routes</p>
+          <h1 className="text-2xl font-bold text-slate-900">Drivers & Deliveries</h1>
+          <p className="text-muted-foreground mt-1">Manage drivers, assigned delivery dates, and active routes from one page.</p>
         </div>
-        <Link href="/admin/deliveries/new">
-          <Button><Plus className="w-4 h-4 mr-2" />Schedule Delivery</Button>
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/admin/users/new">
+            <Button variant="outline"><Plus className="w-4 h-4 mr-2" />Add Driver</Button>
+          </Link>
+          <Link href="/admin/deliveries/new">
+            <Button><Plus className="w-4 h-4 mr-2" />Schedule Delivery</Button>
+          </Link>
+        </div>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Driver Roster</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {allDrivers.length === 0 ? (
+              <div className="col-span-full py-8 text-center text-sm text-muted-foreground">
+                No drivers added yet.
+              </div>
+            ) : allDrivers.map((driver) => (
+              <div key={driver.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-slate-900">{driver.name}</p>
+                    <p className="text-xs text-slate-500">{driver.email}</p>
+                  </div>
+                  <Badge variant={driver.active ? 'success' : 'secondary'}>{driver.active ? 'Active' : 'Inactive'}</Badge>
+                </div>
+                <div className="mt-3 space-y-1 text-sm text-slate-600">
+                  <p>{driver.phone ?? 'No phone on file'}</p>
+                  {driver.vehicleMake ? <p>{driver.vehicleMake} {driver.vehicleModel}</p> : null}
+                  {driver.licensePlate ? <p>{driver.licensePlate}</p> : null}
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4">
         {allDeliveries.length === 0 ? (

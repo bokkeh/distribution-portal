@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ClipboardCheck, Clock3, FileText, Receipt, Store } from 'lucide-react'
 import { formatEasternDate, formatEasternTimeRange } from '@/lib/tastings/time'
+import { TastingMapPanel } from './TastingMapPanel'
 
 type TastingRow = {
   id: string
@@ -151,6 +152,8 @@ export function TasterTastingsHub({
           )}
         </CardContent>
       </Card>
+
+      <TastingMapPanel tastings={upcoming} />
 
       <Card>
         <CardHeader>
