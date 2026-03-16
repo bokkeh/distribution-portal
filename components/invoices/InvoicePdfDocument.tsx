@@ -1,0 +1,121 @@
+import { Document, Page, StyleSheet, Text, View } from '@react-pdf/renderer'
+import type { InvoiceDetailData } from '@/lib/invoices/read'
+
+const styles = StyleSheet.create({
+  page: { padding: 36, backgroundColor: '#ffffff', fontSize: 11, color: '#0f172a' },
+  header: { backgroundColor: '#0f172a', borderRadius: 18, padding: 24, marginBottom: 24 },
+  eyebrow: { fontSize: 9, color: '#bfdbfe', letterSpacing: 2, marginBottom: 10, textTransform: 'uppercase' },
+  title: { fontSize: 26, color: '#ffffff', fontWeight: 700, marginBottom: 6 },
+  subtitle: { fontSize: 10, color: '#cbd5e1', lineHeight: 1.5 },
+  headerRow: { display: 'flex', flexDirection: 'row', justifyContent: 'space-between', gap: 24 },
+  summaryBox: { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 14, padding: 14, minWidth: 180 },
+  summaryRow: { display: 'flex', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
+  summaryLabel: { color: '#cbd5e1', fontSize: 9 },
+  summaryValue: { color: '#ffffff', fontSize: 10, fontWeight: 600 },
+  grid: { display: 'flex', flexDirection: 'row', gap: 18, marginBottom: 20 },
+  panel: { flex: 1, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 16, padding: 16, backgroundColor: '#ffffff' },
+  softPanel: { backgroundColor: '#f8fafc' },
+  panelEyebrow: { fontSize: 9, color: '#64748b', letterSpacing: 1.4, textTransform: 'uppercase', marginBottom: 10 },
+  panelHeading: { fontSize: 14, fontWeight: 700, marginBottom: 4 },
+  panelText: { fontSize: 10, color: '#475569', marginBottom: 3 },
+  table: { borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 16, overflow: 'hidden', marginBottom: 20 },
+  tableHeader: { display: 'flex', flexDirection: 'row', backgroundColor: '#f8fafc', borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
+  tableRow: { display: 'flex', flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
+  tableRowLast: { borderBottomWidth: 0 },
+  cell: { padding: 10, fontSize: 10 },
+  itemCell: { width: '34%' },
+  skuCell: { width: '18%' },
+  qtyCell: { width: '12%', textAlign: 'right' },
+  unitCell: { width: '18%', textAlign: 'right' },
+  totalCell: { width: '18%', textAlign: 'right' },
+  totalsWrap: { display: 'flex', alignItems: 'flex-end' },
+  totalsBox: { width: 220, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 16, padding: 16 },
+  totalRow: { display: 'flex', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8, fontSize: 10 },
+  grandTotal: { borderTopWidth: 1, borderTopColor: '#e2e8f0', paddingTop: 10, marginTop: 6, fontSize: 13, fontWeight: 700, color: '#1d4ed8' },
+})
+
+function fmtCurrency(value: number) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value)
+}
+
+function fmtDate(value: Date | null) {
+  if (!value) return '—'
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(value)
+}
+
+export function InvoicePdfDocument({ invoice }: { invoice: InvoiceDetailData }) {
+  return (
+    <Document title={invoice.invoiceNumber}>
+      <Page size="LETTER" style={styles.page}>
+        <View style={styles.header}>
+          <View style={styles.headerRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.eyebrow}>AHAWC Distribution</Text>
+              <Text style={styles.title}>Invoice</Text>
+              <Text style={styles.subtitle}>Premium distribution billing statement for products, tasting support, and related account charges.</Text>
+            </View>
+            <View style={styles.summaryBox}>
+              <View style={styles.summaryRow}><Text style={styles.summaryLabel}>Invoice #</Text><Text style={styles.summaryValue}>{invoice.invoiceNumber}</Text></View>
+              <View style={styles.summaryRow}><Text style={styles.summaryLabel}>Issue date</Text><Text style={styles.summaryValue}>{fmtDate(invoice.createdAt)}</Text></View>
+              <View style={styles.summaryRow}><Text style={styles.summaryLabel}>Due date</Text><Text style={styles.summaryValue}>{fmtDate(invoice.dueDate)}</Text></View>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.grid}>
+          <View style={[styles.panel, styles.softPanel]}>
+            <Text style={styles.panelEyebrow}>Bill To</Text>
+            <Text style={styles.panelHeading}>{invoice.companyName}</Text>
+            {invoice.customerAddressLines.map((line) => <Text key={line} style={styles.panelText}>{line}</Text>)}
+            {invoice.customerEmail ? <Text style={[styles.panelText, { marginTop: 8 }]}>{invoice.customerEmail}</Text> : null}
+            {invoice.customerPhone ? <Text style={styles.panelText}>{invoice.customerPhone}</Text> : null}
+          </View>
+          <View style={styles.panel}>
+            <Text style={styles.panelEyebrow}>Terms</Text>
+            <Text style={styles.panelHeading}>{invoice.paymentTerms ?? 'NET30'}</Text>
+            <Text style={[styles.panelText, { marginTop: 10 }]}>Linked Order</Text>
+            <Text style={styles.panelText}>{invoice.orderId ? invoice.orderId.slice(-8).toUpperCase() : 'Direct invoice'}</Text>
+            <Text style={[styles.panelText, { marginTop: 10 }]}>Status</Text>
+            <Text style={styles.panelText}>{invoice.status.toUpperCase()}</Text>
+          </View>
+        </View>
+
+        <View style={styles.table}>
+          <View style={styles.tableHeader}>
+            <Text style={[styles.cell, styles.itemCell]}>Item</Text>
+            <Text style={[styles.cell, styles.skuCell]}>SKU</Text>
+            <Text style={[styles.cell, styles.qtyCell]}>Qty</Text>
+            <Text style={[styles.cell, styles.unitCell]}>Unit</Text>
+            <Text style={[styles.cell, styles.totalCell]}>Amount</Text>
+          </View>
+          {invoice.lineItems.map((item, index) => (
+            <View key={item.id} style={index === invoice.lineItems.length - 1 ? [styles.tableRow, styles.tableRowLast] : styles.tableRow}>
+              <Text style={[styles.cell, styles.itemCell]}>{item.description}</Text>
+              <Text style={[styles.cell, styles.skuCell]}>{item.sku ?? '—'}</Text>
+              <Text style={[styles.cell, styles.qtyCell]}>{String(item.quantity)}</Text>
+              <Text style={[styles.cell, styles.unitCell]}>{fmtCurrency(item.unitPrice)}</Text>
+              <Text style={[styles.cell, styles.totalCell]}>{fmtCurrency(item.total)}</Text>
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.totalsWrap}>
+          <View style={styles.totalsBox}>
+            <View style={styles.totalRow}>
+              <Text>Subtotal</Text>
+              <Text>{fmtCurrency(invoice.amount)}</Text>
+            </View>
+            <View style={styles.totalRow}>
+              <Text>Tax</Text>
+              <Text>{fmtCurrency(invoice.tax)}</Text>
+            </View>
+            <View style={[styles.totalRow, styles.grandTotal]}>
+              <Text>Total</Text>
+              <Text>{fmtCurrency(invoice.total)}</Text>
+            </View>
+          </View>
+        </View>
+      </Page>
+    </Document>
+  )
+}

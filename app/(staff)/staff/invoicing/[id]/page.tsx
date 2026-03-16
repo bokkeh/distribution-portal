@@ -2,13 +2,14 @@ import { db } from '@/db'
 import { invoices, customerAccounts } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { formatCurrency, formatDate } from '@/lib/utils'
-import { markInvoicePaid } from '@/actions/invoices'
 import Link from 'next/link'
 import { ArrowLeft, Download } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { markInvoicePaid } from '@/actions/invoices'
+import { getInvoiceDetailData } from '@/lib/invoices/read'
+import { InvoiceVisual } from '@/components/invoices/InvoiceVisual'
 
 export default async function StaffInvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -17,25 +18,18 @@ export default async function StaffInvoiceDetailPage({ params }: { params: Promi
     .select({
       id: invoices.id,
       invoiceNumber: invoices.invoiceNumber,
-      amount: invoices.amount,
-      tax: invoices.tax,
-      total: invoices.total,
       status: invoices.status,
-      dueDate: invoices.dueDate,
-      paidAt: invoices.paidAt,
       pdfUrl: invoices.pdfUrl,
-      createdAt: invoices.createdAt,
       companyName: customerAccounts.companyName,
-      customerEmail: customerAccounts.email,
-      customerAddress: customerAccounts.address,
-      customerCity: customerAccounts.city,
-      customerState: customerAccounts.state,
     })
     .from(invoices)
     .leftJoin(customerAccounts, eq(invoices.customerId, customerAccounts.id))
     .where(eq(invoices.id, id))
 
   if (!invoice) notFound()
+
+  const invoiceVisual = await getInvoiceDetailData(invoice.id)
+  if (!invoiceVisual) notFound()
 
   const statusVariant: Record<string, 'default' | 'success' | 'warning' | 'destructive' | 'info'> = {
     draft: 'default',
@@ -45,7 +39,7 @@ export default async function StaffInvoiceDetailPage({ params }: { params: Promi
   }
 
   return (
-    <div className="max-w-4xl space-y-6 p-8">
+    <div className="max-w-6xl space-y-6 p-4 sm:p-8">
       <div className="flex items-center gap-4">
         <Link href="/staff/invoicing"><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
         <div className="flex-1">
@@ -55,44 +49,18 @@ export default async function StaffInvoiceDetailPage({ params }: { params: Promi
         <Badge variant={statusVariant[invoice.status]} className="px-3 py-1 text-sm">{invoice.status.toUpperCase()}</Badge>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader><CardTitle>Invoice Summary</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <p className="text-muted-foreground">Invoice Number</p>
-                <p className="font-medium">{invoice.invoiceNumber}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Issue Date</p>
-                <p className="font-medium">{formatDate(invoice.createdAt)}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Due Date</p>
-                <p className="font-medium">{invoice.dueDate ? formatDate(invoice.dueDate) : '—'}</p>
-              </div>
-              {invoice.paidAt ? (
-                <div>
-                  <p className="text-muted-foreground">Paid On</p>
-                  <p className="font-medium text-green-600">{formatDate(invoice.paidAt)}</p>
-                </div>
-              ) : null}
-            </div>
-            <div className="space-y-2 border-t pt-4">
-              <div className="flex justify-between text-sm"><span className="text-muted-foreground">Subtotal</span><span>{formatCurrency(invoice.amount)}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-muted-foreground">Tax</span><span>{formatCurrency(invoice.tax)}</span></div>
-              <div className="flex justify-between border-t pt-2 text-lg font-bold"><span>Total</span><span>{formatCurrency(invoice.total)}</span></div>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.45fr_0.8fr]">
+        <InvoiceVisual invoice={invoiceVisual} />
 
         <Card>
           <CardHeader><CardTitle>Actions</CardTitle></CardHeader>
           <CardContent className="space-y-3">
+            <a href={`/api/invoices/${invoice.id}/pdf`}>
+              <Button variant="outline" className="w-full"><Download className="mr-2 h-4 w-4" />Download Invoice PDF</Button>
+            </a>
             {invoice.pdfUrl ? (
               <a href={invoice.pdfUrl} target="_blank" rel="noopener noreferrer">
-                <Button variant="outline" className="w-full"><Download className="mr-2 h-4 w-4" />Download PDF</Button>
+                <Button variant="ghost" className="w-full">Open legacy PDF</Button>
               </a>
             ) : null}
             {invoice.status !== 'paid' ? (

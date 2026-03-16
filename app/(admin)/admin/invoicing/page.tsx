@@ -178,6 +178,9 @@ export default async function InvoicingPage({
                         <Link href={`/admin/invoicing/${inv.id}`}>
                           <Button variant="ghost" size="sm">View</Button>
                         </Link>
+                        <a href={`/api/invoices/${inv.id}/pdf`}>
+                          <Button variant="outline" size="sm">Download PDF</Button>
+                        </a>
                         {inv.status !== 'paid' ? (
                           <form action={markInvoicePaid.bind(null, inv.id)}>
                             <Button variant="secondary" size="sm" type="submit">Mark Paid</Button>
