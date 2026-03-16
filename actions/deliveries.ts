@@ -677,3 +677,9 @@ export async function addDeliveryStop(deliveryId: string, formData: FormData) {
 
   redirect(`/admin/deliveries/${deliveryId}`)
 }
+
+export async function deleteDelivery(deliveryId: string) {
+  await requireAdmin()
+  await db.delete(deliveries).where(eq(deliveries.id, deliveryId))
+  redirect('/admin/deliveries')
+}

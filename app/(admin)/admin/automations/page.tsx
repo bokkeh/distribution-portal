@@ -74,6 +74,9 @@ export default async function AdminAutomationsPage() {
           <Link href="/admin/tastings/messages">
             <Button>Edit Tasting SMS Series</Button>
           </Link>
+          <Link href="/admin/automations/emails">
+            <Button variant="outline">Edit Email Flows</Button>
+          </Link>
           <Link href="/admin/system">
             <Button variant="outline">Review Environment Health</Button>
           </Link>

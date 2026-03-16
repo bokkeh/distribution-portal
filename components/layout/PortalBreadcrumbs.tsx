@@ -18,6 +18,8 @@ const LABELS: Record<string, string> = {
   invoicing: 'Invoicing',
   jobs: 'Jobs',
   attention: 'Needs Attention',
+  automations: 'Automations',
+  emails: 'Email Flows',
   system: 'System Health',
   orders: 'Orders',
   tastings: 'Tastings',

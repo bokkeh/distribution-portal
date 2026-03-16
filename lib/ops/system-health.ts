@@ -28,6 +28,7 @@ const REQUIRED_SCHEMA: SchemaItem[] = [
   { tableName: 'activity_events', requiredColumns: ['entity_type', 'entity_id', 'kind'] },
   { tableName: 'sms_threads', requiredColumns: ['phone_number', 'status', 'priority'] },
   { tableName: 'reply_templates', requiredColumns: ['title', 'body', 'category'] },
+  { tableName: 'email_automation_templates', requiredColumns: ['key', 'subject_template', 'body_template'] },
 ]
 
 export async function getSystemHealthSnapshot() {

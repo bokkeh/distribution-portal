@@ -88,9 +88,14 @@ export default async function CRMPage() {
             {accounts.length} local · {hsCompanies.length} in HubSpot
           </p>
         </div>
-        <Link href="/admin/users/new">
-          <Button><Plus className="w-4 h-4 mr-2" />Add Account</Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/admin/crm/sales-routes">
+            <Button variant="outline"><Plus className="w-4 h-4 mr-2" />Sales Routes</Button>
+          </Link>
+          <Link href="/admin/users/new">
+            <Button><Plus className="w-4 h-4 mr-2" />Add Account</Button>
+          </Link>
+        </div>
       </div>
 
       <Card>

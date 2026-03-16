@@ -1,6 +1,12 @@
 import { db } from '@/db'
 import { notificationsLog } from '@/db/schema'
 import { formatEasternDateTime, formatEasternTimeRange } from '@/lib/tastings/time'
+import {
+  getEmailAutomationTemplateMap,
+  resolveDefaultEmailTemplate,
+  upsertDefaultEmailAutomationTemplates,
+  type EmailAutomationTemplateKey,
+} from '@/lib/resend/email-templates'
 import { Resend } from 'resend'
 
 const resend = new Resend(process.env.RESEND_API_KEY ?? 're_placeholder')
@@ -17,6 +23,18 @@ function escapeHtml(value: string) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;')
+}
+
+function renderTemplate(template: string, replacements: Record<string, string>) {
+  return Object.entries(replacements).reduce(
+    (output, [key, value]) => output.replaceAll(`{{${key}}}`, value),
+    template,
+  )
+}
+
+function formatCurrencyValue(value: string | number) {
+  const amount = typeof value === 'number' ? value : Number.parseFloat(value || '0')
+  return `$${amount.toFixed(2)}`
 }
 
 function renderEmailCard({
@@ -108,7 +126,7 @@ async function sendEmail({
         recipientName,
         message: subject,
         status: 'sent',
-      })
+      }),
     ))
   } catch (error) {
     console.error('Resend email failed:', error)
@@ -120,9 +138,48 @@ async function sendEmail({
         recipientName,
         message: subject,
         status: 'failed',
-      })
+      }),
     ))
   }
+}
+
+async function sendAutomationEmail({
+  key,
+  to,
+  recipientName,
+  variables,
+  userId,
+}: {
+  key: EmailAutomationTemplateKey
+  to: string | string[]
+  recipientName?: string | null
+  variables: Record<string, string>
+  userId?: string | null
+}) {
+  await upsertDefaultEmailAutomationTemplates()
+  const templateMap = await getEmailAutomationTemplateMap()
+  const template = templateMap.get(key) ?? resolveDefaultEmailTemplate(key)
+
+  const ctaPath = template.ctaPath ? renderTemplate(template.ctaPath, variables).trim() : ''
+  const ctaHref = ctaPath
+    ? (ctaPath.startsWith('http://') || ctaPath.startsWith('https://') ? ctaPath : portalUrl(ctaPath))
+    : undefined
+  const ctaLabel = template.ctaLabel ? renderTemplate(template.ctaLabel, variables).trim() : ''
+
+  await sendEmail({
+    to,
+    recipientName,
+    userId,
+    subject: renderTemplate(template.subjectTemplate, variables),
+    html: renderEmailCard({
+      eyebrow: renderTemplate(template.eyebrow, variables),
+      title: renderTemplate(template.titleTemplate, variables),
+      intro: template.introTemplate ? renderTemplate(template.introTemplate, variables) : undefined,
+      body: renderTemplate(template.bodyTemplate, variables),
+      ctaLabel: ctaLabel || undefined,
+      ctaHref,
+    }),
+  })
 }
 
 export async function sendInvoiceEmailNotification({
@@ -138,21 +195,16 @@ export async function sendInvoiceEmailNotification({
   total: string
   invoiceUrl: string
 }): Promise<void> {
-  await sendEmail({
+  await sendAutomationEmail({
+    key: 'invoice_created',
     to,
-    subject: `Invoice ${invoiceNumber} from AHAWC`,
     recipientName: companyName,
-    html: renderEmailCard({
-      eyebrow: 'Invoice',
-      title: `Invoice ${invoiceNumber}`,
-      intro: `A new invoice is ready for ${escapeHtml(companyName)}.`,
-      body: `
-        <p style="margin: 0 0 12px;">Please review and pay the invoice below.</p>
-        <p style="margin: 0; font-size: 28px; font-weight: 700;">$${parseFloat(total).toFixed(2)}</p>
-      `,
-      ctaLabel: 'View invoice',
-      ctaHref: invoiceUrl,
-    }),
+    variables: {
+      invoice_number: escapeHtml(invoiceNumber),
+      company_name: escapeHtml(companyName),
+      total_currency: formatCurrencyValue(total),
+      invoice_id: invoiceUrl.split('/').pop() ?? '',
+    },
   })
 }
 
@@ -167,21 +219,15 @@ export async function sendInvoicePaidConfirmationEmail({
   invoiceNumber: string
   total: string
 }) {
-  await sendEmail({
+  await sendAutomationEmail({
+    key: 'invoice_paid',
     to,
-    subject: `Payment received for ${invoiceNumber}`,
     recipientName: companyName,
-    html: renderEmailCard({
-      eyebrow: 'Payment received',
-      title: 'Invoice paid',
-      intro: `We received payment for ${escapeHtml(companyName)}.`,
-      body: `
-        <p style="margin: 0 0 12px;"><strong>Invoice:</strong> ${escapeHtml(invoiceNumber)}</p>
-        <p style="margin: 0; font-size: 24px; font-weight: 700;">$${parseFloat(total).toFixed(2)}</p>
-      `,
-      ctaLabel: 'View invoices',
-      ctaHref: portalUrl('/customer/invoices'),
-    }),
+    variables: {
+      invoice_number: escapeHtml(invoiceNumber),
+      company_name: escapeHtml(companyName),
+      total_currency: formatCurrencyValue(total),
+    },
   })
 }
 
@@ -196,21 +242,16 @@ export async function sendOrderReceivedEmail({
   orderId: string
   total: string
 }) {
-  await sendEmail({
+  await sendAutomationEmail({
+    key: 'order_received',
     to,
     recipientName: companyName,
-    subject: `Order received for ${companyName}`,
-    html: renderEmailCard({
-      eyebrow: 'Order update',
-      title: 'Order received',
-      intro: `Your order for ${escapeHtml(companyName)} has been received and is now being reviewed.`,
-      body: `
-        <p style="margin: 0 0 12px;"><strong>Order:</strong> ${escapeHtml(orderId.slice(-8).toUpperCase())}</p>
-        <p style="margin: 0;"><strong>Total:</strong> $${parseFloat(total).toFixed(2)}</p>
-      `,
-      ctaLabel: 'View order',
-      ctaHref: portalUrl(`/customer/orders/${orderId}`),
-    }),
+    variables: {
+      company_name: escapeHtml(companyName),
+      order_id: orderId,
+      order_short_id: escapeHtml(orderId.slice(-8).toUpperCase()),
+      total_currency: formatCurrencyValue(total),
+    },
   })
 }
 
@@ -228,34 +269,33 @@ export async function sendOrderStatusEmail({
   const copy = {
     pending: {
       title: 'Order pending review',
-      intro: `Your order for ${escapeHtml(companyName)} is pending review.`,
+      intro: `Your order for ${companyName} is pending review.`,
     },
     confirmed: {
       title: 'Order confirmed',
-      intro: `Your order for ${escapeHtml(companyName)} has been confirmed.`,
+      intro: `Your order for ${companyName} has been confirmed.`,
     },
     fulfilled: {
       title: 'Order complete',
-      intro: `Your order for ${escapeHtml(companyName)} has been completed.`,
+      intro: `Your order for ${companyName} has been completed.`,
     },
     cancelled: {
       title: 'Order cancelled',
-      intro: `Your order for ${escapeHtml(companyName)} has been cancelled.`,
+      intro: `Your order for ${companyName} has been cancelled.`,
     },
   }[status]
 
-  await sendEmail({
+  await sendAutomationEmail({
+    key: 'order_status',
     to,
     recipientName: companyName,
-    subject: `${copy.title} - ${companyName}`,
-    html: renderEmailCard({
-      eyebrow: 'Order status',
-      title: copy.title,
-      intro: copy.intro,
-      body: `<p style="margin: 0;"><strong>Order:</strong> ${escapeHtml(orderId.slice(-8).toUpperCase())}</p>`,
-      ctaLabel: 'Open order',
-      ctaHref: portalUrl(`/customer/orders/${orderId}`),
-    }),
+    variables: {
+      company_name: escapeHtml(companyName),
+      order_id: orderId,
+      order_short_id: escapeHtml(orderId.slice(-8).toUpperCase()),
+      status_title: escapeHtml(copy.title),
+      status_intro: escapeHtml(copy.intro),
+    },
   })
 }
 
@@ -273,38 +313,37 @@ export async function sendOrderShippingStatusEmail({
   const copy = {
     not_scheduled: {
       title: 'Delivery not yet scheduled',
-      intro: `Your order for ${escapeHtml(companyName)} is awaiting delivery scheduling.`,
+      intro: `Your order for ${companyName} is awaiting delivery scheduling.`,
     },
     scheduled: {
       title: 'Delivery scheduled',
-      intro: `Your order for ${escapeHtml(companyName)} has been scheduled for delivery.`,
+      intro: `Your order for ${companyName} has been scheduled for delivery.`,
     },
     out_for_delivery: {
       title: 'Order out for delivery',
-      intro: `Your order for ${escapeHtml(companyName)} is currently out for delivery.`,
+      intro: `Your order for ${companyName} is currently out for delivery.`,
     },
     delivered: {
       title: 'Order delivered',
-      intro: `Your order for ${escapeHtml(companyName)} has been delivered.`,
+      intro: `Your order for ${companyName} has been delivered.`,
     },
     issue: {
       title: 'Delivery issue',
-      intro: `There is an issue affecting delivery for ${escapeHtml(companyName)}.`,
+      intro: `There is an issue affecting delivery for ${companyName}.`,
     },
   }[status]
 
-  await sendEmail({
+  await sendAutomationEmail({
+    key: 'shipping_status',
     to,
     recipientName: companyName,
-    subject: `${copy.title} - ${companyName}`,
-    html: renderEmailCard({
-      eyebrow: 'Delivery update',
-      title: copy.title,
-      intro: copy.intro,
-      body: `<p style="margin: 0;"><strong>Order:</strong> ${escapeHtml(orderId.slice(-8).toUpperCase())}</p>`,
-      ctaLabel: 'Track order',
-      ctaHref: portalUrl(`/customer/orders/${orderId}`),
-    }),
+    variables: {
+      company_name: escapeHtml(companyName),
+      order_id: orderId,
+      order_short_id: escapeHtml(orderId.slice(-8).toUpperCase()),
+      shipping_title: escapeHtml(copy.title),
+      shipping_intro: escapeHtml(copy.intro),
+    },
   })
 }
 
@@ -387,26 +426,17 @@ export async function sendWholesaleRequestNotification({
   phoneNormalized: string | null
   smsOptIn: boolean
 }): Promise<void> {
-  const to = process.env.WHOLESALE_REQUEST_NOTIFICATION_EMAIL ?? 'admin@ahawc.com'
-
-  await sendEmail({
-    to,
+  await sendAutomationEmail({
+    key: 'wholesale_request',
+    to: process.env.WHOLESALE_REQUEST_NOTIFICATION_EMAIL ?? 'admin@ahawc.com',
     recipientName: businessName,
-    subject: `Wholesale account request - ${businessName}`,
-    html: renderEmailCard({
-      eyebrow: 'Wholesale request',
-      title: 'New wholesale account request',
-      intro: 'A new request was submitted from the public marketing form.',
-      body: `
-        <p style="margin: 0 0 10px;"><strong>Business:</strong> ${escapeHtml(businessName)}</p>
-        <p style="margin: 0 0 10px;"><strong>Email:</strong> ${escapeHtml(businessEmail)}</p>
-        <p style="margin: 0 0 10px;"><strong>Phone:</strong> ${escapeHtml(phone ?? '-')}</p>
-        <p style="margin: 0 0 10px;"><strong>Normalized:</strong> ${escapeHtml(phoneNormalized ?? '-')}</p>
-        <p style="margin: 0;"><strong>SMS opt-in:</strong> ${smsOptIn ? 'Yes' : 'No'}</p>
-      `,
-      ctaLabel: 'Open requests',
-      ctaHref: portalUrl('/admin/wholesale-requests'),
-    }),
+    variables: {
+      business_name: escapeHtml(businessName),
+      business_email: escapeHtml(businessEmail),
+      phone: escapeHtml(phone ?? '-'),
+      phone_normalized: escapeHtml(phoneNormalized ?? '-'),
+      sms_opt_in: smsOptIn ? 'Yes' : 'No',
+    },
   })
 }
 
@@ -423,20 +453,16 @@ export async function sendDeliveryCompletedEmail({
   proofOfDeliveryUrl?: string | null
   shelfPhotoUrl?: string | null
 }): Promise<void> {
-  await sendEmail({
+  await sendAutomationEmail({
+    key: 'delivery_completed',
     to,
     recipientName: companyName,
-    subject: `Delivery completed for ${companyName}`,
-    html: renderEmailCard({
-      eyebrow: 'Delivery completed',
-      title: 'Your delivery has been completed',
-      intro: `Your delivery for ${escapeHtml(companyName)} scheduled on ${escapeHtml(deliveryDate)} has been marked delivered.`,
-      body: `
-        <p style="margin: 0 0 10px;"><strong>Account:</strong> ${escapeHtml(companyName)}</p>
-        ${proofOfDeliveryUrl ? `<p style="margin: 0 0 10px;"><a href="${proofOfDeliveryUrl}" style="color: #1d4ed8;">View proof of delivery</a></p>` : ''}
-        ${shelfPhotoUrl ? `<p style="margin: 0;"><a href="${shelfPhotoUrl}" style="color: #1d4ed8;">View shelf photo</a></p>` : ''}
-      `,
-    }),
+    variables: {
+      company_name: escapeHtml(companyName),
+      delivery_date: escapeHtml(deliveryDate),
+      proof_link_html: proofOfDeliveryUrl ? `<p style="margin: 0 0 10px;"><a href="${proofOfDeliveryUrl}" style="color: #1d4ed8;">View proof of delivery</a></p>` : '',
+      shelf_link_html: shelfPhotoUrl ? `<p style="margin: 0;"><a href="${shelfPhotoUrl}" style="color: #1d4ed8;">View shelf photo</a></p>` : '',
+    },
   })
 }
 
@@ -451,18 +477,15 @@ export async function sendDriverDeliveryAssignmentEmail({
   weekStartDate: string
   stopCount: number
 }) {
-  await sendEmail({
+  await sendAutomationEmail({
+    key: 'driver_assignment',
     to,
     recipientName: driverName,
-    subject: `Delivery route assigned - ${weekStartDate}`,
-    html: renderEmailCard({
-      eyebrow: 'Driver assignment',
-      title: 'New delivery route assigned',
-      intro: `${escapeHtml(driverName)}, you have a delivery route scheduled for ${escapeHtml(weekStartDate)}.`,
-      body: `<p style="margin: 0;"><strong>Stops assigned:</strong> ${stopCount}</p>`,
-      ctaLabel: 'Open driver portal',
-      ctaHref: portalUrl('/driver/deliveries'),
-    }),
+    variables: {
+      driver_name: escapeHtml(driverName),
+      week_start_date: escapeHtml(weekStartDate),
+      stop_count: String(stopCount),
+    },
   })
 }
 
@@ -484,22 +507,16 @@ export async function sendTasterAssignmentEmail({
   const timeRange = formatEasternTimeRange(scheduledAt, endAt ?? null).replace(' ET', '')
   const scheduledLabel = formatEasternDateTime(scheduledAt).replace(' ET', '')
 
-  await sendEmail({
+  await sendAutomationEmail({
+    key: 'taster_assignment',
     to,
     recipientName: tasterName,
-    subject: `Tasting assigned - ${storeName}`,
-    html: renderEmailCard({
-      eyebrow: 'Tasting assignment',
-      title: 'New tasting assigned',
-      intro: `${escapeHtml(tasterName)}, you have been assigned to ${escapeHtml(storeName)}.`,
-      body: `
-        <p style="margin: 0 0 10px;"><strong>When:</strong> ${escapeHtml(`${scheduledLabel}${endAt ? ` - ${timeRange.split(' - ')[1]}` : ''} ET`)}</p>
-        <p style="margin: 0 0 10px;"><strong>Store:</strong> ${escapeHtml(storeName)}</p>
-        ${notes ? `<p style="margin: 0;"><strong>Notes:</strong> ${escapeHtml(notes)}</p>` : ''}
-      `,
-      ctaLabel: 'Review tasting',
-      ctaHref: portalUrl('/taster/tastings'),
-    }),
+    variables: {
+      taster_name: escapeHtml(tasterName),
+      store_name: escapeHtml(storeName),
+      scheduled_label: escapeHtml(`${scheduledLabel}${endAt ? ` - ${timeRange.split(' - ')[1]}` : ''} ET`),
+      notes_html: notes ? `<p style="margin: 0;"><strong>Notes:</strong> ${escapeHtml(notes)}</p>` : '',
+    },
   })
 }
 
@@ -517,30 +534,30 @@ export async function sendTastingStatusEmail({
   const copy = {
     confirmed: {
       title: 'Tasting confirmed',
-      intro: `Your tasting at ${escapeHtml(storeName)} has been confirmed.`,
+      intro: `Your tasting at ${storeName} has been confirmed.`,
     },
     cancelled: {
       title: 'Tasting cancelled',
-      intro: `Your tasting at ${escapeHtml(storeName)} has been cancelled.`,
+      intro: `Your tasting at ${storeName} has been cancelled.`,
     },
     declined: {
       title: 'Tasting declined',
-      intro: `The tasting at ${escapeHtml(storeName)} was declined and needs reassignment.`,
+      intro: `The tasting at ${storeName} was declined and needs reassignment.`,
     },
   }[status]
 
-  await sendEmail({
+  await sendAutomationEmail({
+    key: 'tasting_status',
     to,
     recipientName: storeName,
-    subject: `${copy.title} - ${storeName}`,
-    html: renderEmailCard({
-      eyebrow: 'Tasting update',
-      title: copy.title,
-      intro: copy.intro,
-      body: `<p style="margin: 0;"><strong>Scheduled for:</strong> ${escapeHtml(formatEasternDateTime(scheduledAt))}</p>`,
-      ctaLabel: status === 'declined' ? 'Open tastings' : 'Open tasting portal',
-      ctaHref: portalUrl(status === 'declined' ? '/admin/tastings' : '/taster/tastings'),
-    }),
+    variables: {
+      store_name: escapeHtml(storeName),
+      scheduled_at: escapeHtml(formatEasternDateTime(scheduledAt)),
+      status_title: escapeHtml(copy.title),
+      status_intro: escapeHtml(copy.intro),
+      status_cta_label: status === 'declined' ? 'Open tastings' : 'Open tasting portal',
+      status_cta_path: status === 'declined' ? '/admin/tastings' : '/taster/tastings',
+    },
   })
 }
 
@@ -553,18 +570,14 @@ export async function sendTastingReportReceivedEmail({
   tasterName: string
   storeName: string
 }) {
-  await sendEmail({
+  await sendAutomationEmail({
+    key: 'tasting_report_received',
     to,
     recipientName: tasterName,
-    subject: `Tasting report received - ${storeName}`,
-    html: renderEmailCard({
-      eyebrow: 'Report received',
-      title: 'Tasting report submitted',
-      intro: `Thanks, ${escapeHtml(tasterName)}. Your tasting report for ${escapeHtml(storeName)} has been received.`,
-      body: '<p style="margin: 0;">You can return to the portal anytime to review your submitted activity and invoice status.</p>',
-      ctaLabel: 'Open my tastings',
-      ctaHref: portalUrl('/taster/tastings'),
-    }),
+    variables: {
+      taster_name: escapeHtml(tasterName),
+      store_name: escapeHtml(storeName),
+    },
   })
 }
 
@@ -581,17 +594,15 @@ export async function sendInternalAlertEmail({
   body: string
   href?: string
 }) {
-  await sendEmail({
+  await sendAutomationEmail({
+    key: 'internal_alert',
     to,
-    subject,
-    html: renderEmailCard({
-      eyebrow: 'Internal alert',
-      title,
-      intro: body,
-      body: '<p style="margin: 0;">Review the update in the portal.</p>',
-      ctaLabel: href ? 'Open portal' : undefined,
-      ctaHref: href ? portalUrl(href) : undefined,
-    }),
+    variables: {
+      subject,
+      title: escapeHtml(title),
+      body: escapeHtml(body),
+      href: href ?? '',
+    },
   })
 }
 
@@ -622,30 +633,23 @@ export async function sendTasterInvoiceNotification({
   totalAmount: string
   notes: string | null
 }): Promise<void> {
-  const to = process.env.TASTER_ACCOUNTING_EMAIL ?? 'kris@ahawc.com'
-
-  await sendEmail({
-    to,
+  await sendAutomationEmail({
+    key: 'taster_invoice',
+    to: process.env.TASTER_ACCOUNTING_EMAIL ?? 'kris@ahawc.com',
     recipientName: payeeName,
-    subject: `Taster invoice submitted - ${payeeName} - ${tastingName}`,
-    html: renderEmailCard({
-      eyebrow: 'Taster invoice',
-      title: 'A taster invoice was submitted',
-      intro: `${escapeHtml(payeeName)} submitted an invoice for ${escapeHtml(tastingName)}.`,
-      body: `
-        <p style="margin: 0 0 10px;"><strong>Email:</strong> ${escapeHtml(payeeEmail)}</p>
-        <p style="margin: 0 0 10px;"><strong>Phone:</strong> ${escapeHtml(payeePhone ?? '-')}</p>
-        <p style="margin: 0 0 10px;"><strong>Date:</strong> ${escapeHtml(tastingDate)}</p>
-        <p style="margin: 0 0 10px;"><strong>Location:</strong> ${escapeHtml(storeAddress || '-')}</p>
-        <p style="margin: 0 0 10px;"><strong>Hourly rate:</strong> $${Number(hourlyRate || 0).toFixed(2)}</p>
-        <p style="margin: 0 0 10px;"><strong>Hours worked:</strong> ${Number(hoursWorked || 0).toFixed(2)}</p>
-        <p style="margin: 0 0 10px;"><strong>Mileage:</strong> ${Number(mileage || 0).toFixed(2)}</p>
-        <p style="margin: 0 0 10px;"><strong>Expenses:</strong> $${Number(expenseAmount || 0).toFixed(2)}</p>
-        <p style="margin: 0 0 10px;"><strong>Total due:</strong> $${Number(totalAmount || 0).toFixed(2)}</p>
-        ${notes ? `<p style="margin: 0;"><strong>Notes:</strong> ${escapeHtml(notes)}</p>` : ''}
-      `,
-      ctaLabel: 'Open invoicing',
-      ctaHref: portalUrl('/admin/invoicing'),
-    }),
+    variables: {
+      payee_name: escapeHtml(payeeName),
+      payee_email: escapeHtml(payeeEmail),
+      payee_phone: escapeHtml(payeePhone ?? '-'),
+      tasting_name: escapeHtml(tastingName),
+      tasting_date: escapeHtml(tastingDate),
+      store_address: escapeHtml(storeAddress || '-'),
+      hourly_rate_currency: formatCurrencyValue(hourlyRate),
+      hours_worked: Number(hoursWorked || 0).toFixed(2),
+      mileage: Number(mileage || 0).toFixed(2),
+      expense_amount_currency: formatCurrencyValue(expenseAmount),
+      total_amount_currency: formatCurrencyValue(totalAmount),
+      notes_html: notes ? `<p style="margin: 0;"><strong>Notes:</strong> ${escapeHtml(notes)}</p>` : '',
+    },
   })
 }

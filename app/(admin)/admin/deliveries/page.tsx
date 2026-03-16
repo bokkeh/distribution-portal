@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { formatDate } from '@/lib/utils'
 import Link from 'next/link'
 import { Plus, Truck, MapPin } from 'lucide-react'
+import { deleteDelivery } from '@/actions/deliveries'
 
 const statusVariant: Record<string, 'default' | 'success' | 'warning' | 'destructive' | 'info'> = {
   scheduled: 'info',
@@ -121,11 +122,18 @@ export default async function DeliveriesPage() {
                     <span>Driver: {delivery.driverName ?? 'Unassigned'}</span>
                   </div>
                 </div>
-                <Link href={`/admin/deliveries/${delivery.id}`}>
-                  <Button variant="outline">
-                    <MapPin className="w-4 h-4 mr-2" />View Route
-                  </Button>
-                </Link>
+                <div className="flex items-center gap-2">
+                  <form action={deleteDelivery.bind(null, delivery.id)}>
+                    <Button type="submit" variant="outline" size="sm" className="text-red-600 hover:text-red-700 hover:border-red-300">
+                      Delete
+                    </Button>
+                  </form>
+                  <Link href={`/admin/deliveries/${delivery.id}`}>
+                    <Button variant="outline">
+                      <MapPin className="w-4 h-4 mr-2" />View Route
+                    </Button>
+                  </Link>
+                </div>
               </div>
             </CardContent>
           </Card>

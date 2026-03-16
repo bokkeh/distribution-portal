@@ -176,6 +176,13 @@
       "when": 1773669600000,
       "tag": "0025_role_onboarding",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1773673200000,
+      "tag": "0026_email_automation_templates",
+      "breakpoints": true
     }
   ]
 }
