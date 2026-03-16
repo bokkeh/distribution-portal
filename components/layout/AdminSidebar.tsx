@@ -36,7 +36,6 @@ const navSections = [
   {
     title: 'Operations',
     items: [
-      { href: '/admin/drivers', label: 'Drivers', icon: Map, feature: 'drivers' },
       { href: '/admin/inventory', label: 'Inventory', icon: Package, feature: 'inventory' },
       { href: '/admin/jobs', label: 'Jobs / Logs', icon: ListChecks, feature: 'dashboard' },
       { href: '/admin/tastings', label: 'Tastings', icon: CalendarDays, feature: 'tastings' },

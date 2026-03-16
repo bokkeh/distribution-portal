@@ -65,6 +65,9 @@ export default async function DeliveriesPage() {
       <Card>
         <CardHeader>
           <CardTitle>Driver Roster</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            View active drivers, contact details, and assigned vehicle information.
+          </p>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -93,6 +96,10 @@ export default async function DeliveriesPage() {
       </Card>
 
       <div className="grid gap-4">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900">Deliveries</h2>
+          <p className="text-sm text-muted-foreground">Review scheduled delivery dates, assigned drivers, and route status.</p>
+        </div>
         {allDeliveries.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center text-muted-foreground">
