@@ -115,6 +115,7 @@ export async function payoutTasterInvoiceViaStripe(formData: FormData) {
       body: getStripeErrorMessage(error),
       metadata: {
         tasterInvoiceId: invoice.id,
+        stripeDestinationAccountId: invoice.stripeConnectAccountId,
       },
     })
     redirect(`/${mode}/invoicing?error=${encodeURIComponent(getStripeErrorMessage(error))}`)
@@ -134,6 +135,8 @@ export async function payoutTasterInvoiceViaStripe(formData: FormData) {
     body: `${invoice.payeeName} was paid $${Number(invoice.totalAmount).toFixed(2)} via Stripe.`,
     metadata: {
       stripeTransferId: transfer.id,
+      stripeDestinationAccountId: invoice.stripeConnectAccountId,
+      amount: invoice.totalAmount,
       tasterInvoiceId: invoice.id,
     },
   })
@@ -192,7 +195,7 @@ export async function approveTasterInvoice(formData: FormData) {
       kind: 'taster_invoice_approved',
       title: 'Taster invoice approved',
       body: `${invoice.payeeName}'s invoice was approved for payout.`,
-      metadata: { tasterInvoiceId: invoice.id },
+      metadata: { tasterInvoiceId: invoice.id, approvedByUserId: session.user.id },
     })
   }
 

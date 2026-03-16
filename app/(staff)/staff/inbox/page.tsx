@@ -22,7 +22,7 @@ export default async function StaffInboxPage({
 }: {
   searchParams: Promise<{ phone?: string }>
 }) {
-  await requireFeature('inbox', 'admin', 'staff')
+  const session = await requireFeature('inbox', 'admin', 'staff')
   const params = await searchParams
 
   try {
@@ -120,6 +120,7 @@ export default async function StaffInboxPage({
         </div>
         <SmsInboxHub
           basePath="/staff/inbox"
+          currentUserId={session.user.id}
           threads={threads}
           selectedPhone={selectedPhone}
           selectedContactName={selectedContactName}

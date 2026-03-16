@@ -181,7 +181,10 @@ export function LocalAccountsTable({
   const [accounts, setAccounts] = useState<AccountRow[]>(initialAccounts)
   const [showColumnPicker, setShowColumnPicker] = useState(false)
   const storageKey = useMemo(() => `crm-columns:${userId}:${basePath}`, [userId, basePath])
+  const filterStorageKey = useMemo(() => `crm-view:${userId}:${basePath}`, [userId, basePath])
   const [selectedColumns, setSelectedColumns] = useState<ColumnKey[]>(DEFAULT_COLUMNS)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [sortBy, setSortBy] = useState<'company' | 'balance' | 'pendingCases'>('company')
 
   useEffect(() => {
     try {
@@ -202,6 +205,24 @@ export function LocalAccountsTable({
     } catch {}
   }, [storageKey, selectedColumns])
 
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(filterStorageKey)
+      if (!raw) return
+      const parsed = JSON.parse(raw) as { searchQuery?: string; sortBy?: 'company' | 'balance' | 'pendingCases' }
+      if (typeof parsed.searchQuery === 'string') setSearchQuery(parsed.searchQuery)
+      if (parsed.sortBy === 'company' || parsed.sortBy === 'balance' || parsed.sortBy === 'pendingCases') {
+        setSortBy(parsed.sortBy)
+      }
+    } catch {}
+  }, [filterStorageKey])
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(filterStorageKey, JSON.stringify({ searchQuery, sortBy }))
+    } catch {}
+  }, [filterStorageKey, searchQuery, sortBy])
+
   function handleStar(id: string, val: boolean) {
     setAccounts(prev => prev.map(a => a.id === id ? { ...a, starred: val } : a))
   }
@@ -218,8 +239,27 @@ export function LocalAccountsTable({
     })
   }
 
-  const starred = accounts.filter(a => a.starred)
-  const rest = accounts.filter(a => !a.starred)
+  const normalizedQuery = searchQuery.trim().toLowerCase()
+  const filteredAccounts = accounts.filter(account => {
+    if (!normalizedQuery) return true
+    return [
+      account.companyName,
+      account.city,
+      account.state,
+      account.phone,
+      account.email,
+      account.paymentTerms,
+    ].some(value => String(value ?? '').toLowerCase().includes(normalizedQuery))
+  })
+
+  const sortedAccounts = [...filteredAccounts].sort((left, right) => {
+    if (sortBy === 'balance') return Number(right.balance ?? 0) - Number(left.balance ?? 0)
+    if (sortBy === 'pendingCases') return right.pendingCases - left.pendingCases
+    return left.companyName.localeCompare(right.companyName)
+  })
+
+  const starred = sortedAccounts.filter(a => a.starred)
+  const rest = sortedAccounts.filter(a => !a.starred)
   const visibleColumns = new Set(selectedColumns)
 
   return (
@@ -229,27 +269,45 @@ export function LocalAccountsTable({
           <p className="text-sm font-medium text-slate-900">Visible Columns</p>
           <p className="text-xs text-slate-500">Saved to your login only.</p>
         </div>
-        <div className="relative">
-          <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => setShowColumnPicker(prev => !prev)}>
-            <Settings2 className="h-4 w-4" />
-            Customize Columns
-          </Button>
-          {showColumnPicker ? (
-            <div className="absolute right-0 z-10 mt-2 w-56 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
-              <div className="space-y-2">
-                {COLUMN_OPTIONS.map(option => (
-                  <label key={option.key} className="flex items-center gap-3 text-sm text-slate-700">
-                    <input
-                      type="checkbox"
-                      checked={selectedColumns.includes(option.key)}
-                      onChange={() => toggleColumn(option.key)}
-                    />
-                    <span>{option.label}</span>
-                  </label>
-                ))}
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search accounts"
+            className="h-9 min-w-[220px] rounded-md border border-input bg-white px-3 text-sm"
+          />
+          <select
+            value={sortBy}
+            onChange={(event) => setSortBy(event.target.value as typeof sortBy)}
+            className="h-9 rounded-md border border-input bg-white px-3 text-sm"
+          >
+            <option value="company">Sort: Company</option>
+            <option value="balance">Sort: Balance</option>
+            <option value="pendingCases">Sort: Pending Cases</option>
+          </select>
+          <div className="relative">
+            <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => setShowColumnPicker(prev => !prev)}>
+              <Settings2 className="h-4 w-4" />
+              Customize Columns
+            </Button>
+            {showColumnPicker ? (
+              <div className="absolute right-0 z-10 mt-2 w-56 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
+                <div className="space-y-2">
+                  {COLUMN_OPTIONS.map(option => (
+                    <label key={option.key} className="flex items-center gap-3 text-sm text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={selectedColumns.includes(option.key)}
+                        onChange={() => toggleColumn(option.key)}
+                      />
+                      <span>{option.label}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
       </div>
       {starred.length > 0 ? (

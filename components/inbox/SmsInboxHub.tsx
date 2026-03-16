@@ -157,6 +157,7 @@ export function SmsInboxHub({
   accounts,
   templates,
   assignees,
+  currentUserId,
 }: {
   basePath: '/admin/inbox' | '/staff/inbox'
   threads: Thread[]
@@ -167,6 +168,7 @@ export function SmsInboxHub({
   accounts: AccountOption[]
   templates: ReplyTemplateOption[]
   assignees: AssigneeOption[]
+  currentUserId: string
 }) {
   const router = useRouter()
   const [state, action, pending] = useActionState(replyToSmsThread, null)
@@ -191,7 +193,7 @@ export function SmsInboxHub({
   const templateFormRef = useRef<HTMLFormElement | null>(null)
   const handledReplyStateRef = useRef<typeof state>(null)
   const pendingReplyAttachmentsRef = useRef<MediaAttachment[]>([])
-  const [threadFilter, setThreadFilter] = useState<'all' | 'unread' | 'open' | 'assigned' | 'starred'>('all')
+  const [threadFilter, setThreadFilter] = useState<'all' | 'unread' | 'open' | 'assigned' | 'mine' | 'starred'>('all')
   const [selectedTemplateId, setSelectedTemplateId] = useState('')
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false)
   const replyDraft = useFormDraftAutosave(formRef, `${basePath}:reply-draft:${selectedPhone ?? 'none'}`)
@@ -203,7 +205,7 @@ export function SmsInboxHub({
   useEffect(() => {
     const storageKey = `${basePath}:thread-filter`
     const saved = window.localStorage.getItem(storageKey)
-    if (saved === 'all' || saved === 'unread' || saved === 'open' || saved === 'assigned' || saved === 'starred') {
+    if (saved === 'all' || saved === 'unread' || saved === 'open' || saved === 'assigned' || saved === 'mine' || saved === 'starred') {
       setThreadFilter(saved)
     }
   }, [basePath])
@@ -433,6 +435,7 @@ export function SmsInboxHub({
     if (threadFilter === 'unread') return thread.unreadCount > 0
     if (threadFilter === 'open') return thread.status === 'open'
     if (threadFilter === 'assigned') return Boolean(thread.assignedUserId)
+    if (threadFilter === 'mine') return thread.assignedUserId === currentUserId
     if (threadFilter === 'starred') return thread.priority === 'starred'
     return true
   })
@@ -467,6 +470,7 @@ export function SmsInboxHub({
               ['unread', 'Unread'],
               ['open', 'Open'],
               ['assigned', 'Assigned'],
+              ['mine', 'Mine'],
               ['starred', 'Starred'],
             ].map(([value, label]) => (
               <button

@@ -228,11 +228,14 @@ export default async function StaffInvoicingPage({
                       </div>
                       {payoutEventMap.get(invoice.id)?.length ? (
                         <div className="mt-2 space-y-1">
-                          {payoutEventMap.get(invoice.id)?.slice(0, 2).map((event, index) => (
+                          {payoutEventMap.get(invoice.id)?.slice(0, 2).map((event, index) => {
+                            const metadata = event.metadata && typeof event.metadata === 'object' ? event.metadata as Record<string, unknown> : {}
+                            const transferId = typeof metadata.stripeTransferId === 'string' ? metadata.stripeTransferId : null
+                            return (
                             <p key={`${invoice.id}-${index}`} className={`text-xs ${event.kind === 'taster_invoice_payout_failed' ? 'text-red-600' : 'text-slate-500'}`}>
-                              {formatDate(event.createdAt)}: {event.body || event.kind}
+                              {formatDate(event.createdAt)}: {event.body || event.kind}{transferId ? ` (Transfer ${transferId})` : ''}
                             </p>
-                          ))}
+                          )})}
                         </div>
                       ) : null}
                     </td>

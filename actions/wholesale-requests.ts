@@ -1,0 +1,75 @@
+'use server'
+
+import { eq } from 'drizzle-orm'
+import { revalidatePath } from 'next/cache'
+import { db } from '@/db'
+import { users, wholesaleAccountRequests } from '@/db/schema'
+import { requireAdmin } from '@/lib/auth/session'
+import { logActivityEvent } from '@/lib/activity/log'
+
+export async function updateWholesaleRequestWorkflow(formData: FormData) {
+  const session = await requireAdmin()
+  const requestId = ((formData.get('requestId') as string) || '').trim()
+  const assigneeUserId = ((formData.get('assigneeUserId') as string) || '').trim() || null
+  const status = ((formData.get('status') as string) || 'new').trim()
+  const notes = ((formData.get('notes') as string) || '').trim()
+
+  if (!requestId) {
+    return { error: 'Missing request id.' }
+  }
+
+  const [request] = await db
+    .select({
+      id: wholesaleAccountRequests.id,
+      businessName: wholesaleAccountRequests.businessName,
+    })
+    .from(wholesaleAccountRequests)
+    .where(eq(wholesaleAccountRequests.id, requestId))
+    .limit(1)
+
+  if (!request) {
+    return { error: 'Wholesale request not found.' }
+  }
+
+  let assigneeName: string | null = null
+  if (assigneeUserId) {
+    const [assignee] = await db
+      .select({ name: users.name })
+      .from(users)
+      .where(eq(users.id, assigneeUserId))
+      .limit(1)
+    assigneeName = assignee?.name ?? null
+  }
+
+  const titles: Record<string, string> = {
+    new: 'Wholesale request marked new',
+    reviewing: 'Wholesale request under review',
+    approved: 'Wholesale request approved',
+    rejected: 'Wholesale request rejected',
+    escalated: 'Wholesale request escalated',
+    resolved: 'Wholesale request resolved',
+  }
+
+  await logActivityEvent({
+    entityType: 'wholesale_request',
+    entityId: request.id,
+    actorUserId: session.user.id,
+    relatedUserId: assigneeUserId,
+    kind: 'wholesale_request_updated',
+    title: titles[status] ?? 'Wholesale request updated',
+    body: [
+      assigneeName ? `Owner: ${assigneeName}` : 'Owner: Unassigned',
+      notes ? `Notes: ${notes}` : null,
+    ].filter(Boolean).join(' | '),
+    metadata: {
+      status,
+      assigneeUserId,
+      assigneeName,
+      notes,
+    },
+  })
+
+  revalidatePath('/admin/wholesale-requests')
+  revalidatePath('/admin/attention')
+  return { success: true }
+}

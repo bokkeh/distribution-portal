@@ -23,7 +23,7 @@ export default async function AdminInboxPage({
 }: {
   searchParams: Promise<{ phone?: string }>
 }) {
-  await requireFeature('inbox', 'admin', 'staff')
+  const session = await requireFeature('inbox', 'admin', 'staff')
   const params = await searchParams
 
   try {
@@ -126,6 +126,7 @@ export default async function AdminInboxPage({
         </div>
         <SmsInboxHub
           basePath="/admin/inbox"
+          currentUserId={session.user.id}
           threads={threads}
           selectedPhone={selectedPhone}
           selectedContactName={selectedContactName}
