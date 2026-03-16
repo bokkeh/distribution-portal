@@ -52,6 +52,9 @@ const navSections = [
   {
     title: 'Finance',
     items: [
+      { href: '/admin/finance/ledger', label: 'Payments Ledger', icon: BookOpen, feature: 'accounting' },
+      { href: '/admin/finance/reconciliation', label: 'Reconciliation', icon: ClipboardList, feature: 'accounting' },
+      { href: '/admin/finance/statements', label: 'Statements', icon: FileText, feature: 'accounting' },
       { href: '/admin/accounts', label: 'Chart of Accounts', icon: BookOpen, feature: 'accounting' },
     ],
   },

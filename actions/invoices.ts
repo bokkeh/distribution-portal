@@ -16,6 +16,49 @@ function generateInvoiceNumber(seq: number) {
   return `INV-${new Date().getFullYear()}-${String(seq).padStart(5, '0')}`
 }
 
+async function getFinanceAccounts() {
+  const accounts = await db.select().from(chartOfAccounts)
+  return {
+    accounts,
+    cashAccount: accounts.find(a => a.accountNumber === '1000') ?? accounts.find(a => a.type === 'asset'),
+    arAccount: accounts.find(a => a.accountNumber === '1100') ?? accounts.find(a => a.type === 'asset'),
+    revenueAccount: accounts.find(a => a.type === 'revenue'),
+    expenseAccount: accounts.find(a => a.type === 'expense'),
+  }
+}
+
+async function createJournalEntryForLines(input: {
+  date?: string
+  description: string
+  reference?: string | null
+  createdBy: string
+  lines: Array<{
+    accountId: string
+    debit: string
+    credit: string
+    description: string
+  }>
+}) {
+  const [entry] = await db.insert(journalEntries).values({
+    date: input.date ?? new Date().toISOString().split('T')[0],
+    description: input.description,
+    reference: input.reference ?? null,
+    createdBy: input.createdBy,
+  }).returning()
+
+  await db.insert(journalEntryLines).values(
+    input.lines.map(line => ({
+      entryId: entry.id,
+      accountId: line.accountId,
+      debit: line.debit,
+      credit: line.credit,
+      description: line.description,
+    })),
+  )
+
+  return entry
+}
+
 export async function createInvoice(formData: FormData) {
   const session = await requireAdminOrStaff()
 
@@ -110,22 +153,18 @@ export async function markInvoicePaid(invoiceId: string) {
   }
 
   // Auto-create journal entry: DR Cash / CR Accounts Receivable
-  const accounts = await db.select().from(chartOfAccounts)
-  const cashAccount = accounts.find(a => a.accountNumber === '1000')
-  const arAccount = accounts.find(a => a.accountNumber === '1100')
+  const { cashAccount, arAccount } = await getFinanceAccounts()
 
   if (cashAccount && arAccount) {
-    const [entry] = await db.insert(journalEntries).values({
-      date: new Date().toISOString().split('T')[0],
+    await createJournalEntryForLines({
       description: `Payment received for ${invoice.invoiceNumber}`,
       reference: invoice.invoiceNumber,
       createdBy: session.user.id,
-    }).returning()
-
-    await db.insert(journalEntryLines).values([
-      { entryId: entry.id, accountId: cashAccount.id, debit: invoice.total, credit: '0', description: 'Cash received' },
-      { entryId: entry.id, accountId: arAccount.id, debit: '0', credit: invoice.total, description: 'AR cleared' },
-    ])
+      lines: [
+        { accountId: cashAccount.id, debit: invoice.total, credit: '0', description: 'Cash received' },
+        { accountId: arAccount.id, debit: '0', credit: invoice.total, description: 'AR cleared' },
+      ],
+    })
   }
 
   const invoiceEmails = Array.from(new Set(
@@ -145,6 +184,136 @@ export async function markInvoicePaid(invoiceId: string) {
 
   revalidatePath(`/admin/invoicing/${invoiceId}`)
   revalidatePath('/admin/accounts/journal')
+}
+
+export async function recordOfflineInvoicePayment(formData: FormData) {
+  const session = await requireAdminOrStaff()
+  const invoiceId = formData.get('invoiceId') as string
+  const amount = Number(formData.get('amount') as string)
+  const note = (formData.get('note') as string) || 'Offline payment recorded.'
+
+  if (!invoiceId || !Number.isFinite(amount) || amount <= 0) {
+    redirect('/admin/invoicing?error=' + encodeURIComponent('Enter a valid offline payment amount.'))
+  }
+
+  const [invoice] = await db
+    .select({
+      id: invoices.id,
+      invoiceNumber: invoices.invoiceNumber,
+      total: invoices.total,
+      status: invoices.status,
+      customerId: invoices.customerId,
+      orderId: invoices.orderId,
+    })
+    .from(invoices)
+    .where(eq(invoices.id, invoiceId))
+    .limit(1)
+
+  if (!invoice) {
+    redirect('/admin/invoicing?error=' + encodeURIComponent('Invoice not found.'))
+  }
+
+  const { cashAccount, arAccount } = await getFinanceAccounts()
+  if (cashAccount && arAccount) {
+    await createJournalEntryForLines({
+      description: `Offline payment recorded for ${invoice.invoiceNumber}`,
+      reference: invoice.invoiceNumber,
+      createdBy: session.user.id,
+      lines: [
+        { accountId: cashAccount.id, debit: amount.toFixed(2), credit: '0', description: 'Offline payment received' },
+        { accountId: arAccount.id, debit: '0', credit: amount.toFixed(2), description: 'AR reduction' },
+      ],
+    })
+  }
+
+  await logActivityEvent({
+    entityType: 'invoice',
+    entityId: invoice.id,
+    actorUserId: session.user.id,
+    kind: 'invoice_offline_payment_recorded',
+    title: 'Offline payment recorded',
+    body: `$${amount.toFixed(2)} recorded against ${invoice.invoiceNumber}. ${note}`.trim(),
+    metadata: { amount, note },
+  })
+
+  if (amount >= Number(invoice.total) && invoice.status !== 'paid') {
+    await db.update(invoices).set({ status: 'paid', paidAt: new Date() }).where(eq(invoices.id, invoice.id))
+  }
+
+  revalidatePath(`/admin/invoicing/${invoice.id}`)
+  revalidatePath('/admin/invoicing')
+  revalidatePath('/admin/accounts/journal')
+  redirect(`/admin/invoicing/${invoice.id}?success=${encodeURIComponent('Offline payment recorded.')}`)
+}
+
+export async function createInvoiceAdjustment(formData: FormData) {
+  const session = await requireAdminOrStaff()
+  const invoiceId = formData.get('invoiceId') as string
+  const adjustmentType = (formData.get('adjustmentType') as string) || 'credit_memo'
+  const note = (formData.get('note') as string) || null
+  const amountRaw = formData.get('amount') as string
+  const amount = Number(amountRaw)
+
+  const [invoice] = await db
+    .select({
+      id: invoices.id,
+      invoiceNumber: invoices.invoiceNumber,
+      total: invoices.total,
+      status: invoices.status,
+    })
+    .from(invoices)
+    .where(eq(invoices.id, invoiceId))
+    .limit(1)
+
+  if (!invoice) {
+    redirect('/admin/invoicing?error=' + encodeURIComponent('Invoice not found.'))
+  }
+
+  const effectiveAmount = adjustmentType === 'void' ? Number(invoice.total) : amount
+  if (!Number.isFinite(effectiveAmount) || effectiveAmount <= 0) {
+    redirect(`/admin/invoicing/${invoice.id}?error=${encodeURIComponent('Enter a valid adjustment amount.')}`)
+  }
+
+  const { arAccount, revenueAccount, expenseAccount } = await getFinanceAccounts()
+
+  if (arAccount && (revenueAccount || expenseAccount)) {
+    const contraAccountId = adjustmentType === 'write_off'
+      ? (expenseAccount?.id ?? revenueAccount?.id)
+      : (revenueAccount?.id ?? expenseAccount?.id)
+
+    if (contraAccountId) {
+      const lines = adjustmentType === 'write_off'
+        ? [
+            { accountId: contraAccountId, debit: effectiveAmount.toFixed(2), credit: '0', description: 'Write-off expense' },
+            { accountId: arAccount.id, debit: '0', credit: effectiveAmount.toFixed(2), description: 'AR reduction' },
+          ]
+        : [
+            { accountId: contraAccountId, debit: effectiveAmount.toFixed(2), credit: '0', description: adjustmentType === 'credit_memo' ? 'Credit memo' : 'Invoice void' },
+            { accountId: arAccount.id, debit: '0', credit: effectiveAmount.toFixed(2), description: 'AR reduction' },
+          ]
+
+      await createJournalEntryForLines({
+        description: `${adjustmentType.replaceAll('_', ' ')} for ${invoice.invoiceNumber}`,
+        reference: invoice.invoiceNumber,
+        createdBy: session.user.id,
+        lines,
+      })
+    }
+  }
+
+  await logActivityEvent({
+    entityType: 'invoice',
+    entityId: invoice.id,
+    actorUserId: session.user.id,
+    kind: `invoice_${adjustmentType}`,
+    title: adjustmentType === 'credit_memo' ? 'Credit memo created' : adjustmentType === 'write_off' ? 'Invoice written off' : 'Invoice voided',
+    body: `${invoice.invoiceNumber} ${adjustmentType.replaceAll('_', ' ')} for $${effectiveAmount.toFixed(2)}.${note ? ` ${note}` : ''}`,
+    metadata: { adjustmentType, amount: effectiveAmount, note },
+  })
+
+  revalidatePath(`/admin/invoicing/${invoice.id}`)
+  revalidatePath('/admin/accounts/journal')
+  redirect(`/admin/invoicing/${invoice.id}?success=${encodeURIComponent('Invoice adjustment recorded.')}`)
 }
 
 export async function createPaymentIntent(invoiceId: string) {
