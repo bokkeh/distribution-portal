@@ -1,7 +1,7 @@
 'use server'
 
 import { db } from '@/db'
-import { users, customerAccounts, drivers } from '@/db/schema'
+import { users, customerAccounts, drivers, userPreferences, accountPreferences } from '@/db/schema'
 import { requireAuth } from '@/lib/auth/session'
 import { eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
@@ -29,6 +29,14 @@ function isMissingStripeConnectColumn(error: unknown) {
   const message = error instanceof Error ? error.message.toLowerCase() : ''
 
   return code === '42703' || message.includes('stripe_connect_account_id')
+}
+
+function isMissingPreferencesTable(error: unknown) {
+  const dbError = error as { code?: string; message?: string; cause?: unknown } | null
+  const code = dbError?.code ?? (dbError?.cause as { code?: string } | undefined)?.code
+  const message = error instanceof Error ? error.message.toLowerCase() : ''
+
+  return code === '42P01' || message.includes('user_preferences') || message.includes('account_preferences')
 }
 
 export async function updateProfile(
@@ -101,6 +109,25 @@ export async function updateProfile(
         additionalLocations: (formData.get('additionalLocations') as string) || null,
       }).where(eq(customerAccounts.id, accountId))
 
+      try {
+        await db.insert(accountPreferences).values({
+          accountId,
+          timeZone: (formData.get('accountTimeZone') as string) || 'America/New_York',
+          quietHoursStart: (formData.get('accountQuietHoursStart') as string) || null,
+          quietHoursEnd: (formData.get('accountQuietHoursEnd') as string) || null,
+        }).onConflictDoUpdate({
+          target: accountPreferences.accountId,
+          set: {
+            timeZone: (formData.get('accountTimeZone') as string) || 'America/New_York',
+            quietHoursStart: (formData.get('accountQuietHoursStart') as string) || null,
+            quietHoursEnd: (formData.get('accountQuietHoursEnd') as string) || null,
+            updatedAt: new Date(),
+          },
+        })
+      } catch (error) {
+        if (!isMissingPreferencesTable(error)) throw error
+      }
+
       const [account] = await db.select().from(customerAccounts).where(eq(customerAccounts.id, accountId)).limit(1)
 
       if (account) {
@@ -132,6 +159,33 @@ export async function updateProfile(
           }).catch(() => false)
         }
       }
+    }
+
+    try {
+      await db.insert(userPreferences).values({
+        userId,
+        timeZone: (formData.get('timeZone') as string) || 'America/New_York',
+        notificationPreference: (formData.get('notificationPreference') as string) || 'all',
+        emailNotificationsEnabled: formData.get('emailNotificationsEnabled') === 'on',
+        smsNotificationsEnabled: formData.get('smsNotificationsEnabled') === 'on',
+        inAppNotificationsEnabled: formData.get('inAppNotificationsEnabled') === 'on',
+        quietHoursStart: (formData.get('quietHoursStart') as string) || null,
+        quietHoursEnd: (formData.get('quietHoursEnd') as string) || null,
+      }).onConflictDoUpdate({
+        target: userPreferences.userId,
+        set: {
+          timeZone: (formData.get('timeZone') as string) || 'America/New_York',
+          notificationPreference: (formData.get('notificationPreference') as string) || 'all',
+          emailNotificationsEnabled: formData.get('emailNotificationsEnabled') === 'on',
+          smsNotificationsEnabled: formData.get('smsNotificationsEnabled') === 'on',
+          inAppNotificationsEnabled: formData.get('inAppNotificationsEnabled') === 'on',
+          quietHoursStart: (formData.get('quietHoursStart') as string) || null,
+          quietHoursEnd: (formData.get('quietHoursEnd') as string) || null,
+          updatedAt: new Date(),
+        },
+      })
+    } catch (error) {
+      if (!isMissingPreferencesTable(error)) throw error
     }
 
     revalidatePath('/customer/profile')
@@ -170,6 +224,33 @@ export async function updateSimpleProfile(
         phone: (formData.get('phone') as string) || null,
         avatarUrl: (formData.get('avatarUrl') as string) || null,
       }).where(eq(users.id, userId))
+    }
+
+    try {
+      await db.insert(userPreferences).values({
+        userId,
+        timeZone: (formData.get('timeZone') as string) || 'America/New_York',
+        notificationPreference: (formData.get('notificationPreference') as string) || 'all',
+        emailNotificationsEnabled: formData.get('emailNotificationsEnabled') === 'on',
+        smsNotificationsEnabled: formData.get('smsNotificationsEnabled') === 'on',
+        inAppNotificationsEnabled: formData.get('inAppNotificationsEnabled') === 'on',
+        quietHoursStart: (formData.get('quietHoursStart') as string) || null,
+        quietHoursEnd: (formData.get('quietHoursEnd') as string) || null,
+      }).onConflictDoUpdate({
+        target: userPreferences.userId,
+        set: {
+          timeZone: (formData.get('timeZone') as string) || 'America/New_York',
+          notificationPreference: (formData.get('notificationPreference') as string) || 'all',
+          emailNotificationsEnabled: formData.get('emailNotificationsEnabled') === 'on',
+          smsNotificationsEnabled: formData.get('smsNotificationsEnabled') === 'on',
+          inAppNotificationsEnabled: formData.get('inAppNotificationsEnabled') === 'on',
+          quietHoursStart: (formData.get('quietHoursStart') as string) || null,
+          quietHoursEnd: (formData.get('quietHoursEnd') as string) || null,
+          updatedAt: new Date(),
+        },
+      })
+    } catch (error) {
+      if (!isMissingPreferencesTable(error)) throw error
     }
 
     revalidatePath('/admin/profile')
@@ -288,6 +369,33 @@ export async function updateDriverProfile(
       phone: (formData.get('phone') as string) || null,
       avatarUrl: (formData.get('avatarUrl') as string) || null,
     }).where(eq(users.id, userId))
+
+    try {
+      await db.insert(userPreferences).values({
+        userId,
+        timeZone: (formData.get('timeZone') as string) || 'America/New_York',
+        notificationPreference: (formData.get('notificationPreference') as string) || 'all',
+        emailNotificationsEnabled: formData.get('emailNotificationsEnabled') === 'on',
+        smsNotificationsEnabled: formData.get('smsNotificationsEnabled') === 'on',
+        inAppNotificationsEnabled: formData.get('inAppNotificationsEnabled') === 'on',
+        quietHoursStart: (formData.get('quietHoursStart') as string) || null,
+        quietHoursEnd: (formData.get('quietHoursEnd') as string) || null,
+      }).onConflictDoUpdate({
+        target: userPreferences.userId,
+        set: {
+          timeZone: (formData.get('timeZone') as string) || 'America/New_York',
+          notificationPreference: (formData.get('notificationPreference') as string) || 'all',
+          emailNotificationsEnabled: formData.get('emailNotificationsEnabled') === 'on',
+          smsNotificationsEnabled: formData.get('smsNotificationsEnabled') === 'on',
+          inAppNotificationsEnabled: formData.get('inAppNotificationsEnabled') === 'on',
+          quietHoursStart: (formData.get('quietHoursStart') as string) || null,
+          quietHoursEnd: (formData.get('quietHoursEnd') as string) || null,
+          updatedAt: new Date(),
+        },
+      })
+    } catch (error) {
+      if (!isMissingPreferencesTable(error)) throw error
+    }
 
     const driverId = formData.get('driverId') as string | null
     if (driverId) {

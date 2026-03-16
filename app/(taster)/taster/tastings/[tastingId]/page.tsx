@@ -11,6 +11,7 @@ import { getTastingById } from '@/lib/tastings/read'
 import { getActivityTimeline } from '@/lib/activity/read'
 import { ActivityTimeline } from '@/components/activity/ActivityTimeline'
 import { confirmTastingAssignment, declineTastingAssignment } from '@/actions/tastings'
+import { buildGoogleCalendarUrl } from '@/lib/calendar'
 
 function isMissingSubmissionTables(error: unknown) {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
@@ -37,6 +38,16 @@ export default async function TasterTastingDetailPage({
 
   const roles = session.user.roles ?? [session.user.role]
   if (!roles.includes('admin') && tasting.assignedUserId !== session.user.id) notFound()
+  const start = new Date(tasting.scheduledAt)
+  const end = tasting.endAt ? new Date(tasting.endAt) : new Date(start.getTime() + 2 * 60 * 60 * 1000)
+  const location = [tasting.storeAddress, tasting.storeCity, tasting.storeState, tasting.storeZip].filter(Boolean).join(', ')
+  const googleCalendarUrl = buildGoogleCalendarUrl({
+    title: `AHAWC Tasting - ${tasting.eventName}`,
+    details: tasting.notes ?? 'AHAWC tasting assignment',
+    location,
+    start,
+    end,
+  })
 
   try {
     const [report, invoice, assignedUser] = await Promise.all([
@@ -73,6 +84,12 @@ export default async function TasterTastingDetailPage({
             <form action={declineTastingAssignment.bind(null, tasting.id)}>
               <Button type="submit" variant="destructive">Decline Assignment</Button>
             </form>
+            <Link href={googleCalendarUrl} target="_blank">
+              <Button type="button" variant="outline">Add to Google Calendar</Button>
+            </Link>
+            <Link href={`/api/calendar/tasting/${tasting.id}`}>
+              <Button type="button" variant="outline">Download ICS</Button>
+            </Link>
           </div>
         ) : null}
         <TastingSubmissionDetail

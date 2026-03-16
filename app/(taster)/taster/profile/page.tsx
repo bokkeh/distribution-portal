@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import Stripe from 'stripe'
 import { createTasterStripeOnboardingLink } from '@/actions/profile'
+import { getUserPreferences } from '@/lib/preferences/read'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? 'sk_test_placeholder', { apiVersion: '2026-02-25.clover' })
 
@@ -23,6 +24,7 @@ export default async function TasterProfilePage({
 }) {
   const session = await requireFeature('profile', 'taster', 'admin')
   const query = await searchParams
+  const preferences = await getUserPreferences(session.user.id)
 
   let user: {
     id: string
@@ -102,7 +104,7 @@ export default async function TasterProfilePage({
         <h1 className="text-2xl font-bold text-slate-900">My Profile</h1>
         <p className="text-muted-foreground mt-1">Keep your phone number current so tasting assignments reach you by text.</p>
       </div>
-      <SimpleProfileForm user={user} />
+      <SimpleProfileForm user={user} preferences={preferences} />
       <Card className="max-w-lg">
         <CardHeader>
           <CardTitle>Stripe Payouts</CardTitle>

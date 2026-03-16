@@ -3,6 +3,7 @@ import { users, drivers } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { requireRole } from '@/lib/auth/session'
 import { DriverProfileForm } from '@/components/profile/DriverProfileForm'
+import { getUserPreferences } from '@/lib/preferences/read'
 
 export default async function DriverProfilePage() {
   const session = await requireRole('driver', 'admin')
@@ -12,6 +13,7 @@ export default async function DriverProfilePage() {
     .from(users)
     .where(eq(users.id, session.user.id))
   const [driver] = await db.select().from(drivers).where(eq(drivers.userId, session.user.id))
+  const preferences = await getUserPreferences(session.user.id)
 
   return (
     <div className="space-y-6">
@@ -21,6 +23,7 @@ export default async function DriverProfilePage() {
       </div>
       <DriverProfileForm
         user={{ id: user.id, name: user.name, email: user.email, phone: user.phone, avatarUrl: user.avatarUrl }}
+        preferences={preferences}
         driver={driver ? {
           id: driver.id,
           vehicleMake: driver.vehicleMake,

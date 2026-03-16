@@ -3,10 +3,12 @@ import { deliveries, deliveryStops, drivers, customerAccounts } from '@/db/schem
 import { eq, and } from 'drizzle-orm'
 import { requireRole } from '@/lib/auth/session'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { formatDate } from '@/lib/utils'
 import { Truck } from 'lucide-react'
 import DeliveryMapWrapper from '@/components/deliveries/DeliveryMapWrapper'
 import SortableStopList from '@/components/deliveries/SortableStopList'
+import { buildGoogleCalendarUrl } from '@/lib/calendar'
 
 export default async function DriverDeliveriesPage() {
   const session = await requireRole('driver', 'admin')
@@ -133,7 +135,26 @@ export default async function DriverDeliveriesPage() {
         return (
           <Card key={delivery.id}>
             <CardHeader>
-              <CardTitle className="text-base">Delivery Date {formatDate(delivery.weekStartDate)}</CardTitle>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <CardTitle className="text-base">Delivery Date {formatDate(delivery.weekStartDate)}</CardTitle>
+                <div className="flex flex-wrap gap-2">
+                  <a
+                    href={buildGoogleCalendarUrl({
+                      title: `AHAWC Delivery Run - ${delivery.weekStartDate}`,
+                      details: 'AHAWC driver delivery run',
+                      start: new Date(`${delivery.weekStartDate}T08:00:00-05:00`),
+                      end: new Date(`${delivery.weekStartDate}T18:00:00-05:00`),
+                    })}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <Button variant="outline" size="sm">Add to Google Calendar</Button>
+                  </a>
+                  <a href={`/api/calendar/delivery/${delivery.id}`}>
+                    <Button variant="outline" size="sm">Download ICS</Button>
+                  </a>
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="space-y-3 sm:space-y-4">
               <div className="h-[320px] sm:h-[420px] overflow-hidden rounded-xl border">

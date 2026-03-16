@@ -17,6 +17,8 @@ import {
 import { v4 as uuidv4 } from 'uuid'
 import { createNotificationsForRoles, createUserNotification } from '@/lib/notifications/in-app'
 import { logActivityEvent } from '@/lib/activity/log'
+import { getAccountPreferences, getUserPreferences } from '@/lib/preferences/read'
+import { formatDateInTimeZone, getShortTimeZoneLabel } from '@/lib/timezones'
 
 async function resequenceDeliveryStops(deliveryId: string) {
   const existingStops = await db
@@ -206,19 +208,21 @@ export async function createDelivery(formData: FormData) {
   })
 
   const [driver] = await db
-    .select({ phone: drivers.phone, name: users.name, email: users.email })
+    .select({ phone: drivers.phone, name: users.name, email: users.email, userId: users.id })
     .from(drivers)
     .innerJoin(users, eq(drivers.userId, users.id))
     .where(eq(drivers.id, driverId))
 
-  if (driver?.phone) {
+  const driverPrefs = driver ? await getUserPreferences(driver.userId).catch(() => null) : null
+
+  if (driver?.phone && (driverPrefs?.smsNotificationsEnabled ?? true)) {
     await sendSms({
       to: driver.phone,
       body: `AHAWC Delivery Assigned: You have ${orderIds.length} stop(s) scheduled for ${weekStartDate}. Log in to view your route: ${process.env.NEXTAUTH_URL}/driver/deliveries`,
     })
   }
 
-  if (driver?.email) {
+  if (driver?.email && (driverPrefs?.emailNotificationsEnabled ?? true)) {
     await sendDriverDeliveryAssignmentEmail({
       to: driver.email,
       driverName: driver.name,
@@ -282,6 +286,7 @@ export async function completeDeliveryStop(stopId: string, formData: FormData) {
     .select({
       id: deliveryStops.id,
       deliveryId: deliveryStops.deliveryId,
+      customerId: deliveryStops.customerId,
       address: deliveryStops.address,
       companyName: customerAccounts.companyName,
       contactPhone: deliveryStops.contactPhone,
@@ -289,6 +294,7 @@ export async function completeDeliveryStop(stopId: string, formData: FormData) {
       accountPhone: customerAccounts.phone,
       accountEmail: customerAccounts.email,
       businessEmail: customerAccounts.businessEmail,
+      notificationPreference: customerAccounts.notificationPreference,
     })
     .from(deliveryStops)
     .leftJoin(customerAccounts, eq(deliveryStops.customerId, customerAccounts.id))
@@ -329,16 +335,20 @@ export async function completeDeliveryStop(stopId: string, formData: FormData) {
 
   const notificationPhone = stop.contactPhone || stop.accountPhone
   const notificationEmail = stop.contactEmail || stop.businessEmail || stop.accountEmail
-  const deliveryDate = new Date().toLocaleDateString()
+  const accountPrefs = await getAccountPreferences(stop.customerId, null).catch(() => null)
+  const deliveryTimeZone = accountPrefs?.timeZone ?? 'America/New_York'
+  const deliveryDate = formatDateInTimeZone(new Date(), deliveryTimeZone)
+  const prefersSms = stop.notificationPreference === 'sms' || stop.notificationPreference === 'both'
+  const prefersEmail = !stop.notificationPreference || stop.notificationPreference === 'email' || stop.notificationPreference === 'both'
 
-  if (notificationPhone) {
+  if (notificationPhone && prefersSms) {
     await sendSms({
       to: notificationPhone,
-      body: `AHAWC delivery update: your order for ${stop.companyName ?? stop.address} has been delivered.`,
+      body: `AHAWC delivery update: your order for ${stop.companyName ?? stop.address} was delivered on ${deliveryDate} (${getShortTimeZoneLabel(deliveryTimeZone)}).`,
     }).catch(() => {})
   }
 
-  if (notificationEmail) {
+  if (notificationEmail && prefersEmail) {
     await sendDeliveryCompletedEmail({
       to: notificationEmail,
       companyName: stop.companyName ?? stop.address,

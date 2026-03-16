@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { User, Car, Camera, Loader2, MapPin, Search } from 'lucide-react'
 import Image from 'next/image'
 import { ProfilePhotoUploadField } from '@/components/profile/ProfilePhotoUploadField'
+import { COMMON_TIME_ZONES } from '@/lib/timezones'
 
 interface Props {
   user: { id: string; name: string; email: string; phone: string | null; avatarUrl: string | null }
@@ -26,6 +27,15 @@ interface Props {
     homeState: string | null
     homeZip: string | null
   } | null
+  preferences?: {
+    timeZone: string
+    notificationPreference: string
+    emailNotificationsEnabled: boolean
+    smsNotificationsEnabled: boolean
+    inAppNotificationsEnabled: boolean
+    quietHoursStart: string | null
+    quietHoursEnd: string | null
+  }
 }
 
 interface VinResult {
@@ -53,7 +63,7 @@ async function decodeVin(vin: string): Promise<VinResult | null> {
   }
 }
 
-export function DriverProfileForm({ user, driver }: Props) {
+export function DriverProfileForm({ user, driver, preferences }: Props) {
   const [state, action, pending] = useActionState(updateDriverProfile, null)
 
   const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl ?? '')
@@ -154,6 +164,46 @@ export function DriverProfileForm({ user, driver }: Props) {
           <div className="space-y-1.5">
             <Label>Phone</Label>
             <Input name="phone" type="tel" defaultValue={user.phone ?? ''} placeholder="+1 (555) 000-0000" />
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>Time Zone</Label>
+              <select name="timeZone" defaultValue={preferences?.timeZone ?? 'America/New_York'} className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm">
+                {COMMON_TIME_ZONES.map((zone) => <option key={zone.value} value={zone.value}>{zone.label}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Notification Mode</Label>
+              <select name="notificationPreference" defaultValue={preferences?.notificationPreference ?? 'all'} className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm">
+                <option value="all">All notifications</option>
+                <option value="important">Important only</option>
+                <option value="quiet">Minimal</option>
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="emailNotificationsEnabled" defaultChecked={preferences?.emailNotificationsEnabled ?? true} />
+              Email
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="smsNotificationsEnabled" defaultChecked={preferences?.smsNotificationsEnabled ?? true} />
+              SMS
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="inAppNotificationsEnabled" defaultChecked={preferences?.inAppNotificationsEnabled ?? true} />
+              In-app
+            </label>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>Quiet Hours Start</Label>
+              <Input name="quietHoursStart" type="time" defaultValue={preferences?.quietHoursStart ?? ''} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Quiet Hours End</Label>
+              <Input name="quietHoursEnd" type="time" defaultValue={preferences?.quietHoursEnd ?? ''} />
+            </div>
           </div>
         </CardContent>
       </Card>

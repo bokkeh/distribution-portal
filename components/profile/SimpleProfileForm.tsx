@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ProfilePhotoUploadField } from '@/components/profile/ProfilePhotoUploadField'
 import { useFormDraftAutosave } from '@/hooks/useFormDraftAutosave'
+import { COMMON_TIME_ZONES } from '@/lib/timezones'
 
 interface Props {
   user: {
@@ -23,9 +24,18 @@ interface Props {
     state: string | null
     zip: string | null
   }
+  preferences?: {
+    timeZone: string
+    notificationPreference: string
+    emailNotificationsEnabled: boolean
+    smsNotificationsEnabled: boolean
+    inAppNotificationsEnabled: boolean
+    quietHoursStart: string | null
+    quietHoursEnd: string | null
+  }
 }
 
-export function SimpleProfileForm({ user }: Props) {
+export function SimpleProfileForm({ user, preferences }: Props) {
   const [state, action, pending] = useActionState(updateSimpleProfile, null)
   const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl ?? '')
   const formRef = useRef<HTMLFormElement | null>(null)
@@ -86,6 +96,59 @@ export function SimpleProfileForm({ user }: Props) {
             <div className="space-y-1.5">
               <Label>ZIP</Label>
               <Input name="zip" defaultValue={user.zip ?? ''} placeholder="77001" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>Time Zone</Label>
+              <select
+                name="timeZone"
+                defaultValue={preferences?.timeZone ?? 'America/New_York'}
+                className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+              >
+                {COMMON_TIME_ZONES.map((zone) => (
+                  <option key={zone.value} value={zone.value}>{zone.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Notification Mode</Label>
+              <select
+                name="notificationPreference"
+                defaultValue={preferences?.notificationPreference ?? 'all'}
+                className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+              >
+                <option value="all">All notifications</option>
+                <option value="important">Important only</option>
+                <option value="quiet">Minimal</option>
+              </select>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Notification Channels</Label>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" name="emailNotificationsEnabled" defaultChecked={preferences?.emailNotificationsEnabled ?? true} />
+                Email
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" name="smsNotificationsEnabled" defaultChecked={preferences?.smsNotificationsEnabled ?? true} />
+                SMS
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" name="inAppNotificationsEnabled" defaultChecked={preferences?.inAppNotificationsEnabled ?? true} />
+                In-app
+              </label>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>Quiet Hours Start</Label>
+              <Input name="quietHoursStart" type="time" defaultValue={preferences?.quietHoursStart ?? ''} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Quiet Hours End</Label>
+              <Input name="quietHoursEnd" type="time" defaultValue={preferences?.quietHoursEnd ?? ''} />
             </div>
           </div>
           <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs">

@@ -11,11 +11,27 @@ import { Badge } from '@/components/ui/badge'
 import { formatCurrency } from '@/lib/utils'
 import { User, Building2, Bell, UserCircle, Clock, Truck, MapPin, Plus, Trash2, CreditCard } from 'lucide-react'
 import { ProfilePhotoUploadField } from '@/components/profile/ProfilePhotoUploadField'
+import { COMMON_TIME_ZONES } from '@/lib/timezones'
 
 interface Location { address: string; city: string; state: string; zip: string }
 
 interface Props {
-  user: { id: string; name: string; email: string; phone: string | null; avatarUrl: string | null }
+  user: {
+    id: string
+    name: string
+    email: string
+    phone: string | null
+    avatarUrl: string | null
+    preferences?: {
+      timeZone: string
+      notificationPreference: string
+      emailNotificationsEnabled: boolean
+      smsNotificationsEnabled: boolean
+      inAppNotificationsEnabled: boolean
+      quietHoursStart: string | null
+      quietHoursEnd: string | null
+    }
+  }
   account: {
     id: string
     companyName: string
@@ -37,6 +53,11 @@ interface Props {
     creditLimit: string
     balance: string
     paymentTerms: string | null
+    preferences?: {
+      timeZone: string
+      quietHoursStart: string | null
+      quietHoursEnd: string | null
+    }
   } | null
 }
 
@@ -135,6 +156,42 @@ export function ProfileForm({ user, account }: Props) {
           <Field label="Phone">
             <Input name="phone" type="tel" defaultValue={user.phone ?? ''} placeholder="+1 (555) 000-0000" />
           </Field>
+          <FieldRow>
+            <Field label="Your Time Zone">
+              <select name="timeZone" defaultValue={user.preferences?.timeZone ?? 'America/New_York'} className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm">
+                {COMMON_TIME_ZONES.map((zone) => <option key={zone.value} value={zone.value}>{zone.label}</option>)}
+              </select>
+            </Field>
+            <Field label="Notification Mode">
+              <select name="notificationPreference" defaultValue={user.preferences?.notificationPreference ?? 'all'} className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm">
+                <option value="all">All notifications</option>
+                <option value="important">Important only</option>
+                <option value="quiet">Minimal</option>
+              </select>
+            </Field>
+          </FieldRow>
+          <FieldRow>
+            <Field label="Quiet Hours Start">
+              <Input name="quietHoursStart" type="time" defaultValue={user.preferences?.quietHoursStart ?? ''} />
+            </Field>
+            <Field label="Quiet Hours End">
+              <Input name="quietHoursEnd" type="time" defaultValue={user.preferences?.quietHoursEnd ?? ''} />
+            </Field>
+          </FieldRow>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="emailNotificationsEnabled" defaultChecked={user.preferences?.emailNotificationsEnabled ?? true} />
+              Email
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="smsNotificationsEnabled" defaultChecked={user.preferences?.smsNotificationsEnabled ?? true} />
+              SMS
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="inAppNotificationsEnabled" defaultChecked={user.preferences?.inAppNotificationsEnabled ?? true} />
+              In-app
+            </label>
+          </div>
         </CardContent>
       </Card>
 
@@ -211,6 +268,19 @@ export function ProfileForm({ user, account }: Props) {
                     )
                   })}
                 </div>
+              </Field>
+              <FieldRow>
+                <Field label="Business Time Zone">
+                  <select name="accountTimeZone" defaultValue={account.preferences?.timeZone ?? 'America/New_York'} className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm">
+                    {COMMON_TIME_ZONES.map((zone) => <option key={zone.value} value={zone.value}>{zone.label}</option>)}
+                  </select>
+                </Field>
+                <Field label="Quiet Hours Start">
+                  <Input name="accountQuietHoursStart" type="time" defaultValue={account.preferences?.quietHoursStart ?? ''} />
+                </Field>
+              </FieldRow>
+              <Field label="Quiet Hours End">
+                <Input name="accountQuietHoursEnd" type="time" defaultValue={account.preferences?.quietHoursEnd ?? ''} />
               </Field>
             </CardContent>
           </Card>

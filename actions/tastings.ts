@@ -24,6 +24,7 @@ import {
 import { getTastingById, getTastingsForViewWithFallback } from '@/lib/tastings/read'
 import { formatEasternDateTime, parseDateTimeInTimeZone } from '@/lib/tastings/time'
 import { logActivityEvent } from '@/lib/activity/log'
+import { getUserPreferences } from '@/lib/preferences/read'
 
 function tastingRedirectPath(mode: string) {
   return mode === 'staff' ? '/staff/tastings' : '/admin/tastings'
@@ -215,6 +216,7 @@ export async function createTasting(formData: FormData) {
   if (!assignedUser || !assignedUser.roles.includes('taster')) {
     redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('Choose a valid taster account.')}`)
   }
+  const assignedUserPrefs = await getUserPreferences(assignedUser.id).catch(() => null)
 
   const [tasting] = await db.insert(tastings).values({
     customerId: account.id,
@@ -241,12 +243,14 @@ export async function createTasting(formData: FormData) {
     endAt,
   })
 
-  await notifyTasterAssignment({
-    assignedPhone: assignedUser.phone,
-    payload: smsPayload,
-  })
+  if (assignedUserPrefs?.smsNotificationsEnabled ?? true) {
+    await notifyTasterAssignment({
+      assignedPhone: assignedUser.phone,
+      payload: smsPayload,
+    })
+  }
 
-  if (assignedUser.phone) {
+  if (assignedUser.phone && (assignedUserPrefs?.smsNotificationsEnabled ?? true)) {
     await queueScheduledTastingSmsJobs({
       ...smsPayload,
       scheduledAt,
@@ -254,24 +258,28 @@ export async function createTasting(formData: FormData) {
     })
   }
 
-  await createUserNotification({
-    userId: assignedUser.id,
-    kind: 'tasting_assigned',
-    title: 'New tasting assigned',
-    body: `${account.companyName} has been assigned to you for ${formatEasternDateTime(scheduledAt)}.`,
-    href: `/taster/tastings/${tasting.id}`,
-  })
+  if (assignedUserPrefs?.inAppNotificationsEnabled ?? true) {
+    await createUserNotification({
+      userId: assignedUser.id,
+      kind: 'tasting_assigned',
+      title: 'New tasting assigned',
+      body: `${account.companyName} has been assigned to you for ${formatEasternDateTime(scheduledAt)}.`,
+      href: `/taster/tastings/${tasting.id}`,
+    })
+  }
 
-  await createUserNotification({
-    userId: assignedUser.id,
-    kind: 'tasting_report_reminder',
-    title: 'Complete your tasting report',
-    body: `Submit your tasting report for ${account.companyName}.`,
-    href: `/taster/tastings/${tasting.id}`,
-    availableAt: new Date(scheduledAt.getTime() + 24 * 60 * 60 * 1000),
-  })
+  if (assignedUserPrefs?.inAppNotificationsEnabled ?? true) {
+    await createUserNotification({
+      userId: assignedUser.id,
+      kind: 'tasting_report_reminder',
+      title: 'Complete your tasting report',
+      body: `Submit your tasting report for ${account.companyName}.`,
+      href: `/taster/tastings/${tasting.id}`,
+      availableAt: new Date(scheduledAt.getTime() + 24 * 60 * 60 * 1000),
+    })
+  }
 
-  if (assignedUser.email) {
+  if (assignedUser.email && (assignedUserPrefs?.emailNotificationsEnabled ?? true)) {
     await sendTasterAssignmentEmail({
       to: assignedUser.email,
       tasterName: assignedUser.name,

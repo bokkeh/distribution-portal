@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm'
 import { requireAdmin } from '@/lib/auth/session'
 import { SimpleProfileForm } from '@/components/profile/SimpleProfileForm'
 import { notFound } from 'next/navigation'
+import { getUserPreferences } from '@/lib/preferences/read'
 
 export default async function AdminProfilePage() {
   const session = await requireAdmin()
@@ -30,6 +31,7 @@ export default async function AdminProfilePage() {
   }
 
   if (!user) notFound()
+  const preferences = await getUserPreferences(session.user.id)
 
   return (
     <div className="p-4 sm:p-8 space-y-6">
@@ -37,7 +39,7 @@ export default async function AdminProfilePage() {
         <h1 className="text-2xl font-bold text-slate-900">My Profile</h1>
         <p className="text-muted-foreground mt-1">Update your name, email, phone number, and address</p>
       </div>
-      <SimpleProfileForm user={{ id: user.id, name: user.name, email: user.email, phone: user.phone, avatarUrl: user.avatarUrl, address: user.address, city: user.city, state: user.state, zip: user.zip }} />
+      <SimpleProfileForm user={{ id: user.id, name: user.name, email: user.email, phone: user.phone, avatarUrl: user.avatarUrl, address: user.address, city: user.city, state: user.state, zip: user.zip }} preferences={preferences} />
     </div>
   )
 }

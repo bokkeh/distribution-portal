@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, FileText, BookOpen, Users, Package,
-  Truck, Map, Building2, LogOut, ChevronRight, Menu, X, UserCircle, CalendarDays, MessageSquare, HeartPulse, ListChecks, ClipboardList,
+  Truck, Map, Building2, LogOut, ChevronRight, Menu, X, UserCircle, CalendarDays, MessageSquare, HeartPulse, ListChecks, ClipboardList, Workflow,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { signOut } from 'next-auth/react'
@@ -21,6 +21,7 @@ const navSections = [
     items: [
       { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard, feature: 'dashboard' },
       { href: '/admin/attention', label: 'Needs Attention', icon: ClipboardList, feature: 'dashboard' },
+      { href: '/admin/automations', label: 'Automations', icon: Workflow, feature: 'dashboard' },
     ],
   },
   {
