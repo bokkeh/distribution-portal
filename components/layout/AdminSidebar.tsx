@@ -21,7 +21,6 @@ const navSections = [
     items: [
       { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard, feature: 'dashboard' },
       { href: '/admin/attention', label: 'Needs Attention', icon: ClipboardList, feature: 'dashboard' },
-      { href: '/admin/system', label: 'System Health', icon: HeartPulse, feature: 'dashboard' },
     ],
   },
   {
@@ -59,6 +58,7 @@ const navSections = [
     title: 'Admin',
     items: [
       { href: '/admin/users', label: 'User Management', icon: Users, feature: 'users' },
+      { href: '/admin/system', label: 'System Health', icon: HeartPulse, feature: 'dashboard' },
       { href: '/admin/profile', label: 'My Profile', icon: UserCircle, feature: 'profile' },
     ],
   },
