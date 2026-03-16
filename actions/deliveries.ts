@@ -10,7 +10,10 @@ import { sendSms } from '@/lib/telnyx/client'
 import { postGoogleChat } from '@/lib/google-chat/webhook'
 import { geocodeAddress } from '@/lib/maps/geocode'
 import { generateSignedUploadUrl } from '@/lib/gcs/client'
-import { sendDeliveryCompletedEmail } from '@/lib/resend/client'
+import {
+  sendDeliveryCompletedEmail,
+  sendDriverDeliveryAssignmentEmail,
+} from '@/lib/resend/client'
 import { v4 as uuidv4 } from 'uuid'
 import { createNotificationsForRoles, createUserNotification } from '@/lib/notifications/in-app'
 import { logActivityEvent } from '@/lib/activity/log'
@@ -203,7 +206,7 @@ export async function createDelivery(formData: FormData) {
   })
 
   const [driver] = await db
-    .select({ phone: drivers.phone, name: users.name })
+    .select({ phone: drivers.phone, name: users.name, email: users.email })
     .from(drivers)
     .innerJoin(users, eq(drivers.userId, users.id))
     .where(eq(drivers.id, driverId))
@@ -212,6 +215,15 @@ export async function createDelivery(formData: FormData) {
     await sendSms({
       to: driver.phone,
       body: `AHAWC Delivery Assigned: You have ${orderIds.length} stop(s) scheduled for ${weekStartDate}. Log in to view your route: ${process.env.NEXTAUTH_URL}/driver/deliveries`,
+    })
+  }
+
+  if (driver?.email) {
+    await sendDriverDeliveryAssignmentEmail({
+      to: driver.email,
+      driverName: driver.name,
+      weekStartDate,
+      stopCount: orderIds.length,
     })
   }
 
@@ -489,7 +501,7 @@ export async function reassignDeliveryDriver(deliveryId: string, formData: FormD
     .where(eq(deliveries.id, deliveryId))
 
   const [driver] = await db
-    .select({ phone: drivers.phone, name: users.name })
+    .select({ phone: drivers.phone, name: users.name, email: users.email })
     .from(drivers)
     .innerJoin(users, eq(drivers.userId, users.id))
     .where(eq(drivers.id, driverId))
@@ -500,6 +512,20 @@ export async function reassignDeliveryDriver(deliveryId: string, formData: FormD
       to: driver.phone,
       body: `AHAWC Delivery Reassigned: You have been assigned a delivery scheduled for ${delivery.weekStartDate}. Log in to view your route: ${process.env.NEXTAUTH_URL}/driver/deliveries`,
     }).catch(() => {})
+  }
+
+  if (driver?.email) {
+    const stopCount = await db
+      .select({ id: deliveryStops.id })
+      .from(deliveryStops)
+      .where(eq(deliveryStops.deliveryId, deliveryId))
+
+    await sendDriverDeliveryAssignmentEmail({
+      to: driver.email,
+      driverName: driver.name,
+      weekStartDate: delivery.weekStartDate,
+      stopCount: stopCount.length,
+    })
   }
 
   const [driverUser] = await db

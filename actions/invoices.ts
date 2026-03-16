@@ -8,6 +8,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import Stripe from 'stripe'
 import { logActivityEvent } from '@/lib/activity/log'
+import { sendInvoicePaidConfirmationEmail } from '@/lib/resend/client'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? 'sk_test_placeholder', { apiVersion: '2026-02-25.clover' })
 
@@ -78,7 +79,21 @@ export async function sendInvoiceEmail(invoiceId: string) {
 export async function markInvoicePaid(invoiceId: string) {
   const session = await requireAdminOrStaff()
 
-  const [invoice] = await db.select().from(invoices).where(eq(invoices.id, invoiceId))
+  const [invoice] = await db
+    .select({
+      id: invoices.id,
+      invoiceNumber: invoices.invoiceNumber,
+      orderId: invoices.orderId,
+      total: invoices.total,
+      customerId: invoices.customerId,
+      companyName: customerAccounts.companyName,
+      email: customerAccounts.email,
+      businessEmail: customerAccounts.businessEmail,
+      pocEmail: customerAccounts.pocEmail,
+    })
+    .from(invoices)
+    .leftJoin(customerAccounts, eq(invoices.customerId, customerAccounts.id))
+    .where(eq(invoices.id, invoiceId))
   if (!invoice) return
 
   await db.update(invoices).set({ status: 'paid', paidAt: new Date() }).where(eq(invoices.id, invoiceId))
@@ -111,6 +126,21 @@ export async function markInvoicePaid(invoiceId: string) {
       { entryId: entry.id, accountId: cashAccount.id, debit: invoice.total, credit: '0', description: 'Cash received' },
       { entryId: entry.id, accountId: arAccount.id, debit: '0', credit: invoice.total, description: 'AR cleared' },
     ])
+  }
+
+  const invoiceEmails = Array.from(new Set(
+    [invoice.pocEmail, invoice.businessEmail, invoice.email]
+      .map((value) => value?.trim())
+      .filter(Boolean) as string[],
+  ))
+
+  if (invoice.companyName && invoiceEmails.length) {
+    await sendInvoicePaidConfirmationEmail({
+      to: invoiceEmails,
+      companyName: invoice.companyName,
+      invoiceNumber: invoice.invoiceNumber,
+      total: invoice.total,
+    })
   }
 
   revalidatePath(`/admin/invoicing/${invoiceId}`)

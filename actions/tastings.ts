@@ -7,7 +7,13 @@ import { db } from '@/db'
 import { customerAccounts, notificationsLog, tasterInvoices, tastingReports, tastings, users } from '@/db/schema'
 import { requireFeature, requireRole } from '@/lib/auth/session'
 import { sendSms } from '@/lib/telnyx/client'
-import { sendTasterInvoiceNotification } from '@/lib/resend/client'
+import {
+  sendInternalAlertEmail,
+  sendTasterAssignmentEmail,
+  sendTasterInvoiceNotification,
+  sendTastingReportReceivedEmail,
+  sendTastingStatusEmail,
+} from '@/lib/resend/client'
 import { clearUserNotifications, createNotificationsForRoles, createUserNotification } from '@/lib/notifications/in-app'
 import {
   clearScheduledTastingSmsJobs,
@@ -20,6 +26,10 @@ import { logActivityEvent } from '@/lib/activity/log'
 
 function tastingRedirectPath(mode: string) {
   return mode === 'staff' ? '/staff/tastings' : '/admin/tastings'
+}
+
+function uniqueEmails(...values: Array<string | null | undefined>) {
+  return Array.from(new Set(values.map((value) => value?.trim()).filter(Boolean) as string[]))
 }
 
 async function notifyTasterAssignment({
@@ -106,11 +116,23 @@ async function notifyTeamAboutDeclinedTasting({
     .from(users)
 
   const recipients = new Map<string, string>()
+  const emailRecipients = new Set<string>()
   for (const member of teamMembers) {
     if (!member.active) continue
     if (!member.phone) continue
     if (!member.roles.includes('staff') && !member.roles.includes('admin')) continue
     recipients.set(member.phone, member.id)
+  }
+
+  const teamEmails = await db
+    .select({ email: users.email, roles: users.roles, active: users.active })
+    .from(users)
+
+  for (const member of teamEmails) {
+    if (!member.active) continue
+    if (!member.email) continue
+    if (!member.roles.includes('staff') && !member.roles.includes('admin')) continue
+    emailRecipients.add(member.email)
   }
 
   await Promise.all(Array.from(recipients.entries()).map(async ([phone, userId]) => {
@@ -135,6 +157,16 @@ async function notifyTeamAboutDeclinedTasting({
     title: 'Team notified of decline',
     body: `${declinedByName} declined ${eventName} and the team was notified.`,
   })
+
+  if (emailRecipients.size) {
+    await sendInternalAlertEmail({
+      to: Array.from(emailRecipients),
+      subject: `Tasting declined - ${eventName}`,
+      title: 'Tasting declined',
+      body: `${declinedByName} declined ${eventName} scheduled for ${scheduledAt.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}.`,
+      href: '/admin/tastings',
+    })
+  }
 }
 
 export async function createTasting(formData: FormData) {
@@ -174,7 +206,7 @@ export async function createTasting(formData: FormData) {
   }
 
   const [assignedUser] = await db
-    .select({ id: users.id, name: users.name, phone: users.phone, roles: users.roles })
+    .select({ id: users.id, name: users.name, phone: users.phone, email: users.email, roles: users.roles })
     .from(users)
     .where(eq(users.id, assignedUserId))
     .limit(1)
@@ -238,6 +270,17 @@ export async function createTasting(formData: FormData) {
     availableAt: new Date(scheduledAt.getTime() + 24 * 60 * 60 * 1000),
   })
 
+  if (assignedUser.email) {
+    await sendTasterAssignmentEmail({
+      to: assignedUser.email,
+      tasterName: assignedUser.name,
+      storeName: account.companyName,
+      scheduledAt,
+      endAt,
+      notes,
+    })
+  }
+
   revalidatePath('/admin/tastings')
   revalidatePath('/staff/tastings')
   revalidatePath('/taster/tastings')
@@ -292,7 +335,7 @@ export async function updateTastingStatus(formData: FormData) {
 
   if (nextStatus === 'confirmed') {
     const [assignedUser] = await db
-      .select({ phone: users.phone })
+      .select({ phone: users.phone, email: users.email })
       .from(users)
       .where(eq(users.id, tasting.assignedUserId))
       .limit(1)
@@ -324,6 +367,15 @@ export async function updateTastingStatus(formData: FormData) {
           endAt: tastingDetails.endAt,
         }),
       }).catch(() => {})
+    }
+
+    if (assignedUser?.email && tastingDetails) {
+      await sendTastingStatusEmail({
+        to: assignedUser.email,
+        storeName: tastingDetails.eventName,
+        status: 'confirmed',
+        scheduledAt: tastingDetails.scheduledAt,
+      })
     }
   }
 
@@ -463,7 +515,7 @@ export async function reassignTasting(formData: FormData) {
   }
 
   const [nextTaster] = await db
-    .select({ id: users.id, name: users.name, phone: users.phone, roles: users.roles })
+    .select({ id: users.id, name: users.name, phone: users.phone, email: users.email, roles: users.roles })
     .from(users)
     .where(eq(users.id, nextAssignedUserId))
     .limit(1)
@@ -547,6 +599,17 @@ export async function reassignTasting(formData: FormData) {
     href: `/taster/tastings/${tasting.id}`,
     availableAt: new Date(tasting.scheduledAt.getTime() + 24 * 60 * 60 * 1000),
   })
+
+  if (nextTaster.email) {
+    await sendTasterAssignmentEmail({
+      to: nextTaster.email,
+      tasterName: nextTaster.name,
+      storeName: tasting.eventName,
+      scheduledAt: tasting.scheduledAt,
+      endAt: tasting.endAt,
+      notes: null,
+    })
+  }
 
   revalidatePath('/admin/tastings')
   revalidatePath('/staff/tastings')
@@ -636,7 +699,7 @@ export async function submitTastingReport(formData: FormData) {
     .limit(1)
 
   const [assignedUser] = await db
-    .select({ phone: users.phone })
+    .select({ phone: users.phone, email: users.email, name: users.name })
     .from(users)
     .where(eq(users.id, tasting.assignedUserId))
     .limit(1)
@@ -654,6 +717,14 @@ export async function submitTastingReport(formData: FormData) {
         endAt: tastingInfo.endAt,
       }),
     }).catch(() => {})
+  }
+
+  if (assignedUser?.email && tastingInfo) {
+    await sendTastingReportReceivedEmail({
+      to: assignedUser.email,
+      tasterName: assignedUser.name,
+      storeName: tastingInfo.eventName,
+    })
   }
 
   revalidatePath('/admin/tastings')

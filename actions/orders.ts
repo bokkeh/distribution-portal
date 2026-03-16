@@ -11,8 +11,17 @@ import { logInventoryTransaction } from '@/lib/inventory/history'
 import { getMinimumCaseQuantity, isWisherVodkaProduct } from '@/lib/orders/minimums'
 import { createUserNotification } from '@/lib/notifications/in-app'
 import { logActivityEvent } from '@/lib/activity/log'
+import {
+  sendOrderReceivedEmail,
+  sendOrderShippingStatusEmail,
+  sendOrderStatusEmail,
+} from '@/lib/resend/client'
 
 type PurchaseUnit = 'case' | 'bottle'
+
+function uniqueEmails(...values: Array<string | null | undefined>) {
+  return Array.from(new Set(values.map((value) => value?.trim()).filter(Boolean) as string[]))
+}
 
 export async function createOrder(formData: FormData) {
   try {
@@ -119,7 +128,13 @@ export async function createOrder(formData: FormData) {
     })
 
     const [customerAccount] = await db
-      .select({ userId: customerAccounts.userId, companyName: customerAccounts.companyName })
+      .select({
+        userId: customerAccounts.userId,
+        companyName: customerAccounts.companyName,
+        email: customerAccounts.email,
+        businessEmail: customerAccounts.businessEmail,
+        pocEmail: customerAccounts.pocEmail,
+      })
       .from(customerAccounts)
       .where(eq(customerAccounts.id, customerId))
       .limit(1)
@@ -131,6 +146,21 @@ export async function createOrder(formData: FormData) {
         title: 'Order received',
         body: `Your order for ${customerAccount.companyName} has been received and is now being processed.`,
         href: `/customer/orders/${order.id}`,
+      })
+    }
+
+    const customerEmails = uniqueEmails(
+      customerAccount?.pocEmail,
+      customerAccount?.businessEmail,
+      customerAccount?.email,
+    )
+
+    if (customerAccount?.companyName && customerEmails.length) {
+      await sendOrderReceivedEmail({
+        to: customerEmails,
+        companyName: customerAccount.companyName,
+        orderId: order.id,
+        total: total.toFixed(2),
       })
     }
 
@@ -225,6 +255,9 @@ export async function updateOrderStatus(orderId: string, status: 'pending' | 'co
       id: orders.id,
       customerUserId: customerAccounts.userId,
       companyName: customerAccounts.companyName,
+      email: customerAccounts.email,
+      businessEmail: customerAccounts.businessEmail,
+      pocEmail: customerAccounts.pocEmail,
     })
     .from(orders)
     .leftJoin(customerAccounts, eq(orders.customerId, customerAccounts.id))
@@ -259,6 +292,17 @@ export async function updateOrderStatus(orderId: string, status: 'pending' | 'co
       href: `/customer/orders/${orderId}`,
     })
   }
+
+  const customerEmails = uniqueEmails(order?.pocEmail, order?.businessEmail, order?.email)
+  if (order?.companyName && customerEmails.length) {
+    await sendOrderStatusEmail({
+      to: customerEmails,
+      companyName: order.companyName,
+      orderId,
+      status,
+    })
+  }
+
   revalidatePath('/admin/dashboard')
   revalidatePath('/admin/orders')
   revalidatePath('/staff/orders')
@@ -416,6 +460,9 @@ export async function updateOrderShippingStatus(orderId: string, formData: FormD
     .select({
       customerUserId: customerAccounts.userId,
       companyName: customerAccounts.companyName,
+      email: customerAccounts.email,
+      businessEmail: customerAccounts.businessEmail,
+      pocEmail: customerAccounts.pocEmail,
     })
     .from(orders)
     .leftJoin(customerAccounts, eq(orders.customerId, customerAccounts.id))
@@ -454,6 +501,17 @@ export async function updateOrderShippingStatus(orderId: string, formData: FormD
       href: `/customer/orders/${orderId}`,
     })
   }
+
+  const customerEmails = uniqueEmails(order?.pocEmail, order?.businessEmail, order?.email)
+  if (order?.companyName && customerEmails.length) {
+    await sendOrderShippingStatusEmail({
+      to: customerEmails,
+      companyName: order.companyName,
+      orderId,
+      status: shippingStatus,
+    })
+  }
+
   revalidatePath('/admin/orders')
   revalidatePath('/staff/orders')
   revalidatePath(`/admin/orders/${orderId}`)
