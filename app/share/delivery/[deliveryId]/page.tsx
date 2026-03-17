@@ -8,6 +8,7 @@ import ShareRouteMap from '@/components/share/ShareRouteMap'
 import GetDirectionsButton from '@/components/shared/GetDirectionsButton'
 import EditableShareOrigin from '@/components/share/EditableShareOrigin'
 import EditableShareStopNotes from '@/components/share/EditableShareStopNotes'
+import CopyAddressButton from '@/components/share/CopyAddressButton'
 import { updateSharedDeliveryOrigin, updateSharedDeliveryStopNotes } from '@/actions/share'
 
 export default async function ShareDeliveryPage({
@@ -161,9 +162,13 @@ export default async function ShareDeliveryPage({
                     <span className={`inline-block h-2 w-2 rounded-full ${STATUS_COLORS[stop.status] ?? 'bg-slate-400'}`} />
                     <span className="text-xs text-slate-400 capitalize">{stop.status}</span>
                   </div>
-                  <p className="mt-0.5 flex items-center gap-1 text-xs text-slate-500">
-                    <MapPin className="h-3 w-3 shrink-0" />{stop.address}
-                  </p>
+                  <div className="mt-0.5 flex items-start gap-2 text-xs text-slate-500">
+                    <p className="flex min-w-0 items-center gap-1">
+                      <MapPin className="h-3 w-3 shrink-0" />
+                      <span>{stop.address}</span>
+                    </p>
+                    <CopyAddressButton address={stop.address} />
+                  </div>
                   {stop.contactName && (
                     <p className="mt-0.5 text-xs text-slate-500">POC: {stop.contactName}{stop.contactPhone ? ` · ${stop.contactPhone}` : ''}</p>
                   )}

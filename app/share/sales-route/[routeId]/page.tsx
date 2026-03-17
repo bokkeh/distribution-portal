@@ -8,6 +8,7 @@ import ShareRouteMap from '@/components/share/ShareRouteMap'
 import GetDirectionsButton from '@/components/shared/GetDirectionsButton'
 import EditableShareOrigin from '@/components/share/EditableShareOrigin'
 import EditableShareStopNotes from '@/components/share/EditableShareStopNotes'
+import CopyAddressButton from '@/components/share/CopyAddressButton'
 import { updateSharedSalesRouteOrigin, updateSharedSalesRouteStopNotes } from '@/actions/share'
 
 export default async function ShareSalesRoutePage({
@@ -109,9 +110,13 @@ export default async function ShareSalesRoutePage({
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-slate-900">{stop.companyName ?? '—'}</p>
-                  <p className="mt-0.5 flex items-center gap-1 text-xs text-slate-500">
-                    <MapPin className="h-3 w-3 shrink-0" />{stop.address}
-                  </p>
+                  <div className="mt-0.5 flex items-start gap-2 text-xs text-slate-500">
+                    <p className="flex min-w-0 items-center gap-1">
+                      <MapPin className="h-3 w-3 shrink-0" />
+                      <span>{stop.address}</span>
+                    </p>
+                    <CopyAddressButton address={stop.address} />
+                  </div>
                   {stop.contactName && (
                     <p className="mt-0.5 text-xs text-slate-500">POC: {stop.contactName}{stop.contactPhone ? ` · ${stop.contactPhone}` : ''}</p>
                   )}
