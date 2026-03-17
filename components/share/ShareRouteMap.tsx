@@ -23,10 +23,12 @@ export type ShareStop = {
   status: string
 }
 
-export default function ShareRouteMap({ stops }: { stops: ShareStop[] }) {
+export type ShareOrigin = { lat: number; lng: number; address: string } | null
+
+export default function ShareRouteMap({ stops, origin }: { stops: ShareStop[]; origin?: ShareOrigin }) {
   return (
     <div className="w-full h-full">
-      <ShareRouteMapInner stops={stops} />
+      <ShareRouteMapInner stops={stops} origin={origin} />
     </div>
   )
 }

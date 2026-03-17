@@ -10,7 +10,7 @@ const STATUS_COLORS: Record<string, string> = {
   failed: '#EF4444',
 }
 
-export default function ShareRouteMapInner({ stops }: { stops: ShareStop[] }) {
+export default function ShareRouteMapInner({ stops, origin }: { stops: ShareStop[]; origin?: { lat: number; lng: number; address: string } | null }) {
   const [selectedStop, setSelectedStop] = useState<ShareStop | null>(null)
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null)
   const mapRef = useRef<google.maps.Map | null>(null)
@@ -20,15 +20,18 @@ export default function ShareRouteMapInner({ stops }: { stops: ShareStop[] }) {
   })
 
   const validStops = stops.filter((s) => s.lat !== 0 && s.lng !== 0)
+  const originKey = origin ? `${origin.lat}:${origin.lng}` : ''
   const routeKey = validStops.map((s) => `${s.id}:${s.lat}:${s.lng}`).join('|')
 
-  // Fit map to all stops whenever stops change
+  // Fit map to all stops + origin whenever they change
   useEffect(() => {
-    if (!mapRef.current || validStops.length === 0) return
+    if (!mapRef.current) return
+    const points = [...validStops.map(s => ({ lat: s.lat, lng: s.lng })), ...(origin ? [{ lat: origin.lat, lng: origin.lng }] : [])]
+    if (points.length === 0) return
     const bounds = new google.maps.LatLngBounds()
-    validStops.forEach((s) => bounds.extend({ lat: s.lat, lng: s.lng }))
+    points.forEach((p) => bounds.extend(p))
     mapRef.current.fitBounds(bounds, 60)
-  }, [routeKey, isLoaded])
+  }, [routeKey, originKey, isLoaded])
 
   // Fetch directions
   useEffect(() => {
@@ -38,16 +41,19 @@ export default function ShareRouteMapInner({ stops }: { stops: ShareStop[] }) {
     }
 
     const service = new google.maps.DirectionsService()
-    const origin = { lat: validStops[0].lat, lng: validStops[0].lng }
+    const routeOrigin = origin
+      ? { lat: origin.lat, lng: origin.lng }
+      : { lat: validStops[0].lat, lng: validStops[0].lng }
     const destination = { lat: validStops[validStops.length - 1].lat, lng: validStops[validStops.length - 1].lng }
-    const waypoints = validStops.slice(1, -1).map((s) => ({
+    const waypointStops = origin ? validStops : validStops.slice(1, -1)
+    const waypoints = waypointStops.map((s) => ({
       location: { lat: s.lat, lng: s.lng },
       stopover: true,
     }))
 
     service.route(
       {
-        origin,
+        origin: routeOrigin,
         destination,
         waypoints,
         optimizeWaypoints: false,
@@ -61,7 +67,7 @@ export default function ShareRouteMapInner({ stops }: { stops: ShareStop[] }) {
         }
       }
     )
-  }, [isLoaded, routeKey])
+  }, [isLoaded, routeKey, originKey])
 
   if (!isLoaded) {
     return (
@@ -85,6 +91,21 @@ export default function ShareRouteMapInner({ stops }: { stops: ShareStop[] }) {
         options={{ gestureHandling: 'greedy', draggableCursor: 'grab', draggingCursor: 'grabbing' }}
         onLoad={(map) => { mapRef.current = map }}
       >
+        {origin && (
+          <Marker
+            position={{ lat: origin.lat, lng: origin.lng }}
+            label={{ text: 'H', color: 'white', fontWeight: 'bold', fontSize: '11px' }}
+            icon={{
+              path: google.maps.SymbolPath.CIRCLE,
+              fillColor: '#0F172A',
+              fillOpacity: 1,
+              strokeWeight: 2,
+              strokeColor: 'white',
+              scale: 14,
+            }}
+            title={origin.address}
+          />
+        )}
         {validStops.map((stop) => (
           <Marker
             key={stop.id}

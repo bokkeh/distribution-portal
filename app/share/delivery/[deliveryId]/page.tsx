@@ -3,8 +3,9 @@ import { deliveries, deliveryStops, drivers, users, customerAccounts } from '@/d
 import { asc, eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { formatDate } from '@/lib/utils'
-import { MapPin, Truck } from 'lucide-react'
+import { Home, MapPin, Truck } from 'lucide-react'
 import ShareRouteMap from '@/components/share/ShareRouteMap'
+import GetDirectionsButton from '@/components/shared/GetDirectionsButton'
 
 export default async function ShareDeliveryPage({
   params,
@@ -20,6 +21,9 @@ export default async function ShareDeliveryPage({
       status: deliveries.status,
       driverName: users.name,
       driverPhone: users.phone,
+      originAddress: deliveries.originAddress,
+      originLat: deliveries.originLat,
+      originLng: deliveries.originLng,
     })
     .from(deliveries)
     .leftJoin(drivers, eq(deliveries.driverId, drivers.id))
@@ -78,6 +82,12 @@ export default async function ShareDeliveryPage({
       .then((rows) => rows.map((r) => ({ ...r, contactName: null, contactPhone: null })))
   }
 
+  const originAddress = delivery.originAddress?.trim() || null
+  const origin =
+    originAddress && delivery.originLat && delivery.originLng
+      ? { address: originAddress, lat: parseFloat(delivery.originLat), lng: parseFloat(delivery.originLng) }
+      : null
+
   const STATUS_COLORS: Record<string, string> = {
     pending: 'bg-blue-500',
     delivered: 'bg-green-500',
@@ -116,14 +126,31 @@ export default async function ShareDeliveryPage({
       <div className="mx-auto max-w-5xl p-4 sm:p-6 space-y-4">
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="h-[420px]">
-            <ShareRouteMap stops={mapStops} />
+            <ShareRouteMap stops={mapStops} origin={origin} />
           </div>
         </div>
 
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-4 py-3">
-            <p className="text-sm font-semibold text-slate-900">{stops.length} Stops</p>
+          <div className="border-b border-slate-100 px-4 py-3 flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-slate-900">{stops.length} Stop{stops.length !== 1 ? 's' : ''}</p>
+            {stops.length > 0 && (
+              <GetDirectionsButton
+                stops={stops.map(s => ({ address: s.address, lat: s.lat ? parseFloat(s.lat) : null, lng: s.lng ? parseFloat(s.lng) : null }))}
+                originAddress={originAddress}
+              />
+            )}
           </div>
+          {originAddress && (
+            <div className="flex items-center gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3">
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-800 text-xs font-bold text-white">H</div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Home Base</p>
+                <p className="flex items-center gap-1 text-sm text-slate-700 mt-0.5">
+                  <Home className="h-3 w-3 shrink-0 text-slate-400" />{originAddress}
+                </p>
+              </div>
+            </div>
+          )}
           <div className="divide-y divide-slate-100">
             {stops.length === 0 ? (
               <p className="px-4 py-8 text-center text-sm text-slate-500">No stops on this delivery.</p>
