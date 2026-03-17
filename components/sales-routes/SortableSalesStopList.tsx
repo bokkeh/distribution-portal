@@ -166,11 +166,18 @@ function DragPreview({ stop }: { stop: Stop }) {
 export default function SortableSalesStopList({
   routeId,
   stops: initialStops,
+  onStopsChange,
 }: {
   routeId: string
   stops: Stop[]
+  onStopsChange?: (stops: Stop[]) => void
 }) {
   const [stops, setStops] = useState(initialStops)
+
+  function applyStops(next: Stop[]) {
+    setStops(next)
+    onStopsChange?.(next)
+  }
   const [activeId, setActiveId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const [isOptimizing, setIsOptimizing] = useState(false)
@@ -196,14 +203,14 @@ export default function SortableSalesStopList({
       sequenceNumber: i + 1,
     }))
     const previousStops = stops
-    setStops(nextStops)
+    applyStops(nextStops)
 
     startTransition(async () => {
       try {
         await reorderSalesRouteStops(routeId, nextStops.map((s) => s.id))
         toast.success('Stop order updated')
       } catch (error) {
-        setStops(previousStops)
+        applyStops(previousStops)
         toast.error('Unable to reorder stops', {
           description: error instanceof Error ? error.message : undefined,
         })
@@ -226,14 +233,14 @@ export default function SortableSalesStopList({
 
     const optimized = nearestNeighborOrder(stops).map((s, i) => ({ ...s, sequenceNumber: i + 1 }))
     const previousStops = stops
-    setStops(optimized)
+    applyStops(optimized)
     setIsOptimizing(true)
 
     try {
       await reorderSalesRouteStops(routeId, optimized.map((s) => s.id))
       toast.success('Route optimized', { description: 'Stops reordered by shortest distance.' })
     } catch (error) {
-      setStops(previousStops)
+      applyStops(previousStops)
       toast.error('Unable to optimize route', {
         description: error instanceof Error ? error.message : undefined,
       })
@@ -248,14 +255,14 @@ export default function SortableSalesStopList({
       .filter((s) => s.id !== stopId)
       .map((s, i) => ({ ...s, sequenceNumber: i + 1 }))
 
-    setStops(nextStops)
+    applyStops(nextStops)
 
     startTransition(async () => {
       try {
         await removeSalesRouteStop(routeId, stopId)
         toast.success('Stop removed')
       } catch (error) {
-        setStops(previousStops)
+        applyStops(previousStops)
         toast.error('Unable to remove stop', {
           description: error instanceof Error ? error.message : undefined,
         })

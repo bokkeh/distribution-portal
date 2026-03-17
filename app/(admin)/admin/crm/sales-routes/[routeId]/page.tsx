@@ -8,8 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { formatDate } from '@/lib/utils'
-import DeliveryMapWrapper from '@/components/deliveries/DeliveryMapWrapper'
-import SortableSalesStopList from '@/components/sales-routes/SortableSalesStopList'
+import SalesRouteMapAndList from '@/components/sales-routes/SalesRouteMapAndList'
 import { addSalesRouteStop, deleteSalesRoute } from '@/actions/sales-routes'
 
 export default async function SalesRouteDetailPage({
@@ -60,19 +59,7 @@ export default async function SalesRouteDetailPage({
     .from(customerAccounts)
     .orderBy(asc(customerAccounts.companyName))
 
-  const mapStops = stops.map((stop) => ({
-    id: stop.id,
-    lat: parseFloat(stop.lat ?? '0'),
-    lng: parseFloat(stop.lng ?? '0'),
-    label: String(stop.sequenceNumber),
-    title: stop.companyName ?? stop.address,
-    address: stop.address,
-    contactName: stop.contactName,
-    contactPhone: stop.contactPhone,
-    status: 'pending' as const,
-  }))
-
-  const listStops = stops.map((stop) => ({
+  const initialStops = stops.map((stop) => ({
     id: stop.id,
     sequenceNumber: stop.sequenceNumber,
     address: stop.address,
@@ -161,26 +148,7 @@ export default async function SalesRouteDetailPage({
         </Card>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="lg:col-span-1">
-          <CardHeader><CardTitle>Route Map</CardTitle></CardHeader>
-          <CardContent className="p-0 h-96 rounded-b-xl overflow-hidden">
-            <DeliveryMapWrapper stops={mapStops} />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>{stops.length} {stops.length === 1 ? 'Stop' : 'Stops'}</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Drag to reorder. The map calculates the fastest route automatically.
-            </p>
-          </CardHeader>
-          <CardContent>
-            <SortableSalesStopList routeId={resolvedParams.routeId} stops={listStops} />
-          </CardContent>
-        </Card>
-      </div>
+      <SalesRouteMapAndList routeId={resolvedParams.routeId} initialStops={initialStops} />
     </div>
   )
 }
