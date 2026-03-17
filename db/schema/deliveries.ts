@@ -15,7 +15,7 @@ export const deliveryStops = pgTable('delivery_stops', {
   id: uuid('id').primaryKey().defaultRandom(),
   deliveryId: uuid('delivery_id').notNull().references(() => deliveries.id, { onDelete: 'cascade' }),
   orderId: uuid('order_id').references(() => orders.id),
-  customerId: uuid('customer_id').notNull().references(() => customerAccounts.id),
+  customerId: uuid('customer_id').references(() => customerAccounts.id),
   sequenceNumber: integer('sequence_number').notNull(),
   address: text('address').notNull(),
   contactName: text('contact_name'),

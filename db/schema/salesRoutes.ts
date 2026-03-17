@@ -12,7 +12,7 @@ export const salesRoutes = pgTable('sales_routes', {
 export const salesRouteStops = pgTable('sales_route_stops', {
   id: uuid('id').primaryKey().defaultRandom(),
   routeId: uuid('route_id').notNull().references(() => salesRoutes.id, { onDelete: 'cascade' }),
-  customerId: uuid('customer_id').notNull().references(() => customerAccounts.id),
+  customerId: uuid('customer_id').references(() => customerAccounts.id),
   sequenceNumber: integer('sequence_number').notNull(),
   address: text('address').notNull(),
   contactName: text('contact_name'),

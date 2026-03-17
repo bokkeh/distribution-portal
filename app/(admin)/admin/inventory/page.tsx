@@ -1,15 +1,40 @@
 import { db } from '@/db'
-import { inventory, inventoryTransactions, products, users } from '@/db/schema'
-import { desc, eq } from 'drizzle-orm'
-import { Card, CardContent } from '@/components/ui/card'
+import { inventory, inventoryTransactions, inventorySampleHolders, products, users } from '@/db/schema'
+import { asc, desc, eq, inArray } from 'drizzle-orm'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency } from '@/lib/utils'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import { AdminInventoryRowActions } from '@/components/inventory/AdminInventoryRowActions'
+import SampleHoldersPanel from '@/components/inventory/SampleHoldersPanel'
 
 export default async function InventoryPage() {
+  // Fetch staff/admin users for the assign dropdown
+  const staffUsers = await db
+    .select({ id: users.id, name: users.name, role: users.role })
+    .from(users)
+    .where(inArray(users.role, ['admin', 'staff']))
+    .orderBy(asc(users.name))
+
+  // Fetch all current sample holders
+  const sampleHolders = await db
+    .select({
+      id: inventorySampleHolders.id,
+      productId: inventorySampleHolders.productId,
+      userId: inventorySampleHolders.userId,
+      quantity: inventorySampleHolders.quantity,
+      notes: inventorySampleHolders.notes,
+      checkedOutAt: inventorySampleHolders.checkedOutAt,
+      productName: products.name,
+      userName: users.name,
+    })
+    .from(inventorySampleHolders)
+    .innerJoin(products, eq(inventorySampleHolders.productId, products.id))
+    .innerJoin(users, eq(inventorySampleHolders.userId, users.id))
+    .orderBy(asc(products.name), asc(users.name))
+
   const items = await db
     .select({
       id: products.id,
@@ -135,6 +160,25 @@ export default async function InventoryPage() {
               </tbody>
             </table>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Sample Holders</CardTitle>
+          <p className="text-sm text-muted-foreground">Track which users currently have sample cases checked out.</p>
+        </CardHeader>
+        <CardContent>
+          <SampleHoldersPanel
+            holders={sampleHolders.map(h => ({ ...h, userId: h.userId! }))}
+            products={items.map(i => ({
+              id: i.productId ?? i.id,
+              name: i.name,
+              sku: i.sku,
+              quantitySample: i.quantitySample ?? 0,
+            }))}
+            staffUsers={staffUsers}
+          />
         </CardContent>
       </Card>
 

@@ -29,6 +29,51 @@ export async function deleteSalesRoute(routeId: string) {
   redirect('/admin/crm/sales-routes')
 }
 
+export async function duplicateSalesRoute(sourceRouteId: string, formData: FormData) {
+  await requireAdminOrStaff()
+
+  const name = (formData.get('name') as string)?.trim()
+  if (!name) throw new Error('Route name is required')
+
+  // Get the source route
+  const [source] = await db
+    .select()
+    .from(salesRoutes)
+    .where(eq(salesRoutes.id, sourceRouteId))
+  if (!source) throw new Error('Route not found')
+
+  // Create the new route
+  const [newRoute] = await db
+    .insert(salesRoutes)
+    .values({ name, description: source.description })
+    .returning({ id: salesRoutes.id })
+
+  // Copy all stops
+  const stops = await db
+    .select()
+    .from(salesRouteStops)
+    .where(eq(salesRouteStops.routeId, sourceRouteId))
+    .orderBy(asc(salesRouteStops.sequenceNumber))
+
+  if (stops.length > 0) {
+    await db.insert(salesRouteStops).values(
+      stops.map((stop) => ({
+        routeId: newRoute.id,
+        customerId: stop.customerId,
+        sequenceNumber: stop.sequenceNumber,
+        address: stop.address,
+        contactName: stop.contactName,
+        contactPhone: stop.contactPhone,
+        lat: stop.lat,
+        lng: stop.lng,
+        notes: stop.notes,
+      }))
+    )
+  }
+
+  redirect(`/admin/crm/sales-routes/${newRoute.id}`)
+}
+
 export async function addSalesRouteStop(routeId: string, formData: FormData) {
   await requireAdminOrStaff()
 
@@ -84,6 +129,51 @@ export async function addSalesRouteStop(routeId: string, formData: FormData) {
     address,
     contactName: account.contactName ?? null,
     contactPhone: account.pocPhone ?? null,
+    lat,
+    lng,
+  })
+
+  redirect(`/admin/crm/sales-routes/${routeId}`)
+}
+
+export async function addManualSalesRouteStop(routeId: string, formData: FormData) {
+  await requireAdminOrStaff()
+
+  const address = (formData.get('address') as string)?.trim()
+  if (!address) {
+    redirect(`/admin/crm/sales-routes/${routeId}?addStop=1&error=Address+is+required`)
+  }
+
+  const contactName = (formData.get('contactName') as string)?.trim() || null
+  const contactPhone = (formData.get('contactPhone') as string)?.trim() || null
+
+  const existingStops = await db
+    .select({ sequenceNumber: salesRouteStops.sequenceNumber })
+    .from(salesRouteStops)
+    .where(eq(salesRouteStops.routeId, routeId))
+
+  const nextSeq =
+    existingStops.length > 0 ? Math.max(...existingStops.map((s) => s.sequenceNumber)) + 1 : 1
+
+  let lat: string | null = null
+  let lng: string | null = null
+  try {
+    const geo = await geocodeAddress(address)
+    if (geo) {
+      lat = String(geo.lat)
+      lng = String(geo.lng)
+    }
+  } catch {
+    // non-fatal
+  }
+
+  await db.insert(salesRouteStops).values({
+    routeId,
+    customerId: null,
+    sequenceNumber: nextSeq,
+    address,
+    contactName,
+    contactPhone,
     lat,
     lng,
   })

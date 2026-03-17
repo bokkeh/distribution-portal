@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { formatDate } from '@/lib/utils'
 import { ArrowLeft, MapPin, Plus, Route } from 'lucide-react'
 import { createSalesRoute, deleteSalesRoute } from '@/actions/sales-routes'
+import RerunRouteButton from '@/components/sales-routes/RerunRouteButton'
 
 export default async function SalesRoutesPage() {
   const routes = await db
@@ -101,7 +102,8 @@ export default async function SalesRoutesPage() {
                       <span>Created {formatDate(route.createdAt)}</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <RerunRouteButton routeId={route.id} defaultName={route.name} />
                     <form action={deleteSalesRoute.bind(null, route.id)}>
                       <Button type="submit" variant="outline" size="sm" className="text-red-600 hover:text-red-700 hover:border-red-300">
                         Delete

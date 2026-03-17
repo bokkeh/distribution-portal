@@ -10,7 +10,8 @@ import DeliveryMapWrapper from '@/components/deliveries/DeliveryMapWrapper'
 import SortableStopList from '@/components/deliveries/SortableStopList'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
-import { addDeliveryStop, reassignDeliveryDriver } from '@/actions/deliveries'
+import { reassignDeliveryDriver } from '@/actions/deliveries'
+import AddDeliveryStopForm from '@/components/deliveries/AddStopForm'
 import { getActivityTimeline } from '@/lib/activity/read'
 import { ActivityTimeline } from '@/components/activity/ActivityTimeline'
 import CopyShareLink from '@/components/share/CopyShareLink'
@@ -207,35 +208,11 @@ export default async function DeliveryDetailPage({
         <Card>
           <CardHeader><CardTitle>Add Stop</CardTitle></CardHeader>
           <CardContent>
-            {addStopError && (
-              <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                {addStopError}
-              </div>
-            )}
-            <form action={addDeliveryStop.bind(null, resolvedParams.deliveryId)} className="space-y-4">
-              <div className="space-y-2">
-                <label htmlFor="customerId" className="text-sm font-medium text-slate-900">Select Account</label>
-                <select
-                  id="customerId"
-                  name="customerId"
-                  required
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                >
-                  <option value="">Select account...</option>
-                  {accounts.map(account => (
-                    <option key={account.id} value={account.id}>
-                      {account.companyName} - {[account.address, account.city, account.state, account.zip].filter(Boolean).join(', ')}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex gap-3">
-                <Button type="submit">Add Stop</Button>
-                <Link href={`/admin/deliveries/${resolvedParams.deliveryId}`}>
-                  <Button type="button" variant="outline">Cancel</Button>
-                </Link>
-              </div>
-            </form>
+            <AddDeliveryStopForm
+              deliveryId={resolvedParams.deliveryId}
+              accounts={accounts}
+              error={addStopError}
+            />
           </CardContent>
         </Card>
       )}

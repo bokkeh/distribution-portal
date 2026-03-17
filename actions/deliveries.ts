@@ -106,7 +106,7 @@ async function insertDeliveryStopWithFallback(
   values: {
     deliveryId: string
     orderId: string | null
-    customerId: string
+    customerId: string | null
     sequenceNumber: number
     address: string
     contactName: string | null
@@ -662,6 +662,77 @@ export async function addDeliveryStop(deliveryId: string, formData: FormData) {
       kind: 'delivery_stop_added',
       title: 'Stop added',
       body: `${account.companyName} was added to the route.`,
+    })
+
+    revalidatePath(`/admin/deliveries/${deliveryId}`)
+    revalidatePath('/driver/deliveries')
+    revalidatePath('/driver/map')
+  } catch (error) {
+    errorMessage = error instanceof Error ? error.message : 'Unable to add stop.'
+  }
+
+  if (errorMessage) {
+    redirect(`/admin/deliveries/${deliveryId}?addStop=1&error=${encodeURIComponent(errorMessage)}`)
+  }
+
+  redirect(`/admin/deliveries/${deliveryId}`)
+}
+
+export async function addManualDeliveryStop(deliveryId: string, formData: FormData) {
+  let errorMessage: string | null = null
+
+  try {
+    await requireAdmin()
+
+    const address = (formData.get('address') as string)?.trim()
+    if (!address) throw new Error('Address is required.')
+
+    const contactName = (formData.get('contactName') as string)?.trim() || null
+    const contactPhone = (formData.get('contactPhone') as string)?.trim() || null
+
+    const [delivery] = await db
+      .select({ id: deliveries.id })
+      .from(deliveries)
+      .where(eq(deliveries.id, deliveryId))
+      .limit(1)
+
+    if (!delivery) throw new Error('Delivery not found.')
+
+    const [latestStop] = await db
+      .select({ sequenceNumber: deliveryStops.sequenceNumber })
+      .from(deliveryStops)
+      .where(eq(deliveryStops.deliveryId, deliveryId))
+      .orderBy(desc(deliveryStops.sequenceNumber))
+      .limit(1)
+
+    let lat: number | null = null
+    let lng: number | null = null
+    try {
+      const coords = await geocodeAddress(address)
+      lat = coords?.lat ?? null
+      lng = coords?.lng ?? null
+    } catch {}
+
+    await insertDeliveryStopWithFallback({
+      deliveryId,
+      orderId: null,
+      customerId: null,
+      sequenceNumber: (latestStop?.sequenceNumber ?? 0) + 1,
+      address,
+      contactName,
+      contactPhone,
+      contactEmail: null,
+      lat: lat?.toFixed(7) ?? null,
+      lng: lng?.toFixed(7) ?? null,
+      status: 'pending',
+    })
+
+    await logActivityEvent({
+      entityType: 'delivery',
+      entityId: deliveryId,
+      kind: 'delivery_stop_added',
+      title: 'Stop added',
+      body: `Manual stop at ${address} was added to the route.`,
     })
 
     revalidatePath(`/admin/deliveries/${deliveryId}`)
