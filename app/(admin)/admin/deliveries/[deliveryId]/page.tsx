@@ -10,12 +10,11 @@ import DeliveryMapWrapper from '@/components/deliveries/DeliveryMapWrapper'
 import SortableStopList from '@/components/deliveries/SortableStopList'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
-import { reassignDeliveryDriver, setDeliveryOrigin } from '@/actions/deliveries'
+import { reassignDeliveryDriver } from '@/actions/deliveries'
 import AddDeliveryStopForm from '@/components/deliveries/AddStopForm'
 import { getActivityTimeline } from '@/lib/activity/read'
 import { ActivityTimeline } from '@/components/activity/ActivityTimeline'
 import CopyShareLink from '@/components/share/CopyShareLink'
-import HombaseForm from '@/components/shared/HombaseForm'
 
 export default async function DeliveryDetailPage({
   params,
@@ -171,8 +170,6 @@ export default async function DeliveryDetailPage({
     },
   ])
 
-  const saveOrigin = setDeliveryOrigin.bind(null, resolvedParams.deliveryId)
-
   return (
     <div className="p-4 sm:p-8 space-y-6">
       <div className="flex items-center gap-4">
@@ -180,9 +177,6 @@ export default async function DeliveryDetailPage({
         <div className="flex-1">
           <h1 className="text-2xl font-bold text-slate-900">Delivery Date {formatDate(delivery.weekStartDate)}</h1>
           <p className="text-muted-foreground mt-1">Driver: {delivery.driverName} - {delivery.driverPhone}</p>
-          <div className="mt-1.5">
-            <HombaseForm currentAddress={delivery.originAddress ?? null} onSave={saveOrigin} />
-          </div>
         </div>
         <CopyShareLink path={`/share/delivery/${resolvedParams.deliveryId}`} />
         <Link href={showAddStop ? `/admin/deliveries/${resolvedParams.deliveryId}` : `/admin/deliveries/${resolvedParams.deliveryId}?addStop=1`}>
@@ -247,7 +241,12 @@ export default async function DeliveryDetailPage({
         <Card>
           <CardHeader><CardTitle>{stops.length} Stops</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            <SortableStopList deliveryId={resolvedParams.deliveryId} stops={stops} mode="admin" />
+            <SortableStopList
+              deliveryId={resolvedParams.deliveryId}
+              stops={stops}
+              mode="admin"
+              originAddress={delivery.originAddress ?? null}
+            />
           </CardContent>
         </Card>
       </div>

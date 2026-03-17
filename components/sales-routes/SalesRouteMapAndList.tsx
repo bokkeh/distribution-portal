@@ -26,13 +26,21 @@ export type RouteOrigin = {
 export default function SalesRouteMapAndList({
   routeId,
   initialStops,
-  origin,
+  origin: initialOrigin,
 }: {
   routeId: string
   initialStops: RouteStop[]
   origin?: RouteOrigin
 }) {
   const [stops, setStops] = useState(initialStops)
+  const [origin, setOrigin] = useState<RouteOrigin>(initialOrigin ?? null)
+
+  function handleOriginChange(address: string | null, lat: number | null, lng: number | null) {
+    if (!address) { setOrigin(null); return }
+    // lat/lng from the HombaseRow are null immediately after save (geocoding happens server-side)
+    // we keep whatever was there before if we don't have new coords yet
+    setOrigin(prev => address === null ? null : { address, lat: lat ?? prev?.lat ?? 0, lng: lng ?? prev?.lng ?? 0 })
+  }
 
   const mapStops = stops.map((stop, index) => ({
     id: stop.id,
@@ -45,7 +53,7 @@ export default function SalesRouteMapAndList({
     contactPhone: stop.contactPhone,
   }))
 
-  const mapOrigin = origin
+  const mapOrigin = origin && origin.lat && origin.lng
     ? { lat: origin.lat, lng: origin.lng, title: 'Starting Location', address: origin.address }
     : null
 
@@ -65,12 +73,14 @@ export default function SalesRouteMapAndList({
             Drag to reorder. The map updates live as you change the order.
           </p>
         </CardHeader>
-        <CardContent className="max-h-[32rem] overflow-y-auto">
+        <CardContent className="max-h-[36rem] overflow-y-auto">
           <SortableSalesStopList
             routeId={routeId}
             stops={stops}
             onStopsChange={setStops}
             origin={origin ? { lat: origin.lat, lng: origin.lng } : null}
+            originAddress={origin?.address ?? null}
+            onOriginChange={handleOriginChange}
           />
         </CardContent>
       </Card>

@@ -271,30 +271,33 @@ export async function optimizeSalesRouteOrder(
   const geocoded = stops.filter((s) => s.lat !== 0 && s.lng !== 0)
   const ungeocodable = stops.filter((s) => s.lat === 0 && s.lng === 0)
 
-  // Need at least 1 geocoded stop (plus origin) or 2 stops to optimize
-  if (geocoded.length < (origin ? 1 : 2)) return { orderedIds: stops.map((s) => s.id) }
+  if (geocoded.length < 2) return { orderedIds: stops.map((s) => s.id) }
+
+  // The departure point — explicit homebase or the first stop
+  const startPoint = origin ?? { lat: geocoded[0].lat, lng: geocoded[0].lng }
+
+  // Stops that need ordering — when no homebase the first stop is pinned as the start
+  const stopsToOrder = origin ? geocoded : geocoded.slice(1)
+  const pinnedFirst = origin ? null : geocoded[0]
+
+  let orderedWaypoints = stopsToOrder
 
   const apiKey = process.env.GOOGLE_MAPS_API_KEY
-  let optimizedGeocoded = geocoded
 
-  if (apiKey && geocoded.length >= 1) {
+  // Google Directions API: optimize:true supports up to 25 waypoints on paid tier
+  if (apiKey && stopsToOrder.length >= 1 && stopsToOrder.length <= 25) {
     try {
-      // If origin is set, use it as fixed departure; all stops become waypoints + last stop is destination
-      const routeOrigin = origin
-        ? `${origin.lat},${origin.lng}`
-        : `${geocoded[0].lat},${geocoded[0].lng}`
-      const destination = `${geocoded[geocoded.length - 1].lat},${geocoded[geocoded.length - 1].lng}`
-      const middle = origin ? geocoded.slice(0, -1) : geocoded.slice(1, -1)
+      const startStr = `${startPoint.lat},${startPoint.lng}`
 
       const url = new URL('https://maps.googleapis.com/maps/api/directions/json')
-      url.searchParams.set('origin', routeOrigin)
-      url.searchParams.set('destination', destination)
-      if (middle.length > 0) {
-        url.searchParams.set(
-          'waypoints',
-          `optimize:true|${middle.map((s) => `${s.lat},${s.lng}`).join('|')}`
-        )
-      }
+      url.searchParams.set('origin', startStr)
+      // Use the same start point as destination — this makes the API treat every
+      // stop as a free waypoint and finds the true optimal visiting order
+      url.searchParams.set('destination', startStr)
+      url.searchParams.set(
+        'waypoints',
+        `optimize:true|${stopsToOrder.map((s) => `${s.lat},${s.lng}`).join('|')}`
+      )
       url.searchParams.set('key', apiKey)
 
       const res = await fetch(url.toString())
@@ -302,30 +305,26 @@ export async function optimizeSalesRouteOrder(
 
       if (data.status === 'OK' && data.routes?.[0]) {
         const waypointOrder: number[] = data.routes[0].waypoint_order ?? []
-        optimizedGeocoded = [
-          geocoded[0],
-          ...waypointOrder.map((i) => middle[i]),
-          geocoded[geocoded.length - 1],
-        ]
+        if (waypointOrder.length === stopsToOrder.length) {
+          orderedWaypoints = waypointOrder.map((i) => stopsToOrder[i])
+        }
       }
     } catch {
-      // Fallback to nearest-neighbor below
+      // fall through to nearest-neighbor
     }
   }
 
-  // Fallback nearest-neighbor if API unavailable
-  if (optimizedGeocoded === geocoded && apiKey) {
-    // API returned same — already optimal, use as-is
-  } else if (!apiKey) {
-    // No API key: use nearest-neighbor
-    const visited = new Set<string>([geocoded[0].id])
-    const result = [geocoded[0]]
-    while (result.length < geocoded.length) {
-      const cur = result[result.length - 1]
-      let nearest = geocoded.find((s) => !visited.has(s.id))!
+  // Nearest-neighbor fallback — runs whenever the API didn't produce a result
+  if (orderedWaypoints === stopsToOrder) {
+    const remaining = [...stopsToOrder]
+    const result: typeof stopsToOrder = []
+    let cur = startPoint
+
+    while (remaining.length > 0) {
+      let nearestIdx = 0
       let nearestDist = Infinity
-      for (const s of geocoded) {
-        if (visited.has(s.id)) continue
+      for (let i = 0; i < remaining.length; i++) {
+        const s = remaining[i]
         const dLat = ((s.lat - cur.lat) * Math.PI) / 180
         const dLng = ((s.lng - cur.lng) * Math.PI) / 180
         const a =
@@ -336,14 +335,19 @@ export async function optimizeSalesRouteOrder(
         const d = 2 * 6371 * Math.asin(Math.sqrt(a))
         if (d < nearestDist) {
           nearestDist = d
-          nearest = s
+          nearestIdx = i
         }
       }
-      result.push(nearest)
-      visited.add(nearest.id)
+      result.push(remaining[nearestIdx])
+      cur = remaining[nearestIdx]
+      remaining.splice(nearestIdx, 1)
     }
-    optimizedGeocoded = result
+    orderedWaypoints = result
   }
+
+  const optimizedGeocoded = pinnedFirst
+    ? [pinnedFirst, ...orderedWaypoints]
+    : orderedWaypoints
 
   const orderedIds = [
     ...optimizedGeocoded.map((s) => s.id),

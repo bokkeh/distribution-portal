@@ -5,13 +5,13 @@ import { DndContext, DragOverlay, PointerSensor, closestCenter, useSensor, useSe
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { toast } from 'sonner'
-import { reorderDeliveryStops, removeDeliveryStop, updateDeliveryStop } from '@/actions/deliveries'
+import { reorderDeliveryStops, removeDeliveryStop, updateDeliveryStop, setDeliveryOrigin } from '@/actions/deliveries'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { DriverStopActions } from '@/components/deliveries/DriverStopCard'
 import { formatDate } from '@/lib/utils'
-import { CheckCircle, Check, Clock, GripVertical, MapPin, Pencil, X, XCircle } from 'lucide-react'
+import { CheckCircle, Check, Clock, GripVertical, Home, MapPin, Pencil, X, XCircle } from 'lucide-react'
 
 type Stop = {
   id: string
@@ -186,6 +186,76 @@ function SortableStopCard({
   )
 }
 
+function HombaseRow({
+  deliveryId,
+  currentAddress,
+}: {
+  deliveryId: string
+  currentAddress: string | null
+}) {
+  const [editing, setEditing] = useState(!currentAddress)
+  const [value, setValue] = useState(currentAddress ?? '')
+  const [isPending, startTransition] = useTransition()
+
+  function handleSave() {
+    startTransition(async () => {
+      const formData = new FormData()
+      formData.append('originAddress', value.trim())
+      const result = await setDeliveryOrigin(deliveryId, formData)
+      if (result && 'error' in result && result.error) {
+        toast.error(result.error as string)
+        return
+      }
+      toast.success(value.trim() ? 'Starting location saved' : 'Starting location cleared')
+      setEditing(false)
+    })
+  }
+
+  return (
+    <div className="rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 p-2.5 sm:p-3">
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 text-slate-400"><Home className="w-4 h-4" /></div>
+        <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-slate-800 text-xs font-bold text-white">H</div>
+        {editing ? (
+          <div className="flex-1 flex items-center gap-2">
+            <Input
+              autoFocus
+              value={value}
+              onChange={e => setValue(e.target.value)}
+              placeholder="Enter starting address (warehouse, depot, etc.)"
+              className="h-8 text-sm flex-1"
+              onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') { setEditing(false); setValue(currentAddress ?? '') } }}
+            />
+            <Button size="sm" onClick={handleSave} disabled={isPending}>
+              <Check className="w-3.5 h-3.5 mr-1" />{isPending ? 'Saving...' : 'Save'}
+            </Button>
+            {currentAddress && (
+              <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setValue(currentAddress) }} disabled={isPending}>
+                <X className="w-3.5 h-3.5" />
+              </Button>
+            )}
+          </div>
+        ) : (
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-slate-700">Starting Location</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{currentAddress}</p>
+          </div>
+        )}
+        {!editing && (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            title="Edit starting location"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function DragPreview({ stop }: { stop: Stop }) {
   return (
     <div className="w-full max-w-xl rounded-lg border bg-white p-3 shadow-xl">
@@ -207,10 +277,12 @@ export default function SortableStopList({
   deliveryId,
   stops: initialStops,
   mode,
+  originAddress,
 }: {
   deliveryId: string
   stops: Stop[]
   mode: 'admin' | 'driver'
+  originAddress?: string | null
 }) {
   const [stops, setStops] = useState(initialStops)
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -280,27 +352,32 @@ export default function SortableStopList({
   }
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <SortableContext items={stops.map(stop => stop.id)} strategy={verticalListSortingStrategy}>
-        <div className="space-y-2 sm:space-y-3">
-          {stops.map((stop, index) => (
-            <SortableStopCard
-              key={stop.id}
-              stop={stop}
-              index={index}
-              mode={mode}
-              deliveryId={deliveryId}
-              onRemove={handleRemove}
-              onUpdate={handleUpdate}
-              isRemoving={isPending}
-            />
-          ))}
-        </div>
-      </SortableContext>
+    <div className="space-y-2 sm:space-y-3">
+      {mode === 'admin' && (
+        <HombaseRow deliveryId={deliveryId} currentAddress={originAddress ?? null} />
+      )}
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+        <SortableContext items={stops.map(stop => stop.id)} strategy={verticalListSortingStrategy}>
+          <div className="space-y-2 sm:space-y-3">
+            {stops.map((stop, index) => (
+              <SortableStopCard
+                key={stop.id}
+                stop={stop}
+                index={index}
+                mode={mode}
+                deliveryId={deliveryId}
+                onRemove={handleRemove}
+                onUpdate={handleUpdate}
+                isRemoving={isPending}
+              />
+            ))}
+          </div>
+        </SortableContext>
 
-      <DragOverlay>
-        {activeStop ? <DragPreview stop={activeStop} /> : null}
-      </DragOverlay>
-    </DndContext>
+        <DragOverlay>
+          {activeStop ? <DragPreview stop={activeStop} /> : null}
+        </DragOverlay>
+      </DndContext>
+    </div>
   )
 }
