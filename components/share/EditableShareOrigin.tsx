@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { Check, Home, Pencil, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,6 +16,7 @@ export default function EditableShareOrigin({
   address: string | null
   onSave: (formData: FormData) => Promise<{ success?: boolean; error?: string }>
 }) {
+  const router = useRouter()
   const [editing, setEditing] = useState(!address)
   const [value, setValue] = useState(address ?? '')
   const [isPending, startTransition] = useTransition()
@@ -30,6 +32,7 @@ export default function EditableShareOrigin({
       }
       toast.success(value.trim() ? 'Home base updated' : 'Home base cleared')
       setEditing(false)
+      router.refresh()
     })
   }
 
