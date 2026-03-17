@@ -21,6 +21,20 @@ interface Origin {
   address: string
 }
 
+function haversineMiles(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+  const toRadians = (degrees: number) => degrees * (Math.PI / 180)
+  const earthRadiusMiles = 3958.8
+  const dLat = toRadians(b.lat - a.lat)
+  const dLng = toRadians(b.lng - a.lng)
+  const lat1 = toRadians(a.lat)
+  const lat2 = toRadians(b.lat)
+
+  const sinLat = Math.sin(dLat / 2)
+  const sinLng = Math.sin(dLng / 2)
+  const h = sinLat * sinLat + Math.cos(lat1) * Math.cos(lat2) * sinLng * sinLng
+  return 2 * earthRadiusMiles * Math.asin(Math.sqrt(h))
+}
+
 export default function SalesRouteMapInner({
   stops,
   origin,
@@ -42,6 +56,8 @@ export default function SalesRouteMapInner({
   const originPoint = origin && origin.lat !== 0 && origin.lng !== 0 ? origin : null
   const routeKey = validStops.map((s) => `${s.id}:${s.lat}:${s.lng}`).join('|')
   const originKey = originPoint ? `${originPoint.lat}:${originPoint.lng}` : ''
+  const totalPointCount = validStops.length + (originPoint ? 1 : 0)
+  const exceedsDirectionsWaypointLimit = totalPointCount > 25
 
   // Auto-fit bounds whenever stops change
   useEffect(() => {
@@ -56,11 +72,38 @@ export default function SalesRouteMapInner({
     mapRef.current.fitBounds(bounds, 60)
   }, [routeKey, originKey, isLoaded])
 
+  const totalDurationSeconds =
+    directions?.routes[0]?.legs?.reduce((sum, leg) => sum + (leg.duration?.value ?? 0), 0) ?? 0
+  const durationStops = originPoint
+    ? [{ lat: originPoint.lat, lng: originPoint.lng }, ...validStops.map((stop) => ({ lat: stop.lat, lng: stop.lng }))]
+    : validStops.map((stop) => ({ lat: stop.lat, lng: stop.lng }))
+  const fallbackDurationSeconds =
+    durationStops.length > 1
+      ? durationStops.slice(1).reduce((sum, stop, index) => sum + ((haversineMiles(durationStops[index], stop) / 30) * 3600), 0)
+      : 0
+  const durationSeconds = totalDurationSeconds || fallbackDurationSeconds
+  const estimatedTravelTime =
+    totalDurationSeconds > 0
+      ? durationSeconds >= 3600
+        ? `${Math.floor(durationSeconds / 3600)}h ${Math.round((durationSeconds % 3600) / 60)}m`
+        : `${Math.round(durationSeconds / 60)} min`
+      : fallbackDurationSeconds > 0
+        ? `~${Math.round(fallbackDurationSeconds / 60)} min`
+        : null
+
+  useEffect(() => {
+    onEstimateChange?.(estimatedTravelTime)
+  }, [estimatedTravelTime, onEstimateChange])
+
   // Fetch directions in the order stops are given — no waypoint reordering
   useEffect(() => {
     if (!isLoaded || (validStops.length < 2 && (!originPoint || validStops.length < 1))) {
       setDirections(null)
-      onEstimateChange?.(null)
+      return
+    }
+
+    if (exceedsDirectionsWaypointLimit) {
+      setDirections(null)
       return
     }
 
@@ -89,26 +132,12 @@ export default function SalesRouteMapInner({
       (result, status) => {
         if (status === google.maps.DirectionsStatus.OK && result) {
           setDirections(result)
-          const totalSecs = result.routes[0]?.legs?.reduce(
-            (sum, leg) => sum + (leg.duration?.value ?? 0),
-            0
-          ) ?? 0
-          if (totalSecs > 0) {
-            const estimate =
-              totalSecs >= 3600
-                ? `${Math.floor(totalSecs / 3600)}h ${Math.round((totalSecs % 3600) / 60)}m`
-                : `${Math.round(totalSecs / 60)} min`
-            onEstimateChange?.(estimate)
-          } else {
-            onEstimateChange?.(null)
-          }
         } else {
           setDirections(null)
-          onEstimateChange?.(null)
         }
       }
     )
-  }, [isLoaded, routeKey, originKey])
+  }, [exceedsDirectionsWaypointLimit, isLoaded, routeKey, originKey])
 
   if (!isLoaded) {
     return (
