@@ -417,6 +417,39 @@ export async function updateStopNotes(stopId: string, formData: FormData) {
   revalidatePath('/driver/map')
 }
 
+export async function updateDeliveryStop(
+  deliveryId: string,
+  stopId: string,
+  data: { address: string; contactName: string | null; contactPhone: string | null; notes: string | null }
+) {
+  await requireAdmin()
+
+  let lat: number | null = null
+  let lng: number | null = null
+  try {
+    const coords = await geocodeAddress(data.address)
+    lat = coords?.lat ?? null
+    lng = coords?.lng ?? null
+  } catch { /* non-fatal */ }
+
+  await db
+    .update(deliveryStops)
+    .set({
+      address: data.address,
+      contactName: data.contactName,
+      contactPhone: data.contactPhone,
+      notes: data.notes,
+      lat: lat?.toFixed(7) ?? null,
+      lng: lng?.toFixed(7) ?? null,
+    })
+    .where(and(eq(deliveryStops.id, stopId), eq(deliveryStops.deliveryId, deliveryId)))
+
+  revalidatePath(`/admin/deliveries/${deliveryId}`)
+  revalidatePath('/driver/deliveries')
+  revalidatePath('/driver/map')
+  return { success: true }
+}
+
 export async function removeDeliveryStop(deliveryId: string, stopId: string) {
   await requireAdmin()
 
@@ -747,6 +780,30 @@ export async function addManualDeliveryStop(deliveryId: string, formData: FormDa
   }
 
   redirect(`/admin/deliveries/${deliveryId}`)
+}
+
+export async function setDeliveryOrigin(deliveryId: string, formData: FormData) {
+  await requireAdminOrStaff()
+
+  const address = (formData.get('originAddress') as string)?.trim()
+  if (!address) {
+    await db.update(deliveries).set({ originAddress: null, originLat: null, originLng: null }).where(eq(deliveries.id, deliveryId))
+    revalidatePath(`/admin/deliveries/${deliveryId}`)
+    return { success: true }
+  }
+
+  let lat: string | null = null
+  let lng: string | null = null
+  try {
+    const geo = await geocodeAddress(address)
+    if (geo) { lat = String(geo.lat); lng = String(geo.lng) }
+  } catch { /* non-fatal */ }
+
+  if (!lat || !lng) return { error: 'Could not geocode that address. Try a more specific address.' }
+
+  await db.update(deliveries).set({ originAddress: address, originLat: lat, originLng: lng }).where(eq(deliveries.id, deliveryId))
+  revalidatePath(`/admin/deliveries/${deliveryId}`)
+  return { success: true }
 }
 
 export async function deleteDelivery(deliveryId: string) {

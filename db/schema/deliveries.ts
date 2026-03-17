@@ -8,6 +8,9 @@ export const deliveries = pgTable('deliveries', {
   weekStartDate: date('week_start_date').notNull(),
   driverId: uuid('driver_id').notNull().references(() => drivers.id),
   status: text('status', { enum: ['scheduled', 'in_progress', 'completed', 'cancelled'] }).notNull().default('scheduled'),
+  originAddress: text('origin_address'),
+  originLat: numeric('origin_lat', { precision: 10, scale: 7 }),
+  originLng: numeric('origin_lng', { precision: 10, scale: 7 }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

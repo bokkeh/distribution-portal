@@ -14,11 +14,20 @@ export interface SalesStop {
   contactPhone?: string | null
 }
 
+interface Origin {
+  lat: number
+  lng: number
+  title: string
+  address: string
+}
+
 export default function SalesRouteMapInner({
   stops,
+  origin,
   onEstimateChange,
 }: {
   stops: SalesStop[]
+  origin?: Origin | null
   onEstimateChange?: (estimate: string | null) => void
 }) {
   const [selectedStop, setSelectedStop] = useState<SalesStop | null>(null)
@@ -30,38 +39,48 @@ export default function SalesRouteMapInner({
   })
 
   const validStops = stops.filter((s) => s.lat !== 0 && s.lng !== 0)
+  const originPoint = origin && origin.lat !== 0 && origin.lng !== 0 ? origin : null
   const routeKey = validStops.map((s) => `${s.id}:${s.lat}:${s.lng}`).join('|')
+  const originKey = originPoint ? `${originPoint.lat}:${originPoint.lng}` : ''
 
   // Auto-fit bounds whenever stops change
   useEffect(() => {
-    if (!mapRef.current || validStops.length === 0 || !isLoaded) return
+    if (!mapRef.current || !isLoaded) return
+    const allPoints = [
+      ...(originPoint ? [{ lat: originPoint.lat, lng: originPoint.lng }] : []),
+      ...validStops.map((s) => ({ lat: s.lat, lng: s.lng })),
+    ]
+    if (allPoints.length === 0) return
     const bounds = new google.maps.LatLngBounds()
-    validStops.forEach((s) => bounds.extend({ lat: s.lat, lng: s.lng }))
+    allPoints.forEach((p) => bounds.extend(p))
     mapRef.current.fitBounds(bounds, 60)
-  }, [routeKey, isLoaded])
+  }, [routeKey, originKey, isLoaded])
 
   // Fetch directions in the order stops are given — no waypoint reordering
   useEffect(() => {
-    if (!isLoaded || validStops.length < 2) {
+    if (!isLoaded || (validStops.length < 2 && (!originPoint || validStops.length < 1))) {
       setDirections(null)
       onEstimateChange?.(null)
       return
     }
 
     const service = new google.maps.DirectionsService()
-    const origin = { lat: validStops[0].lat, lng: validStops[0].lng }
+    const routeOrigin = originPoint
+      ? { lat: originPoint.lat, lng: originPoint.lng }
+      : { lat: validStops[0].lat, lng: validStops[0].lng }
     const destination = {
       lat: validStops[validStops.length - 1].lat,
       lng: validStops[validStops.length - 1].lng,
     }
-    const waypoints = validStops.slice(1, -1).map((s) => ({
+    const middleStops = originPoint ? validStops.slice(0, -1) : validStops.slice(1, -1)
+    const waypoints = middleStops.map((s) => ({
       location: { lat: s.lat, lng: s.lng },
       stopover: true,
     }))
 
     service.route(
       {
-        origin,
+        origin: routeOrigin,
         destination,
         waypoints,
         optimizeWaypoints: false, // order is set by "Generate Best Route"
@@ -89,7 +108,7 @@ export default function SalesRouteMapInner({
         }
       }
     )
-  }, [isLoaded, routeKey])
+  }, [isLoaded, routeKey, originKey])
 
   if (!isLoaded) {
     return (
@@ -99,20 +118,25 @@ export default function SalesRouteMapInner({
     )
   }
 
-  const fallbackPath = validStops.map((s) => ({ lat: s.lat, lng: s.lng }))
+  const fallbackPath = [
+    ...(originPoint ? [{ lat: originPoint.lat, lng: originPoint.lng }] : []),
+    ...validStops.map((s) => ({ lat: s.lat, lng: s.lng })),
+  ]
   const directionsPath =
     directions?.routes[0]?.overview_path?.map((p) => ({ lat: p.lat(), lng: p.lng() })) ?? []
   const renderedPath = directionsPath.length > 1 ? directionsPath : fallbackPath
+
+  const defaultCenter = originPoint
+    ? { lat: originPoint.lat, lng: originPoint.lng }
+    : validStops[0]
+      ? { lat: validStops[0].lat, lng: validStops[0].lng }
+      : { lat: 29.7604, lng: -95.3698 }
 
   return (
     <div className="relative h-full w-full">
       <GoogleMap
         mapContainerStyle={{ width: '100%', height: '100%' }}
-        center={
-          validStops[0]
-            ? { lat: validStops[0].lat, lng: validStops[0].lng }
-            : { lat: 29.7604, lng: -95.3698 }
-        }
+        center={defaultCenter}
         zoom={11}
         options={{
           gestureHandling: 'greedy',
@@ -123,6 +147,21 @@ export default function SalesRouteMapInner({
           mapRef.current = map
         }}
       >
+        {originPoint && (
+          <Marker
+            position={{ lat: originPoint.lat, lng: originPoint.lng }}
+            label={{ text: 'H', color: 'white', fontWeight: 'bold', fontSize: '12px' }}
+            icon={{
+              path: google.maps.SymbolPath.CIRCLE,
+              fillColor: '#0F172A',
+              fillOpacity: 1,
+              strokeWeight: 2,
+              strokeColor: 'white',
+              scale: 18,
+            }}
+          />
+        )}
+
         {validStops.map((stop) => (
           <Marker
             key={stop.id}

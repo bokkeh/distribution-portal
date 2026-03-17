@@ -4,6 +4,38 @@ import { db } from '@/db'
 import { notificationsLog } from '@/db/schema'
 import { requireAdminOrStaff } from '@/lib/auth/session'
 import { sendSms } from '@/lib/telnyx/client'
+import { Resend } from 'resend'
+
+const resend = new Resend(process.env.RESEND_API_KEY ?? 're_placeholder')
+
+export async function sendQuickEmail(
+  to: string,
+  recipientName: string,
+  subject: string,
+  body: string
+) {
+  const session = await requireAdminOrStaff()
+  if (!to || !subject.trim() || !body.trim()) return { error: 'To, subject, and message are required.' }
+
+  const fromDomain = process.env.RESEND_FROM_EMAIL ?? 'noreply@ahawc.com'
+  const html = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px">
+    <p style="margin-bottom:16px">${body.replace(/\n/g, '<br/>')}</p>
+    <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0"/>
+    <p style="font-size:12px;color:#94a3b8">Sent via AHAWC Distribution Portal</p>
+  </div>`
+
+  try {
+    await resend.emails.send({
+      from: fromDomain,
+      to,
+      subject,
+      html,
+    })
+    return { success: true }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Failed to send email.' }
+  }
+}
 
 export async function sendDirectSms(to: string, recipientName: string, body: string) {
   const session = await requireAdminOrStaff()

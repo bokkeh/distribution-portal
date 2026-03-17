@@ -87,6 +87,8 @@ export async function POST(req: NextRequest) {
     providerMessageId,
   })
 
+  const alertPhone = process.env.ADMIN_NOTIFICATION_PHONE
+
   await Promise.all([
     createNotificationsForRoles({
       roles: ['admin'],
@@ -102,6 +104,13 @@ export async function POST(req: NextRequest) {
       body: `New SMS reply from ${phoneNormalized}.`,
       href: '/staff/inbox',
     }),
+    alertPhone
+      ? sendSms({
+          to: alertPhone,
+          body: `New text from ${phoneNormalized}: ${text ? text.slice(0, 160) : '[image]'}`,
+          bypassOptOut: true,
+        }).catch(() => {})
+      : Promise.resolve(),
   ])
 
   if (keyword === 'stop') {

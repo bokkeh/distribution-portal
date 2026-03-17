@@ -1,13 +1,13 @@
 import { db } from '@/db'
 import { users } from '@/db/schema'
 import { eq } from 'drizzle-orm'
-import { requireAdmin } from '@/lib/auth/session'
+import { requireAdminOrStaff } from '@/lib/auth/session'
 import { SimpleProfileForm } from '@/components/profile/SimpleProfileForm'
 import { notFound } from 'next/navigation'
 import { getUserPreferences } from '@/lib/preferences/read'
 
 export default async function AdminProfilePage() {
-  const session = await requireAdmin()
+  const session = await requireAdminOrStaff()
   let user:
     | { id: string; name: string; email: string; phone: string | null; avatarUrl: string | null; address: string | null; city: string | null; state: string | null; zip: string | null }
     | undefined

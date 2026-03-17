@@ -13,7 +13,14 @@ const SalesRouteMapInner = dynamic(() => import('./SalesRouteMapInner'), {
   ),
 })
 
-export default function SalesRouteMapWrapper({ stops }: { stops: SalesStop[] }) {
+interface Origin {
+  lat: number
+  lng: number
+  title: string
+  address: string
+}
+
+export default function SalesRouteMapWrapper({ stops, origin }: { stops: SalesStop[]; origin?: Origin | null }) {
   const [estimate, setEstimate] = useState<string | null>(null)
 
   return (
@@ -27,7 +34,7 @@ export default function SalesRouteMapWrapper({ stops }: { stops: SalesStop[] }) 
         </p>
       </div>
       <div className="min-h-0 flex-1">
-        <SalesRouteMapInner stops={stops} onEstimateChange={setEstimate} />
+        <SalesRouteMapInner stops={stops} origin={origin} onEstimateChange={setEstimate} />
       </div>
     </div>
   )

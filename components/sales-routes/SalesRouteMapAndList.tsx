@@ -17,12 +17,20 @@ export type RouteStop = {
   lng: number | null
 }
 
+export type RouteOrigin = {
+  address: string
+  lat: number
+  lng: number
+} | null
+
 export default function SalesRouteMapAndList({
   routeId,
   initialStops,
+  origin,
 }: {
   routeId: string
   initialStops: RouteStop[]
+  origin?: RouteOrigin
 }) {
   const [stops, setStops] = useState(initialStops)
 
@@ -37,12 +45,16 @@ export default function SalesRouteMapAndList({
     contactPhone: stop.contactPhone,
   }))
 
+  const mapOrigin = origin
+    ? { lat: origin.lat, lng: origin.lng, title: 'Starting Location', address: origin.address }
+    : null
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <Card className="lg:col-span-1">
         <CardHeader><CardTitle>Route Map</CardTitle></CardHeader>
         <CardContent className="p-0 h-96 rounded-b-xl overflow-hidden">
-          <SalesRouteMapWrapper stops={mapStops} />
+          <SalesRouteMapWrapper stops={mapStops} origin={mapOrigin} />
         </CardContent>
       </Card>
 
@@ -58,6 +70,7 @@ export default function SalesRouteMapAndList({
             routeId={routeId}
             stops={stops}
             onStopsChange={setStops}
+            origin={origin ? { lat: origin.lat, lng: origin.lng } : null}
           />
         </CardContent>
       </Card>

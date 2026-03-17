@@ -5,12 +5,13 @@ import { DndContext, DragOverlay, PointerSensor, closestCenter, useSensor, useSe
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { toast } from 'sonner'
-import { reorderDeliveryStops, removeDeliveryStop } from '@/actions/deliveries'
+import { reorderDeliveryStops, removeDeliveryStop, updateDeliveryStop } from '@/actions/deliveries'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { DriverStopActions } from '@/components/deliveries/DriverStopCard'
 import { formatDate } from '@/lib/utils'
-import { CheckCircle, Clock, GripVertical, MapPin, XCircle } from 'lucide-react'
+import { CheckCircle, Check, Clock, GripVertical, MapPin, Pencil, X, XCircle } from 'lucide-react'
 
 type Stop = {
   id: string
@@ -55,6 +56,7 @@ function SortableStopCard({
   mode,
   deliveryId,
   onRemove,
+  onUpdate,
   isRemoving,
 }: {
   stop: Stop
@@ -62,13 +64,39 @@ function SortableStopCard({
   mode: 'admin' | 'driver'
   deliveryId: string
   onRemove: (stopId: string) => void
+  onUpdate: (stopId: string, data: Partial<Stop>) => void
   isRemoving: boolean
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stop.id })
+  const [editing, setEditing] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [address, setAddress] = useState(stop.address)
+  const [contactName, setContactName] = useState(stop.contactName ?? '')
+  const [contactPhone, setContactPhone] = useState(stop.contactPhone ?? '')
+  const [notes, setNotes] = useState(stop.notes ?? '')
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
+  const style = { transform: CSS.Transform.toString(transform), transition }
+
+  async function handleSave() {
+    if (!address.trim()) return
+    setIsSaving(true)
+    try {
+      const result = await updateDeliveryStop(deliveryId, stop.id, {
+        address: address.trim(),
+        contactName: contactName.trim() || null,
+        contactPhone: contactPhone.trim() || null,
+        notes: notes.trim() || null,
+      })
+      if (result?.success) {
+        onUpdate(stop.id, { address: address.trim(), contactName: contactName.trim() || null, contactPhone: contactPhone.trim() || null, notes: notes.trim() || null })
+        setEditing(false)
+        toast.success('Stop updated')
+      }
+    } catch {
+      toast.error('Failed to update stop')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (
@@ -90,41 +118,64 @@ function SortableStopCard({
         <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
           {index + 1}
         </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-medium leading-tight">{stop.companyName}</p>
-            {mode === 'driver' ? <StopStatusBadge status={stop.status} /> : null}
+
+        {editing && mode === 'admin' ? (
+          <div className="flex-1 space-y-2">
+            <Input value={address} onChange={e => setAddress(e.target.value)} placeholder="Address" className="h-8 text-sm" />
+            <div className="grid grid-cols-2 gap-2">
+              <Input value={contactName} onChange={e => setContactName(e.target.value)} placeholder="Contact name" className="h-8 text-sm" />
+              <Input value={contactPhone} onChange={e => setContactPhone(e.target.value)} placeholder="Contact phone" className="h-8 text-sm" />
+            </div>
+            <Input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Notes (optional)" className="h-8 text-sm" />
+            <div className="flex gap-2">
+              <Button size="sm" onClick={handleSave} disabled={isSaving || !address.trim()}>
+                <Check className="w-3.5 h-3.5 mr-1" />{isSaving ? 'Saving...' : 'Save'}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setEditing(false)} disabled={isSaving}>
+                <X className="w-3.5 h-3.5 mr-1" />Cancel
+              </Button>
+            </div>
           </div>
-          <p className="mt-0.5 flex items-start gap-1 text-xs text-muted-foreground">
-            <MapPin className="h-3 w-3" />{stop.address}
-          </p>
-          {(stop.contactName || stop.contactPhone || stop.contactEmail) && (
-            <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-              {stop.contactName && <p>POC: {stop.contactName}</p>}
-              {stop.contactPhone && <p>Phone: {stop.contactPhone}</p>}
-              {stop.contactEmail && <p>Email: {stop.contactEmail}</p>}
+        ) : (
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-medium leading-tight">{stop.companyName ?? stop.address}</p>
+              {mode === 'driver' ? <StopStatusBadge status={stop.status} /> : null}
             </div>
-          )}
-          {mode === 'admin' && stop.completedAt && (
-            <p className="mt-1 text-xs text-muted-foreground">Completed {formatDate(stop.completedAt)}</p>
-          )}
-          {mode === 'driver' && (
-            <div className="mt-3">
-              <DriverStopActions
-                stop={{
-                  id: stop.id,
-                  status: stop.status,
-                  notes: stop.notes,
-                  proofOfDeliveryUrl: stop.proofOfDeliveryUrl,
-                  shelfPhotoUrl: stop.shelfPhotoUrl,
-                }}
-              />
-            </div>
-          )}
-        </div>
-        {mode === 'admin' && (
-          <div className="flex items-start gap-2">
+            {stop.companyName && (
+              <p className="mt-0.5 flex items-start gap-1 text-xs text-muted-foreground">
+                <MapPin className="h-3 w-3" />{stop.address}
+              </p>
+            )}
+            {(stop.contactName || stop.contactPhone || stop.contactEmail) && (
+              <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                {stop.contactName && <p>POC: {stop.contactName}</p>}
+                {stop.contactPhone && <p>Phone: {stop.contactPhone}</p>}
+                {stop.contactEmail && <p>Email: {stop.contactEmail}</p>}
+              </div>
+            )}
+            {mode === 'admin' && stop.completedAt && (
+              <p className="mt-1 text-xs text-muted-foreground">Completed {formatDate(stop.completedAt)}</p>
+            )}
+            {mode === 'driver' && (
+              <div className="mt-3">
+                <DriverStopActions stop={{ id: stop.id, status: stop.status, notes: stop.notes, proofOfDeliveryUrl: stop.proofOfDeliveryUrl, shelfPhotoUrl: stop.shelfPhotoUrl }} />
+              </div>
+            )}
+          </div>
+        )}
+
+        {mode === 'admin' && !editing && (
+          <div className="flex items-start gap-1">
             <StopStatusIcon status={stop.status} />
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+              title="Edit stop"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
             <Button type="button" variant="outline" size="sm" disabled={isRemoving} onClick={() => onRemove(stop.id)}>
               Remove
             </Button>
@@ -200,6 +251,10 @@ export default function SortableStopList({
     })
   }
 
+  function handleUpdate(stopId: string, data: Partial<Stop>) {
+    setStops(prev => prev.map(s => s.id === stopId ? { ...s, ...data } : s))
+  }
+
   function handleRemove(stopId: string) {
     if (mode !== 'admin') return
 
@@ -236,6 +291,7 @@ export default function SortableStopList({
               mode={mode}
               deliveryId={deliveryId}
               onRemove={handleRemove}
+              onUpdate={handleUpdate}
               isRemoving={isPending}
             />
           ))}

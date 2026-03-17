@@ -55,28 +55,75 @@ export async function syncToHubSpot(accountId: string) {
   revalidatePath(`/staff/crm/${accountId}`)
 }
 
+function revalidateContactPaths(customerId: string) {
+  revalidatePath(`/admin/crm/${customerId}`)
+  revalidatePath(`/admin/crm/${customerId}/contacts`)
+  revalidatePath(`/staff/crm/${customerId}`)
+  revalidatePath(`/staff/crm/${customerId}/contacts`)
+}
+
 export async function addContact(formData: FormData) {
   await requireAdminOrStaff()
 
   const customerId = formData.get('customerId') as string
   const name = formData.get('name') as string
-  const email = formData.get('email') as string | null
-  const phone = formData.get('phone') as string | null
-  const title = formData.get('title') as string | null
+  const email = (formData.get('email') as string)?.trim() || null
+  const phone = (formData.get('phone') as string)?.trim() || null
+  const phoneType = (formData.get('phoneType') as string) || null
+  const preferredContact = (formData.get('preferredContact') as string) || null
+  const title = (formData.get('title') as string)?.trim() || null
   const isPrimary = formData.get('isPrimary') === 'on'
 
   await db.insert(contacts).values({
     customerId, name,
-    email: email || null,
-    phone: phone || null,
-    title: title || null,
+    email,
+    phone,
+    phoneType: phoneType as 'mobile' | 'landline' | 'voip' | 'other' | null,
+    preferredContact: preferredContact as 'email' | 'sms' | 'call' | null,
+    title,
     isPrimary,
   })
 
-  revalidatePath(`/admin/crm/${customerId}`)
-  revalidatePath(`/admin/crm/${customerId}/contacts`)
-  revalidatePath(`/staff/crm/${customerId}`)
-  revalidatePath(`/staff/crm/${customerId}/contacts`)
+  revalidateContactPaths(customerId)
+}
+
+export async function updateContact(contactId: string, formData: FormData) {
+  await requireAdminOrStaff()
+
+  const name = (formData.get('name') as string)?.trim()
+  const email = (formData.get('email') as string)?.trim() || null
+  const phone = (formData.get('phone') as string)?.trim() || null
+  const phoneType = (formData.get('phoneType') as string) || null
+  const preferredContact = (formData.get('preferredContact') as string) || null
+  const title = (formData.get('title') as string)?.trim() || null
+  const isPrimary = formData.get('isPrimary') === 'on'
+
+  const [contact] = await db.select({ customerId: contacts.customerId }).from(contacts).where(eq(contacts.id, contactId))
+  if (!contact) return { error: 'Contact not found' }
+
+  await db.update(contacts).set({
+    name,
+    email,
+    phone,
+    phoneType: phoneType as 'mobile' | 'landline' | 'voip' | 'other' | null,
+    preferredContact: preferredContact as 'email' | 'sms' | 'call' | null,
+    title,
+    isPrimary,
+  }).where(eq(contacts.id, contactId))
+
+  revalidateContactPaths(contact.customerId)
+  return { success: true }
+}
+
+export async function deleteContact(contactId: string) {
+  await requireAdminOrStaff()
+
+  const [contact] = await db.select({ customerId: contacts.customerId }).from(contacts).where(eq(contacts.id, contactId))
+  if (!contact) return { error: 'Contact not found' }
+
+  await db.delete(contacts).where(eq(contacts.id, contactId))
+  revalidateContactPaths(contact.customerId)
+  return { success: true }
 }
 
 export async function importHubSpotCompany(hubspotCompanyId: string) {

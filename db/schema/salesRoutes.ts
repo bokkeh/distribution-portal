@@ -6,6 +6,9 @@ export const salesRoutes = pgTable('sales_routes', {
   name: text('name').notNull(),
   description: text('description'),
   status: text('status', { enum: ['active', 'archived'] }).notNull().default('active'),
+  originAddress: text('origin_address'),
+  originLat: numeric('origin_lat', { precision: 10, scale: 7 }),
+  originLng: numeric('origin_lng', { precision: 10, scale: 7 }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

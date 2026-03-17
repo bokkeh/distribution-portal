@@ -136,6 +136,28 @@ export async function addSalesRouteStop(routeId: string, formData: FormData) {
   redirect(`/admin/crm/sales-routes/${routeId}`)
 }
 
+export async function updateSalesRouteStop(
+  routeId: string,
+  stopId: string,
+  data: { address: string; contactName: string | null; contactPhone: string | null; notes: string | null }
+) {
+  await requireAdminOrStaff()
+
+  let lat: string | null = null
+  let lng: string | null = null
+  try {
+    const geo = await geocodeAddress(data.address)
+    if (geo) { lat = String(geo.lat); lng = String(geo.lng) }
+  } catch { /* non-fatal */ }
+
+  await db
+    .update(salesRouteStops)
+    .set({ address: data.address, contactName: data.contactName, contactPhone: data.contactPhone, notes: data.notes, lat, lng })
+    .where(and(eq(salesRouteStops.id, stopId), eq(salesRouteStops.routeId, routeId)))
+
+  return { success: true }
+}
+
 export async function addManualSalesRouteStop(routeId: string, formData: FormData) {
   await requireAdminOrStaff()
 
@@ -217,29 +239,55 @@ export async function reorderSalesRouteStops(routeId: string, orderedIds: string
   return { success: true }
 }
 
+export async function setRouteOrigin(routeId: string, formData: FormData) {
+  await requireAdminOrStaff()
+
+  const address = (formData.get('originAddress') as string)?.trim()
+  if (!address) {
+    await db.update(salesRoutes).set({ originAddress: null, originLat: null, originLng: null }).where(eq(salesRoutes.id, routeId))
+    return { success: true }
+  }
+
+  let lat: string | null = null
+  let lng: string | null = null
+  try {
+    const geo = await geocodeAddress(address)
+    if (geo) { lat = String(geo.lat); lng = String(geo.lng) }
+  } catch { /* non-fatal */ }
+
+  if (!lat || !lng) return { error: 'Could not geocode that address. Try a more specific address.' }
+
+  await db.update(salesRoutes).set({ originAddress: address, originLat: lat, originLng: lng }).where(eq(salesRoutes.id, routeId))
+  return { success: true }
+}
+
 export async function optimizeSalesRouteOrder(
   routeId: string,
-  stops: Array<{ id: string; lat: number; lng: number }>
+  stops: Array<{ id: string; lat: number; lng: number }>,
+  origin?: { lat: number; lng: number } | null
 ): Promise<{ orderedIds: string[] }> {
   await requireAdminOrStaff()
 
   const geocoded = stops.filter((s) => s.lat !== 0 && s.lng !== 0)
   const ungeocodable = stops.filter((s) => s.lat === 0 && s.lng === 0)
 
-  // Need at least 2 geocoded stops to optimize
-  if (geocoded.length < 2) return { orderedIds: stops.map((s) => s.id) }
+  // Need at least 1 geocoded stop (plus origin) or 2 stops to optimize
+  if (geocoded.length < (origin ? 1 : 2)) return { orderedIds: stops.map((s) => s.id) }
 
   const apiKey = process.env.GOOGLE_MAPS_API_KEY
   let optimizedGeocoded = geocoded
 
-  if (apiKey && geocoded.length >= 2) {
+  if (apiKey && geocoded.length >= 1) {
     try {
-      const origin = `${geocoded[0].lat},${geocoded[0].lng}`
+      // If origin is set, use it as fixed departure; all stops become waypoints + last stop is destination
+      const routeOrigin = origin
+        ? `${origin.lat},${origin.lng}`
+        : `${geocoded[0].lat},${geocoded[0].lng}`
       const destination = `${geocoded[geocoded.length - 1].lat},${geocoded[geocoded.length - 1].lng}`
-      const middle = geocoded.slice(1, -1)
+      const middle = origin ? geocoded.slice(0, -1) : geocoded.slice(1, -1)
 
       const url = new URL('https://maps.googleapis.com/maps/api/directions/json')
-      url.searchParams.set('origin', origin)
+      url.searchParams.set('origin', routeOrigin)
       url.searchParams.set('destination', destination)
       if (middle.length > 0) {
         url.searchParams.set(

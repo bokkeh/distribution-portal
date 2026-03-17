@@ -7,6 +7,8 @@ export const contacts = pgTable('contacts', {
   name: text('name').notNull(),
   email: text('email'),
   phone: text('phone'),
+  phoneType: text('phone_type', { enum: ['mobile', 'landline', 'voip', 'other'] }),
+  preferredContact: text('preferred_contact', { enum: ['email', 'sms', 'call'] }),
   title: text('title'),
   isPrimary: boolean('is_primary').notNull().default(false),
   hubspotContactId: text('hubspot_contact_id'),

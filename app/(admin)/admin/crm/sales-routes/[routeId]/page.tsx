@@ -11,8 +11,9 @@ import { formatDate } from '@/lib/utils'
 import SalesRouteMapAndList from '@/components/sales-routes/SalesRouteMapAndList'
 import CopyShareLink from '@/components/share/CopyShareLink'
 import RerunRouteButton from '@/components/sales-routes/RerunRouteButton'
-import { deleteSalesRoute } from '@/actions/sales-routes'
+import { deleteSalesRoute, setRouteOrigin } from '@/actions/sales-routes'
 import AddSalesRouteStopForm from '@/components/sales-routes/AddStopForm'
+import HombaseForm from '@/components/shared/HombaseForm'
 
 export default async function SalesRouteDetailPage({
   params,
@@ -74,6 +75,17 @@ export default async function SalesRouteDetailPage({
     lng: stop.lng ? parseFloat(stop.lng) : null,
   }))
 
+  const origin =
+    route.originAddress && route.originLat && route.originLng
+      ? {
+          address: route.originAddress,
+          lat: parseFloat(route.originLat),
+          lng: parseFloat(route.originLng),
+        }
+      : null
+
+  const saveOrigin = setRouteOrigin.bind(null, resolvedParams.routeId)
+
   return (
     <div className="p-4 sm:p-8 space-y-6">
       <div className="flex flex-wrap items-center gap-4">
@@ -86,6 +98,9 @@ export default async function SalesRouteDetailPage({
             <p className="text-muted-foreground mt-1">{route.description}</p>
           )}
           <p className="text-xs text-muted-foreground mt-0.5">Created {formatDate(route.createdAt)}</p>
+          <div className="mt-1.5">
+            <HombaseForm currentAddress={route.originAddress ?? null} onSave={saveOrigin} />
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <RerunRouteButton routeId={resolvedParams.routeId} defaultName={route.name} />
@@ -121,7 +136,7 @@ export default async function SalesRouteDetailPage({
         </Card>
       )}
 
-      <SalesRouteMapAndList routeId={resolvedParams.routeId} initialStops={initialStops} />
+      <SalesRouteMapAndList routeId={resolvedParams.routeId} initialStops={initialStops} origin={origin} />
     </div>
   )
 }

@@ -14,9 +14,10 @@ import {
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { toast } from 'sonner'
-import { reorderSalesRouteStops, removeSalesRouteStop, optimizeSalesRouteOrder } from '@/actions/sales-routes'
+import { reorderSalesRouteStops, removeSalesRouteStop, optimizeSalesRouteOrder, updateSalesRouteStop } from '@/actions/sales-routes'
 import { Button } from '@/components/ui/button'
-import { GripVertical, MapPin, Sparkles } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { GripVertical, MapPin, Sparkles, Pencil, X, Check } from 'lucide-react'
 
 type Stop = {
   id: string
@@ -36,19 +37,46 @@ function SortableStopCard({
   index,
   routeId,
   onRemove,
+  onUpdate,
   isRemoving,
 }: {
   stop: Stop
   index: number
   routeId: string
   onRemove: (stopId: string) => void
+  onUpdate: (stopId: string, data: Partial<Stop>) => void
   isRemoving: boolean
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stop.id })
+  const [editing, setEditing] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [address, setAddress] = useState(stop.address)
+  const [contactName, setContactName] = useState(stop.contactName ?? '')
+  const [contactPhone, setContactPhone] = useState(stop.contactPhone ?? '')
+  const [notes, setNotes] = useState(stop.notes ?? '')
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
+  const style = { transform: CSS.Transform.toString(transform), transition }
+
+  async function handleSave() {
+    if (!address.trim()) return
+    setIsSaving(true)
+    try {
+      const result = await updateSalesRouteStop(routeId, stop.id, {
+        address: address.trim(),
+        contactName: contactName.trim() || null,
+        contactPhone: contactPhone.trim() || null,
+        notes: notes.trim() || null,
+      })
+      if (result?.success) {
+        onUpdate(stop.id, { address: address.trim(), contactName: contactName.trim() || null, contactPhone: contactPhone.trim() || null, notes: notes.trim() || null })
+        setEditing(false)
+        toast.success('Stop updated')
+      }
+    } catch {
+      toast.error('Failed to update stop')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (
@@ -70,31 +98,57 @@ function SortableStopCard({
         <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-violet-600 text-xs font-bold text-white">
           {index + 1}
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium leading-tight">{stop.companyName}</p>
-          <p className="mt-0.5 flex items-start gap-1 text-xs text-muted-foreground">
-            <MapPin className="h-3 w-3 shrink-0 mt-0.5" />
-            {stop.address}
-          </p>
-          {(stop.contactName || stop.contactPhone) && (
-            <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">
-              {stop.contactName && <p>POC: {stop.contactName}</p>}
-              {stop.contactPhone && <p>Phone: {stop.contactPhone}</p>}
+
+        {editing ? (
+          <div className="flex-1 space-y-2">
+            <Input value={address} onChange={e => setAddress(e.target.value)} placeholder="Address" className="h-8 text-sm" />
+            <div className="grid grid-cols-2 gap-2">
+              <Input value={contactName} onChange={e => setContactName(e.target.value)} placeholder="Contact name" className="h-8 text-sm" />
+              <Input value={contactPhone} onChange={e => setContactPhone(e.target.value)} placeholder="Contact phone" className="h-8 text-sm" />
             </div>
-          )}
-          {stop.notes && (
-            <p className="mt-1.5 text-xs text-slate-500 italic">{stop.notes}</p>
-          )}
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={isRemoving}
-          onClick={() => onRemove(stop.id)}
-        >
-          Remove
-        </Button>
+            <Input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Notes (optional)" className="h-8 text-sm" />
+            <div className="flex gap-2">
+              <Button size="sm" onClick={handleSave} disabled={isSaving || !address.trim()}>
+                <Check className="w-3.5 h-3.5 mr-1" />{isSaving ? 'Saving...' : 'Save'}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setEditing(false)} disabled={isSaving}>
+                <X className="w-3.5 h-3.5 mr-1" />Cancel
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium leading-tight">{stop.companyName ?? stop.address}</p>
+            {stop.companyName && (
+              <p className="mt-0.5 flex items-start gap-1 text-xs text-muted-foreground">
+                <MapPin className="h-3 w-3 shrink-0 mt-0.5" />{stop.address}
+              </p>
+            )}
+            {(stop.contactName || stop.contactPhone) && (
+              <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+                {stop.contactName && <p>POC: {stop.contactName}</p>}
+                {stop.contactPhone && <p>Phone: {stop.contactPhone}</p>}
+              </div>
+            )}
+            {stop.notes && <p className="mt-1 text-xs text-slate-500 italic">{stop.notes}</p>}
+          </div>
+        )}
+
+        {!editing && (
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+              title="Edit stop"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+            <Button type="button" variant="outline" size="sm" disabled={isRemoving} onClick={() => onRemove(stop.id)}>
+              Remove
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -121,10 +175,12 @@ export default function SortableSalesStopList({
   routeId,
   stops: initialStops,
   onStopsChange,
+  origin,
 }: {
   routeId: string
   stops: Stop[]
   onStopsChange?: (stops: Stop[]) => void
+  origin?: { lat: number; lng: number } | null
 }) {
   const [stops, setStops] = useState(initialStops)
 
@@ -190,7 +246,7 @@ export default function SortableSalesStopList({
 
     try {
       const stopCoords = stops.map((s) => ({ id: s.id, lat: s.lat ?? 0, lng: s.lng ?? 0 }))
-      const { orderedIds } = await optimizeSalesRouteOrder(routeId, stopCoords)
+      const { orderedIds } = await optimizeSalesRouteOrder(routeId, stopCoords, origin ?? null)
 
       const idToStop = new Map(stops.map((s) => [s.id, s]))
       const optimized = orderedIds
@@ -207,6 +263,10 @@ export default function SortableSalesStopList({
     } finally {
       setIsOptimizing(false)
     }
+  }
+
+  function handleUpdate(stopId: string, data: Partial<Stop>) {
+    applyStops(stops.map(s => s.id === stopId ? { ...s, ...data } : s))
   }
 
   function handleRemove(stopId: string) {
@@ -267,6 +327,7 @@ export default function SortableSalesStopList({
               index={index}
               routeId={routeId}
               onRemove={handleRemove}
+              onUpdate={handleUpdate}
               isRemoving={isPending}
             />
           ))}

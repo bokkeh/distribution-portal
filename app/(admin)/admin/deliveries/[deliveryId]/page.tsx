@@ -10,11 +10,12 @@ import DeliveryMapWrapper from '@/components/deliveries/DeliveryMapWrapper'
 import SortableStopList from '@/components/deliveries/SortableStopList'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
-import { reassignDeliveryDriver } from '@/actions/deliveries'
+import { reassignDeliveryDriver, setDeliveryOrigin } from '@/actions/deliveries'
 import AddDeliveryStopForm from '@/components/deliveries/AddStopForm'
 import { getActivityTimeline } from '@/lib/activity/read'
 import { ActivityTimeline } from '@/components/activity/ActivityTimeline'
 import CopyShareLink from '@/components/share/CopyShareLink'
+import HombaseForm from '@/components/shared/HombaseForm'
 
 export default async function DeliveryDetailPage({
   params,
@@ -37,6 +38,9 @@ export default async function DeliveryDetailPage({
       driverId: deliveries.driverId,
       driverName: users.name,
       driverPhone: users.phone,
+      originAddress: deliveries.originAddress,
+      originLat: deliveries.originLat,
+      originLng: deliveries.originLng,
     })
     .from(deliveries)
     .leftJoin(drivers, eq(deliveries.driverId, drivers.id))
@@ -146,6 +150,16 @@ export default async function DeliveryDetailPage({
     status: stop.status,
   }))
 
+  const origin =
+    delivery.originAddress && delivery.originLat && delivery.originLng
+      ? {
+          address: delivery.originAddress,
+          lat: parseFloat(delivery.originLat),
+          lng: parseFloat(delivery.originLng),
+          title: 'Starting Location',
+        }
+      : null
+
   const timeline = await getActivityTimeline('delivery', delivery.id, [
     {
       id: `delivery-created-${delivery.id}`,
@@ -157,6 +171,8 @@ export default async function DeliveryDetailPage({
     },
   ])
 
+  const saveOrigin = setDeliveryOrigin.bind(null, resolvedParams.deliveryId)
+
   return (
     <div className="p-4 sm:p-8 space-y-6">
       <div className="flex items-center gap-4">
@@ -164,6 +180,9 @@ export default async function DeliveryDetailPage({
         <div className="flex-1">
           <h1 className="text-2xl font-bold text-slate-900">Delivery Date {formatDate(delivery.weekStartDate)}</h1>
           <p className="text-muted-foreground mt-1">Driver: {delivery.driverName} - {delivery.driverPhone}</p>
+          <div className="mt-1.5">
+            <HombaseForm currentAddress={delivery.originAddress ?? null} onSave={saveOrigin} />
+          </div>
         </div>
         <CopyShareLink path={`/share/delivery/${resolvedParams.deliveryId}`} />
         <Link href={showAddStop ? `/admin/deliveries/${resolvedParams.deliveryId}` : `/admin/deliveries/${resolvedParams.deliveryId}?addStop=1`}>
@@ -221,7 +240,7 @@ export default async function DeliveryDetailPage({
         <Card className="lg:col-span-1">
           <CardHeader><CardTitle>Route Map</CardTitle></CardHeader>
           <CardContent className="p-0 h-96 rounded-b-xl overflow-hidden">
-            <DeliveryMapWrapper stops={mapStops} />
+            <DeliveryMapWrapper stops={mapStops} origin={origin} />
           </CardContent>
         </Card>
 
