@@ -83,7 +83,7 @@ export default function SampleHoldersPanel({
   function handleReturn(holderId: string, userName: string) {
     startTransition(async () => {
       const result = await returnSamplesFromUser(holderId)
-      if (result?.error) {
+      if (!result?.success) {
         toast.error('Failed to return samples')
         return
       }

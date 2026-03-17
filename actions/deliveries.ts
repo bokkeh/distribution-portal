@@ -335,7 +335,7 @@ export async function completeDeliveryStop(stopId: string, formData: FormData) {
 
   const notificationPhone = stop.contactPhone || stop.accountPhone
   const notificationEmail = stop.contactEmail || stop.businessEmail || stop.accountEmail
-  const accountPrefs = await getAccountPreferences(stop.customerId, null).catch(() => null)
+  const accountPrefs = stop.customerId ? await getAccountPreferences(stop.customerId, null).catch(() => null) : null
   const deliveryTimeZone = accountPrefs?.timeZone ?? 'America/New_York'
   const deliveryDate = formatDateInTimeZone(new Date(), deliveryTimeZone)
   const prefersSms = stop.notificationPreference === 'sms' || stop.notificationPreference === 'both'
