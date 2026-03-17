@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { formatDate } from '@/lib/utils'
 import SalesRouteMapAndList from '@/components/sales-routes/SalesRouteMapAndList'
+import CopyShareLink from '@/components/share/CopyShareLink'
 import { addSalesRouteStop, deleteSalesRoute } from '@/actions/sales-routes'
 
 export default async function SalesRouteDetailPage({
@@ -85,6 +86,7 @@ export default async function SalesRouteDetailPage({
           <p className="text-xs text-muted-foreground mt-0.5">Created {formatDate(route.createdAt)}</p>
         </div>
         <div className="flex items-center gap-2">
+          <CopyShareLink path={`/share/sales-route/${resolvedParams.routeId}`} />
           <form action={deleteSalesRoute.bind(null, route.id)}>
             <Button type="submit" variant="outline" className="text-red-600 hover:text-red-700 hover:border-red-300">
               Delete Route

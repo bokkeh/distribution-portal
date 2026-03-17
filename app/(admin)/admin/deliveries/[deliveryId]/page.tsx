@@ -13,6 +13,7 @@ import { ArrowLeft } from 'lucide-react'
 import { addDeliveryStop, reassignDeliveryDriver } from '@/actions/deliveries'
 import { getActivityTimeline } from '@/lib/activity/read'
 import { ActivityTimeline } from '@/components/activity/ActivityTimeline'
+import CopyShareLink from '@/components/share/CopyShareLink'
 
 export default async function DeliveryDetailPage({
   params,
@@ -163,6 +164,7 @@ export default async function DeliveryDetailPage({
           <h1 className="text-2xl font-bold text-slate-900">Delivery Date {formatDate(delivery.weekStartDate)}</h1>
           <p className="text-muted-foreground mt-1">Driver: {delivery.driverName} - {delivery.driverPhone}</p>
         </div>
+        <CopyShareLink path={`/share/delivery/${resolvedParams.deliveryId}`} />
         <Link href={showAddStop ? `/admin/deliveries/${resolvedParams.deliveryId}` : `/admin/deliveries/${resolvedParams.deliveryId}?addStop=1`}>
           <Button variant="outline">Add Stop</Button>
         </Link>

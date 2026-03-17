@@ -1,18 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import dynamic from 'next/dynamic'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import SortableSalesStopList from './SortableSalesStopList'
-
-const DeliveryMapWrapper = dynamic(() => import('@/components/deliveries/DeliveryMapWrapper'), {
-  ssr: false,
-  loading: () => (
-    <div className="w-full h-full flex items-center justify-center bg-slate-100">
-      <p className="text-sm text-muted-foreground">Loading map...</p>
-    </div>
-  ),
-})
+import SalesRouteMapWrapper from './SalesRouteMapWrapper'
 
 export type RouteStop = {
   id: string
@@ -44,7 +35,6 @@ export default function SalesRouteMapAndList({
     address: stop.address,
     contactName: stop.contactName,
     contactPhone: stop.contactPhone,
-    status: 'pending' as const,
   }))
 
   return (
@@ -52,7 +42,7 @@ export default function SalesRouteMapAndList({
       <Card className="lg:col-span-1">
         <CardHeader><CardTitle>Route Map</CardTitle></CardHeader>
         <CardContent className="p-0 h-96 rounded-b-xl overflow-hidden">
-          <DeliveryMapWrapper stops={mapStops} />
+          <SalesRouteMapWrapper stops={mapStops} />
         </CardContent>
       </Card>
 

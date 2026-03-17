@@ -7,6 +7,11 @@ export default auth((req) => {
   const role = session?.user?.role
   const roles = session?.user?.roles ?? (role ? [role] : [])
 
+  // Always-public routes (no redirect even when logged in)
+  if (pathname.startsWith('/share')) {
+    return NextResponse.next()
+  }
+
   // Public routes
   if (pathname === '/login' || pathname === '/' || pathname === '/privacy' || pathname === '/terms') {
     if (session) {

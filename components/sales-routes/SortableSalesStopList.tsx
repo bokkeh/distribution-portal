@@ -14,7 +14,7 @@ import {
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { toast } from 'sonner'
-import { reorderSalesRouteStops, removeSalesRouteStop } from '@/actions/sales-routes'
+import { reorderSalesRouteStops, removeSalesRouteStop, optimizeSalesRouteOrder } from '@/actions/sales-routes'
 import { Button } from '@/components/ui/button'
 import { GripVertical, MapPin, Sparkles } from 'lucide-react'
 
@@ -30,52 +30,6 @@ type Stop = {
   lng: number | null
 }
 
-function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
-  const R = 6371
-  const dLat = ((b.lat - a.lat) * Math.PI) / 180
-  const dLng = ((b.lng - a.lng) * Math.PI) / 180
-  const sinLat = Math.sin(dLat / 2)
-  const sinLng = Math.sin(dLng / 2)
-  const h =
-    sinLat * sinLat +
-    Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * sinLng * sinLng
-  return 2 * R * Math.asin(Math.sqrt(h))
-}
-
-function nearestNeighborOrder(stops: Stop[]): Stop[] {
-  const geocoded = stops.filter((s) => s.lat !== null && s.lng !== null)
-  const ungeocodable = stops.filter((s) => s.lat === null || s.lng === null)
-  if (geocoded.length < 2) return stops
-
-  const visited = new Set<string>()
-  const result: Stop[] = [geocoded[0]]
-  visited.add(geocoded[0].id)
-
-  while (result.length < geocoded.length) {
-    const current = result[result.length - 1]
-    let nearestStop: Stop | null = null
-    let nearestDist = Infinity
-
-    for (const stop of geocoded) {
-      if (visited.has(stop.id)) continue
-      const d = haversineKm(
-        { lat: current.lat!, lng: current.lng! },
-        { lat: stop.lat!, lng: stop.lng! }
-      )
-      if (d < nearestDist) {
-        nearestDist = d
-        nearestStop = stop
-      }
-    }
-
-    if (nearestStop) {
-      result.push(nearestStop)
-      visited.add(nearestStop.id)
-    }
-  }
-
-  return [...result, ...ungeocodable]
-}
 
 function SortableStopCard({
   stop,
@@ -223,22 +177,28 @@ export default function SortableSalesStopList({
       toast.info('Add at least 2 stops to optimize the route.')
       return
     }
-    const geocoded = stops.filter((s) => s.lat !== null && s.lng !== null)
-    if (geocoded.length < 2) {
+    const geocodedCount = stops.filter((s) => s.lat !== null && s.lng !== null).length
+    if (geocodedCount < 2) {
       toast.error('Not enough geocoded stops', {
         description: 'Most stops are missing coordinates. Try removing and re-adding them.',
       })
       return
     }
 
-    const optimized = nearestNeighborOrder(stops).map((s, i) => ({ ...s, sequenceNumber: i + 1 }))
-    const previousStops = stops
-    applyStops(optimized)
     setIsOptimizing(true)
+    const previousStops = stops
 
     try {
-      await reorderSalesRouteStops(routeId, optimized.map((s) => s.id))
-      toast.success('Route optimized', { description: 'Stops reordered by shortest distance.' })
+      const stopCoords = stops.map((s) => ({ id: s.id, lat: s.lat ?? 0, lng: s.lng ?? 0 }))
+      const { orderedIds } = await optimizeSalesRouteOrder(routeId, stopCoords)
+
+      const idToStop = new Map(stops.map((s) => [s.id, s]))
+      const optimized = orderedIds
+        .map((id, i) => idToStop.get(id) ? { ...idToStop.get(id)!, sequenceNumber: i + 1 } : null)
+        .filter((s): s is Stop => s !== null)
+
+      applyStops(optimized)
+      toast.success('Best route calculated', { description: 'Stops reordered for fastest driving time.' })
     } catch (error) {
       applyStops(previousStops)
       toast.error('Unable to optimize route', {

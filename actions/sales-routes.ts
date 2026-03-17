@@ -126,3 +126,99 @@ export async function reorderSalesRouteStops(routeId: string, orderedIds: string
 
   return { success: true }
 }
+
+export async function optimizeSalesRouteOrder(
+  routeId: string,
+  stops: Array<{ id: string; lat: number; lng: number }>
+): Promise<{ orderedIds: string[] }> {
+  await requireAdminOrStaff()
+
+  const geocoded = stops.filter((s) => s.lat !== 0 && s.lng !== 0)
+  const ungeocodable = stops.filter((s) => s.lat === 0 && s.lng === 0)
+
+  // Need at least 2 geocoded stops to optimize
+  if (geocoded.length < 2) return { orderedIds: stops.map((s) => s.id) }
+
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY
+  let optimizedGeocoded = geocoded
+
+  if (apiKey && geocoded.length >= 2) {
+    try {
+      const origin = `${geocoded[0].lat},${geocoded[0].lng}`
+      const destination = `${geocoded[geocoded.length - 1].lat},${geocoded[geocoded.length - 1].lng}`
+      const middle = geocoded.slice(1, -1)
+
+      const url = new URL('https://maps.googleapis.com/maps/api/directions/json')
+      url.searchParams.set('origin', origin)
+      url.searchParams.set('destination', destination)
+      if (middle.length > 0) {
+        url.searchParams.set(
+          'waypoints',
+          `optimize:true|${middle.map((s) => `${s.lat},${s.lng}`).join('|')}`
+        )
+      }
+      url.searchParams.set('key', apiKey)
+
+      const res = await fetch(url.toString())
+      const data = await res.json()
+
+      if (data.status === 'OK' && data.routes?.[0]) {
+        const waypointOrder: number[] = data.routes[0].waypoint_order ?? []
+        optimizedGeocoded = [
+          geocoded[0],
+          ...waypointOrder.map((i) => middle[i]),
+          geocoded[geocoded.length - 1],
+        ]
+      }
+    } catch {
+      // Fallback to nearest-neighbor below
+    }
+  }
+
+  // Fallback nearest-neighbor if API unavailable
+  if (optimizedGeocoded === geocoded && apiKey) {
+    // API returned same — already optimal, use as-is
+  } else if (!apiKey) {
+    // No API key: use nearest-neighbor
+    const visited = new Set<string>([geocoded[0].id])
+    const result = [geocoded[0]]
+    while (result.length < geocoded.length) {
+      const cur = result[result.length - 1]
+      let nearest = geocoded.find((s) => !visited.has(s.id))!
+      let nearestDist = Infinity
+      for (const s of geocoded) {
+        if (visited.has(s.id)) continue
+        const dLat = ((s.lat - cur.lat) * Math.PI) / 180
+        const dLng = ((s.lng - cur.lng) * Math.PI) / 180
+        const a =
+          Math.sin(dLat / 2) ** 2 +
+          Math.cos((cur.lat * Math.PI) / 180) *
+            Math.cos((s.lat * Math.PI) / 180) *
+            Math.sin(dLng / 2) ** 2
+        const d = 2 * 6371 * Math.asin(Math.sqrt(a))
+        if (d < nearestDist) {
+          nearestDist = d
+          nearest = s
+        }
+      }
+      result.push(nearest)
+      visited.add(nearest.id)
+    }
+    optimizedGeocoded = result
+  }
+
+  const orderedIds = [
+    ...optimizedGeocoded.map((s) => s.id),
+    ...ungeocodable.map((s) => s.id),
+  ]
+
+  // Persist
+  for (let i = 0; i < orderedIds.length; i++) {
+    await db
+      .update(salesRouteStops)
+      .set({ sequenceNumber: i + 1 })
+      .where(and(eq(salesRouteStops.id, orderedIds[i]), eq(salesRouteStops.routeId, routeId)))
+  }
+
+  return { orderedIds }
+}
