@@ -3,9 +3,12 @@ import { deliveries, deliveryStops, drivers, users, customerAccounts } from '@/d
 import { asc, eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { formatDate } from '@/lib/utils'
-import { Home, MapPin, Truck } from 'lucide-react'
+import { MapPin, Truck } from 'lucide-react'
 import ShareRouteMap from '@/components/share/ShareRouteMap'
 import GetDirectionsButton from '@/components/shared/GetDirectionsButton'
+import EditableShareOrigin from '@/components/share/EditableShareOrigin'
+import EditableShareStopNotes from '@/components/share/EditableShareStopNotes'
+import { updateSharedDeliveryOrigin, updateSharedDeliveryStopNotes } from '@/actions/share'
 
 export default async function ShareDeliveryPage({
   params,
@@ -140,17 +143,10 @@ export default async function ShareDeliveryPage({
               />
             )}
           </div>
-          {originAddress && (
-            <div className="flex items-center gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3">
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-800 text-xs font-bold text-white">H</div>
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Home Base</p>
-                <p className="flex items-center gap-1 text-sm text-slate-700 mt-0.5">
-                  <Home className="h-3 w-3 shrink-0 text-slate-400" />{originAddress}
-                </p>
-              </div>
-            </div>
-          )}
+          <EditableShareOrigin
+            address={originAddress}
+            onSave={updateSharedDeliveryOrigin.bind(null, deliveryId)}
+          />
           <div className="divide-y divide-slate-100">
             {stops.length === 0 ? (
               <p className="px-4 py-8 text-center text-sm text-slate-500">No stops on this delivery.</p>
@@ -171,9 +167,10 @@ export default async function ShareDeliveryPage({
                   {stop.contactName && (
                     <p className="mt-0.5 text-xs text-slate-500">POC: {stop.contactName}{stop.contactPhone ? ` · ${stop.contactPhone}` : ''}</p>
                   )}
-                  {stop.notes && (
-                    <p className="mt-1 text-xs text-slate-400 italic">{stop.notes}</p>
-                  )}
+                  <EditableShareStopNotes
+                    notes={stop.notes}
+                    onSave={updateSharedDeliveryStopNotes.bind(null, deliveryId, stop.id)}
+                  />
                 </div>
               </div>
             ))}
