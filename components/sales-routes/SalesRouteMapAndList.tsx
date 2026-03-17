@@ -58,22 +58,22 @@ export default function SalesRouteMapAndList({
     : null
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <Card className="lg:col-span-1">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <Card className="flex h-full flex-col lg:col-span-1">
         <CardHeader><CardTitle>Route Map</CardTitle></CardHeader>
-        <CardContent className="p-0 h-96 rounded-b-xl overflow-hidden">
+        <CardContent className="min-h-[24rem] flex-1 overflow-hidden rounded-b-xl p-0">
           <SalesRouteMapWrapper stops={mapStops} origin={mapOrigin} />
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="flex h-full flex-col">
         <CardHeader>
           <CardTitle>{stops.length} {stops.length === 1 ? 'Stop' : 'Stops'}</CardTitle>
           <p className="text-sm text-muted-foreground">
             Drag to reorder. The map updates live as you change the order.
           </p>
         </CardHeader>
-        <CardContent className="max-h-[36rem] overflow-y-auto">
+        <CardContent className="max-h-[36rem] flex-1 overflow-y-auto">
           <SortableSalesStopList
             routeId={routeId}
             stops={stops}

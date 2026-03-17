@@ -78,6 +78,7 @@ export async function addSalesRouteStop(routeId: string, formData: FormData) {
   await requireAdminOrStaff()
 
   const customerId = formData.get('customerId') as string
+  const notes = (formData.get('notes') as string)?.trim() || null
   if (!customerId) throw new Error('Account is required')
 
   const [account] = await db
@@ -131,6 +132,7 @@ export async function addSalesRouteStop(routeId: string, formData: FormData) {
     contactPhone: account.pocPhone ?? null,
     lat,
     lng,
+    notes,
   })
 
   redirect(`/admin/crm/sales-routes/${routeId}`)
@@ -168,6 +170,7 @@ export async function addManualSalesRouteStop(routeId: string, formData: FormDat
 
   const contactName = (formData.get('contactName') as string)?.trim() || null
   const contactPhone = (formData.get('contactPhone') as string)?.trim() || null
+  const notes = (formData.get('notes') as string)?.trim() || null
 
   const existingStops = await db
     .select({ sequenceNumber: salesRouteStops.sequenceNumber })
@@ -198,6 +201,7 @@ export async function addManualSalesRouteStop(routeId: string, formData: FormDat
     contactPhone,
     lat,
     lng,
+    notes,
   })
 
   redirect(`/admin/crm/sales-routes/${routeId}`)
