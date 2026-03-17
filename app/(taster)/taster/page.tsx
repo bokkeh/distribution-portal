@@ -11,5 +11,5 @@ export default async function TasterIndexPage() {
       redirect('/taster/welcome')
     }
   }
-  redirect('/taster/tastings')
+  redirect('/taster/dashboard')
 }

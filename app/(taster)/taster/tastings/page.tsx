@@ -1,6 +1,8 @@
 import { TasterTastingsHub } from '@/components/tastings/TasterTastingsHub'
 import { getTastingsForView } from '@/actions/tastings'
 import { requireFeature } from '@/lib/auth/session'
+import Link from 'next/link'
+import { Button } from '@/components/ui/button'
 
 function isMissingTastingsTable(error: unknown) {
   const message = (error instanceof Error ? error.message : String(error)).toLowerCase()
@@ -26,9 +28,14 @@ export default async function TasterTastingsPage({
 
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">My Tastings</h1>
-          <p className="text-muted-foreground mt-1">See upcoming and past tastings, then complete reports and invoices from one place.</p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">My Tastings</h1>
+            <p className="text-muted-foreground mt-1">See upcoming and past tastings, then complete reports and invoices from one place.</p>
+          </div>
+          <Link href="/taster/tastings/reports">
+            <Button variant="outline">Review Reports</Button>
+          </Link>
         </div>
         <TasterTastingsHub tastings={tastings} success={params.success} error={params.error} />
       </div>

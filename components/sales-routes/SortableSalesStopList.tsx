@@ -192,23 +192,25 @@ function HombaseRow({
           H
         </div>
         {editing ? (
-          <div className="flex-1 flex items-center gap-2">
+          <div className="flex-1 space-y-2">
             <Input
               autoFocus
               value={value}
               onChange={e => setValue(e.target.value)}
               placeholder="Enter starting address (warehouse, home, etc.)"
-              className="h-8 text-sm flex-1"
+              className="h-8 text-sm w-full"
               onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') { setEditing(false); setValue(currentAddress ?? '') } }}
             />
-            <Button size="sm" onClick={handleSave} disabled={isPending}>
-              <Check className="w-3.5 h-3.5 mr-1" />{isPending ? 'Saving...' : 'Save'}
-            </Button>
-            {currentAddress && (
-              <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setValue(currentAddress) }} disabled={isPending}>
-                <X className="w-3.5 h-3.5" />
+            <div className="flex gap-2">
+              <Button size="sm" onClick={handleSave} disabled={isPending}>
+                <Check className="w-3.5 h-3.5 mr-1" />{isPending ? 'Saving...' : 'Save'}
               </Button>
-            )}
+              {currentAddress && (
+                <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setValue(currentAddress) }} disabled={isPending}>
+                  <X className="w-3.5 h-3.5 mr-1" />Cancel
+                </Button>
+              )}
+            </div>
           </div>
         ) : (
           <div className="min-w-0 flex-1">
