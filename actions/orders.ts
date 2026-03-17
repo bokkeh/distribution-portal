@@ -35,6 +35,8 @@ export async function createOrder(formData: FormData) {
     const customerId = formData.get('customerId') as string
     const purchaseUnit = (formData.get('purchaseUnit') as PurchaseUnit) || 'case'
     const notes = formData.get('notes') as string | null
+    const paymentMethod = (formData.get('paymentMethod') as string | null) ?? null
+    const processingFee = Number((formData.get('processingFee') as string | null) ?? '0')
     const itemsJson = formData.get('items') as string
     const items: { productId: string; quantity: number }[] = JSON.parse(itemsJson)
 
@@ -102,7 +104,14 @@ export async function createOrder(formData: FormData) {
     })
 
     const tax = 0
-    const total = subtotal + tax
+    const sanitizedProcessingFee = Number.isFinite(processingFee) && processingFee > 0 ? processingFee : 0
+    const total = subtotal + tax + sanitizedProcessingFee
+    const normalizedNotes = [
+      notes?.trim() || null,
+      paymentMethod === 'card' && sanitizedProcessingFee > 0
+        ? `Card processing fee paid by customer: $${sanitizedProcessingFee.toFixed(2)}.`
+        : null,
+    ].filter(Boolean).join('\n')
 
     const [order] = await db.insert(orders).values({
       customerId,
@@ -113,7 +122,7 @@ export async function createOrder(formData: FormData) {
       subtotal: subtotal.toFixed(2),
       tax: tax.toFixed(2),
       total: total.toFixed(2),
-      notes: notes || null,
+      notes: normalizedNotes || null,
     }).returning()
 
     await db.insert(orderItems).values(lineItems.map(item => ({ ...item, orderId: order.id })))

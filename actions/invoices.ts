@@ -9,6 +9,7 @@ import { redirect } from 'next/navigation'
 import Stripe from 'stripe'
 import { logActivityEvent } from '@/lib/activity/log'
 import { sendInvoicePaidConfirmationEmail } from '@/lib/resend/client'
+import { getCustomerPaymentBreakdown, type CustomerPaymentMethod } from '@/lib/stripe/fees'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? 'sk_test_placeholder', { apiVersion: '2026-02-25.clover' })
 
@@ -316,25 +317,40 @@ export async function createInvoiceAdjustment(formData: FormData) {
   redirect(`/admin/invoicing/${invoice.id}?success=${encodeURIComponent('Invoice adjustment recorded.')}`)
 }
 
-export async function createPaymentIntent(invoiceId: string) {
+export async function createPaymentIntent(invoiceId: string, paymentMethod: CustomerPaymentMethod) {
   await requireAuth()
 
   const [invoice] = await db.select().from(invoices).where(eq(invoices.id, invoiceId))
   if (!invoice) throw new Error('Invoice not found')
+  const baseAmountCents = Math.round(parseFloat(invoice.total) * 100)
+  const breakdown = getCustomerPaymentBreakdown(baseAmountCents, paymentMethod)
 
   const paymentIntent = await stripe.paymentIntents.create({
-    amount: Math.round(parseFloat(invoice.total) * 100),
+    amount: breakdown.totalAmountCents,
     currency: 'usd',
-    metadata: { invoiceId },
-    payment_method_types: ['card', 'us_bank_account'],
-    payment_method_options: {
-      us_bank_account: {
-        financial_connections: { permissions: ['payment_method'] },
-      },
+    metadata: {
+      invoiceId,
+      paymentMethod,
+      baseAmountCents: String(baseAmountCents),
+      processingFeeCents: String(breakdown.processingFeeCents),
     },
+    payment_method_types: [paymentMethod],
+    ...(paymentMethod === 'us_bank_account'
+      ? {
+          payment_method_options: {
+            us_bank_account: {
+              financial_connections: { permissions: ['payment_method'] },
+            },
+          },
+        }
+      : {}),
   })
 
   await db.update(invoices).set({ stripePaymentIntentId: paymentIntent.id }).where(eq(invoices.id, invoiceId))
 
-  return { clientSecret: paymentIntent.client_secret }
+  return {
+    clientSecret: paymentIntent.client_secret,
+    amount: breakdown.totalAmount,
+    processingFee: breakdown.processingFee,
+  }
 }

@@ -4,22 +4,25 @@ import { useMemo, useState } from 'react'
 import { useCart } from '@/hooks/useCart'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { formatCurrency } from '@/lib/utils'
+import { cn, formatCurrency } from '@/lib/utils'
 import { loadStripe } from '@stripe/stripe-js'
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js'
 import { createOrder } from '@/actions/orders'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { getMinimumCaseQuantity, isWisherVodkaProduct } from '@/lib/orders/minimums'
+import { getCustomerPaymentBreakdown, type CustomerPaymentMethod } from '@/lib/stripe/fees'
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '')
 
-function PaymentForm({ customerId, orderType, items, total, notes, onSuccess }: {
+function PaymentForm({ customerId, orderType, items, total, notes, paymentMethod, processingFee, onSuccess }: {
   customerId: string
   orderType: 'paid' | 'sample'
   items: any[]
   total: number
   notes: string
+  paymentMethod: CustomerPaymentMethod
+  processingFee: number
   onSuccess: (redirectTo?: string) => void
 }) {
   const stripe = useStripe()
@@ -52,6 +55,8 @@ function PaymentForm({ customerId, orderType, items, total, notes, onSuccess }: 
     formData.append('orderType', orderType)
     formData.append('items', JSON.stringify(items.map(i => ({ productId: i.productId, quantity: i.quantity }))))
     if (notes.trim()) formData.append('notes', notes.trim())
+    formData.append('paymentMethod', paymentMethod)
+    formData.append('processingFee', processingFee.toFixed(2))
     const result = await createOrder(formData)
     if (result?.error) {
       setError(result.error)
@@ -65,7 +70,7 @@ function PaymentForm({ customerId, orderType, items, total, notes, onSuccess }: 
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <PaymentElement />
+      <PaymentElement options={{ paymentMethodOrder: [paymentMethod] }} />
       {error && <p className="text-sm text-red-600">{error}</p>}
       <Button type="submit" disabled={!stripe || loading} className="w-full">
         {loading ? 'Processing...' : `Pay ${formatCurrency(total)}`}
@@ -79,6 +84,9 @@ export default function CheckoutClient({ customerId, customerName }: { customerI
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [notes, setNotes] = useState('')
+  const [paymentMethod, setPaymentMethod] = useState<CustomerPaymentMethod>('us_bank_account')
+  const [payableTotal, setPayableTotal] = useState(0)
+  const [processingFee, setProcessingFee] = useState(0)
   const router = useRouter()
 
   const minimumViolation = useMemo(
@@ -96,15 +104,18 @@ export default function CheckoutClient({ customerId, customerName }: { customerI
 
     try {
       setLoading(true)
+      const baseAmountCents = Math.round(total() * 100)
       const res = await fetch('/api/stripe/payment-intent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: Math.round(total() * 100), customerId }),
+        body: JSON.stringify({ amount: baseAmountCents, customerId, paymentMethod }),
       })
       if (!res.ok) throw new Error('Unable to initialize Stripe payment')
-      const { clientSecret } = await res.json()
+      const { clientSecret, amount, processingFee } = await res.json()
       if (!clientSecret) throw new Error('Missing Stripe client secret')
       setClientSecret(clientSecret)
+      setPayableTotal(Number(amount))
+      setProcessingFee(Number(processingFee))
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to initialize payment'
       toast.error('Payment setup failed', { description: message })
@@ -112,6 +123,9 @@ export default function CheckoutClient({ customerId, customerName }: { customerI
       setLoading(false)
     }
   }
+
+  const totalAmount = total()
+  const cardBreakdown = getCustomerPaymentBreakdown(Math.round(totalAmount * 100), 'card')
 
   if (items.length === 0) {
     return (
@@ -172,18 +186,83 @@ export default function CheckoutClient({ customerId, customerName }: { customerI
                   className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
                 />
               </div>
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-slate-900">Choose payment method</p>
+                {([
+                  {
+                    value: 'us_bank_account',
+                    title: 'Bank transfer (ACH)',
+                    description: 'No card processing fee.',
+                    totalLabel: formatCurrency(totalAmount),
+                  },
+                  {
+                    value: 'card',
+                    title: 'Credit card',
+                    description: `Customer pays ${formatCurrency(cardBreakdown.processingFee)} Stripe fee.`,
+                    totalLabel: formatCurrency(cardBreakdown.totalAmount),
+                  },
+                ] as const).map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setPaymentMethod(option.value)}
+                    className={cn(
+                      'w-full rounded-lg border p-3 text-left transition',
+                      paymentMethod === option.value ? 'border-slate-900 bg-slate-50' : 'border-slate-200 hover:border-slate-300',
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{option.title}</p>
+                        <p className="text-xs text-muted-foreground">{option.description}</p>
+                      </div>
+                      <div className="text-sm font-semibold text-slate-900">{option.totalLabel}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+                <div className="flex justify-between">
+                  <span>Order subtotal</span>
+                  <span>{formatCurrency(totalAmount)}</span>
+                </div>
+                <div className="mt-1 flex justify-between">
+                  <span>Card processing fee</span>
+                  <span>{paymentMethod === 'card' ? formatCurrency(cardBreakdown.processingFee) : formatCurrency(0)}</span>
+                </div>
+                <div className="mt-2 flex justify-between font-semibold text-slate-900">
+                  <span>Total due now</span>
+                  <span>{paymentMethod === 'card' ? formatCurrency(cardBreakdown.totalAmount) : formatCurrency(totalAmount)}</span>
+                </div>
+              </div>
               <Button className="w-full" onClick={initializePayment} disabled={loading || !!minimumViolation}>
-                {loading ? 'Preparing...' : 'Proceed to Payment'}
+                {loading ? 'Preparing...' : `Continue to ${paymentMethod === 'card' ? 'Card Payment' : 'ACH Payment'}`}
               </Button>
             </div>
           ) : (
             <Elements stripe={stripePromise} options={{ clientSecret }}>
+              <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+                <div className="flex justify-between">
+                  <span>Order subtotal</span>
+                  <span>{formatCurrency(totalAmount)}</span>
+                </div>
+                <div className="mt-1 flex justify-between">
+                  <span>Card processing fee</span>
+                  <span>{paymentMethod === 'card' ? formatCurrency(processingFee) : formatCurrency(0)}</span>
+                </div>
+                <div className="mt-2 flex justify-between font-semibold text-slate-900">
+                  <span>Total being charged</span>
+                  <span>{formatCurrency(payableTotal)}</span>
+                </div>
+              </div>
               <PaymentForm
                 customerId={customerId}
                 orderType={orderType}
                 items={items}
-                total={total()}
+                total={payableTotal}
                 notes={notes}
+                paymentMethod={paymentMethod}
+                processingFee={processingFee}
                 onSuccess={(redirectTo) => { clearCart(); router.push(redirectTo ?? '/customer/orders') }}
               />
             </Elements>
