@@ -16,7 +16,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { toast } from 'sonner'
 import { reorderSalesRouteStops, removeSalesRouteStop } from '@/actions/sales-routes'
 import { Button } from '@/components/ui/button'
-import { GripVertical, MapPin } from 'lucide-react'
+import { GripVertical, MapPin, Sparkles } from 'lucide-react'
 
 type Stop = {
   id: string
@@ -26,6 +26,55 @@ type Stop = {
   contactPhone: string | null
   notes: string | null
   companyName: string | null
+  lat: number | null
+  lng: number | null
+}
+
+function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+  const R = 6371
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180
+  const sinLat = Math.sin(dLat / 2)
+  const sinLng = Math.sin(dLng / 2)
+  const h =
+    sinLat * sinLat +
+    Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * sinLng * sinLng
+  return 2 * R * Math.asin(Math.sqrt(h))
+}
+
+function nearestNeighborOrder(stops: Stop[]): Stop[] {
+  const geocoded = stops.filter((s) => s.lat !== null && s.lng !== null)
+  const ungeocodable = stops.filter((s) => s.lat === null || s.lng === null)
+  if (geocoded.length < 2) return stops
+
+  const visited = new Set<string>()
+  const result: Stop[] = [geocoded[0]]
+  visited.add(geocoded[0].id)
+
+  while (result.length < geocoded.length) {
+    const current = result[result.length - 1]
+    let nearestStop: Stop | null = null
+    let nearestDist = Infinity
+
+    for (const stop of geocoded) {
+      if (visited.has(stop.id)) continue
+      const d = haversineKm(
+        { lat: current.lat!, lng: current.lng! },
+        { lat: stop.lat!, lng: stop.lng! }
+      )
+      if (d < nearestDist) {
+        nearestDist = d
+        nearestStop = stop
+      }
+    }
+
+    if (nearestStop) {
+      result.push(nearestStop)
+      visited.add(nearestStop.id)
+    }
+  }
+
+  return [...result, ...ungeocodable]
 }
 
 function SortableStopCard({
@@ -124,6 +173,7 @@ export default function SortableSalesStopList({
   const [stops, setStops] = useState(initialStops)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [isOptimizing, setIsOptimizing] = useState(false)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
   const activeStop = useMemo(() => stops.find((s) => s.id === activeId) ?? null, [stops, activeId])
@@ -159,6 +209,37 @@ export default function SortableSalesStopList({
         })
       }
     })
+  }
+
+  async function handleOptimize() {
+    if (stops.length < 2) {
+      toast.info('Add at least 2 stops to optimize the route.')
+      return
+    }
+    const geocoded = stops.filter((s) => s.lat !== null && s.lng !== null)
+    if (geocoded.length < 2) {
+      toast.error('Not enough geocoded stops', {
+        description: 'Most stops are missing coordinates. Try removing and re-adding them.',
+      })
+      return
+    }
+
+    const optimized = nearestNeighborOrder(stops).map((s, i) => ({ ...s, sequenceNumber: i + 1 }))
+    const previousStops = stops
+    setStops(optimized)
+    setIsOptimizing(true)
+
+    try {
+      await reorderSalesRouteStops(routeId, optimized.map((s) => s.id))
+      toast.success('Route optimized', { description: 'Stops reordered by shortest distance.' })
+    } catch (error) {
+      setStops(previousStops)
+      toast.error('Unable to optimize route', {
+        description: error instanceof Error ? error.message : undefined,
+      })
+    } finally {
+      setIsOptimizing(false)
+    }
   }
 
   function handleRemove(stopId: string) {
@@ -197,6 +278,19 @@ export default function SortableSalesStopList({
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
+      <div className="mb-3">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={handleOptimize}
+          disabled={isOptimizing || isPending || stops.length < 2}
+          className="gap-1.5 text-violet-700 border-violet-200 hover:bg-violet-50 hover:border-violet-300"
+        >
+          <Sparkles className="w-3.5 h-3.5" />
+          {isOptimizing ? 'Optimizing...' : 'Generate Best Route'}
+        </Button>
+      </div>
       <SortableContext items={stops.map((s) => s.id)} strategy={verticalListSortingStrategy}>
         <div className="space-y-2 sm:space-y-3">
           {stops.map((stop, index) => (
@@ -217,4 +311,5 @@ export default function SortableSalesStopList({
       </DragOverlay>
     </DndContext>
   )
+
 }

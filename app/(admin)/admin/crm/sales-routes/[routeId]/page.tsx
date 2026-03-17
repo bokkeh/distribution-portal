@@ -80,6 +80,8 @@ export default async function SalesRouteDetailPage({
     contactPhone: stop.contactPhone,
     notes: stop.notes,
     companyName: stop.companyName,
+    lat: stop.lat ? parseFloat(stop.lat) : null,
+    lng: stop.lng ? parseFloat(stop.lng) : null,
   }))
 
   return (
