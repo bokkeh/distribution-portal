@@ -14,11 +14,12 @@ import { getMinimumCaseQuantity, isWisherVodkaProduct } from '@/lib/orders/minim
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '')
 
-function PaymentForm({ customerId, orderType, items, total, onSuccess }: {
+function PaymentForm({ customerId, orderType, items, total, notes, onSuccess }: {
   customerId: string
   orderType: 'paid' | 'sample'
   items: any[]
   total: number
+  notes: string
   onSuccess: (redirectTo?: string) => void
 }) {
   const stripe = useStripe()
@@ -50,6 +51,7 @@ function PaymentForm({ customerId, orderType, items, total, onSuccess }: {
     formData.append('customerId', customerId)
     formData.append('orderType', orderType)
     formData.append('items', JSON.stringify(items.map(i => ({ productId: i.productId, quantity: i.quantity }))))
+    if (notes.trim()) formData.append('notes', notes.trim())
     const result = await createOrder(formData)
     if (result?.error) {
       setError(result.error)
@@ -76,6 +78,7 @@ export default function CheckoutClient({ customerId, customerName }: { customerI
   const { items, orderType, total, clearCart } = useCart()
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [notes, setNotes] = useState('')
   const router = useRouter()
 
   const minimumViolation = useMemo(
@@ -156,10 +159,22 @@ export default function CheckoutClient({ customerId, customerName }: { customerI
               <p className="text-sm text-muted-foreground">
                 Secure payment powered by Stripe. Your card details are never stored on our servers.
               </p>
+              <div className="space-y-1.5">
+                <label htmlFor="order-notes" className="text-sm font-medium text-slate-900">
+                  Order Notes <span className="font-normal text-muted-foreground">(optional)</span>
+                </label>
+                <textarea
+                  id="order-notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="e.g. Expedited delivery needed, leave with John, ring doorbell, etc."
+                  rows={3}
+                  className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
+                />
+              </div>
               <Button className="w-full" onClick={initializePayment} disabled={loading || !!minimumViolation}>
                 {loading ? 'Preparing...' : 'Proceed to Payment'}
               </Button>
-              <p className="text-xs text-center text-muted-foreground">Test card: 4242 4242 4242 4242</p>
             </div>
           ) : (
             <Elements stripe={stripePromise} options={{ clientSecret }}>
@@ -168,6 +183,7 @@ export default function CheckoutClient({ customerId, customerName }: { customerI
                 orderType={orderType}
                 items={items}
                 total={total()}
+                notes={notes}
                 onSuccess={(redirectTo) => { clearCart(); router.push(redirectTo ?? '/customer/orders') }}
               />
             </Elements>
