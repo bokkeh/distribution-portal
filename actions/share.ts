@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { db } from '@/db'
 import { deliveries, deliveryStops, salesRoutes, salesRouteStops } from '@/db/schema'
 import { geocodeAddress } from '@/lib/maps/geocode'
+import { logAccountNoteEvent } from '@/lib/crm/account-notes'
 
 export async function updateSharedSalesRouteOrigin(routeId: string, formData: FormData) {
   const address = (formData.get('originAddress') as string)?.trim() || null
@@ -45,10 +46,24 @@ export async function updateSharedSalesRouteOrigin(routeId: string, formData: Fo
 export async function updateSharedSalesRouteStopNotes(routeId: string, stopId: string, formData: FormData) {
   const notes = (formData.get('notes') as string)?.trim() || null
 
+  const [stop] = await db
+    .select({ customerId: salesRouteStops.customerId })
+    .from(salesRouteStops)
+    .where(and(eq(salesRouteStops.id, stopId), eq(salesRouteStops.routeId, routeId)))
+    .limit(1)
+
   await db
     .update(salesRouteStops)
     .set({ notes })
     .where(and(eq(salesRouteStops.id, stopId), eq(salesRouteStops.routeId, routeId)))
+
+  await logAccountNoteEvent({
+    accountId: stop?.customerId,
+    title: 'Sales route stop note updated from share link',
+    note: notes,
+    source: 'sales_route_stop',
+    sourceId: stopId,
+  })
 
   revalidatePath(`/share/sales-route/${routeId}`)
   revalidatePath(`/admin/crm/sales-routes/${routeId}`)
@@ -94,10 +109,24 @@ export async function updateSharedDeliveryOrigin(deliveryId: string, formData: F
 export async function updateSharedDeliveryStopNotes(deliveryId: string, stopId: string, formData: FormData) {
   const notes = (formData.get('notes') as string)?.trim() || null
 
+  const [stop] = await db
+    .select({ customerId: deliveryStops.customerId })
+    .from(deliveryStops)
+    .where(and(eq(deliveryStops.id, stopId), eq(deliveryStops.deliveryId, deliveryId)))
+    .limit(1)
+
   await db
     .update(deliveryStops)
     .set({ notes })
     .where(and(eq(deliveryStops.id, stopId), eq(deliveryStops.deliveryId, deliveryId)))
+
+  await logAccountNoteEvent({
+    accountId: stop?.customerId,
+    title: 'Delivery stop note updated from share link',
+    note: notes,
+    source: 'delivery_stop',
+    sourceId: stopId,
+  })
 
   revalidatePath(`/share/delivery/${deliveryId}`)
   revalidatePath(`/admin/deliveries/${deliveryId}`)

@@ -19,6 +19,7 @@ import { createNotificationsForRoles, createUserNotification } from '@/lib/notif
 import { logActivityEvent } from '@/lib/activity/log'
 import { getAccountPreferences, getUserPreferences } from '@/lib/preferences/read'
 import { formatDateInTimeZone, getShortTimeZoneLabel } from '@/lib/timezones'
+import { logAccountNoteEvent } from '@/lib/crm/account-notes'
 
 async function resequenceDeliveryStops(deliveryId: string) {
   const existingStops = await db
@@ -383,6 +384,14 @@ export async function completeDeliveryStop(stopId: string, formData: FormData) {
     body: `${stop.companyName ?? stop.address} was completed.`,
   })
 
+  await logAccountNoteEvent({
+    accountId: stop.customerId,
+    title: 'Delivery stop note added',
+    note: notes,
+    source: 'delivery_stop',
+    sourceId: stop.id,
+  })
+
   revalidatePath('/driver/deliveries')
   revalidatePath('/driver/map')
 }
@@ -397,7 +406,7 @@ export async function updateStopNotes(stopId: string, formData: FormData) {
     .where(eq(deliveryStops.id, stopId))
 
   const [stop] = await db
-    .select({ deliveryId: deliveryStops.deliveryId, address: deliveryStops.address })
+    .select({ deliveryId: deliveryStops.deliveryId, address: deliveryStops.address, customerId: deliveryStops.customerId })
     .from(deliveryStops)
     .where(eq(deliveryStops.id, stopId))
     .limit(1)
@@ -410,6 +419,15 @@ export async function updateStopNotes(stopId: string, formData: FormData) {
       kind: 'delivery_notes_updated',
       title: 'Delivery notes updated',
       body: `Notes were updated for ${stop.address}.`,
+    })
+
+    await logAccountNoteEvent({
+      accountId: stop.customerId,
+      actorUserId: session.user.id,
+      title: 'Delivery stop note updated',
+      note: notes,
+      source: 'delivery_stop',
+      sourceId: stopId,
     })
   }
 
@@ -443,6 +461,20 @@ export async function updateDeliveryStop(
       lng: lng?.toFixed(7) ?? null,
     })
     .where(and(eq(deliveryStops.id, stopId), eq(deliveryStops.deliveryId, deliveryId)))
+
+  const [stop] = await db
+    .select({ customerId: deliveryStops.customerId })
+    .from(deliveryStops)
+    .where(and(eq(deliveryStops.id, stopId), eq(deliveryStops.deliveryId, deliveryId)))
+    .limit(1)
+
+  await logAccountNoteEvent({
+    accountId: stop?.customerId,
+    title: 'Delivery stop note updated',
+    note: data.notes,
+    source: 'delivery_stop',
+    sourceId: stopId,
+  })
 
   revalidatePath(`/admin/deliveries/${deliveryId}`)
   revalidatePath('/driver/deliveries')

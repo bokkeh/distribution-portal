@@ -6,6 +6,7 @@ import { db } from '@/db'
 import { salesRoutes, salesRouteStops, customerAccounts } from '@/db/schema'
 import { requireAdminOrStaff } from '@/lib/auth/session'
 import { geocodeAddress } from '@/lib/maps/geocode'
+import { logAccountNoteEvent } from '@/lib/crm/account-notes'
 
 export async function createSalesRoute(formData: FormData) {
   await requireAdminOrStaff()
@@ -135,6 +136,13 @@ export async function addSalesRouteStop(routeId: string, formData: FormData) {
     notes,
   })
 
+  await logAccountNoteEvent({
+    accountId: customerId,
+    title: 'Sales route stop note added',
+    note: notes,
+    source: 'sales_route_stop',
+  })
+
   redirect(`/admin/crm/sales-routes/${routeId}`)
 }
 
@@ -156,6 +164,20 @@ export async function updateSalesRouteStop(
     .update(salesRouteStops)
     .set({ address: data.address, contactName: data.contactName, contactPhone: data.contactPhone, notes: data.notes, lat, lng })
     .where(and(eq(salesRouteStops.id, stopId), eq(salesRouteStops.routeId, routeId)))
+
+  const [stop] = await db
+    .select({ customerId: salesRouteStops.customerId })
+    .from(salesRouteStops)
+    .where(and(eq(salesRouteStops.id, stopId), eq(salesRouteStops.routeId, routeId)))
+    .limit(1)
+
+  await logAccountNoteEvent({
+    accountId: stop?.customerId,
+    title: 'Sales route stop note updated',
+    note: data.notes,
+    source: 'sales_route_stop',
+    sourceId: stopId,
+  })
 
   return { success: true }
 }
