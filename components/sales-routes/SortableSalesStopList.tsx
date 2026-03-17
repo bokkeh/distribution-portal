@@ -18,6 +18,7 @@ import { reorderSalesRouteStops, removeSalesRouteStop, optimizeSalesRouteOrder, 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { GripVertical, Home, MapPin, Sparkles, Pencil, X, Check } from 'lucide-react'
+import GetDirectionsButton from '@/components/shared/GetDirectionsButton'
 
 type Stop = {
   id: string
@@ -398,7 +399,7 @@ export default function SortableSalesStopList({
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
-          <div className="mb-3 pt-1">
+          <div className="mb-3 pt-1 flex flex-wrap gap-2">
             <Button
               type="button"
               variant="outline"
@@ -410,6 +411,10 @@ export default function SortableSalesStopList({
               <Sparkles className="w-3.5 h-3.5" />
               {isOptimizing ? 'Optimizing...' : 'Generate Best Route'}
             </Button>
+            <GetDirectionsButton
+              stops={stops.map(s => ({ address: s.address, lat: s.lat, lng: s.lng }))}
+              originAddress={originAddress}
+            />
           </div>
           <SortableContext items={stops.map((s) => s.id)} strategy={verticalListSortingStrategy}>
             <div className="space-y-2 sm:space-y-3">

@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { DriverStopActions } from '@/components/deliveries/DriverStopCard'
 import { formatDate } from '@/lib/utils'
 import { CheckCircle, Check, Clock, GripVertical, Home, MapPin, Pencil, X, XCircle } from 'lucide-react'
+import GetDirectionsButton from '@/components/shared/GetDirectionsButton'
 
 type Stop = {
   id: string
@@ -357,6 +358,14 @@ export default function SortableStopList({
     <div className="space-y-2 sm:space-y-3">
       {mode === 'admin' && (
         <HombaseRow deliveryId={deliveryId} currentAddress={originAddress ?? null} />
+      )}
+      {stops.length > 0 && (
+        <div className="pt-1">
+          <GetDirectionsButton
+            stops={stops.map(s => ({ address: s.address }))}
+            originAddress={originAddress}
+          />
+        </div>
       )}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <SortableContext items={stops.map(stop => stop.id)} strategy={verticalListSortingStrategy}>
