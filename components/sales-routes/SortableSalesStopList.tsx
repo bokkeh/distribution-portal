@@ -14,10 +14,10 @@ import {
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { toast } from 'sonner'
-import { reorderSalesRouteStops, removeSalesRouteStop, optimizeSalesRouteOrder, updateSalesRouteStop, setRouteOrigin } from '@/actions/sales-routes'
+import { reorderSalesRouteStops, removeSalesRouteStop, optimizeSalesRouteOrder, updateSalesRouteStop, updateSalesRouteStopVisit, setRouteOrigin } from '@/actions/sales-routes'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { GripVertical, Home, MapPin, Sparkles, Pencil, X, Check } from 'lucide-react'
+import { GripVertical, Home, MapPin, Sparkles, Pencil, X, Check, Camera, Loader2 } from 'lucide-react'
 import GetDirectionsButton from '@/components/shared/GetDirectionsButton'
 
 type Stop = {
@@ -30,6 +30,8 @@ type Stop = {
   companyName: string | null
   lat: number | null
   lng: number | null
+  visitPhotoUrl?: string | null
+  visitedAt?: string | Date | null
 }
 
 
@@ -55,6 +57,8 @@ function SortableStopCard({
   const [contactName, setContactName] = useState(stop.contactName ?? '')
   const [contactPhone, setContactPhone] = useState(stop.contactPhone ?? '')
   const [notes, setNotes] = useState(stop.notes ?? '')
+  const [visitPhotoUrl, setVisitPhotoUrl] = useState(stop.visitPhotoUrl ?? '')
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
 
   const style = { transform: CSS.Transform.toString(transform), transition }
 
@@ -77,6 +81,38 @@ function SortableStopCard({
       toast.error('Failed to update stop')
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  async function handleVisitPhotoUpload(file: File) {
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('File too large', { description: 'Maximum 10MB.' })
+      return
+    }
+
+    setUploadingPhoto(true)
+    try {
+      const uploadFormData = new FormData()
+      uploadFormData.append('file', file)
+      uploadFormData.append('folder', 'sales-routes')
+      uploadFormData.append('filename', `sales-stop-${stop.id}-${file.name}`)
+
+      const response = await fetch('/api/upload', { method: 'POST', body: uploadFormData })
+      const payload = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(payload?.error || 'Upload failed')
+
+      const nextPhotoUrl = payload.publicUrl as string
+      setVisitPhotoUrl(nextPhotoUrl)
+      await updateSalesRouteStopVisit(routeId, stop.id, {
+        visitPhotoUrl: nextPhotoUrl,
+        notes: notes.trim() || stop.notes || null,
+      })
+      onUpdate(stop.id, { visitPhotoUrl: nextPhotoUrl, visitedAt: new Date().toISOString() })
+      toast.success('Visit photo uploaded')
+    } catch (error) {
+      toast.error('Failed to upload visit photo', { description: error instanceof Error ? error.message : undefined })
+    } finally {
+      setUploadingPhoto(false)
     }
   }
 
@@ -132,6 +168,34 @@ function SortableStopCard({
               </div>
             )}
             {stop.notes && <p className="mt-1 text-xs text-slate-500 italic">{stop.notes}</p>}
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <label className="cursor-pointer">
+                <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:border-blue-300 hover:bg-blue-50">
+                  {uploadingPhoto ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}
+                  {visitPhotoUrl ? 'Replace visit photo' : 'Upload visit photo'}
+                </span>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  capture="environment"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0]
+                    if (file) void handleVisitPhotoUpload(file)
+                  }}
+                />
+              </label>
+              {visitPhotoUrl && (
+                <a href={visitPhotoUrl} target="_blank" rel="noreferrer" className="text-xs font-medium text-blue-600 underline">
+                  View photo
+                </a>
+              )}
+              {stop.visitedAt && (
+                <span className="text-xs text-muted-foreground">
+                  Visited {new Date(stop.visitedAt).toLocaleString()}
+                </span>
+              )}
+            </div>
           </div>
         )}
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useEffect, useState, useRef } from 'react'
+import { useActionState, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { updateProfile } from '@/actions/profile'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -9,9 +9,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency } from '@/lib/utils'
-import { User, Building2, Bell, UserCircle, Clock, Truck, MapPin, Plus, Trash2, CreditCard } from 'lucide-react'
+import { User, Building2, Bell, UserCircle, Truck, MapPin, Plus, Trash2, CreditCard } from 'lucide-react'
 import { ProfilePhotoUploadField } from '@/components/profile/ProfilePhotoUploadField'
 import { COMMON_TIME_ZONES } from '@/lib/timezones'
+import { DocumentUploadField } from '@/components/shared/DocumentUploadField'
 
 interface Location { address: string; city: string; state: string; zip: string }
 
@@ -40,8 +41,13 @@ interface Props {
     state: string | null
     zip: string | null
     dcAbraNumber: string | null
+    businessType: string | null
     businessEmail: string | null
     businessPhone: string | null
+    liquorLicenseNumber: string | null
+    liquorLicenseState: string | null
+    liquorLicenseExpiration: string | null
+    liquorLicenseUrl: string | null
     notificationPreference: string | null
     pocName: string | null
     pocPhone: string | null
@@ -66,18 +72,14 @@ const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'
 function SectionTitle({ icon: Icon, children }: { icon: React.ElementType; children: React.ReactNode }) {
   return (
     <CardTitle className="flex items-center gap-2 text-base">
-      <Icon className="w-4 h-4 text-muted-foreground" />
+      <Icon className="h-4 w-4 text-muted-foreground" />
       {children}
     </CardTitle>
   )
 }
 
 function FieldRow({ children, cols = 2 }: { children: React.ReactNode; cols?: number }) {
-  return (
-    <div className={`grid grid-cols-1 ${cols === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-3'} gap-4`}>
-      {children}
-    </div>
-  )
+  return <div className={`grid grid-cols-1 gap-4 ${cols === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}>{children}</div>
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -93,14 +95,13 @@ export function ProfileForm({ user, account }: Props) {
   const formRef = useRef<HTMLFormElement>(null)
   const [state, action, pending] = useActionState(updateProfile, null)
   const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl ?? '')
-
-  // Local state for reactive fields
-  const [state_, setState_] = useState(account?.state ?? '')
+  const [stateCode, setStateCode] = useState(account?.state ?? '')
+  const [liquorLicenseUrl, setLiquorLicenseUrl] = useState(account?.liquorLicenseUrl ?? '')
   const [selectedDays, setSelectedDays] = useState<string[]>(
-    account?.preferredDeliveryDays ? account.preferredDeliveryDays.split(',').map(d => d.trim()).filter(Boolean) : []
+    account?.preferredDeliveryDays ? account.preferredDeliveryDays.split(',').map(d => d.trim()).filter(Boolean) : [],
   )
   const [extraLocations, setExtraLocations] = useState<Location[]>(
-    account?.additionalLocations ? (JSON.parse(account.additionalLocations) as Location[]) : []
+    account?.additionalLocations ? (JSON.parse(account.additionalLocations) as Location[]) : [],
   )
 
   useEffect(() => {
@@ -112,9 +113,7 @@ export function ProfileForm({ user, account }: Props) {
   }, [state])
 
   function toggleDay(day: string) {
-    setSelectedDays(prev =>
-      prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
-    )
+    setSelectedDays(prev => (prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]))
   }
 
   function addLocation() {
@@ -126,21 +125,20 @@ export function ProfileForm({ user, account }: Props) {
   }
 
   function updateLocation(i: number, field: keyof Location, value: string) {
-    setExtraLocations(prev => prev.map((loc, idx) => idx === i ? { ...loc, [field]: value } : loc))
+    setExtraLocations(prev => prev.map((loc, idx) => (idx === i ? { ...loc, [field]: value } : loc)))
   }
 
-  const isDC = state_.toUpperCase() === 'DC'
+  const isDC = stateCode.toUpperCase() === 'DC'
 
   return (
-    <form ref={formRef} action={action} className="space-y-6 max-w-2xl">
+    <form ref={formRef} action={action} className="max-w-2xl space-y-6">
       <input type="hidden" name="userId" value={user.id} />
       <input type="hidden" name="avatarUrl" value={avatarUrl} />
+      <input type="hidden" name="liquorLicenseUrl" value={liquorLicenseUrl} />
       {account && <input type="hidden" name="accountId" value={account.id} />}
-      {/* Serialise dynamic fields as hidden inputs */}
       <input type="hidden" name="preferredDeliveryDays" value={selectedDays.join(', ')} />
       <input type="hidden" name="additionalLocations" value={JSON.stringify(extraLocations)} />
 
-      {/* ── Personal Info ─────────────────────────────────── */}
       <Card>
         <CardHeader><SectionTitle icon={User}>Personal Information</SectionTitle></CardHeader>
         <CardContent className="space-y-4">
@@ -159,7 +157,7 @@ export function ProfileForm({ user, account }: Props) {
           <FieldRow>
             <Field label="Your Time Zone">
               <select name="timeZone" defaultValue={user.preferences?.timeZone ?? 'America/New_York'} className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm">
-                {COMMON_TIME_ZONES.map((zone) => <option key={zone.value} value={zone.value}>{zone.label}</option>)}
+                {COMMON_TIME_ZONES.map(zone => <option key={zone.value} value={zone.value}>{zone.label}</option>)}
               </select>
             </Field>
             <Field label="Notification Mode">
@@ -179,25 +177,15 @@ export function ProfileForm({ user, account }: Props) {
             </Field>
           </FieldRow>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" name="emailNotificationsEnabled" defaultChecked={user.preferences?.emailNotificationsEnabled ?? true} />
-              Email
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" name="smsNotificationsEnabled" defaultChecked={user.preferences?.smsNotificationsEnabled ?? true} />
-              SMS
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" name="inAppNotificationsEnabled" defaultChecked={user.preferences?.inAppNotificationsEnabled ?? true} />
-              In-app
-            </label>
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="emailNotificationsEnabled" defaultChecked={user.preferences?.emailNotificationsEnabled ?? true} />Email</label>
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="smsNotificationsEnabled" defaultChecked={user.preferences?.smsNotificationsEnabled ?? true} />SMS</label>
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="inAppNotificationsEnabled" defaultChecked={user.preferences?.inAppNotificationsEnabled ?? true} />In-app</label>
           </div>
         </CardContent>
       </Card>
 
       {account && (
         <>
-          {/* ── Company Info ─────────────────────────────── */}
           <Card>
             <CardHeader><SectionTitle icon={Building2}>Company Information</SectionTitle></CardHeader>
             <CardContent className="space-y-4">
@@ -212,26 +200,29 @@ export function ProfileForm({ user, account }: Props) {
                   <Input name="city" defaultValue={account.city ?? ''} placeholder="Washington" />
                 </Field>
                 <Field label="State">
-                  <Input
-                    name="state"
-                    defaultValue={account.state ?? ''}
-                    placeholder="DC"
-                    maxLength={2}
-                    onChange={e => setState_(e.target.value)}
-                  />
+                  <Input name="state" defaultValue={account.state ?? ''} placeholder="DC" maxLength={2} onChange={e => setStateCode(e.target.value)} />
                 </Field>
                 <Field label="ZIP">
                   <Input name="zip" defaultValue={account.zip ?? ''} placeholder="20001" />
                 </Field>
               </FieldRow>
-
               {isDC && (
                 <Field label="DC ABRA License Number">
                   <Input name="dcAbraNumber" defaultValue={account.dcAbraNumber ?? ''} placeholder="Required for DC establishments" />
                 </Field>
               )}
-
-              <FieldRow>
+              <FieldRow cols={3}>
+                <Field label="Business Type">
+                  <select name="businessType" defaultValue={account.businessType ?? ''} className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm">
+                    <option value="">Select type</option>
+                    <option value="restaurant">Restaurant</option>
+                    <option value="restaurant_group">Restaurant Group</option>
+                    <option value="liquor_store">Liquor Store</option>
+                    <option value="hotel_group">Hotel Group</option>
+                    <option value="bar">Bar</option>
+                    <option value="other">Other</option>
+                  </select>
+                </Field>
                 <Field label="Business Email">
                   <Input name="businessEmail" type="email" defaultValue={account.businessEmail ?? ''} placeholder="orders@mybusiness.com" />
                 </Field>
@@ -239,14 +230,29 @@ export function ProfileForm({ user, account }: Props) {
                   <Input name="businessPhone" type="tel" defaultValue={account.businessPhone ?? ''} placeholder="+1 (555) 000-0000" />
                 </Field>
               </FieldRow>
-
               <Field label="Hours of Operation">
-                <Input name="hoursOfOperation" defaultValue={account.hoursOfOperation ?? ''} placeholder="Mon–Fri 9am–9pm, Sat–Sun 10am–8pm" />
+                <Input name="hoursOfOperation" defaultValue={account.hoursOfOperation ?? ''} placeholder="Mon-Fri 9am-9pm, Sat-Sun 10am-8pm" />
               </Field>
+              <div className="space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-medium text-slate-900">Liquor License Information</p>
+                <FieldRow cols={3}>
+                  <Field label="License Number">
+                    <Input name="liquorLicenseNumber" defaultValue={account.liquorLicenseNumber ?? ''} placeholder="License number" />
+                  </Field>
+                  <Field label="License State">
+                    <Input name="liquorLicenseState" defaultValue={account.liquorLicenseState ?? ''} placeholder="DC" maxLength={2} />
+                  </Field>
+                  <Field label="Expiration">
+                    <Input name="liquorLicenseExpiration" defaultValue={account.liquorLicenseExpiration ?? ''} placeholder="MM/DD/YYYY" />
+                  </Field>
+                </FieldRow>
+                <Field label="License Document">
+                  <DocumentUploadField name="liquorLicenseUrl" value={liquorLicenseUrl} onChange={setLiquorLicenseUrl} label="Upload liquor license" />
+                </Field>
+              </div>
             </CardContent>
           </Card>
 
-          {/* ── Notification Preference ───────────────────── */}
           <Card>
             <CardHeader><SectionTitle icon={Bell}>Notification Preferences</SectionTitle></CardHeader>
             <CardContent>
@@ -255,14 +261,8 @@ export function ProfileForm({ user, account }: Props) {
                   {(['email', 'sms', 'both'] as const).map(opt => {
                     const labels = { email: 'Email only', sms: 'Text (SMS) only', both: 'Both email & text' }
                     return (
-                      <label key={opt} className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="notificationPreference"
-                          value={opt}
-                          defaultChecked={(account.notificationPreference ?? 'email') === opt}
-                          className="accent-blue-600"
-                        />
+                      <label key={opt} className="flex cursor-pointer items-center gap-2">
+                        <input type="radio" name="notificationPreference" value={opt} defaultChecked={(account.notificationPreference ?? 'email') === opt} className="accent-blue-600" />
                         <span className="text-sm">{labels[opt]}</span>
                       </label>
                     )
@@ -272,7 +272,7 @@ export function ProfileForm({ user, account }: Props) {
               <FieldRow>
                 <Field label="Business Time Zone">
                   <select name="accountTimeZone" defaultValue={account.preferences?.timeZone ?? 'America/New_York'} className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm">
-                    {COMMON_TIME_ZONES.map((zone) => <option key={zone.value} value={zone.value}>{zone.label}</option>)}
+                    {COMMON_TIME_ZONES.map(zone => <option key={zone.value} value={zone.value}>{zone.label}</option>)}
                   </select>
                 </Field>
                 <Field label="Quiet Hours Start">
@@ -285,7 +285,6 @@ export function ProfileForm({ user, account }: Props) {
             </CardContent>
           </Card>
 
-          {/* ── Point of Contact ─────────────────────────── */}
           <Card>
             <CardHeader><SectionTitle icon={UserCircle}>Point of Contact</SectionTitle></CardHeader>
             <CardContent className="space-y-4">
@@ -303,7 +302,6 @@ export function ProfileForm({ user, account }: Props) {
             </CardContent>
           </Card>
 
-          {/* ── Delivery Preferences ─────────────────────── */}
           <Card>
             <CardHeader><SectionTitle icon={Truck}>Delivery Preferences</SectionTitle></CardHeader>
             <CardContent className="space-y-4">
@@ -314,11 +312,7 @@ export function ProfileForm({ user, account }: Props) {
                       key={day}
                       type="button"
                       onClick={() => toggleDay(day)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-                        selectedDays.includes(day)
-                          ? 'bg-blue-600 text-white border-blue-600'
-                          : 'bg-white text-slate-600 border-slate-300 hover:border-blue-400'
-                      }`}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${selectedDays.includes(day) ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-white text-slate-600 hover:border-blue-400'}`}
                     >
                       {day}
                     </button>
@@ -326,22 +320,17 @@ export function ProfileForm({ user, account }: Props) {
                 </div>
               </Field>
               <Field label="Preferred Delivery Times / Notes">
-                <Input
-                  name="preferredDeliveryTimes"
-                  defaultValue={account.preferredDeliveryTimes ?? ''}
-                  placeholder="e.g. Before 2pm, mornings preferred"
-                />
+                <Input name="preferredDeliveryTimes" defaultValue={account.preferredDeliveryTimes ?? ''} placeholder="e.g. Before 2pm, mornings preferred" />
               </Field>
             </CardContent>
           </Card>
 
-          {/* ── Additional Locations ─────────────────────── */}
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <SectionTitle icon={MapPin}>Additional Locations</SectionTitle>
                 <Button type="button" variant="outline" size="sm" onClick={addLocation} className="gap-1.5">
-                  <Plus className="w-3.5 h-3.5" /> Add Location
+                  <Plus className="h-3.5 w-3.5" /> Add Location
                 </Button>
               </div>
             </CardHeader>
@@ -350,26 +339,17 @@ export function ProfileForm({ user, account }: Props) {
                 <p className="text-sm text-muted-foreground">No additional locations. Click "Add Location" if you have multiple sites.</p>
               )}
               {extraLocations.map((loc, i) => (
-                <div key={i} className="space-y-3 border rounded-lg p-4 relative">
-                  <div className="flex items-center justify-between mb-1">
+                <div key={i} className="relative space-y-3 rounded-lg border p-4">
+                  <div className="mb-1 flex items-center justify-between">
                     <span className="text-sm font-medium text-slate-700">Location {i + 1}</span>
-                    <button
-                      type="button"
-                      onClick={() => removeLocation(i)}
-                      className="text-muted-foreground hover:text-red-600 transition-colors"
-                      aria-label="Remove location"
-                    >
-                      <Trash2 className="w-4 h-4" />
+                    <button type="button" onClick={() => removeLocation(i)} className="text-muted-foreground transition-colors hover:text-red-600" aria-label="Remove location">
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
                   <Field label="Address">
-                    <Input
-                      value={loc.address}
-                      onChange={e => updateLocation(i, 'address', e.target.value)}
-                      placeholder="456 Oak Ave"
-                    />
+                    <Input value={loc.address} onChange={e => updateLocation(i, 'address', e.target.value)} placeholder="456 Oak Ave" />
                   </Field>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <Field label="City">
                       <Input value={loc.city} onChange={e => updateLocation(i, 'city', e.target.value)} placeholder="City" />
                     </Field>
@@ -385,7 +365,6 @@ export function ProfileForm({ user, account }: Props) {
             </CardContent>
           </Card>
 
-          {/* ── Account Standing (read-only) ──────────────── */}
           <Card>
             <CardHeader><SectionTitle icon={CreditCard}>Account Standing</SectionTitle></CardHeader>
             <CardContent>
@@ -410,7 +389,7 @@ export function ProfileForm({ user, account }: Props) {
 
       <div className="pb-6">
         <Button type="submit" disabled={pending} className="w-full sm:w-auto">
-          {pending ? 'Saving…' : 'Save Profile'}
+          {pending ? 'Saving...' : 'Save Profile'}
         </Button>
       </div>
     </form>

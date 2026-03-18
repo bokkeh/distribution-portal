@@ -1,11 +1,15 @@
 import { pgTable, uuid, text, integer, numeric, timestamp } from 'drizzle-orm/pg-core'
 import { customerAccounts } from './customers'
+import { users } from './users'
 
 export const salesRoutes = pgTable('sales_routes', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
   description: text('description'),
   status: text('status', { enum: ['active', 'archived'] }).notNull().default('active'),
+  region: text('region'),
+  assignedRepUserId: uuid('assigned_rep_user_id').references(() => users.id),
+  hourlyRate: numeric('hourly_rate', { precision: 10, scale: 2 }),
   originAddress: text('origin_address'),
   originLat: numeric('origin_lat', { precision: 10, scale: 7 }),
   originLng: numeric('origin_lng', { precision: 10, scale: 7 }),
@@ -23,6 +27,8 @@ export const salesRouteStops = pgTable('sales_route_stops', {
   lat: numeric('lat', { precision: 10, scale: 7 }),
   lng: numeric('lng', { precision: 10, scale: 7 }),
   notes: text('notes'),
+  visitPhotoUrl: text('visit_photo_url'),
+  visitedAt: timestamp('visited_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

@@ -35,6 +35,10 @@ export async function createOrder(formData: FormData) {
     const customerId = formData.get('customerId') as string
     const purchaseUnit = (formData.get('purchaseUnit') as PurchaseUnit) || 'case'
     const notes = formData.get('notes') as string | null
+    const deliveryTiming = (formData.get('deliveryTiming') as string | null) ?? 'standard'
+    const preferredDeliveryDay = (formData.get('preferredDeliveryDay') as string | null)?.trim() || null
+    const preferredDeliveryTime = (formData.get('preferredDeliveryTime') as string | null)?.trim() || null
+    const deliveryRequirements = (formData.get('deliveryRequirements') as string | null)?.trim() || null
     const paymentMethod = (formData.get('paymentMethod') as string | null) ?? null
     const processingFee = Number((formData.get('processingFee') as string | null) ?? '0')
     const itemsJson = formData.get('items') as string
@@ -105,9 +109,21 @@ export async function createOrder(formData: FormData) {
 
     const tax = 0
     const sanitizedProcessingFee = Number.isFinite(processingFee) && processingFee > 0 ? processingFee : 0
-    const total = subtotal + tax + sanitizedProcessingFee
+    const deliveryFee =
+      deliveryTiming === 'time_sensitive'
+        ? (preferredDeliveryDay && ['saturday', 'sunday'].includes(preferredDeliveryDay.toLowerCase()) ? 50 : 30)
+        : 0
+    const total = subtotal + tax + deliveryFee + sanitizedProcessingFee
+    const deliverySummary = [
+      `Delivery option: ${deliveryTiming === 'time_sensitive' ? 'Time-sensitive' : 'Standard within 2 weeks'}.`,
+      preferredDeliveryDay ? `Requested day: ${preferredDeliveryDay}.` : null,
+      preferredDeliveryTime ? `Requested time: ${preferredDeliveryTime}.` : null,
+      deliveryTiming === 'time_sensitive' ? `Time-sensitive delivery fee: $${deliveryFee.toFixed(2)}.` : null,
+      deliveryRequirements ? `Delivery requirements: ${deliveryRequirements}` : null,
+    ].filter(Boolean).join('\n')
     const normalizedNotes = [
       notes?.trim() || null,
+      deliverySummary,
       paymentMethod === 'card' && sanitizedProcessingFee > 0
         ? `Card processing fee paid by customer: $${sanitizedProcessingFee.toFixed(2)}.`
         : null,

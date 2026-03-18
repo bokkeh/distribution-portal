@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency } from '@/lib/utils'
-import { Trash2, Plus, Minus, ShoppingCart, ArrowRight } from 'lucide-react'
+import { Trash2, Plus, Minus, ShoppingCart, ArrowRight, ImageIcon } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { getMinimumCaseQuantityMessage, isWisherVodkaProduct } from '@/lib/orders/minimums'
@@ -15,8 +15,8 @@ export default function CustomerCartPage() {
 
   if (items.length === 0) {
     return (
-      <div className="text-center py-16 space-y-4">
-        <ShoppingCart className="w-16 h-16 mx-auto text-slate-300" />
+      <div className="space-y-4 py-16 text-center">
+        <ShoppingCart className="mx-auto h-16 w-16 text-slate-300" />
         <h2 className="text-xl font-semibold text-slate-900">Your cart is empty</h2>
         <p className="text-muted-foreground">Browse our catalog and add products to your order.</p>
         <Link href="/customer/products"><Button>Browse Products</Button></Link>
@@ -29,7 +29,7 @@ export default function CustomerCartPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Your Cart</h1>
-          <p className="text-muted-foreground mt-1">{itemCount()} item(s) · <Badge variant="outline">{orderType} order</Badge></p>
+          <p className="mt-1 text-muted-foreground">{itemCount()} item(s) · <Badge variant="outline">{orderType} order</Badge></p>
         </div>
         <button onClick={clearCart} className="text-sm text-red-500 hover:text-red-700">Clear cart</button>
       </div>
@@ -45,8 +45,19 @@ export default function CustomerCartPage() {
               <Card key={item.productId}>
                 <CardContent className="p-4">
                   <div className="flex items-center gap-4">
-                    <div className="w-16 h-16 flex-shrink-0 overflow-hidden rounded-lg bg-slate-100 flex items-center justify-center">
-                      {item.imageUrl ? <Image src={item.imageUrl} alt={item.name} width={64} height={64} className="object-cover" /> : <span className="text-2xl">-</span>}
+                    <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-100">
+                      {item.imageUrl ? (
+                        <Image
+                          src={item.imageUrl}
+                          alt={item.name}
+                          width={64}
+                          height={64}
+                          className="h-full w-full object-cover"
+                          unoptimized
+                        />
+                      ) : (
+                        <ImageIcon className="h-6 w-6 text-slate-400" />
+                      )}
                     </div>
                     <div className="flex-1">
                       <p className="font-medium">{item.name}</p>
@@ -59,18 +70,18 @@ export default function CustomerCartPage() {
                         disabled={isLockedAtMinimum}
                         title={isLockedAtMinimum ? 'Wisher Vodka has a 10-case minimum. Use remove to delete it.' : 'Decrease quantity'}
                       >
-                        <Minus className="w-3 h-3" />
+                        <Minus className="h-3 w-3" />
                       </button>
                       <span className="w-8 text-center font-medium">{item.quantity}</span>
                       <button onClick={() => updateQuantity(item.productId, item.quantity + 1)} className="flex h-7 w-7 items-center justify-center rounded border hover:bg-slate-100">
-                        <Plus className="w-3 h-3" />
+                        <Plus className="h-3 w-3" />
                       </button>
                     </div>
                     <div className="w-20 text-right">
                       <p className="font-semibold">{formatCurrency(price * item.quantity)}</p>
                     </div>
                     <button onClick={() => removeItem(item.productId)} className="text-slate-400 hover:text-red-500">
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
                   {minimumMessage && (
@@ -84,7 +95,7 @@ export default function CustomerCartPage() {
           })}
         </div>
 
-        <Card className="h-fit sticky top-4">
+        <Card className="sticky top-4 h-fit">
           <CardHeader><CardTitle>Order Summary</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -98,12 +109,12 @@ export default function CustomerCartPage() {
                 )
               })}
             </div>
-            <div className="border-t pt-3 flex justify-between font-bold text-lg">
+            <div className="flex justify-between border-t pt-3 text-lg font-bold">
               <span>Total</span><span>{formatCurrency(total())}</span>
             </div>
             <Link href="/customer/checkout">
               <Button className="w-full">
-                Proceed to Checkout <ArrowRight className="w-4 h-4 ml-2" />
+                Proceed to Checkout <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </Link>
             <Link href="/customer/products">

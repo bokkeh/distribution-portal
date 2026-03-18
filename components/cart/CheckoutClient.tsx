@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { useCart } from '@/hooks/useCart'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { cn, formatCurrency } from '@/lib/utils'
 import { loadStripe } from '@stripe/stripe-js'
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js'
@@ -15,12 +16,16 @@ import { getCustomerPaymentBreakdown, type CustomerPaymentMethod } from '@/lib/s
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '')
 
-function PaymentForm({ customerId, orderType, items, total, notes, paymentMethod, processingFee, onSuccess }: {
+function PaymentForm({ customerId, orderType, items, total, notes, deliveryTiming, preferredDeliveryDay, preferredDeliveryTime, deliveryRequirements, paymentMethod, processingFee, onSuccess }: {
   customerId: string
   orderType: 'paid' | 'sample'
   items: any[]
   total: number
   notes: string
+  deliveryTiming: 'standard' | 'time_sensitive'
+  preferredDeliveryDay: string
+  preferredDeliveryTime: string
+  deliveryRequirements: string
   paymentMethod: CustomerPaymentMethod
   processingFee: number
   onSuccess: (redirectTo?: string) => void
@@ -55,6 +60,10 @@ function PaymentForm({ customerId, orderType, items, total, notes, paymentMethod
     formData.append('orderType', orderType)
     formData.append('items', JSON.stringify(items.map(i => ({ productId: i.productId, quantity: i.quantity }))))
     if (notes.trim()) formData.append('notes', notes.trim())
+    if (deliveryTiming) formData.append('deliveryTiming', deliveryTiming)
+    if (preferredDeliveryDay) formData.append('preferredDeliveryDay', preferredDeliveryDay)
+    if (preferredDeliveryTime) formData.append('preferredDeliveryTime', preferredDeliveryTime)
+    if (deliveryRequirements) formData.append('deliveryRequirements', deliveryRequirements)
     formData.append('paymentMethod', paymentMethod)
     formData.append('processingFee', processingFee.toFixed(2))
     const result = await createOrder(formData)
@@ -84,6 +93,10 @@ export default function CheckoutClient({ customerId, customerName }: { customerI
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [notes, setNotes] = useState('')
+  const [deliveryTiming, setDeliveryTiming] = useState<'standard' | 'time_sensitive'>('standard')
+  const [preferredDeliveryDay, setPreferredDeliveryDay] = useState('')
+  const [preferredDeliveryTime, setPreferredDeliveryTime] = useState('')
+  const [deliveryRequirements, setDeliveryRequirements] = useState('')
   const [paymentMethod, setPaymentMethod] = useState<CustomerPaymentMethod>('us_bank_account')
   const [payableTotal, setPayableTotal] = useState(0)
   const [processingFee, setProcessingFee] = useState(0)
@@ -104,7 +117,11 @@ export default function CheckoutClient({ customerId, customerName }: { customerI
 
     try {
       setLoading(true)
-      const baseAmountCents = Math.round(total() * 100)
+      const deliveryFee =
+        deliveryTiming === 'time_sensitive'
+          ? (preferredDeliveryDay && ['saturday', 'sunday'].includes(preferredDeliveryDay.toLowerCase()) ? 50 : 30)
+          : 0
+      const baseAmountCents = Math.round((total() + deliveryFee) * 100)
       const res = await fetch('/api/stripe/payment-intent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -125,7 +142,12 @@ export default function CheckoutClient({ customerId, customerName }: { customerI
   }
 
   const totalAmount = total()
-  const cardBreakdown = getCustomerPaymentBreakdown(Math.round(totalAmount * 100), 'card')
+  const timeSensitiveFee =
+    deliveryTiming === 'time_sensitive'
+      ? (preferredDeliveryDay && ['saturday', 'sunday'].includes(preferredDeliveryDay.toLowerCase()) ? 50 : 30)
+      : 0
+  const orderAmountWithDelivery = totalAmount + timeSensitiveFee
+  const cardBreakdown = getCustomerPaymentBreakdown(Math.round(orderAmountWithDelivery * 100), 'card')
 
   if (items.length === 0) {
     return (
@@ -162,6 +184,12 @@ export default function CheckoutClient({ customerId, customerName }: { customerI
           <div className="border-t pt-3 flex justify-between font-bold text-lg">
             <span>Total</span><span>{formatCurrency(total())}</span>
           </div>
+          <div className="flex justify-between text-sm">
+            <span>Delivery fee</span><span>{formatCurrency(timeSensitiveFee)}</span>
+          </div>
+          <div className="border-t pt-3 flex justify-between font-bold text-lg">
+            <span>Total with delivery</span><span>{formatCurrency(orderAmountWithDelivery)}</span>
+          </div>
         </CardContent>
       </Card>
 
@@ -173,6 +201,69 @@ export default function CheckoutClient({ customerId, customerName }: { customerI
               <p className="text-sm text-muted-foreground">
                 Secure payment powered by Stripe. Your card details are never stored on our servers.
               </p>
+              <div className="space-y-1.5">
+                <label htmlFor="deliveryTiming" className="text-sm font-medium text-slate-900">
+                  Delivery option
+                </label>
+                <select
+                  id="deliveryTiming"
+                  value={deliveryTiming}
+                  onChange={(e) => setDeliveryTiming(e.target.value as 'standard' | 'time_sensitive')}
+                  className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm"
+                >
+                  <option value="standard">Standard delivery within 2 weeks</option>
+                  <option value="time_sensitive">Time-sensitive delivery</option>
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  Time-sensitive orders add a $30 weekday fee or $50 weekend fee.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <label htmlFor="preferredDeliveryDay" className="text-sm font-medium text-slate-900">
+                    Preferred delivery day
+                  </label>
+                  <select
+                    id="preferredDeliveryDay"
+                    value={preferredDeliveryDay}
+                    onChange={(e) => setPreferredDeliveryDay(e.target.value)}
+                    className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm"
+                  >
+                    <option value="">Select a day</option>
+                    <option value="Monday">Monday</option>
+                    <option value="Tuesday">Tuesday</option>
+                    <option value="Wednesday">Wednesday</option>
+                    <option value="Thursday">Thursday</option>
+                    <option value="Friday">Friday</option>
+                    <option value="Saturday">Saturday</option>
+                    <option value="Sunday">Sunday</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label htmlFor="preferredDeliveryTime" className="text-sm font-medium text-slate-900">
+                    Preferred delivery time
+                  </label>
+                  <Input
+                    id="preferredDeliveryTime"
+                    value={preferredDeliveryTime}
+                    onChange={(e) => setPreferredDeliveryTime(e.target.value)}
+                    placeholder="e.g. 9am-12pm"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="deliveryRequirements" className="text-sm font-medium text-slate-900">
+                  Delivery requirements
+                </label>
+                <textarea
+                  id="deliveryRequirements"
+                  value={deliveryRequirements}
+                  onChange={(e) => setDeliveryRequirements(e.target.value)}
+                  placeholder="Loading dock details, contact requests, or special handling."
+                  rows={3}
+                  className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
+                />
+              </div>
               <div className="space-y-1.5">
                 <label htmlFor="order-notes" className="text-sm font-medium text-slate-900">
                   Order Notes <span className="font-normal text-muted-foreground">(optional)</span>
@@ -193,7 +284,7 @@ export default function CheckoutClient({ customerId, customerName }: { customerI
                     value: 'us_bank_account',
                     title: 'Bank transfer (ACH)',
                     description: 'No card processing fee.',
-                    totalLabel: formatCurrency(totalAmount),
+                    totalLabel: formatCurrency(orderAmountWithDelivery),
                   },
                   {
                     value: 'card',
@@ -227,12 +318,16 @@ export default function CheckoutClient({ customerId, customerName }: { customerI
                   <span>{formatCurrency(totalAmount)}</span>
                 </div>
                 <div className="mt-1 flex justify-between">
+                  <span>Delivery fee</span>
+                  <span>{formatCurrency(timeSensitiveFee)}</span>
+                </div>
+                <div className="mt-1 flex justify-between">
                   <span>Card processing fee</span>
                   <span>{paymentMethod === 'card' ? formatCurrency(cardBreakdown.processingFee) : formatCurrency(0)}</span>
                 </div>
                 <div className="mt-2 flex justify-between font-semibold text-slate-900">
                   <span>Total due now</span>
-                  <span>{paymentMethod === 'card' ? formatCurrency(cardBreakdown.totalAmount) : formatCurrency(totalAmount)}</span>
+                  <span>{paymentMethod === 'card' ? formatCurrency(cardBreakdown.totalAmount) : formatCurrency(orderAmountWithDelivery)}</span>
                 </div>
               </div>
               <Button className="w-full" onClick={initializePayment} disabled={loading || !!minimumViolation}>
@@ -245,6 +340,10 @@ export default function CheckoutClient({ customerId, customerName }: { customerI
                 <div className="flex justify-between">
                   <span>Order subtotal</span>
                   <span>{formatCurrency(totalAmount)}</span>
+                </div>
+                <div className="mt-1 flex justify-between">
+                  <span>Delivery fee</span>
+                  <span>{formatCurrency(timeSensitiveFee)}</span>
                 </div>
                 <div className="mt-1 flex justify-between">
                   <span>Card processing fee</span>
@@ -261,6 +360,10 @@ export default function CheckoutClient({ customerId, customerName }: { customerI
                 items={items}
                 total={payableTotal}
                 notes={notes}
+                deliveryTiming={deliveryTiming}
+                preferredDeliveryDay={preferredDeliveryDay}
+                preferredDeliveryTime={preferredDeliveryTime}
+                deliveryRequirements={deliveryRequirements}
                 paymentMethod={paymentMethod}
                 processingFee={processingFee}
                 onSuccess={(redirectTo) => { clearCart(); router.push(redirectTo ?? '/customer/orders') }}

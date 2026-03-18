@@ -10,6 +10,7 @@ type WholesaleRequestRow = {
   id: string
   businessName: string
   businessEmail: string
+  businessType: string | null
   phone: string | null
   phoneNormalized: string | null
   smsOptIn: boolean
@@ -183,6 +184,10 @@ export default async function WholesaleRequestsPage() {
                   </div>
 
                   <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Business Type</p>
+                      <p className="text-sm text-slate-900">{request.businessType ? request.businessType.replaceAll('_', ' ') : 'Not provided'}</p>
+                    </div>
                     <div className="space-y-1">
                       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Email</p>
                       <a href={`mailto:${request.businessEmail}`} className="text-sm text-slate-900 underline-offset-4 hover:underline">

@@ -46,6 +46,17 @@ export function WholesaleAccountRequestForm() {
         required
         className="w-full rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-sm text-white placeholder-blue-300 focus:outline-none focus:ring-2 focus:ring-white/30"
       />
+      <select
+        name="businessType"
+        defaultValue=""
+        className="w-full rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/30"
+      >
+        <option value="" className="text-slate-900">Business type</option>
+        <option value="restaurant" className="text-slate-900">Restaurant</option>
+        <option value="restaurant_group" className="text-slate-900">Restaurant Group</option>
+        <option value="liquor_store" className="text-slate-900">Liquor Store</option>
+        <option value="hotel_group" className="text-slate-900">Hotel Group</option>
+      </select>
       <input
         name="phone"
         type="tel"

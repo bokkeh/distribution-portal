@@ -2,6 +2,7 @@
 
 import { and, asc, eq } from 'drizzle-orm'
 import { redirect } from 'next/navigation'
+import { revalidatePath } from 'next/cache'
 import { db } from '@/db'
 import { salesRoutes, salesRouteStops, customerAccounts } from '@/db/schema'
 import { requireAdminOrStaff } from '@/lib/auth/session'
@@ -15,10 +16,15 @@ export async function createSalesRoute(formData: FormData) {
   if (!name) throw new Error('Route name is required')
 
   const description = (formData.get('description') as string)?.trim() || null
+  const region = (formData.get('region') as string)?.trim() || null
+  const assignedRepUserId = (formData.get('assignedRepUserId') as string)?.trim() || null
+  const hourlyRateValue = (formData.get('hourlyRate') as string)?.trim() || null
+  const parsedHourlyRate = hourlyRateValue ? Number(hourlyRateValue) : null
+  const hourlyRate = parsedHourlyRate !== null && Number.isFinite(parsedHourlyRate) ? parsedHourlyRate.toFixed(2) : null
 
   const [route] = await db
     .insert(salesRoutes)
-    .values({ name, description })
+    .values({ name, description, region, assignedRepUserId, hourlyRate })
     .returning({ id: salesRoutes.id })
 
   redirect(`/admin/crm/sales-routes/${route.id}`)
@@ -46,7 +52,16 @@ export async function duplicateSalesRoute(sourceRouteId: string, formData: FormD
   // Create the new route
   const [newRoute] = await db
     .insert(salesRoutes)
-    .values({ name, description: source.description })
+    .values({
+      name,
+      description: source.description,
+      region: source.region,
+      assignedRepUserId: source.assignedRepUserId,
+      hourlyRate: source.hourlyRate,
+      originAddress: source.originAddress,
+      originLat: source.originLat,
+      originLng: source.originLng,
+    })
     .returning({ id: salesRoutes.id })
 
   // Copy all stops
@@ -68,6 +83,8 @@ export async function duplicateSalesRoute(sourceRouteId: string, formData: FormD
         lat: stop.lat,
         lng: stop.lng,
         notes: stop.notes,
+        visitPhotoUrl: stop.visitPhotoUrl,
+        visitedAt: stop.visitedAt,
       }))
     )
   }
@@ -179,6 +196,77 @@ export async function updateSalesRouteStop(
     sourceId: stopId,
   })
 
+  return { success: true }
+}
+
+export async function updateSalesRouteDetails(routeId: string, formData: FormData) {
+  await requireAdminOrStaff()
+
+  const name = (formData.get('name') as string)?.trim()
+  if (!name) return { error: 'Route name is required.' }
+
+  const description = (formData.get('description') as string)?.trim() || null
+  const region = (formData.get('region') as string)?.trim() || null
+  const assignedRepUserId = (formData.get('assignedRepUserId') as string)?.trim() || null
+  const hourlyRateValue = (formData.get('hourlyRate') as string)?.trim() || null
+  const parsedHourlyRate = hourlyRateValue ? Number(hourlyRateValue) : null
+  const hourlyRate = parsedHourlyRate !== null && Number.isFinite(parsedHourlyRate) ? parsedHourlyRate.toFixed(2) : null
+
+  await db
+    .update(salesRoutes)
+    .set({
+      name,
+      description,
+      region,
+      assignedRepUserId,
+      hourlyRate,
+    })
+    .where(eq(salesRoutes.id, routeId))
+
+  revalidatePath('/admin/crm/sales-routes')
+  revalidatePath(`/admin/crm/sales-routes/${routeId}`)
+  revalidatePath(`/share/sales-route/${routeId}`)
+  return { success: true }
+}
+
+export async function updateSalesRouteStopVisit(routeId: string, stopId: string, data: {
+  visitPhotoUrl?: string | null
+  notes?: string | null
+}) {
+  await requireAdminOrStaff()
+
+  const [existingStop] = await db
+    .select({
+      customerId: salesRouteStops.customerId,
+      notes: salesRouteStops.notes,
+    })
+    .from(salesRouteStops)
+    .where(and(eq(salesRouteStops.id, stopId), eq(salesRouteStops.routeId, routeId)))
+    .limit(1)
+
+  if (!existingStop) {
+    throw new Error('Stop not found')
+  }
+
+  await db
+    .update(salesRouteStops)
+    .set({
+      visitPhotoUrl: data.visitPhotoUrl ?? null,
+      visitedAt: data.visitPhotoUrl ? new Date() : null,
+      notes: data.notes ?? existingStop.notes,
+    })
+    .where(and(eq(salesRouteStops.id, stopId), eq(salesRouteStops.routeId, routeId)))
+
+  await logAccountNoteEvent({
+    accountId: existingStop.customerId,
+    title: 'Sales route visit update',
+    note: data.notes ?? existingStop.notes,
+    source: 'sales_route_stop',
+    sourceId: stopId,
+  })
+
+  revalidatePath(`/admin/crm/sales-routes/${routeId}`)
+  revalidatePath(`/share/sales-route/${routeId}`)
   return { success: true }
 }
 

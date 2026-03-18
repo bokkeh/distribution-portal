@@ -1,6 +1,6 @@
 import { db } from '@/db'
-import { salesRoutes, salesRouteStops } from '@/db/schema'
-import { count, desc, eq } from 'drizzle-orm'
+import { salesRoutes, salesRouteStops, users } from '@/db/schema'
+import { and, asc, count, desc, eq, or } from 'drizzle-orm'
 import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -11,19 +11,30 @@ import { createSalesRoute, deleteSalesRoute } from '@/actions/sales-routes'
 import RerunRouteButton from '@/components/sales-routes/RerunRouteButton'
 
 export default async function SalesRoutesPage() {
-  const routes = await db
-    .select({
-      id: salesRoutes.id,
-      name: salesRoutes.name,
-      description: salesRoutes.description,
-      status: salesRoutes.status,
-      createdAt: salesRoutes.createdAt,
-      stopCount: count(salesRouteStops.id),
-    })
-    .from(salesRoutes)
-    .leftJoin(salesRouteStops, eq(salesRouteStops.routeId, salesRoutes.id))
-    .groupBy(salesRoutes.id)
-    .orderBy(desc(salesRoutes.createdAt))
+  const [routes, reps] = await Promise.all([
+    db
+      .select({
+        id: salesRoutes.id,
+        name: salesRoutes.name,
+        description: salesRoutes.description,
+        status: salesRoutes.status,
+        region: salesRoutes.region,
+        hourlyRate: salesRoutes.hourlyRate,
+        assignedRepName: users.name,
+        createdAt: salesRoutes.createdAt,
+        stopCount: count(salesRouteStops.id),
+      })
+      .from(salesRoutes)
+      .leftJoin(users, eq(salesRoutes.assignedRepUserId, users.id))
+      .leftJoin(salesRouteStops, eq(salesRouteStops.routeId, salesRoutes.id))
+      .groupBy(salesRoutes.id, users.name)
+      .orderBy(desc(salesRoutes.createdAt)),
+    db
+      .select({ id: users.id, name: users.name })
+      .from(users)
+      .where(and(eq(users.active, true), or(eq(users.role, 'staff'), eq(users.role, 'admin'))))
+      .orderBy(asc(users.name)),
+  ])
 
   return (
     <div className="p-4 sm:p-8 space-y-6">
@@ -34,15 +45,15 @@ export default async function SalesRoutesPage() {
         <div className="flex-1">
           <h1 className="text-2xl font-bold text-slate-900">Sales Routes</h1>
           <p className="text-muted-foreground mt-1">
-            Build optimized routes for sales visits to customer accounts.
+            Build region-based routes, assign sales reps, and track paid field visits.
           </p>
         </div>
       </div>
 
       <Card>
         <CardContent className="pt-6">
-          <form action={createSalesRoute} className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <div className="flex-1 space-y-2">
+          <form action={createSalesRoute} className="grid gap-3 lg:grid-cols-5 lg:items-end">
+            <div className="space-y-2 lg:col-span-2">
               <label htmlFor="name" className="text-sm font-medium text-slate-900">
                 New Route Name
               </label>
@@ -54,7 +65,47 @@ export default async function SalesRoutesPage() {
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               />
             </div>
-            <div className="flex-1 space-y-2">
+            <div className="space-y-2">
+              <label htmlFor="region" className="text-sm font-medium text-slate-900">
+                Region
+              </label>
+              <input
+                id="region"
+                name="region"
+                placeholder="NW Houston"
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="assignedRepUserId" className="text-sm font-medium text-slate-900">
+                Sales Rep
+              </label>
+              <select
+                id="assignedRepUserId"
+                name="assignedRepUserId"
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="">Unassigned</option>
+                {reps.map((rep) => (
+                  <option key={rep.id} value={rep.id}>{rep.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="hourlyRate" className="text-sm font-medium text-slate-900">
+                Hourly Rate
+              </label>
+              <input
+                id="hourlyRate"
+                name="hourlyRate"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="35.00"
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
+            </div>
+            <div className="space-y-2 lg:col-span-4">
               <label htmlFor="description" className="text-sm font-medium text-slate-900">
                 Description <span className="text-muted-foreground font-normal">(optional)</span>
               </label>
@@ -95,9 +146,12 @@ export default async function SalesRoutesPage() {
                     {route.description && (
                       <p className="text-sm text-muted-foreground">{route.description}</p>
                     )}
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                       <MapPin className="w-3.5 h-3.5" />
                       <span>{route.stopCount} {route.stopCount === 1 ? 'stop' : 'stops'}</span>
+                      {route.region && <><span className="text-slate-300">·</span><span>{route.region}</span></>}
+                      {route.assignedRepName && <><span className="text-slate-300">·</span><span>Rep: {route.assignedRepName}</span></>}
+                      {route.hourlyRate && <><span className="text-slate-300">·</span><span>${Number(route.hourlyRate).toFixed(2)}/hr</span></>}
                       <span className="text-slate-300">·</span>
                       <span>Created {formatDate(route.createdAt)}</span>
                     </div>

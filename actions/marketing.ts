@@ -12,6 +12,7 @@ import { createNotificationsForRoles } from '@/lib/notifications/in-app'
 const requestSchema = z.object({
   businessName: z.string().trim().min(2, 'Business name is required'),
   businessEmail: z.email('Enter a valid email address'),
+  businessType: z.string().trim().optional(),
   phone: z.string().trim().min(10, 'Enter a valid phone number'),
   smsOptIn: z.boolean(),
   source: z.string().trim().default('marketing_contact_form'),
@@ -71,6 +72,7 @@ export async function submitWholesaleAccountRequest(
     const parsed = requestSchema.parse({
       businessName: formData.get('businessName'),
       businessEmail: formData.get('businessEmail'),
+      businessType: formData.get('businessType'),
       phone: formData.get('phone'),
       smsOptIn: formData.get('smsOptIn') === 'on',
       source: formData.get('source'),
@@ -84,6 +86,7 @@ export async function submitWholesaleAccountRequest(
     const insertValues = {
       businessName: parsed.businessName,
       businessEmail: parsed.businessEmail,
+      businessType: parsed.businessType || null,
       phone,
       phoneNormalized,
       smsOptIn: parsed.smsOptIn,
@@ -98,6 +101,7 @@ export async function submitWholesaleAccountRequest(
     const fallbackInsertValues = {
       businessName: insertValues.businessName,
       businessEmail: insertValues.businessEmail,
+      businessType: insertValues.businessType,
       phone: insertValues.phone,
       phoneNormalized: insertValues.phoneNormalized,
       smsOptIn: insertValues.smsOptIn,
@@ -132,6 +136,7 @@ export async function submitWholesaleAccountRequest(
 
       if (availableColumns.has('business_name')) retryValues.businessName = fallbackInsertValues.businessName
       if (availableColumns.has('business_email')) retryValues.businessEmail = fallbackInsertValues.businessEmail
+      if (availableColumns.has('business_type')) retryValues.businessType = fallbackInsertValues.businessType
       if (availableColumns.has('phone')) retryValues.phone = fallbackInsertValues.phone
       if (availableColumns.has('phone_normalized')) retryValues.phoneNormalized = fallbackInsertValues.phoneNormalized
       if (availableColumns.has('sms_opt_in')) retryValues.smsOptIn = fallbackInsertValues.smsOptIn
@@ -169,6 +174,7 @@ export async function submitWholesaleAccountRequest(
     void sendWholesaleRequestNotification({
       businessName: parsed.businessName,
       businessEmail: parsed.businessEmail,
+      businessType: parsed.businessType || null,
       phone,
       phoneNormalized,
       smsOptIn: parsed.smsOptIn,

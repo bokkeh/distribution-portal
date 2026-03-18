@@ -12,6 +12,8 @@ export type RouteStop = {
   contactName: string | null
   contactPhone: string | null
   notes: string | null
+  visitPhotoUrl?: string | null
+  visitedAt?: string | Date | null
   companyName: string | null
   lat: number | null
   lng: number | null

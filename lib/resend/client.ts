@@ -416,12 +416,14 @@ export async function sendWelcomeEmail({
 export async function sendWholesaleRequestNotification({
   businessName,
   businessEmail,
+  businessType,
   phone,
   phoneNormalized,
   smsOptIn,
 }: {
   businessName: string
   businessEmail: string
+  businessType?: string | null
   phone: string | null
   phoneNormalized: string | null
   smsOptIn: boolean
@@ -433,6 +435,7 @@ export async function sendWholesaleRequestNotification({
     variables: {
       business_name: escapeHtml(businessName),
       business_email: escapeHtml(businessEmail),
+      business_type: escapeHtml(businessType ?? '-'),
       phone: escapeHtml(phone ?? '-'),
       phone_normalized: escapeHtml(phoneNormalized ?? '-'),
       sms_opt_in: smsOptIn ? 'Yes' : 'No',

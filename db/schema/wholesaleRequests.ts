@@ -4,6 +4,7 @@ export const wholesaleAccountRequests = pgTable('wholesale_account_requests', {
   id: uuid('id').primaryKey().defaultRandom(),
   businessName: text('business_name').notNull(),
   businessEmail: text('business_email').notNull(),
+  businessType: text('business_type'),
   phone: text('phone'),
   phoneNormalized: text('phone_normalized'),
   smsOptIn: boolean('sms_opt_in').notNull().default(false),
