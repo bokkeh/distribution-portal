@@ -13,7 +13,12 @@ export type CRMAccountDetail = {
   zip: string | null
   phone: string | null
   email: string | null
+  businessType: string | null
   dcAbraNumber: string | null
+  liquorLicenseNumber: string | null
+  liquorLicenseState: string | null
+  liquorLicenseExpiration: string | null
+  liquorLicenseUrl: string | null
   hubspotContactId: string | null
   hubspotCompanyId: string | null
   dealStage: string | null
@@ -35,7 +40,12 @@ export type CRMAccountDetail = {
 }
 
 const DEFAULT_ACCOUNT_DETAIL = {
+  businessType: null,
   dcAbraNumber: null,
+  liquorLicenseNumber: null,
+  liquorLicenseState: null,
+  liquorLicenseExpiration: null,
+  liquorLicenseUrl: null,
   hubspotContactId: null,
   hubspotCompanyId: null,
   dealStage: 'new_lead',
@@ -115,7 +125,12 @@ export async function getCRMAccountDetail(accountId: string): Promise<CRMAccount
   if (!availableColumns.size) return fallbackAccount
 
   const optionalFields: Array<keyof typeof DEFAULT_ACCOUNT_DETAIL> = [
+    'businessType',
     'dcAbraNumber',
+    'liquorLicenseNumber',
+    'liquorLicenseState',
+    'liquorLicenseExpiration',
+    'liquorLicenseUrl',
     'hubspotContactId',
     'hubspotCompanyId',
     'dealStage',
@@ -133,7 +148,12 @@ export async function getCRMAccountDetail(accountId: string): Promise<CRMAccount
   ]
 
   const columnMap: Record<(typeof optionalFields)[number], string> = {
+    businessType: 'business_type',
     dcAbraNumber: 'dc_abra_number',
+    liquorLicenseNumber: 'liquor_license_number',
+    liquorLicenseState: 'liquor_license_state',
+    liquorLicenseExpiration: 'liquor_license_expiration',
+    liquorLicenseUrl: 'liquor_license_url',
     hubspotContactId: 'hubspot_contact_id',
     hubspotCompanyId: 'hubspot_company_id',
     dealStage: 'deal_stage',
