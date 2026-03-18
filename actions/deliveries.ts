@@ -3,7 +3,7 @@
 import { db } from '@/db'
 import { deliveries, deliveryStops, orders, drivers, users, customerAccounts } from '@/db/schema'
 import { requireAdmin, requireAdminOrStaff, requireRole } from '@/lib/auth/session'
-import { and, desc, eq, inArray } from 'drizzle-orm'
+import { and, count, desc, eq, inArray, ne } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { sendSms } from '@/lib/telnyx/client'
@@ -256,10 +256,63 @@ export async function createDelivery(formData: FormData) {
 
 export async function updateStopStatus(stopId: string, status: 'delivered' | 'failed') {
   await requireAdminOrStaff()
+
+  const [stop] = await db
+    .select({ id: deliveryStops.id, deliveryId: deliveryStops.deliveryId, orderId: deliveryStops.orderId })
+    .from(deliveryStops)
+    .where(eq(deliveryStops.id, stopId))
+    .limit(1)
+
   await db.update(deliveryStops)
     .set({ status, completedAt: status === 'delivered' ? new Date() : null })
     .where(eq(deliveryStops.id, stopId))
+
+  if (stop?.orderId && status === 'delivered') {
+    await db.update(orders)
+      .set({ shippingStatus: 'delivered' })
+      .where(eq(orders.id, stop.orderId))
+  }
+
+  if (stop) {
+    const [{ pendingCount }] = await db
+      .select({ pendingCount: count() })
+      .from(deliveryStops)
+      .where(and(
+        eq(deliveryStops.deliveryId, stop.deliveryId),
+        ne(deliveryStops.id, stop.id),
+        eq(deliveryStops.status, 'pending'),
+      ))
+
+    if (pendingCount === 0) {
+      await db.update(deliveries)
+        .set({ status: 'completed' })
+        .where(eq(deliveries.id, stop.deliveryId))
+
+      const deliveryUrl = `${process.env.NEXTAUTH_URL}/admin/deliveries/${stop.deliveryId}`
+      const staffPhones = [
+        process.env.ADMIN_NOTIFICATION_PHONE,
+        '+12489339350',
+        process.env.ORDER_NOTIFY_KRISTEN_PHONE,
+      ].filter(Boolean) as string[]
+
+      await Promise.allSettled([
+        postGoogleChat(`✅ Delivery Run Completed\nAll stops finished.\n${deliveryUrl}`),
+        ...staffPhones.map(phone =>
+          sendSms({ to: phone, body: `AHAWC: All stops on a delivery run are now complete. View: ${deliveryUrl}`, bypassOptOut: true })
+        ),
+        createNotificationsForRoles({
+          roles: ['admin', 'staff'],
+          kind: 'delivery_completed',
+          title: 'Delivery run completed',
+          body: 'All stops on a delivery run have been completed.',
+          href: `/admin/deliveries/${stop.deliveryId}`,
+        }),
+      ])
+    }
+  }
+
   revalidatePath('/driver/deliveries')
+  revalidatePath('/admin/deliveries')
 }
 
 export async function getDeliveryStopUploadUrl(
@@ -287,6 +340,7 @@ export async function completeDeliveryStop(stopId: string, formData: FormData) {
     .select({
       id: deliveryStops.id,
       deliveryId: deliveryStops.deliveryId,
+      orderId: deliveryStops.orderId,
       customerId: deliveryStops.customerId,
       address: deliveryStops.address,
       companyName: customerAccounts.companyName,
@@ -332,6 +386,54 @@ export async function completeDeliveryStop(stopId: string, formData: FormData) {
         notes,
       })
       .where(eq(deliveryStops.id, stopId))
+  }
+
+  // Update linked order shipping status to 'delivered'
+  if (stop.orderId) {
+    await db.update(orders)
+      .set({ shippingStatus: 'delivered' })
+      .where(eq(orders.id, stop.orderId))
+  }
+
+  // Check if all stops on this delivery are now completed (none still pending)
+  const [{ pendingCount }] = await db
+    .select({ pendingCount: count() })
+    .from(deliveryStops)
+    .where(and(
+      eq(deliveryStops.deliveryId, stop.deliveryId),
+      ne(deliveryStops.id, stop.id),           // exclude the stop we just updated
+      eq(deliveryStops.status, 'pending'),
+    ))
+
+  if (pendingCount === 0) {
+    // All stops done — mark the whole delivery completed
+    await db.update(deliveries)
+      .set({ status: 'completed' })
+      .where(eq(deliveries.id, stop.deliveryId))
+
+    const adminPhone = process.env.ADMIN_NOTIFICATION_PHONE
+    const kimPhone = '+12489339350'
+    const kristenPhone = process.env.ORDER_NOTIFY_KRISTEN_PHONE
+    const staffPhones = [adminPhone, kimPhone, kristenPhone].filter(Boolean) as string[]
+    const deliveryUrl = `${process.env.NEXTAUTH_URL}/admin/deliveries/${stop.deliveryId}`
+
+    await Promise.allSettled([
+      postGoogleChat(`✅ Delivery Run Completed\nAll stops finished for delivery ${stop.deliveryId}.\n${deliveryUrl}`),
+      ...staffPhones.map(phone =>
+        sendSms({
+          to: phone,
+          body: `AHAWC: All stops on a delivery run are now complete. View: ${deliveryUrl}`,
+          bypassOptOut: true,
+        })
+      ),
+      createNotificationsForRoles({
+        roles: ['admin', 'staff'],
+        kind: 'delivery_completed',
+        title: 'Delivery run completed',
+        body: 'All stops on a delivery run have been completed.',
+        href: `/admin/deliveries/${stop.deliveryId}`,
+      }),
+    ])
   }
 
   const notificationPhone = stop.contactPhone || stop.accountPhone
