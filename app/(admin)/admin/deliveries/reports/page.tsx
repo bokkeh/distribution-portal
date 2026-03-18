@@ -68,25 +68,63 @@ export default async function DeliveryReportsPage() {
 
   const deliveryIds = completedDeliveries.map(d => d.id)
 
-  const allStops = await db
-    .select({
-      id: deliveryStops.id,
-      deliveryId: deliveryStops.deliveryId,
-      sequenceNumber: deliveryStops.sequenceNumber,
-      address: deliveryStops.address,
-      companyName: customerAccounts.companyName,
-      lat: deliveryStops.lat,
-      lng: deliveryStops.lng,
-      status: deliveryStops.status,
-      completedAt: deliveryStops.completedAt,
-      proofOfDeliveryUrl: deliveryStops.proofOfDeliveryUrl,
-      shelfPhotoUrl: deliveryStops.shelfPhotoUrl,
-      additionalPhotoUrl: deliveryStops.additionalPhotoUrl,
-    })
-    .from(deliveryStops)
-    .leftJoin(customerAccounts, eq(deliveryStops.customerId, customerAccounts.id))
-    .where(inArray(deliveryStops.deliveryId, deliveryIds))
-    .orderBy(deliveryStops.deliveryId, deliveryStops.sequenceNumber)
+  type StopRow = {
+    id: string
+    deliveryId: string
+    sequenceNumber: number
+    address: string
+    companyName: string | null
+    lat: string | null
+    lng: string | null
+    status: 'pending' | 'delivered' | 'failed'
+    completedAt: Date | null
+    proofOfDeliveryUrl: string | null
+    shelfPhotoUrl: string | null
+    additionalPhotoUrl: string | null
+  }
+
+  let allStops: StopRow[]
+  try {
+    allStops = await db
+      .select({
+        id: deliveryStops.id,
+        deliveryId: deliveryStops.deliveryId,
+        sequenceNumber: deliveryStops.sequenceNumber,
+        address: deliveryStops.address,
+        companyName: customerAccounts.companyName,
+        lat: deliveryStops.lat,
+        lng: deliveryStops.lng,
+        status: deliveryStops.status,
+        completedAt: deliveryStops.completedAt,
+        proofOfDeliveryUrl: deliveryStops.proofOfDeliveryUrl,
+        shelfPhotoUrl: deliveryStops.shelfPhotoUrl,
+        additionalPhotoUrl: deliveryStops.additionalPhotoUrl,
+      })
+      .from(deliveryStops)
+      .leftJoin(customerAccounts, eq(deliveryStops.customerId, customerAccounts.id))
+      .where(inArray(deliveryStops.deliveryId, deliveryIds))
+      .orderBy(deliveryStops.deliveryId, deliveryStops.sequenceNumber)
+  } catch {
+    allStops = await db
+      .select({
+        id: deliveryStops.id,
+        deliveryId: deliveryStops.deliveryId,
+        sequenceNumber: deliveryStops.sequenceNumber,
+        address: deliveryStops.address,
+        companyName: customerAccounts.companyName,
+        lat: deliveryStops.lat,
+        lng: deliveryStops.lng,
+        status: deliveryStops.status,
+        completedAt: deliveryStops.completedAt,
+        proofOfDeliveryUrl: deliveryStops.proofOfDeliveryUrl,
+        shelfPhotoUrl: deliveryStops.shelfPhotoUrl,
+      })
+      .from(deliveryStops)
+      .leftJoin(customerAccounts, eq(deliveryStops.customerId, customerAccounts.id))
+      .where(inArray(deliveryStops.deliveryId, deliveryIds))
+      .orderBy(deliveryStops.deliveryId, deliveryStops.sequenceNumber)
+      .then(rows => rows.map(row => ({ ...row, additionalPhotoUrl: null })))
+  }
 
   const stopsByDelivery = new Map<string, typeof allStops>()
   for (const stop of allStops) {
