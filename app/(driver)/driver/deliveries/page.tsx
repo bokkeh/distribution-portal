@@ -60,6 +60,7 @@ export default async function DriverDeliveriesPage() {
           notes: string | null
           proofOfDeliveryUrl: string | null
           shelfPhotoUrl: string | null
+          additionalPhotoUrl: string | null
           lat: string | null
           lng: string | null
           companyName: string | null
@@ -78,6 +79,7 @@ export default async function DriverDeliveriesPage() {
               notes: deliveryStops.notes,
               proofOfDeliveryUrl: deliveryStops.proofOfDeliveryUrl,
               shelfPhotoUrl: deliveryStops.shelfPhotoUrl,
+              additionalPhotoUrl: deliveryStops.additionalPhotoUrl,
               lat: deliveryStops.lat,
               lng: deliveryStops.lng,
               companyName: customerAccounts.companyName,
@@ -117,6 +119,7 @@ export default async function DriverDeliveriesPage() {
               contactEmail: null,
               proofOfDeliveryUrl: null,
               shelfPhotoUrl: null,
+              additionalPhotoUrl: null,
             })))
         }
 

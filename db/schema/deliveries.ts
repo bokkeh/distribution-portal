@@ -30,6 +30,7 @@ export const deliveryStops = pgTable('delivery_stops', {
   notes: text('notes'),
   proofOfDeliveryUrl: text('proof_of_delivery_url'),
   shelfPhotoUrl: text('shelf_photo_url'),
+  additionalPhotoUrl: text('additional_photo_url'),
   completedAt: timestamp('completed_at', { withTimezone: true }),
 })
 

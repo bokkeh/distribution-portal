@@ -334,6 +334,7 @@ export async function completeDeliveryStop(stopId: string, formData: FormData) {
 
   const proofOfDeliveryUrl = ((formData.get('proofOfDeliveryUrl') as string) || '').trim() || null
   const shelfPhotoUrl = ((formData.get('shelfPhotoUrl') as string) || '').trim() || null
+  const additionalPhotoUrl = ((formData.get('additionalPhotoUrl') as string) || '').trim() || null
   const notes = ((formData.get('notes') as string) || '').trim() || null
 
   const [stop] = await db
@@ -368,6 +369,7 @@ export async function completeDeliveryStop(stopId: string, formData: FormData) {
         notes,
         proofOfDeliveryUrl,
         shelfPhotoUrl,
+        additionalPhotoUrl,
       })
       .where(eq(deliveryStops.id, stopId))
   } catch (error) {
@@ -375,7 +377,7 @@ export async function completeDeliveryStop(stopId: string, formData: FormData) {
       ?? (error as { cause?: { code?: string } } | null)?.cause?.code
     const message = error instanceof Error ? error.message.toLowerCase() : ''
 
-    if (code !== '42703' && !message.includes('proof_of_delivery_url') && !message.includes('shelf_photo_url')) {
+    if (code !== '42703' && !message.includes('proof_of_delivery_url') && !message.includes('shelf_photo_url') && !message.includes('additional_photo_url')) {
       throw error
     }
 

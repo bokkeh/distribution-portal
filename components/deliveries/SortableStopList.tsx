@@ -27,6 +27,7 @@ type Stop = {
   notes: string | null
   proofOfDeliveryUrl?: string | null
   shelfPhotoUrl?: string | null
+  additionalPhotoUrl?: string | null
   completedAt?: Date | null
   companyName: string | null
 }
@@ -162,44 +163,31 @@ function SortableStopCard({
             {mode === 'admin' && stop.completedAt && (
               <p className="mt-1 text-xs text-muted-foreground">Completed {formatDate(stop.completedAt)}</p>
             )}
-            {mode === 'admin' && (stop.proofOfDeliveryUrl || stop.shelfPhotoUrl) && (
+            {mode === 'admin' && (stop.proofOfDeliveryUrl || stop.shelfPhotoUrl || stop.additionalPhotoUrl) && (
               <div className="mt-2 flex gap-2">
-                {stop.proofOfDeliveryUrl && (
+                {([
+                  { url: stop.proofOfDeliveryUrl, label: 'POD', title: 'Proof of delivery' },
+                  { url: stop.shelfPhotoUrl, label: 'Shelf', title: 'Shelf photo' },
+                  { url: stop.additionalPhotoUrl, label: 'Extra', title: 'Additional photo' },
+                ] as { url: string | null | undefined; label: string; title: string }[]).filter(p => p.url).map(({ url, label, title }) => (
                   <a
-                    href={stop.proofOfDeliveryUrl}
+                    key={label}
+                    href={url!}
                     target="_blank"
                     rel="noreferrer"
                     className="group relative block h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
-                    title="Proof of delivery"
+                    title={title}
                   >
                     <Image
-                      src={stop.proofOfDeliveryUrl}
-                      alt="Proof of delivery"
+                      src={url!}
+                      alt={title}
                       fill
                       className="object-cover transition-opacity group-hover:opacity-80"
                       unoptimized
                     />
-                    <span className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-center text-[9px] font-medium text-white">POD</span>
+                    <span className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-center text-[9px] font-medium text-white">{label}</span>
                   </a>
-                )}
-                {stop.shelfPhotoUrl && (
-                  <a
-                    href={stop.shelfPhotoUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="group relative block h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
-                    title="Shelf photo"
-                  >
-                    <Image
-                      src={stop.shelfPhotoUrl}
-                      alt="Shelf photo"
-                      fill
-                      className="object-cover transition-opacity group-hover:opacity-80"
-                      unoptimized
-                    />
-                    <span className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-center text-[9px] font-medium text-white">Shelf</span>
-                  </a>
-                )}
+                ))}
               </div>
             )}
           </div>
@@ -225,7 +213,7 @@ function SortableStopCard({
 
       {mode === 'driver' && !editing && (
         <div className="mt-4 border-t pt-4">
-          <DriverStopActions stop={{ id: stop.id, status: stop.status, notes: stop.notes, proofOfDeliveryUrl: stop.proofOfDeliveryUrl, shelfPhotoUrl: stop.shelfPhotoUrl }} />
+          <DriverStopActions stop={{ id: stop.id, status: stop.status, notes: stop.notes, proofOfDeliveryUrl: stop.proofOfDeliveryUrl, shelfPhotoUrl: stop.shelfPhotoUrl, additionalPhotoUrl: stop.additionalPhotoUrl }} />
         </div>
       )}
     </div>

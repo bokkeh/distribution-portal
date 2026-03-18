@@ -86,6 +86,7 @@ export default async function DeliveryDetailPage({
     completedAt: Date | null
     proofOfDeliveryUrl: string | null
     shelfPhotoUrl: string | null
+    additionalPhotoUrl: string | null
     companyName: string | null
   }> = []
 
@@ -105,6 +106,7 @@ export default async function DeliveryDetailPage({
         completedAt: deliveryStops.completedAt,
         proofOfDeliveryUrl: deliveryStops.proofOfDeliveryUrl,
         shelfPhotoUrl: deliveryStops.shelfPhotoUrl,
+        additionalPhotoUrl: deliveryStops.additionalPhotoUrl,
         companyName: customerAccounts.companyName,
       })
       .from(deliveryStops)
@@ -143,6 +145,7 @@ export default async function DeliveryDetailPage({
         contactEmail: null,
         proofOfDeliveryUrl: null,
         shelfPhotoUrl: null,
+        additionalPhotoUrl: null,
       })))
   }
 
