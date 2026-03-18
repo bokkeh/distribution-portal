@@ -443,13 +443,30 @@ export async function completeDeliveryStop(stopId: string, formData: FormData) {
   const accountPrefs = stop.customerId ? await getAccountPreferences(stop.customerId, null).catch(() => null) : null
   const deliveryTimeZone = accountPrefs?.timeZone ?? 'America/New_York'
   const deliveryDate = formatDateInTimeZone(new Date(), deliveryTimeZone)
-  const prefersSms = stop.notificationPreference === 'sms' || stop.notificationPreference === 'both'
+  const prefersNoSms = stop.notificationPreference === 'email'
   const prefersEmail = !stop.notificationPreference || stop.notificationPreference === 'email' || stop.notificationPreference === 'both'
 
-  if (notificationPhone && prefersSms) {
+  const stopLabel = stop.companyName ?? stop.address
+  const staffPhones = [
+    process.env.ADMIN_NOTIFICATION_PHONE,
+    '+12489339350',
+    process.env.ORDER_NOTIFY_KRISTEN_PHONE,
+  ].filter(Boolean) as string[]
+
+  await Promise.allSettled(
+    staffPhones.map(phone =>
+      sendSms({
+        to: phone,
+        body: `AHAWC: Stop delivered — ${stopLabel}. View: ${process.env.NEXTAUTH_URL}/admin/deliveries/${stop.deliveryId}`,
+        bypassOptOut: true,
+      })
+    )
+  )
+
+  if (notificationPhone && !prefersNoSms) {
     await sendSms({
       to: notificationPhone,
-      body: `AHAWC delivery update: your order for ${stop.companyName ?? stop.address} was delivered on ${deliveryDate} (${getShortTimeZoneLabel(deliveryTimeZone)}).`,
+      body: `AHAWC: Your order for ${stop.companyName ?? 'your account'} has been delivered. Thank you!`,
     }).catch(() => {})
   }
 
