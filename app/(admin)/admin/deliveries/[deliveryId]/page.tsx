@@ -9,7 +9,7 @@ import { formatDate } from '@/lib/utils'
 import DeliveryMapWrapper from '@/components/deliveries/DeliveryMapWrapper'
 import SortableStopList from '@/components/deliveries/SortableStopList'
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Eye, Settings2 } from 'lucide-react'
 import { reassignDeliveryDriver } from '@/actions/deliveries'
 import AddDeliveryStopForm from '@/components/deliveries/AddStopForm'
 import { getActivityTimeline } from '@/lib/activity/read'
@@ -21,13 +21,14 @@ export default async function DeliveryDetailPage({
   searchParams,
 }: {
   params: Promise<{ deliveryId: string }> | { deliveryId: string }
-  searchParams?: Promise<{ addStop?: string; error?: string }> | { addStop?: string; error?: string }
+  searchParams?: Promise<{ addStop?: string; error?: string; view?: string }> | { addStop?: string; error?: string; view?: string }
 }) {
   const resolvedParams = await Promise.resolve(params)
   const resolvedSearchParams = await Promise.resolve(searchParams ?? {})
   const showAddStop = resolvedSearchParams.addStop === '1'
   const addStopError = resolvedSearchParams.error
   const pageError = resolvedSearchParams.error
+  const isDriverView = resolvedSearchParams.view === 'driver'
 
   const [delivery] = await db
     .select({
@@ -83,6 +84,8 @@ export default async function DeliveryDetailPage({
     status: 'pending' | 'delivered' | 'failed'
     notes: string | null
     completedAt: Date | null
+    proofOfDeliveryUrl: string | null
+    shelfPhotoUrl: string | null
     companyName: string | null
   }> = []
 
@@ -100,6 +103,8 @@ export default async function DeliveryDetailPage({
         status: deliveryStops.status,
         notes: deliveryStops.notes,
         completedAt: deliveryStops.completedAt,
+        proofOfDeliveryUrl: deliveryStops.proofOfDeliveryUrl,
+        shelfPhotoUrl: deliveryStops.shelfPhotoUrl,
         companyName: customerAccounts.companyName,
       })
       .from(deliveryStops)
@@ -136,6 +141,8 @@ export default async function DeliveryDetailPage({
         contactName: null,
         contactPhone: null,
         contactEmail: null,
+        proofOfDeliveryUrl: null,
+        shelfPhotoUrl: null,
       })))
   }
 
@@ -179,9 +186,18 @@ export default async function DeliveryDetailPage({
           <p className="text-muted-foreground mt-1">Driver: {delivery.driverName} - {delivery.driverPhone}</p>
         </div>
         <CopyShareLink path={`/share/delivery/${resolvedParams.deliveryId}`} />
-        <Link href={showAddStop ? `/admin/deliveries/${resolvedParams.deliveryId}` : `/admin/deliveries/${resolvedParams.deliveryId}?addStop=1`}>
-          <Button variant="outline">Add Stop</Button>
+        <Link href={isDriverView
+          ? `/admin/deliveries/${resolvedParams.deliveryId}${showAddStop ? '?addStop=1' : ''}`
+          : `/admin/deliveries/${resolvedParams.deliveryId}?view=driver`}>
+          <Button variant="outline" size="sm" className="gap-2">
+            {isDriverView ? <><Settings2 className="w-4 h-4" />Admin View</> : <><Eye className="w-4 h-4" />Driver View</>}
+          </Button>
         </Link>
+        {!isDriverView && (
+          <Link href={showAddStop ? `/admin/deliveries/${resolvedParams.deliveryId}` : `/admin/deliveries/${resolvedParams.deliveryId}?addStop=1`}>
+            <Button variant="outline">Add Stop</Button>
+          </Link>
+        )}
         <Badge variant={delivery.status === 'completed' ? 'success' : delivery.status === 'in_progress' ? 'warning' : 'info'}>
           {delivery.status.replace('_', ' ')}
         </Badge>
@@ -239,12 +255,17 @@ export default async function DeliveryDetailPage({
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>{stops.length} Stops</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              {stops.length} Stops
+              {isDriverView && <Badge variant="secondary">Driver View</Badge>}
+            </CardTitle>
+          </CardHeader>
           <CardContent className="space-y-3">
             <SortableStopList
               deliveryId={resolvedParams.deliveryId}
               stops={stops}
-              mode="admin"
+              mode={isDriverView ? 'driver' : 'admin'}
               originAddress={delivery.originAddress ?? null}
             />
           </CardContent>
