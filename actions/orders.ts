@@ -517,6 +517,8 @@ export async function updateOrderShippingStatus(orderId: string, formData: FormD
       email: customerAccounts.email,
       businessEmail: customerAccounts.businessEmail,
       pocEmail: customerAccounts.pocEmail,
+      phone: customerAccounts.phone,
+      notificationPreference: customerAccounts.notificationPreference,
     })
     .from(orders)
     .leftJoin(customerAccounts, eq(orders.customerId, customerAccounts.id))
@@ -564,6 +566,19 @@ export async function updateOrderShippingStatus(orderId: string, formData: FormD
       orderId,
       status: shippingStatus,
     })
+  }
+
+  // SMS notification — send for actionable statuses, respect preference
+  const smsMessages: Partial<Record<typeof shippingStatus, string>> = {
+    scheduled:        `AHAWC: Your order for ${order?.companyName ?? 'your account'} has been scheduled for delivery.`,
+    out_for_delivery: `AHAWC: Your order for ${order?.companyName ?? 'your account'} is out for delivery today.`,
+    delivered:        `AHAWC: Your order for ${order?.companyName ?? 'your account'} has been delivered. Thank you!`,
+    issue:            `AHAWC: There is a delivery issue with your order for ${order?.companyName ?? 'your account'}. We will be in touch shortly.`,
+  }
+  const smsBody = smsMessages[shippingStatus]
+  const prefersNoSms = order?.notificationPreference === 'email'
+  if (smsBody && order?.phone && !prefersNoSms) {
+    await sendSms({ to: order.phone, body: smsBody }).catch(() => {})
   }
 
   revalidatePath('/admin/orders')
