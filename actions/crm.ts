@@ -1,7 +1,7 @@
 'use server'
 
 import { db } from '@/db'
-import { customerAccounts, contacts } from '@/db/schema'
+import { accountPreferences, activityEvents, contacts, customerAccounts, deliveryStops, invoices, orders, salesRouteStops, smsThreads, tastings } from '@/db/schema'
 import { requireAdminOrStaff } from '@/lib/auth/session'
 import { eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
@@ -15,6 +15,163 @@ export async function updateDealStage(accountId: string, dealStage: string) {
   revalidatePath('/staff/crm')
   revalidatePath(`/admin/crm/${accountId}`)
   revalidatePath(`/staff/crm/${accountId}`)
+}
+
+function combineTextValues(...values: Array<string | null | undefined>) {
+  const parts = values
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value))
+  return parts.length ? Array.from(new Set(parts)).join('\n') : null
+}
+
+export async function mergeCustomerAccounts(formData: FormData) {
+  const session = await requireAdminOrStaff()
+
+  const sourceAccountId = (formData.get('sourceAccountId') as string | null)?.trim()
+  const targetAccountId = (formData.get('targetAccountId') as string | null)?.trim()
+
+  if (!sourceAccountId || !targetAccountId) {
+    throw new Error('Both source and target accounts are required.')
+  }
+  if (sourceAccountId === targetAccountId) {
+    throw new Error('Choose two different accounts to merge.')
+  }
+
+  const [sourceAccount] = await db.select().from(customerAccounts).where(eq(customerAccounts.id, sourceAccountId)).limit(1)
+  const [targetAccount] = await db.select().from(customerAccounts).where(eq(customerAccounts.id, targetAccountId)).limit(1)
+
+  if (!sourceAccount || !targetAccount) {
+    throw new Error('One of the accounts could not be found.')
+  }
+
+  await db.update(contacts).set({ customerId: targetAccountId }).where(eq(contacts.customerId, sourceAccountId))
+  await db.update(orders).set({ customerId: targetAccountId }).where(eq(orders.customerId, sourceAccountId))
+  await db.update(invoices).set({ customerId: targetAccountId }).where(eq(invoices.customerId, sourceAccountId))
+  await db.update(tastings).set({ customerId: targetAccountId }).where(eq(tastings.customerId, sourceAccountId))
+  await db.update(deliveryStops).set({ customerId: targetAccountId }).where(eq(deliveryStops.customerId, sourceAccountId))
+  await db.update(salesRouteStops).set({ customerId: targetAccountId }).where(eq(salesRouteStops.customerId, sourceAccountId))
+  await db.update(smsThreads).set({ customerId: targetAccountId }).where(eq(smsThreads.customerId, sourceAccountId))
+  await db.update(activityEvents).set({ entityId: targetAccountId }).where(eq(activityEvents.entityId, sourceAccountId))
+
+  const mergedFields = {
+    userId: targetAccount.userId ?? sourceAccount.userId,
+    contactName: targetAccount.contactName ?? sourceAccount.contactName,
+    address: targetAccount.address ?? sourceAccount.address,
+    city: targetAccount.city ?? sourceAccount.city,
+    state: targetAccount.state ?? sourceAccount.state,
+    zip: targetAccount.zip ?? sourceAccount.zip,
+    phone: targetAccount.phone ?? sourceAccount.phone,
+    email: targetAccount.email ?? sourceAccount.email,
+    businessType: targetAccount.businessType ?? sourceAccount.businessType,
+    dcAbraNumber: targetAccount.dcAbraNumber ?? sourceAccount.dcAbraNumber,
+    liquorLicenseNumber: targetAccount.liquorLicenseNumber ?? sourceAccount.liquorLicenseNumber,
+    liquorLicenseState: targetAccount.liquorLicenseState ?? sourceAccount.liquorLicenseState,
+    liquorLicenseExpiration: targetAccount.liquorLicenseExpiration ?? sourceAccount.liquorLicenseExpiration,
+    liquorLicenseUrl: targetAccount.liquorLicenseUrl ?? sourceAccount.liquorLicenseUrl,
+    hubspotContactId: targetAccount.hubspotContactId ?? sourceAccount.hubspotContactId,
+    hubspotCompanyId: targetAccount.hubspotCompanyId ?? sourceAccount.hubspotCompanyId,
+    businessEmail: targetAccount.businessEmail ?? sourceAccount.businessEmail,
+    businessPhone: targetAccount.businessPhone ?? sourceAccount.businessPhone,
+    notificationPreference: targetAccount.notificationPreference ?? sourceAccount.notificationPreference,
+    pocName: targetAccount.pocName ?? sourceAccount.pocName,
+    pocPhone: targetAccount.pocPhone ?? sourceAccount.pocPhone,
+    pocEmail: targetAccount.pocEmail ?? sourceAccount.pocEmail,
+    hoursOfOperation: combineTextValues(targetAccount.hoursOfOperation, sourceAccount.hoursOfOperation),
+    preferredDeliveryDays: combineTextValues(targetAccount.preferredDeliveryDays, sourceAccount.preferredDeliveryDays),
+    preferredDeliveryTimes: combineTextValues(targetAccount.preferredDeliveryTimes, sourceAccount.preferredDeliveryTimes),
+    additionalLocations: combineTextValues(targetAccount.additionalLocations, sourceAccount.additionalLocations),
+  }
+
+  await db.update(customerAccounts).set(mergedFields).where(eq(customerAccounts.id, targetAccountId))
+
+  const [sourcePrefs] = await db.select().from(accountPreferences).where(eq(accountPreferences.accountId, sourceAccountId)).limit(1)
+  if (sourcePrefs) {
+    const [targetPrefs] = await db.select().from(accountPreferences).where(eq(accountPreferences.accountId, targetAccountId)).limit(1)
+    if (!targetPrefs) {
+      await db.insert(accountPreferences).values({
+        accountId: targetAccountId,
+        timeZone: sourcePrefs.timeZone,
+        quietHoursStart: sourcePrefs.quietHoursStart,
+        quietHoursEnd: sourcePrefs.quietHoursEnd,
+      })
+    }
+    await db.delete(accountPreferences).where(eq(accountPreferences.accountId, sourceAccountId))
+  }
+
+  await logActivityEvent({
+    entityType: 'account',
+    entityId: targetAccountId,
+    actorUserId: session.user.id,
+    kind: 'account_merged',
+    title: 'Duplicate account merged',
+    body: `${sourceAccount.companyName} was merged into ${targetAccount.companyName}.`,
+    metadata: {
+      sourceAccountId,
+      targetAccountId,
+    },
+  })
+
+  await db.delete(customerAccounts).where(eq(customerAccounts.id, sourceAccountId))
+
+  revalidatePath('/admin/crm')
+  revalidatePath('/staff/crm')
+  revalidatePath(`/admin/crm/${targetAccountId}`)
+  revalidatePath(`/staff/crm/${targetAccountId}`)
+}
+
+export async function mergeContacts(formData: FormData) {
+  const session = await requireAdminOrStaff()
+
+  const sourceContactId = (formData.get('sourceContactId') as string | null)?.trim()
+  const targetContactId = (formData.get('targetContactId') as string | null)?.trim()
+
+  if (!sourceContactId || !targetContactId) {
+    throw new Error('Both source and target contacts are required.')
+  }
+  if (sourceContactId === targetContactId) {
+    throw new Error('Choose two different people to merge.')
+  }
+
+  const [sourceContact] = await db.select().from(contacts).where(eq(contacts.id, sourceContactId)).limit(1)
+  const [targetContact] = await db.select().from(contacts).where(eq(contacts.id, targetContactId)).limit(1)
+  if (!sourceContact || !targetContact) {
+    throw new Error('One of the contacts could not be found.')
+  }
+
+  await db.update(contacts).set({
+    customerId: targetContact.customerId,
+    name: targetContact.name || sourceContact.name,
+    email: targetContact.email ?? sourceContact.email,
+    phone: targetContact.phone ?? sourceContact.phone,
+    phoneType: targetContact.phoneType ?? sourceContact.phoneType,
+    preferredContact: targetContact.preferredContact ?? sourceContact.preferredContact,
+    title: targetContact.title ?? sourceContact.title,
+    isPrimary: targetContact.isPrimary || sourceContact.isPrimary,
+    hubspotContactId: targetContact.hubspotContactId ?? sourceContact.hubspotContactId,
+    notes: combineTextValues(targetContact.notes, sourceContact.notes),
+  }).where(eq(contacts.id, targetContactId))
+
+  await logActivityEvent({
+    entityType: 'account',
+    entityId: targetContact.customerId,
+    actorUserId: session.user.id,
+    kind: 'contact_merged',
+    title: 'Duplicate contact merged',
+    body: `${sourceContact.name} was merged into ${targetContact.name}.`,
+    metadata: {
+      sourceContactId,
+      targetContactId,
+    },
+  })
+
+  await db.delete(contacts).where(eq(contacts.id, sourceContactId))
+
+  revalidatePath('/admin/crm')
+  revalidatePath('/staff/crm')
+  revalidatePath(`/admin/crm/${targetContact.customerId}`)
+  revalidatePath(`/admin/crm/${targetContact.customerId}/contacts`)
+  revalidatePath(`/staff/crm/${targetContact.customerId}`)
+  revalidatePath(`/staff/crm/${targetContact.customerId}/contacts`)
 }
 
 export async function toggleStarAccount(accountId: string, starred: boolean) {

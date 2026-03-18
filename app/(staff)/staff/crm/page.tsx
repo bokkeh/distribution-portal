@@ -7,12 +7,14 @@ import { getHubSpotCompanies } from '@/lib/hubspot/client'
 import { HubSpotCompaniesTab } from '@/components/crm/HubSpotCompaniesTab'
 import { LocalAccountsTable } from '@/components/crm/LocalAccountsTable'
 import { LocalPeopleTable } from '@/components/crm/LocalPeopleTable'
+import { CRMEntityMergeCard } from '@/components/crm/CRMEntityMergeCard'
 import { CRMTabs } from '@/components/crm/CRMTabs'
 import { DealStageSelect } from '@/components/crm/DealStageSelect'
 import { PipelineBoard } from '@/components/crm/PipelineBoard'
 import Link from 'next/link'
 import { LayoutList, Kanban } from 'lucide-react'
 import { requireFeature } from '@/lib/auth/session'
+import { mergeContacts, mergeCustomerAccounts } from '@/actions/crm'
 
 export default async function StaffCRMPage({
   searchParams,
@@ -20,6 +22,14 @@ export default async function StaffCRMPage({
   searchParams: Promise<{ view?: string }>
 }) {
   const session = await requireFeature('crm', 'staff')
+  async function submitAccountMerge(formData: FormData) {
+    'use server'
+    await mergeCustomerAccounts(formData)
+  }
+  async function submitContactMerge(formData: FormData) {
+    'use server'
+    await mergeContacts(formData)
+  }
   const { view } = await searchParams
   const isPipeline = view === 'pipeline'
 
@@ -124,6 +134,28 @@ export default async function StaffCRMPage({
         <PipelineBoard accounts={accounts} basePath="/staff/crm" />
       ) : (
         <Card>
+          <CardContent className="grid gap-4 border-b p-4 lg:grid-cols-2">
+            <CRMEntityMergeCard
+              title="Merge Accounts"
+              description="Choose the duplicate account to remove and the account that should survive."
+              sourceLabel="Duplicate account"
+              targetLabel="Keep this account"
+              options={accounts.map((account) => ({ id: account.id, label: account.companyName }))}
+              action={submitAccountMerge}
+              sourceName="sourceAccountId"
+              targetName="targetAccountId"
+            />
+            <CRMEntityMergeCard
+              title="Merge People"
+              description="Merge a duplicate person into the surviving contact record and preserve the target account link."
+              sourceLabel="Duplicate person"
+              targetLabel="Keep this person"
+              options={people.map((person) => ({ id: person.id, label: `${person.name} - ${person.companyName}` }))}
+              action={submitContactMerge}
+              sourceName="sourceContactId"
+              targetName="targetContactId"
+            />
+          </CardContent>
           <CardContent className="p-0">
             <CRMTabs
               tabs={[
