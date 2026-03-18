@@ -5,6 +5,9 @@ import { db } from '@/db'
 import { activityEvents, users, wholesaleAccountRequests } from '@/db/schema'
 import { and, asc, desc, eq, inArray } from 'drizzle-orm'
 import { updateWholesaleRequestWorkflow } from '@/actions/wholesale-requests'
+import { SendInvitationModal } from '@/components/wholesale-requests/SendInvitationModal'
+import Link from 'next/link'
+import { ExternalLink } from 'lucide-react'
 
 type WholesaleRequestRow = {
   id: string
@@ -118,6 +121,15 @@ export default async function WholesaleRequestsPage() {
               ? 'Requests will appear here after the wholesale request table is migrated.'
               : `${requests.length} submissions, ${optedInCount} opted into SMS`}
           </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link href="/join" target="_blank" rel="noopener noreferrer">
+            <Button variant="outline" className="gap-2">
+              <ExternalLink className="h-4 w-4" />
+              View Landing Page
+            </Button>
+          </Link>
+          <SendInvitationModal />
         </div>
       </div>
 

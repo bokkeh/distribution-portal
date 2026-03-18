@@ -609,6 +609,34 @@ export async function sendInternalAlertEmail({
   })
 }
 
+export async function sendWholesalerInvitationEmail({
+  to,
+  senderName,
+  personalMessage,
+}: {
+  to: string
+  senderName: string
+  personalMessage?: string | null
+}): Promise<void> {
+  const joinUrl = portalUrl('/join')
+  await sendEmail({
+    to,
+    subject: `You've been invited to join the AHAWC Distribution Portal`,
+    html: renderEmailCard({
+      eyebrow: 'Invitation',
+      title: 'You're invited to join AHAWC',
+      intro: `${escapeHtml(senderName)} has invited you to request a wholesale account on the AHAWC Distribution Portal.`,
+      body: `
+        ${personalMessage ? `<p style="margin: 0 0 14px;">${escapeHtml(personalMessage)}</p>` : ''}
+        <p style="margin: 0 0 10px;">Click the button below to fill out our short access request form. Once submitted, our team will review your application and follow up shortly.</p>
+        <p style="margin: 0; color: #64748b; font-size: 13px;">This invitation was sent by ${escapeHtml(senderName)} on behalf of AHAWC.</p>
+      `,
+      ctaLabel: 'Request Access',
+      ctaHref: joinUrl,
+    }),
+  })
+}
+
 export async function sendTasterInvoiceNotification({
   payeeName,
   payeeEmail,

@@ -4,8 +4,9 @@ import { eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { db } from '@/db'
 import { users, wholesaleAccountRequests } from '@/db/schema'
-import { requireAdmin } from '@/lib/auth/session'
+import { requireAdmin, requireAdminOrStaff } from '@/lib/auth/session'
 import { logActivityEvent } from '@/lib/activity/log'
+import { sendWholesalerInvitationEmail } from '@/lib/resend/client'
 
 export async function updateWholesaleRequestWorkflow(formData: FormData) {
   const session = await requireAdmin()
@@ -71,5 +72,23 @@ export async function updateWholesaleRequestWorkflow(formData: FormData) {
 
   revalidatePath('/admin/wholesale-requests')
   revalidatePath('/admin/attention')
+  return { success: true }
+}
+
+export async function sendWholesalerInvitation(formData: FormData) {
+  const session = await requireAdminOrStaff()
+  const email = ((formData.get('email') as string) || '').trim().toLowerCase()
+  const personalMessage = ((formData.get('personalMessage') as string) || '').trim() || null
+
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { error: 'Please enter a valid email address.' }
+  }
+
+  await sendWholesalerInvitationEmail({
+    to: email,
+    senderName: session.user.name ?? 'The AHAWC Team',
+    personalMessage,
+  })
+
   return { success: true }
 }
