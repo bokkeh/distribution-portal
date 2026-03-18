@@ -13,7 +13,7 @@ import { getCRMAccountDetail } from '@/lib/crm/account-read'
 import Link from 'next/link'
 import {
   ArrowLeft, RefreshCw, Phone, Mail, MapPin,
-  Clock, User, CreditCard, Building2, FileText, Hash, Truck, MessageSquare, CalendarDays, RefreshCcw,
+  Clock, User, CreditCard, Building2, FileText, Hash, Truck, MessageSquare, CalendarDays, RefreshCcw, Bell,
 } from 'lucide-react'
 import { getActivityTimeline } from '@/lib/activity/read'
 import { ActivityTimeline } from '@/components/activity/ActivityTimeline'
@@ -229,6 +229,16 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
               <div className="flex gap-2 items-center">
                 <CreditCard className="w-4 h-4 text-muted-foreground shrink-0" />
                 <span>Credit Limit: <span className="font-medium">{formatCurrency(account.creditLimit ?? '0')}</span></span>
+              </div>
+              <div className="flex gap-2 items-center sm:col-span-2">
+                <Bell className="w-4 h-4 text-muted-foreground shrink-0" />
+                <span className="text-muted-foreground">Notification preference:</span>
+                {(() => {
+                  const pref = account.notificationPreference ?? 'email'
+                  if (pref === 'sms') return <Badge variant="info">SMS only</Badge>
+                  if (pref === 'both') return <><Badge variant="info">SMS</Badge><Badge variant="secondary">Email</Badge></>
+                  return <Badge variant="secondary">Email only</Badge>
+                })()}
               </div>
             </CardContent>
           </Card>
