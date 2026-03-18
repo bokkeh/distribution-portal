@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
-import { Building2, Settings2, Star } from 'lucide-react'
+import { Building2, Settings2, Star, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { toggleStarAccount } from '@/actions/crm'
@@ -12,10 +12,15 @@ import { PhoneSmsButton } from './PhoneSmsButton'
 export interface AccountRow {
   id: string
   companyName: string
+  address: string | null
   city: string | null
   state: string | null
+  zip: string | null
   email: string | null
   phone: string | null
+  contactName: string | null
+  businessType: string | null
+  dealStage: string | null
   creditLimit: string
   balance: string
   paymentTerms: string | null
@@ -28,10 +33,16 @@ export interface AccountRow {
 
 const COLUMN_OPTIONS = [
   { key: 'company', label: 'Company' },
-  { key: 'location', label: 'Location' },
+  { key: 'location', label: 'City / State' },
+  { key: 'address', label: 'Street Address' },
+  { key: 'zip', label: 'Zip Code' },
   { key: 'phone', label: 'Phone' },
   { key: 'email', label: 'Email' },
+  { key: 'contactName', label: 'Primary Contact' },
+  { key: 'businessType', label: 'Business Type' },
+  { key: 'dealStage', label: 'Deal Stage' },
   { key: 'terms', label: 'Terms' },
+  { key: 'creditLimit', label: 'Credit Limit' },
   { key: 'pendingCases', label: 'Pending Cases' },
   { key: 'totalPurchased', label: 'Total Purchased' },
   { key: 'balance', label: 'Balance' },
@@ -72,15 +83,21 @@ function AccountTable({
       <thead className="border-b bg-slate-50">
         <tr>
           <th className="w-8 px-4 py-3" />
-          {visibleColumns.has('company') ? <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Company</th> : null}
-          {visibleColumns.has('location') ? <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Location</th> : null}
-          {visibleColumns.has('phone') ? <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Phone</th> : null}
-          {visibleColumns.has('email') ? <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Email</th> : null}
-          {visibleColumns.has('terms') ? <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Terms</th> : null}
-          {visibleColumns.has('pendingCases') ? <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Pending Cases</th> : null}
-          {visibleColumns.has('totalPurchased') ? <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Total Purchased</th> : null}
-          {visibleColumns.has('balance') ? <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Balance</th> : null}
-          {visibleColumns.has('hubspot') ? <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">HubSpot</th> : null}
+          {visibleColumns.has('company') && <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Company</th>}
+          {visibleColumns.has('location') && <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Location</th>}
+          {visibleColumns.has('address') && <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Address</th>}
+          {visibleColumns.has('zip') && <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Zip</th>}
+          {visibleColumns.has('phone') && <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Phone</th>}
+          {visibleColumns.has('email') && <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Email</th>}
+          {visibleColumns.has('contactName') && <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Primary Contact</th>}
+          {visibleColumns.has('businessType') && <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Business Type</th>}
+          {visibleColumns.has('dealStage') && <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Deal Stage</th>}
+          {visibleColumns.has('terms') && <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Terms</th>}
+          {visibleColumns.has('creditLimit') && <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Credit Limit</th>}
+          {visibleColumns.has('pendingCases') && <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Pending Cases</th>}
+          {visibleColumns.has('totalPurchased') && <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Total Purchased</th>}
+          {visibleColumns.has('balance') && <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Balance</th>}
+          {visibleColumns.has('hubspot') && <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">HubSpot</th>}
           <th className="px-4 py-3" />
         </tr>
       </thead>
@@ -101,20 +118,26 @@ function AccountTable({
                 />
               </button>
             </td>
-            {visibleColumns.has('company') ? (
+            {visibleColumns.has('company') && (
               <td className="px-4 py-3">
                 <div className="flex items-center gap-2">
                   <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <span className="text-sm font-medium">{account.companyName}</span>
                 </div>
               </td>
-            ) : null}
-            {visibleColumns.has('location') ? (
+            )}
+            {visibleColumns.has('location') && (
               <td className="px-4 py-3 text-sm text-muted-foreground">
                 {[account.city, account.state].filter(Boolean).join(', ') || '-'}
               </td>
-            ) : null}
-            {visibleColumns.has('phone') ? (
+            )}
+            {visibleColumns.has('address') && (
+              <td className="px-4 py-3 text-sm text-muted-foreground">{account.address ?? '-'}</td>
+            )}
+            {visibleColumns.has('zip') && (
+              <td className="px-4 py-3 text-sm text-muted-foreground">{account.zip ?? '-'}</td>
+            )}
+            {visibleColumns.has('phone') && (
               <td className="px-4 py-3 text-sm">
                 {account.phone ? (
                   <PhoneSmsButton phone={account.phone} recipientName={account.companyName} />
@@ -122,16 +145,28 @@ function AccountTable({
                   <span className="text-muted-foreground">-</span>
                 )}
               </td>
-            ) : null}
-            {visibleColumns.has('email') ? (
+            )}
+            {visibleColumns.has('email') && (
               <td className="px-4 py-3 text-sm text-muted-foreground">{account.email ?? '-'}</td>
-            ) : null}
-            {visibleColumns.has('terms') ? (
+            )}
+            {visibleColumns.has('contactName') && (
+              <td className="px-4 py-3 text-sm text-muted-foreground">{account.contactName ?? '-'}</td>
+            )}
+            {visibleColumns.has('businessType') && (
+              <td className="px-4 py-3 text-sm text-muted-foreground">{account.businessType ?? '-'}</td>
+            )}
+            {visibleColumns.has('dealStage') && (
+              <td className="px-4 py-3 text-sm text-muted-foreground capitalize">{account.dealStage?.replace(/_/g, ' ') ?? '-'}</td>
+            )}
+            {visibleColumns.has('terms') && (
               <td className="px-4 py-3">
                 <Badge variant="secondary">{account.paymentTerms ?? 'NET30'}</Badge>
               </td>
-            ) : null}
-            {visibleColumns.has('pendingCases') ? (
+            )}
+            {visibleColumns.has('creditLimit') && (
+              <td className="px-4 py-3 text-right text-sm text-muted-foreground">{formatCurrency(account.creditLimit ?? '0')}</td>
+            )}
+            {visibleColumns.has('pendingCases') && (
               <td className="px-4 py-3 text-right text-sm font-medium">
                 {account.pendingCases > 0 ? (
                   <span className="text-amber-600">{account.pendingCases.toLocaleString()}</span>
@@ -139,16 +174,16 @@ function AccountTable({
                   <span className="text-muted-foreground">-</span>
                 )}
               </td>
-            ) : null}
-            {visibleColumns.has('totalPurchased') ? (
+            )}
+            {visibleColumns.has('totalPurchased') && (
               <td className="px-4 py-3 text-right text-sm font-medium">
                 {account.totalCasesPurchased > 0 ? account.totalCasesPurchased.toLocaleString() : '-'}
               </td>
-            ) : null}
-            {visibleColumns.has('balance') ? (
+            )}
+            {visibleColumns.has('balance') && (
               <td className="px-4 py-3 text-right text-sm font-medium">{formatCurrency(account.balance ?? '0')}</td>
-            ) : null}
-            {visibleColumns.has('hubspot') ? (
+            )}
+            {visibleColumns.has('hubspot') && (
               <td className="px-4 py-3">
                 {account.hubspotCompanyId || account.hubspotContactId ? (
                   <Badge variant="success">Synced</Badge>
@@ -156,7 +191,7 @@ function AccountTable({
                   <Badge variant="outline">Not synced</Badge>
                 )}
               </td>
-            ) : null}
+            )}
             <td className="px-4 py-3">
               <Link href={`${basePath}/${account.id}`}>
                 <Button variant="ghost" size="sm">View</Button>
@@ -233,7 +268,6 @@ export function LocalAccountsTable({
         if (prev.length === 1) return prev
         return prev.filter(value => value !== column)
       }
-
       const ordered = COLUMN_OPTIONS.map(option => option.key)
       return ordered.filter(value => [...prev, column].includes(value))
     })
@@ -246,8 +280,12 @@ export function LocalAccountsTable({
       account.companyName,
       account.city,
       account.state,
+      account.address,
+      account.zip,
       account.phone,
       account.email,
+      account.contactName,
+      account.businessType,
       account.paymentTerms,
     ].some(value => String(value ?? '').toLowerCase().includes(normalizedQuery))
   })
@@ -291,26 +329,33 @@ export function LocalAccountsTable({
               <Settings2 className="h-4 w-4" />
               Customize Columns
             </Button>
-            {showColumnPicker ? (
-              <div className="absolute right-0 z-10 mt-2 w-56 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
-                <div className="space-y-2">
+            {showColumnPicker && (
+              <div className="absolute right-0 z-10 mt-2 w-64 rounded-xl border border-slate-200 bg-white shadow-lg">
+                <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
+                  <p className="text-xs font-semibold text-slate-700">Show / Hide Columns</p>
+                  <button type="button" onClick={() => setShowColumnPicker(false)} className="text-slate-400 hover:text-slate-600">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <div className="p-3 space-y-1.5">
                   {COLUMN_OPTIONS.map(option => (
-                    <label key={option.key} className="flex items-center gap-3 text-sm text-slate-700">
+                    <label key={option.key} className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 text-sm text-slate-700 hover:bg-slate-50">
                       <input
                         type="checkbox"
                         checked={selectedColumns.includes(option.key)}
                         onChange={() => toggleColumn(option.key)}
+                        className="accent-violet-600"
                       />
                       <span>{option.label}</span>
                     </label>
                   ))}
                 </div>
               </div>
-            ) : null}
+            )}
           </div>
         </div>
       </div>
-      {starred.length > 0 ? (
+      {starred.length > 0 && (
         <div className="border-b">
           <div className="flex items-center gap-2 border-b border-yellow-100 bg-yellow-50 px-4 py-2 text-xs font-medium text-yellow-700">
             <Star className="h-3.5 w-3.5 fill-yellow-400 stroke-yellow-500" />
@@ -318,7 +363,7 @@ export function LocalAccountsTable({
           </div>
           <AccountTable accounts={starred} onStar={handleStar} basePath={basePath} visibleColumns={visibleColumns} />
         </div>
-      ) : null}
+      )}
 
       {rest.length === 0 && starred.length === 0 ? (
         <div className="px-6 py-12 text-center text-muted-foreground">

@@ -15,6 +15,7 @@ import Link from 'next/link'
 import { LayoutList, Kanban } from 'lucide-react'
 import { requireFeature } from '@/lib/auth/session'
 import { mergeContacts, mergeCustomerAccounts } from '@/actions/crm'
+import { formatCurrency } from '@/lib/utils'
 
 export default async function StaffCRMPage({
   searchParams,
@@ -37,18 +38,21 @@ export default async function StaffCRMPage({
     db.select({
       id: customerAccounts.id,
       companyName: customerAccounts.companyName,
+      address: customerAccounts.address,
       city: customerAccounts.city,
       state: customerAccounts.state,
+      zip: customerAccounts.zip,
       phone: customerAccounts.phone,
       email: customerAccounts.email,
+      contactName: customerAccounts.contactName,
+      businessType: customerAccounts.businessType,
+      dealStage: customerAccounts.dealStage,
       creditLimit: customerAccounts.creditLimit,
       balance: customerAccounts.balance,
       paymentTerms: customerAccounts.paymentTerms,
       hubspotContactId: customerAccounts.hubspotContactId,
       hubspotCompanyId: customerAccounts.hubspotCompanyId,
       starred: customerAccounts.starred,
-      dealStage: customerAccounts.dealStage,
-      contactName: customerAccounts.contactName,
     }).from(customerAccounts).orderBy(customerAccounts.companyName),
     db.select({
       id: contacts.id,
@@ -56,6 +60,7 @@ export default async function StaffCRMPage({
       title: contacts.title,
       email: contacts.email,
       phone: contacts.phone,
+      phoneType: contacts.phoneType,
       preferredContact: contacts.preferredContact,
       isPrimary: contacts.isPrimary,
       companyName: customerAccounts.companyName,
@@ -137,23 +142,77 @@ export default async function StaffCRMPage({
           <CardContent className="grid gap-4 border-b p-4 lg:grid-cols-2">
             <CRMEntityMergeCard
               title="Merge Accounts"
-              description="Choose the duplicate account to remove and the account that should survive."
-              sourceLabel="Duplicate account"
+              description="Choose the duplicate account to remove and the account that should survive. All orders, contacts, and data will be moved to the target."
+              sourceLabel="Duplicate account (removed)"
               targetLabel="Keep this account"
-              options={accounts.map((account) => ({ id: account.id, label: account.companyName }))}
+              options={accounts.map(a => ({
+                id: a.id,
+                label: a.companyName,
+                preview: {
+                  companyName: a.companyName,
+                  address: a.address,
+                  city: a.city,
+                  state: a.state,
+                  zip: a.zip,
+                  phone: a.phone,
+                  email: a.email,
+                  contactName: a.contactName,
+                  businessType: a.businessType,
+                  dealStage: a.dealStage?.replace(/_/g, ' ') ?? null,
+                  paymentTerms: a.paymentTerms,
+                  creditLimit: formatCurrency(a.creditLimit ?? '0'),
+                  balance: formatCurrency(a.balance ?? '0'),
+                },
+              }))}
               action={submitAccountMerge}
               sourceName="sourceAccountId"
               targetName="targetAccountId"
+              previewFields={[
+                { key: 'companyName', label: 'Company' },
+                { key: 'address', label: 'Address' },
+                { key: 'city', label: 'City' },
+                { key: 'state', label: 'State' },
+                { key: 'zip', label: 'Zip' },
+                { key: 'phone', label: 'Phone' },
+                { key: 'email', label: 'Email' },
+                { key: 'contactName', label: 'Contact' },
+                { key: 'businessType', label: 'Biz Type' },
+                { key: 'dealStage', label: 'Deal Stage' },
+                { key: 'paymentTerms', label: 'Terms' },
+                { key: 'creditLimit', label: 'Credit Limit' },
+                { key: 'balance', label: 'Balance' },
+              ]}
             />
             <CRMEntityMergeCard
               title="Merge People"
               description="Merge a duplicate person into the surviving contact record and preserve the target account link."
-              sourceLabel="Duplicate person"
+              sourceLabel="Duplicate person (removed)"
               targetLabel="Keep this person"
-              options={people.map((person) => ({ id: person.id, label: `${person.name} - ${person.companyName}` }))}
+              options={people.map(p => ({
+                id: p.id,
+                label: `${p.name} — ${p.companyName}`,
+                preview: {
+                  name: p.name,
+                  title: p.title,
+                  email: p.email,
+                  phone: p.phone,
+                  phoneType: p.phoneType,
+                  preferredContact: p.preferredContact,
+                  company: p.companyName,
+                },
+              }))}
               action={submitContactMerge}
               sourceName="sourceContactId"
               targetName="targetContactId"
+              previewFields={[
+                { key: 'name', label: 'Name' },
+                { key: 'title', label: 'Title' },
+                { key: 'email', label: 'Email' },
+                { key: 'phone', label: 'Phone' },
+                { key: 'phoneType', label: 'Phone Type' },
+                { key: 'preferredContact', label: 'Preferred' },
+                { key: 'company', label: 'Account' },
+              ]}
             />
           </CardContent>
           <CardContent className="p-0">
