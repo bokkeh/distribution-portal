@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, FileText, BookOpen, Users, Package,
-  Truck, Map, Building2, LogOut, ChevronRight, Menu, X, UserCircle, CalendarDays, MessageSquare, HeartPulse, ListChecks, ClipboardList, Workflow,
+  Truck, Map, Building2, LogOut, ChevronRight, Menu, X, UserCircle, CalendarDays, MessageSquare, HeartPulse, ListChecks, ClipboardList, Workflow, BarChart3,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { signOut } from 'next-auth/react'
@@ -28,6 +28,7 @@ const navSections = [
     items: [
       { href: '/admin/orders', label: 'Orders', icon: FileText, feature: 'orders' },
       { href: '/admin/deliveries', label: 'Deliveries', icon: Truck, feature: 'deliveries' },
+      { href: '/admin/deliveries/reports', label: 'Delivery Reports', icon: BarChart3, feature: 'deliveries' },
       { href: '/admin/invoicing', label: 'Invoicing', icon: FileText, feature: 'invoicing' },
       { href: '/admin/wholesale-requests', label: 'Wholesaler Requests', icon: FileText, feature: 'wholesale_requests' },
     ],
