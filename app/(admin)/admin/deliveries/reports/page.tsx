@@ -148,13 +148,25 @@ export default async function DeliveryReportsPage() {
           const stops = stopsByDelivery.get(delivery.id) ?? []
           const completedStops = stops.filter(s => s.completedAt)
 
-          // Duration: earliest → latest completedAt
-          const timestamps = completedStops.map(s => s.completedAt!.getTime()).sort((a, b) => a - b)
+          // Duration: earliest → latest completedAt (handle string or Date from DB)
+          const toMs = (v: Date | string | null): number | null => {
+            if (!v) return null
+            const ms = v instanceof Date ? v.getTime() : new Date(v).getTime()
+            return isNaN(ms) ? null : ms
+          }
+          const timestamps = completedStops
+            .map(s => toMs(s.completedAt))
+            .filter((t): t is number => t !== null)
+            .sort((a, b) => a - b)
           const durationMs = timestamps.length >= 2 ? timestamps[timestamps.length - 1] - timestamps[0] : null
 
           // Mileage: sum haversine between consecutive stops that have coords
           let totalMiles = 0
-          const coordStops = stops.filter(s => s.lat && s.lng)
+          const coordStops = stops.filter(s => {
+            const lat = parseFloat(s.lat ?? '')
+            const lng = parseFloat(s.lng ?? '')
+            return !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0
+          })
           for (let i = 1; i < coordStops.length; i++) {
             totalMiles += haversineMiles(
               parseFloat(coordStops[i - 1].lat!),
@@ -290,7 +302,7 @@ export default async function DeliveryReportsPage() {
                         <span className="flex-1 min-w-0 truncate text-slate-800">{stop.companyName ?? stop.address}</span>
                         {stop.completedAt && (
                           <span className="text-xs text-muted-foreground shrink-0" suppressHydrationWarning>
-                            {stop.completedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {new Date(stop.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
                         )}
                         <Badge
