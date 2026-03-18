@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { DndContext, DragOverlay, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -190,10 +191,13 @@ function SortableStopCard({
 function HombaseRow({
   deliveryId,
   currentAddress,
+  onSaved,
 }: {
   deliveryId: string
   currentAddress: string | null
+  onSaved?: (address: string) => void
 }) {
+  const router = useRouter()
   const [editing, setEditing] = useState(!currentAddress)
   const [value, setValue] = useState(currentAddress ?? '')
   const [isPending, startTransition] = useTransition()
@@ -209,6 +213,8 @@ function HombaseRow({
       }
       toast.success(value.trim() ? 'Starting location saved' : 'Starting location cleared')
       setEditing(false)
+      onSaved?.(value.trim())
+      router.refresh()
     })
   }
 
@@ -280,7 +286,7 @@ export default function SortableStopList({
   deliveryId,
   stops: initialStops,
   mode,
-  originAddress,
+  originAddress: initialOriginAddress,
 }: {
   deliveryId: string
   stops: Stop[]
@@ -288,6 +294,7 @@ export default function SortableStopList({
   originAddress?: string | null
 }) {
   const [stops, setStops] = useState(initialStops)
+  const [originAddress, setOriginAddress] = useState(initialOriginAddress ?? null)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -357,7 +364,7 @@ export default function SortableStopList({
   return (
     <div className="space-y-2 sm:space-y-3">
       {mode === 'admin' && (
-        <HombaseRow deliveryId={deliveryId} currentAddress={originAddress ?? null} />
+        <HombaseRow deliveryId={deliveryId} currentAddress={originAddress} onSaved={setOriginAddress} />
       )}
       {stops.length > 0 && (
         <div className="pt-1">

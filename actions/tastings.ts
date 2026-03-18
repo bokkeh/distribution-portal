@@ -772,7 +772,6 @@ export async function submitTasterInvoice(formData: FormData) {
 
   const hourlyRate = (formData.get('hourlyRate') as string) || '0'
   const hoursWorked = (formData.get('hoursWorked') as string) || '0'
-  const mileage = (formData.get('mileage') as string) || '0'
   const expenseAmount = (formData.get('expenseAmount') as string) || '0'
   const totalAmount = (formData.get('totalAmount') as string) || '0'
 
@@ -783,7 +782,6 @@ export async function submitTasterInvoice(formData: FormData) {
     payeePhone: (formData.get('payeePhone') as string) || null,
     hourlyRate,
     hoursWorked,
-    mileage,
     expenseAmount,
     totalAmount,
     notes: ((formData.get('notes') as string) || '').trim() || null,
@@ -822,7 +820,6 @@ export async function submitTasterInvoice(formData: FormData) {
     storeAddress: [tasting.storeAddress, tasting.storeCity, tasting.storeState, tasting.storeZip].filter(Boolean).join(', '),
     hourlyRate,
     hoursWorked,
-    mileage,
     expenseAmount,
     totalAmount,
     notes: payload.notes,

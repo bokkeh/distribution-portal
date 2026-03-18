@@ -88,7 +88,7 @@ function PaymentForm({ customerId, orderType, items, total, notes, deliveryTimin
   )
 }
 
-export default function CheckoutClient({ customerId, customerName }: { customerId: string; customerName: string }) {
+export default function CheckoutClient({ customerId, customerName, businessType }: { customerId: string; customerName: string; businessType?: string | null }) {
   const { items, orderType, total, clearCart } = useCart()
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -103,14 +103,14 @@ export default function CheckoutClient({ customerId, customerName }: { customerI
   const router = useRouter()
 
   const minimumViolation = useMemo(
-    () => items.find(item => isWisherVodkaProduct(item) && item.quantity < getMinimumCaseQuantity(item)),
-    [items]
+    () => items.find(item => isWisherVodkaProduct(item) && item.quantity < getMinimumCaseQuantity(item, businessType)),
+    [items, businessType]
   )
 
   async function initializePayment() {
     if (minimumViolation) {
       toast.error('Minimum order not met', {
-        description: `${minimumViolation.name} requires at least ${getMinimumCaseQuantity(minimumViolation)} cases.`,
+        description: `${minimumViolation.name} requires at least ${getMinimumCaseQuantity(minimumViolation, businessType)} cases.`,
       })
       return
     }
@@ -167,7 +167,7 @@ export default function CheckoutClient({ customerId, customerName }: { customerI
           <p className="text-sm text-muted-foreground">Order Type: <strong>{orderType}</strong></p>
           {minimumViolation && (
             <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              {minimumViolation.name} requires a minimum of {getMinimumCaseQuantity(minimumViolation)} cases before checkout.
+              {minimumViolation.name} requires a minimum of {getMinimumCaseQuantity(minimumViolation, businessType)} cases before checkout.
             </div>
           )}
           <div className="space-y-2 border-t pt-3">

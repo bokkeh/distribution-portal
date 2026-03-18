@@ -646,7 +646,6 @@ export async function sendTasterInvoiceNotification({
   storeAddress,
   hourlyRate,
   hoursWorked,
-  mileage,
   expenseAmount,
   totalAmount,
   notes,
@@ -659,7 +658,6 @@ export async function sendTasterInvoiceNotification({
   storeAddress: string
   hourlyRate: string
   hoursWorked: string
-  mileage: string
   expenseAmount: string
   totalAmount: string
   notes: string | null
@@ -677,10 +675,45 @@ export async function sendTasterInvoiceNotification({
       store_address: escapeHtml(storeAddress || '-'),
       hourly_rate_currency: formatCurrencyValue(hourlyRate),
       hours_worked: Number(hoursWorked || 0).toFixed(2),
-      mileage: Number(mileage || 0).toFixed(2),
       expense_amount_currency: formatCurrencyValue(expenseAmount),
       total_amount_currency: formatCurrencyValue(totalAmount),
       notes_html: notes ? `<p style="margin: 0;"><strong>Notes:</strong> ${escapeHtml(notes)}</p>` : '',
     },
   })
+}
+
+export async function sendNewOrderStaffNotification({
+  companyName,
+  orderId,
+  total,
+  purchaseUnit,
+  placedBy,
+}: {
+  companyName: string
+  orderId: string
+  total: string
+  purchaseUnit: string
+  placedBy: string
+}): Promise<void> {
+  const orderShortId = orderId.slice(-8).toUpperCase()
+  const orderUrl = portalUrl(`/admin/orders/${orderId}`)
+  const subject = `New order from ${companyName} — $${total}`
+  const html = renderEmailCard({
+    eyebrow: 'New Order',
+    title: `Order from ${escapeHtml(companyName)}`,
+    intro: `${escapeHtml(placedBy)} placed a ${purchaseUnit} order totaling $${escapeHtml(total)}.`,
+    body: `<p style="margin: 0 0 10px;"><strong>Order ID:</strong> ${escapeHtml(orderShortId)}</p><p style="margin: 0;"><strong>Total:</strong> $${escapeHtml(total)}</p>`,
+    ctaLabel: 'View Order',
+    ctaHref: orderUrl,
+  })
+
+  // Kim's known contact addresses
+  const kimEmails = ['sales@wishervodka.com', 'kim@ahawc.com']
+  // Kristen — set ORDER_NOTIFY_KRISTEN_EMAIL in env
+  const kristenEmail = process.env.ORDER_NOTIFY_KRISTEN_EMAIL
+  const allEmails = [...kimEmails, ...(kristenEmail ? [kristenEmail] : [])].filter(Boolean)
+
+  if (allEmails.length) {
+    await sendEmail({ to: allEmails, subject, html })
+  }
 }

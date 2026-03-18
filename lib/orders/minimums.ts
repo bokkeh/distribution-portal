@@ -5,6 +5,14 @@ type ProductLike = {
 }
 
 export const WISHER_VODKA_MIN_CASES = 10
+export const WISHER_VODKA_RESTAURANT_MIN_CASES = 3
+
+/** Business types that receive the reduced restaurant minimum (1–3 cases) */
+const RESTAURANT_BUSINESS_TYPES = new Set(['restaurant', 'bar', 'catering'])
+
+export function isRestaurantBusinessType(businessType?: string | null) {
+  return RESTAURANT_BUSINESS_TYPES.has(businessType ?? '')
+}
 
 export function isWisherVodkaProduct(product: ProductLike) {
   const name = product.name?.toLowerCase() ?? ''
@@ -18,16 +26,18 @@ export function isWisherVodkaProduct(product: ProductLike) {
   )
 }
 
-export function getMinimumCaseQuantity(product: ProductLike) {
-  return isWisherVodkaProduct(product) ? WISHER_VODKA_MIN_CASES : 1
+export function getMinimumCaseQuantity(product: ProductLike, businessType?: string | null) {
+  if (!isWisherVodkaProduct(product)) return 1
+  return isRestaurantBusinessType(businessType) ? WISHER_VODKA_RESTAURANT_MIN_CASES : WISHER_VODKA_MIN_CASES
 }
 
-export function normalizeCaseQuantity(product: ProductLike, quantity: number) {
+export function normalizeCaseQuantity(product: ProductLike, quantity: number, businessType?: string | null) {
   if (quantity <= 0) return 0
-  return Math.max(getMinimumCaseQuantity(product), quantity)
+  return Math.max(getMinimumCaseQuantity(product, businessType), quantity)
 }
 
-export function getMinimumCaseQuantityMessage(product: ProductLike) {
+export function getMinimumCaseQuantityMessage(product: ProductLike, businessType?: string | null) {
   if (!isWisherVodkaProduct(product)) return null
-  return `Wisher Vodka requires a minimum order of ${WISHER_VODKA_MIN_CASES} cases.`
+  const min = getMinimumCaseQuantity(product, businessType)
+  return `Wisher Vodka requires a minimum order of ${min} cases.`
 }

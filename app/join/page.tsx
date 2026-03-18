@@ -1,5 +1,6 @@
 import { JoinRequestForm } from '@/components/marketing/JoinRequestForm'
 import Link from 'next/link'
+import Image from 'next/image'
 import { CheckCircle2, Package, TrendingUp, Users } from 'lucide-react'
 
 export const metadata = {
@@ -37,9 +38,13 @@ export default function JoinPage() {
       <header className="border-b border-white/10 px-6 py-4">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
-              <Package className="h-4 w-4 text-white" />
-            </div>
+            <Image
+              src="/brand/logo.png"
+              alt="AHAWC"
+              width={32}
+              height={32}
+              className="h-8 w-8 rounded-lg bg-white object-contain p-0.5"
+            />
             <span className="text-sm font-bold tracking-wide text-white">AHAWC</span>
           </div>
           <Link href="/login" className="text-sm text-blue-300 hover:text-white transition-colors">

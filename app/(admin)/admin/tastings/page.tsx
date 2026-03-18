@@ -50,9 +50,14 @@ export default async function AdminTastingsPage({
             <h1 className="text-2xl font-bold text-slate-900">Tastings</h1>
             <p className="text-muted-foreground mt-1">Schedule in-store tastings, assign tasters, and track upcoming events.</p>
           </div>
-          <Link href="/admin/tastings/messages">
-            <Button variant="outline">Manage SMS Series</Button>
-          </Link>
+          <div className="flex gap-2">
+            <Link href="/admin/tastings/reports">
+              <Button variant="outline">View Reports</Button>
+            </Link>
+            <Link href="/admin/tastings/messages">
+              <Button variant="outline">Manage SMS Series</Button>
+            </Link>
+          </div>
         </div>
         <TastingsPlanner
           mode="admin"

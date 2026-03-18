@@ -12,10 +12,12 @@ import { getMinimumCaseQuantity, isWisherVodkaProduct } from '@/lib/orders/minim
 import { createUserNotification } from '@/lib/notifications/in-app'
 import { logActivityEvent } from '@/lib/activity/log'
 import {
+  sendNewOrderStaffNotification,
   sendOrderReceivedEmail,
   sendOrderShippingStatusEmail,
   sendOrderStatusEmail,
 } from '@/lib/resend/client'
+import { sendSms } from '@/lib/telnyx/client'
 
 type PurchaseUnit = 'case' | 'bottle'
 
@@ -44,9 +46,10 @@ export async function createOrder(formData: FormData) {
     const itemsJson = formData.get('items') as string
     const items: { productId: string; quantity: number }[] = JSON.parse(itemsJson)
 
+    let customerBusinessType: string | null = null
     if (userRoles.includes('customer')) {
       const [account] = await db
-        .select({ id: customerAccounts.id })
+        .select({ id: customerAccounts.id, businessType: customerAccounts.businessType })
         .from(customerAccounts)
         .where(eq(customerAccounts.userId, session.user.id))
         .limit(1)
@@ -54,6 +57,14 @@ export async function createOrder(formData: FormData) {
       if (!account || account.id !== customerId) {
         throw new Error('Unauthorized customer order')
       }
+      customerBusinessType = account.businessType
+    } else {
+      const [account] = await db
+        .select({ businessType: customerAccounts.businessType })
+        .from(customerAccounts)
+        .where(eq(customerAccounts.id, customerId))
+        .limit(1)
+      customerBusinessType = account?.businessType ?? null
     }
 
     const productIds = items.map(item => item.productId)
@@ -86,8 +97,8 @@ export async function createOrder(formData: FormData) {
       throw new Error(`Not enough ${purchaseUnit}s in stock for ${product.name}`)
     }
 
-    if (purchaseUnit === 'case' && isWisherVodkaProduct(product) && item.quantity < getMinimumCaseQuantity(product)) {
-      throw new Error(`${product.name} requires a minimum order of ${getMinimumCaseQuantity(product)} cases`)
+    if (purchaseUnit === 'case' && isWisherVodkaProduct(product) && item.quantity < getMinimumCaseQuantity(product, customerBusinessType)) {
+      throw new Error(`${product.name} requires a minimum order of ${getMinimumCaseQuantity(product, customerBusinessType)} cases`)
     }
 
     const unitPrice = purchaseUnit === 'bottle'
@@ -245,6 +256,24 @@ export async function createOrder(formData: FormData) {
     await postGoogleChat(
       `New Order created by ${session.user.name}\nCustomer ID: ${customerId}\nUnit: ${purchaseUnit.toUpperCase()}\nTotal: $${total.toFixed(2)}`
     )
+
+    // Staff order notifications — Kim and Kristen
+    const smsBody = `New AHAWC order: ${customerAccount?.companyName ?? 'Unknown'} placed a ${purchaseUnit} order for $${total.toFixed(2)}. Order #${order.id.slice(-8).toUpperCase()}`
+    const smsRecipients: string[] = [
+      '+12489339350', // Kim
+      process.env.ORDER_NOTIFY_KRISTEN_PHONE ?? '',
+    ].filter(Boolean)
+
+    await Promise.allSettled([
+      ...smsRecipients.map(phone => sendSms({ to: phone, body: smsBody, bypassOptOut: true })),
+      sendNewOrderStaffNotification({
+        companyName: customerAccount?.companyName ?? 'Unknown account',
+        orderId: order.id,
+        total: total.toFixed(2),
+        purchaseUnit,
+        placedBy: session.user.name ?? 'A customer',
+      }),
+    ])
 
     revalidatePath('/admin/invoicing')
     revalidatePath('/staff/orders')

@@ -114,7 +114,6 @@ export default async function TasterTastingDetailPage({
             payeePhone: invoice.payeePhone,
             hourlyRate: invoice.hourlyRate,
             hoursWorked: invoice.hoursWorked,
-            mileage: invoice.mileage,
             expenseAmount: invoice.expenseAmount,
             totalAmount: invoice.totalAmount,
             notes: invoice.notes,

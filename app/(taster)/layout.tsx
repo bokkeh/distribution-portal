@@ -1,5 +1,6 @@
 import Link from 'next/link'
-import { ClipboardList, LogOut, UserCircle } from 'lucide-react'
+import Image from 'next/image'
+import { LogOut, UserCircle } from 'lucide-react'
 import { requireFeature } from '@/lib/auth/session'
 import { SuperAdminViewSwitcher } from '@/components/layout/SuperAdminViewSwitcher'
 import { getBellNotificationsForUser } from '@/lib/notifications/in-app'
@@ -19,9 +20,13 @@ export default async function TasterLayout({ children }: { children: React.React
       <nav className="bg-slate-900 px-6 py-4 text-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/90">
-              <ClipboardList className="h-4 w-4" />
-            </div>
+            <Image
+              src="/brand/logo.png"
+              alt="AHAWC"
+              width={36}
+              height={36}
+              className="h-9 w-9 rounded-xl bg-white object-contain p-0.5"
+            />
             <div>
               <p className="font-bold">AHAWC Taster Portal</p>
               <p className="text-xs text-slate-400">Assignments and event details</p>

@@ -1,5 +1,6 @@
 import { requireRole } from '@/lib/auth/session'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Truck, Map, LogOut, UserCircle } from 'lucide-react'
 import { SuperAdminViewSwitcher } from '@/components/layout/SuperAdminViewSwitcher'
 import { hasFeature } from '@/lib/users/features'
@@ -17,9 +18,13 @@ export default async function DriverLayout({ children }: { children: React.React
     <div className="min-h-screen bg-slate-50">
       <nav className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
-            <Truck className="w-4 h-4 text-white" />
-          </div>
+          <Image
+            src="/brand/logo.png"
+            alt="AHAWC"
+            width={32}
+            height={32}
+            className="h-8 w-8 rounded-lg bg-white object-contain p-0.5"
+          />
           <span className="font-bold">AHAWC Driver Portal</span>
         </div>
         <div className="flex items-center gap-4">

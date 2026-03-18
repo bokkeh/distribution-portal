@@ -8,9 +8,9 @@ import { formatCurrency } from '@/lib/utils'
 import { Trash2, Plus, Minus, ShoppingCart, ArrowRight, ImageIcon } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { getMinimumCaseQuantityMessage, isWisherVodkaProduct } from '@/lib/orders/minimums'
+import { getMinimumCaseQuantity, getMinimumCaseQuantityMessage, isWisherVodkaProduct } from '@/lib/orders/minimums'
 
-export default function CustomerCartPage() {
+export default function CustomerCartPage({ businessType }: { businessType?: string | null }) {
   const { items, orderType, removeItem, updateQuantity, clearCart, total, itemCount } = useCart()
 
   if (items.length === 0) {
@@ -38,8 +38,9 @@ export default function CustomerCartPage() {
         <div className="space-y-3 lg:col-span-2">
           {items.map(item => {
             const price = parseFloat(orderType === 'sample' ? item.samplePrice : item.price)
-            const minimumMessage = getMinimumCaseQuantityMessage(item)
-            const isLockedAtMinimum = isWisherVodkaProduct(item) && item.quantity <= 10
+            const minimumMessage = getMinimumCaseQuantityMessage(item, businessType)
+            const min = getMinimumCaseQuantity(item, businessType)
+            const isLockedAtMinimum = isWisherVodkaProduct(item) && item.quantity <= min
 
             return (
               <Card key={item.productId}>
@@ -68,7 +69,7 @@ export default function CustomerCartPage() {
                         onClick={() => updateQuantity(item.productId, item.quantity - 1)}
                         className="flex h-7 w-7 items-center justify-center rounded border hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
                         disabled={isLockedAtMinimum}
-                        title={isLockedAtMinimum ? 'Wisher Vodka has a 10-case minimum. Use remove to delete it.' : 'Decrease quantity'}
+                        title={isLockedAtMinimum ? `Wisher Vodka has a ${min}-case minimum. Use remove to delete it.` : 'Decrease quantity'}
                       >
                         <Minus className="h-3 w-3" />
                       </button>

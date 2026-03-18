@@ -6,7 +6,9 @@ import { normalizeCaseQuantity } from '@/lib/orders/minimums'
 interface CartStore {
   items: CartItem[]
   orderType: 'paid' | 'sample'
+  businessType: string | null
   setOrderType: (type: 'paid' | 'sample') => void
+  setBusinessType: (type: string | null) => void
   addItem: (item: Omit<CartItem, 'quantity'>) => void
   removeItem: (productId: string) => void
   updateQuantity: (productId: string, quantity: number) => void
@@ -20,7 +22,9 @@ export const useCart = create<CartStore>()(
     (set, get) => ({
       items: [],
       orderType: 'paid',
+      businessType: null,
       setOrderType: (type) => set({ orderType: type, items: [] }),
+      setBusinessType: (type) => set({ businessType: type }),
       addItem: (newItem) => set((state) => {
         const existing = state.items.find(i => i.productId === newItem.productId)
         if (existing) {
@@ -29,7 +33,7 @@ export const useCart = create<CartStore>()(
               if (i.productId !== newItem.productId) return i
               return {
                 ...i,
-                quantity: normalizeCaseQuantity(i, i.quantity + 1),
+                quantity: normalizeCaseQuantity(i, i.quantity + 1, state.businessType),
               }
             }),
           }
@@ -39,7 +43,7 @@ export const useCart = create<CartStore>()(
             ...state.items,
             {
               ...newItem,
-              quantity: normalizeCaseQuantity(newItem, 1),
+              quantity: normalizeCaseQuantity(newItem, 1, state.businessType),
             },
           ],
         }
@@ -52,7 +56,7 @@ export const useCart = create<CartStore>()(
             if (i.productId !== productId) return i
             return {
               ...i,
-              quantity: normalizeCaseQuantity(i, quantity),
+              quantity: normalizeCaseQuantity(i, quantity, state.businessType),
             }
           }),
         }

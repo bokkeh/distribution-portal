@@ -32,7 +32,6 @@ type InvoiceRecord = {
   payeePhone: string | null
   hourlyRate: string
   hoursWorked: string
-  mileage: string
   expenseAmount: string
   totalAmount: string
   notes: string | null
@@ -73,10 +72,9 @@ export function TastingSubmissionDetail({
   const totalEstimate = useMemo(() => {
     const rate = Number(invoice?.hourlyRate ?? '25')
     const hours = Number(invoice?.hoursWorked ?? '2')
-    const mileage = Number(invoice?.mileage ?? '0')
     const expenses = Number(invoice?.expenseAmount ?? '0')
-    return (rate * hours) + mileage + expenses
-  }, [invoice?.expenseAmount, invoice?.hourlyRate, invoice?.hoursWorked, invoice?.mileage])
+    return (rate * hours) + expenses
+  }, [invoice?.expenseAmount, invoice?.hourlyRate, invoice?.hoursWorked])
 
   const invoiceFormRef = useRef<HTMLFormElement | null>(null)
   const invoiceDraft = useFormDraftAutosave(invoiceFormRef, `tasting-invoice:${tasting.id}`)
@@ -156,15 +154,9 @@ export function TastingSubmissionDetail({
                 </div>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="mileage">Mileage / Travel</Label>
-                  <Input id="mileage" name="mileage" type="number" step="0.01" min="0" defaultValue={invoice?.mileage ?? '0.00'} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="expenseAmount">Other Expenses</Label>
-                  <Input id="expenseAmount" name="expenseAmount" type="number" step="0.01" min="0" defaultValue={invoice?.expenseAmount ?? '0.00'} />
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="expenseAmount">Other Expenses</Label>
+                <Input id="expenseAmount" name="expenseAmount" type="number" step="0.01" min="0" defaultValue={invoice?.expenseAmount ?? '0.00'} />
               </div>
 
               <div className="space-y-2">
