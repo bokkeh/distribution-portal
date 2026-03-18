@@ -1,6 +1,6 @@
 import { db } from '@/db'
 import { orders, invoices, customerAccounts, inventory, products, wholesaleAccountRequests, tastingReports, tastings, scheduledSmsJobs } from '@/db/schema'
-import { eq, sql, desc, and, gte } from 'drizzle-orm'
+import { eq, sql, desc, and, gte, ne } from 'drizzle-orm'
 import KpiCard from '@/components/dashboard/KpiCard'
 import { DollarSign, ShoppingCart, Users, MessageSquare, AlertTriangle, HeartPulse, ClipboardList } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -24,7 +24,7 @@ export default async function AdminDashboard() {
     failedJobs,
     systemHealth,
   ] = await Promise.all([
-    db.select({ total: sql<string>`COALESCE(SUM(total), 0)` }).from(invoices).where(eq(invoices.status, 'paid')),
+    db.select({ total: sql<string>`COALESCE(SUM(total), 0)` }).from(orders).where(ne(orders.status, 'cancelled')),
     db.select({ count: sql<number>`COUNT(*)` }).from(orders),
     db.select({ count: sql<number>`COUNT(*)` }).from(customerAccounts),
     db.select({ count: sql<number>`COUNT(*)` }).from(inventory).where(sql`quantity_paid <= reorder_level`),
