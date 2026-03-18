@@ -1,11 +1,12 @@
 import { db } from '@/db'
-import { customerAccounts, orders, orderItems } from '@/db/schema'
+import { customerAccounts, orders, orderItems, contacts } from '@/db/schema'
 import { sql, eq, and, inArray } from 'drizzle-orm'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { getHubSpotCompanies } from '@/lib/hubspot/client'
 import { HubSpotCompaniesTab } from '@/components/crm/HubSpotCompaniesTab'
 import { LocalAccountsTable } from '@/components/crm/LocalAccountsTable'
+import { LocalPeopleTable } from '@/components/crm/LocalPeopleTable'
 import { CRMTabs } from '@/components/crm/CRMTabs'
 import { DealStageSelect } from '@/components/crm/DealStageSelect'
 import { PipelineBoard } from '@/components/crm/PipelineBoard'
@@ -22,7 +23,7 @@ export default async function StaffCRMPage({
   const { view } = await searchParams
   const isPipeline = view === 'pipeline'
 
-  const [accounts, hsResult] = await Promise.all([
+  const [accounts, people, hsResult] = await Promise.all([
     db.select({
       id: customerAccounts.id,
       companyName: customerAccounts.companyName,
@@ -39,6 +40,20 @@ export default async function StaffCRMPage({
       dealStage: customerAccounts.dealStage,
       contactName: customerAccounts.contactName,
     }).from(customerAccounts).orderBy(customerAccounts.companyName),
+    db.select({
+      id: contacts.id,
+      name: contacts.name,
+      title: contacts.title,
+      email: contacts.email,
+      phone: contacts.phone,
+      preferredContact: contacts.preferredContact,
+      isPrimary: contacts.isPrimary,
+      companyName: customerAccounts.companyName,
+      customerId: customerAccounts.id,
+    })
+      .from(contacts)
+      .innerJoin(customerAccounts, eq(contacts.customerId, customerAccounts.id))
+      .orderBy(contacts.name),
     getHubSpotCompanies(),
   ])
 
@@ -112,11 +127,13 @@ export default async function StaffCRMPage({
           <CardContent className="p-0">
             <CRMTabs
               tabs={[
-              { id: 'local', label: 'Local Accounts', count: accounts.length },
-              { id: 'hubspot', label: 'HubSpot Companies', count: hsCompanies.length },
-            ]}
-          >
+                { id: 'local', label: 'Local Accounts', count: accounts.length },
+                { id: 'people', label: 'People', count: people.length },
+                { id: 'hubspot', label: 'HubSpot Companies', count: hsCompanies.length },
+              ]}
+            >
               <LocalAccountsTable initialAccounts={accountRows} basePath="/staff/crm" userId={session.user.id} />
+              <LocalPeopleTable people={people} basePath="/staff/crm" />
               <HubSpotCompaniesTab
                 companies={hsCompanies}
                 importedIds={importedHsIds}
