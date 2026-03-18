@@ -12,7 +12,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { DriverStopActions } from '@/components/deliveries/DriverStopCard'
 import { formatDate } from '@/lib/utils'
-import { CheckCircle, Check, Clock, GripVertical, Home, MapPin, Pencil, X, XCircle } from 'lucide-react'
+import Image from 'next/image'
+import { CheckCircle, Check, Clock, GripVertical, Home, ImageIcon, MapPin, Pencil, X, XCircle } from 'lucide-react'
 import GetDirectionsButton from '@/components/shared/GetDirectionsButton'
 
 type Stop = {
@@ -160,6 +161,46 @@ function SortableStopCard({
             )}
             {mode === 'admin' && stop.completedAt && (
               <p className="mt-1 text-xs text-muted-foreground">Completed {formatDate(stop.completedAt)}</p>
+            )}
+            {mode === 'admin' && (stop.proofOfDeliveryUrl || stop.shelfPhotoUrl) && (
+              <div className="mt-2 flex gap-2">
+                {stop.proofOfDeliveryUrl && (
+                  <a
+                    href={stop.proofOfDeliveryUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="group relative block h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
+                    title="Proof of delivery"
+                  >
+                    <Image
+                      src={stop.proofOfDeliveryUrl}
+                      alt="Proof of delivery"
+                      fill
+                      className="object-cover transition-opacity group-hover:opacity-80"
+                      unoptimized
+                    />
+                    <span className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-center text-[9px] font-medium text-white">POD</span>
+                  </a>
+                )}
+                {stop.shelfPhotoUrl && (
+                  <a
+                    href={stop.shelfPhotoUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="group relative block h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
+                    title="Shelf photo"
+                  >
+                    <Image
+                      src={stop.shelfPhotoUrl}
+                      alt="Shelf photo"
+                      fill
+                      className="object-cover transition-opacity group-hover:opacity-80"
+                      unoptimized
+                    />
+                    <span className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-center text-[9px] font-medium text-white">Shelf</span>
+                  </a>
+                )}
+              </div>
             )}
           </div>
         )}
