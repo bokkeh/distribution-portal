@@ -624,7 +624,7 @@ export async function sendWholesalerInvitationEmail({
     subject: `You've been invited to join the AHAWC Distribution Portal`,
     html: renderEmailCard({
       eyebrow: 'Invitation',
-      title: 'You're invited to join AHAWC',
+      title: "You're invited to join AHAWC",
       intro: `${escapeHtml(senderName)} has invited you to request a wholesale account on the AHAWC Distribution Portal.`,
       body: `
         ${personalMessage ? `<p style="margin: 0 0 14px;">${escapeHtml(personalMessage)}</p>` : ''}
