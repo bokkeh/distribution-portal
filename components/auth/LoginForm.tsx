@@ -1,5 +1,12 @@
 'use client'
 
+// PasswordCredential is a Chrome-only API not yet in the TS lib
+declare global {
+  interface Window {
+    PasswordCredential?: new (init: { id: string; password: string }) => Credential
+  }
+}
+
 import { useState } from 'react'
 import Image from 'next/image'
 import { signIn } from 'next-auth/react'
@@ -26,9 +33,12 @@ export function LoginForm({ onSuccess }: Props) {
     setError('')
 
     const fd = new FormData(e.currentTarget)
+    const email = fd.get('email') as string
+    const password = fd.get('password') as string
+
     const result = await signIn('credentials', {
-      email: fd.get('email') as string,
-      password: fd.get('password') as string,
+      email,
+      password,
       redirect: false,
     })
 
@@ -36,6 +46,16 @@ export function LoginForm({ onSuccess }: Props) {
       setError('Invalid email or password.')
       setLoading(false)
       return
+    }
+
+    // Tell the browser to save/update this credential so autofill works next time
+    if (typeof window !== 'undefined' && window.PasswordCredential) {
+      try {
+        const cred = new window.PasswordCredential({ id: email, password })
+        await navigator.credentials.store(cred)
+      } catch {
+        // Non-fatal — browser may not support or user may decline
+      }
     }
 
     if (onSuccess) {
@@ -92,10 +112,10 @@ export function LoginForm({ onSuccess }: Props) {
       </div>
 
       {/* Credentials */}
-      <form onSubmit={handleSubmit} className="space-y-3">
+      <form onSubmit={handleSubmit} autoComplete="on" className="space-y-3">
         <div className="space-y-1.5">
           <Label htmlFor="lf-email">Email</Label>
-          <Input id="lf-email" name="email" type="email" placeholder="you@ahawc.com" required autoComplete="email" />
+          <Input id="lf-email" name="email" type="email" placeholder="you@ahawc.com" required autoComplete="email" autoFocus />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="lf-password">Password</Label>

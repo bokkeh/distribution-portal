@@ -105,18 +105,20 @@ function SortableStopCard({
     <div
       ref={setNodeRef}
       style={style}
-      className={`rounded-lg border bg-white p-2.5 sm:p-3 ${isDragging ? 'opacity-40 shadow-lg' : ''}`}
+      className={`rounded-lg border bg-white p-3 sm:p-4 ${isDragging ? 'opacity-40 shadow-lg' : ''}`}
     >
       <div className="flex items-start gap-3">
-        <button
-          {...attributes}
-          {...listeners}
-          className="mt-1 text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing"
-          aria-label="Drag to reorder stop"
-          type="button"
-        >
-          <GripVertical className="w-4 h-4" />
-        </button>
+        {mode === 'admin' && (
+          <button
+            {...attributes}
+            {...listeners}
+            className="mt-1 text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing"
+            aria-label="Drag to reorder stop"
+            type="button"
+          >
+            <GripVertical className="w-4 h-4" />
+          </button>
+        )}
         <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
           {index + 1}
         </div>
@@ -141,16 +143,16 @@ function SortableStopCard({
         ) : (
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm font-medium leading-tight">{stop.companyName ?? stop.address}</p>
+              <p className="text-sm font-semibold leading-tight">{stop.companyName ?? stop.address}</p>
               {mode === 'driver' ? <StopStatusBadge status={stop.status} /> : null}
             </div>
             {stop.companyName && (
               <p className="mt-0.5 flex items-start gap-1 text-xs text-muted-foreground">
-                <MapPin className="h-3 w-3" />{stop.address}
+                <MapPin className="h-3 w-3 shrink-0 mt-0.5" />{stop.address}
               </p>
             )}
             {(stop.contactName || stop.contactPhone || stop.contactEmail) && (
-              <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+              <div className="mt-1.5 space-y-0.5 text-xs text-muted-foreground">
                 {stop.contactName && <p>POC: {stop.contactName}</p>}
                 {stop.contactPhone && <p>Phone: {stop.contactPhone}</p>}
                 {stop.contactEmail && <p>Email: {stop.contactEmail}</p>}
@@ -158,11 +160,6 @@ function SortableStopCard({
             )}
             {mode === 'admin' && stop.completedAt && (
               <p className="mt-1 text-xs text-muted-foreground">Completed {formatDate(stop.completedAt)}</p>
-            )}
-            {mode === 'driver' && (
-              <div className="mt-3">
-                <DriverStopActions stop={{ id: stop.id, status: stop.status, notes: stop.notes, proofOfDeliveryUrl: stop.proofOfDeliveryUrl, shelfPhotoUrl: stop.shelfPhotoUrl }} />
-              </div>
             )}
           </div>
         )}
@@ -184,6 +181,12 @@ function SortableStopCard({
           </div>
         )}
       </div>
+
+      {mode === 'driver' && !editing && (
+        <div className="mt-4 border-t pt-4">
+          <DriverStopActions stop={{ id: stop.id, status: stop.status, notes: stop.notes, proofOfDeliveryUrl: stop.proofOfDeliveryUrl, shelfPhotoUrl: stop.shelfPhotoUrl }} />
+        </div>
+      )}
     </div>
   )
 }
