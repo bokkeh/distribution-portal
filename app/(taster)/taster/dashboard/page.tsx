@@ -97,6 +97,8 @@ export default async function TasterDashboardPage({
                 issues: report.issues,
                 followUpNeeded: report.followUpNeeded,
                 followUpNotes: report.followUpNotes,
+                setupPhotoUrl: report.setupPhotoUrl ?? null,
+                shelfPhotoUrls: (report.shelfPhotoUrls as string[] | null) ?? null,
                 submittedAt: report.submittedAt,
               } : null}
               success={params.success}
