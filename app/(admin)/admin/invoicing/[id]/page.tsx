@@ -4,6 +4,7 @@ import { desc, eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Download, Send } from 'lucide-react'
+import { CopyPaymentLinkButton } from '@/components/invoices/CopyPaymentLinkButton'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -95,6 +96,9 @@ export default async function InvoiceDetailPage({
                 <form action={markInvoicePaid.bind(null, invoice.id)}>
                   <Button variant="secondary" className="w-full" type="submit">Mark as Paid</Button>
                 </form>
+              ) : null}
+              {invoice.status !== 'paid' ? (
+                <CopyPaymentLinkButton invoiceId={invoice.id} />
               ) : null}
             </CardContent>
           </Card>

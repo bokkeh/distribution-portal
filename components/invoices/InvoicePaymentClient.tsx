@@ -15,10 +15,12 @@ const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY 
 function InvoicePaymentForm({
   total,
   paymentMethod,
+  returnUrl,
   onSuccess,
 }: {
   total: string
   paymentMethod: CustomerPaymentMethod
+  returnUrl: string
   onSuccess: () => void
 }) {
   const stripe = useStripe()
@@ -34,7 +36,7 @@ function InvoicePaymentForm({
 
     const { error: stripeError } = await stripe.confirmPayment({
       elements,
-      confirmParams: { return_url: `${window.location.origin}/customer/invoices` },
+      confirmParams: { return_url: returnUrl.startsWith('http') ? returnUrl : `${window.location.origin}${returnUrl}` },
       redirect: 'if_required',
     })
 
@@ -57,7 +59,7 @@ function InvoicePaymentForm({
   )
 }
 
-export default function InvoicePaymentClient({ invoiceId, total }: { invoiceId: string; total: string }) {
+export default function InvoicePaymentClient({ invoiceId, total, returnUrl = '/customer/invoices' }: { invoiceId: string; total: string; returnUrl?: string }) {
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState<CustomerPaymentMethod>('us_bank_account')
@@ -154,7 +156,7 @@ export default function InvoicePaymentClient({ invoiceId, total }: { invoiceId: 
                 <span>{formatCurrency(payableTotal)}</span>
               </div>
             </div>
-            <InvoicePaymentForm total={payableTotal} paymentMethod={paymentMethod} onSuccess={() => router.push('/customer/invoices')} />
+            <InvoicePaymentForm total={payableTotal} paymentMethod={paymentMethod} returnUrl={returnUrl} onSuccess={() => router.push(returnUrl)} />
           </Elements>
         )}
       </CardContent>
