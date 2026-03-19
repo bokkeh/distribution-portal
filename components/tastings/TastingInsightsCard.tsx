@@ -14,7 +14,6 @@ import {
   AlertCircle,
   Camera,
   LayoutGrid,
-  ArrowUpDown,
 } from 'lucide-react'
 
 export type SerializedTastingAnalysis = {

@@ -215,20 +215,8 @@ export async function analyzeTastingReport(
     ...(report.shelfPhotoUrls ?? []),
   ]
 
-  // Get most recent prior completed analysis for same store
+  // Get most recent prior completed analysis for same store (for trend comparison)
   let priorAnalysis: TastingAnalysis | null = null
-  const priors = await db
-    .select()
-    .from(tastingAnalyses)
-    .where(
-      and(
-        eq(tastingAnalyses.tastingId, tastingId),
-        ne(tastingAnalyses.tastingId, tastingId), // placeholder – we query by customerId below
-      ),
-    )
-    .limit(0) // dummy — we re-query properly below
-
-  // Actually query by customerId via join
   if (tasting.customerId) {
     const priorRows = await db
       .select({ a: tastingAnalyses })
@@ -246,8 +234,6 @@ export async function analyzeTastingReport(
 
     priorAnalysis = priorRows[0]?.a ?? null
   }
-
-  void priors // suppress unused warning
 
   const [pending] = await db
     .insert(tastingAnalyses)
