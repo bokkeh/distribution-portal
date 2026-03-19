@@ -6,19 +6,24 @@ import { db } from '@/db'
 import { deliveryStops, shelfAnalyses } from '@/db/schema'
 import type { ShelfAnalysis } from '@/db/schema'
 import { requireAdminOrStaff } from '@/lib/auth/session'
+import { generateSignedReadUrl } from '@/lib/gcs/client'
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
-async function fetchImageAsBase64(url: string): Promise<string | null> {
+function extractGCSFilePath(publicUrl: string): string | null {
+  const bucketName = process.env.GCS_BUCKET_NAME ?? ''
+  const prefix = `https://storage.googleapis.com/${bucketName}/`
+  if (publicUrl.startsWith(prefix)) return publicUrl.slice(prefix.length)
+  return null
+}
+
+async function getAccessibleUrl(url: string): Promise<string | null> {
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(15000) })
-    if (!response.ok) return null
-    const buffer = await response.arrayBuffer()
-    const contentType = response.headers.get('content-type') || 'image/jpeg'
-    const base64 = Buffer.from(buffer).toString('base64')
-    return `data:${contentType};base64,${base64}`
+    const filePath = extractGCSFilePath(url)
+    if (filePath) return await generateSignedReadUrl(filePath)
+    return url
   } catch {
-    return null
+    return url
   }
 }
 
@@ -88,9 +93,9 @@ async function callGPT4oVision(imageUrls: string[], priorAnalysis: ShelfAnalysis
   const imageContent: OpenAI.Chat.ChatCompletionContentPart[] = []
 
   for (const url of imageUrls) {
-    const dataUrl = await fetchImageAsBase64(url)
-    if (dataUrl) {
-      imageContent.push({ type: 'image_url', image_url: { url: dataUrl, detail: 'high' } })
+    const accessibleUrl = await getAccessibleUrl(url)
+    if (accessibleUrl) {
+      imageContent.push({ type: 'image_url', image_url: { url: accessibleUrl, detail: 'high' } })
     }
   }
 
