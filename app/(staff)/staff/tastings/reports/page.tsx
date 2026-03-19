@@ -6,6 +6,8 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft } from 'lucide-react'
 import { TastingReportsView } from '@/components/tastings/TastingReportsView'
+import { getTastingAnalysesForTastings } from '@/actions/tasting-analysis'
+import type { SerializedTastingAnalysis } from '@/components/tastings/TastingInsightsCard'
 
 export default async function StaffTastingReportsPage() {
   await requireFeature('tastings', 'admin', 'staff')
@@ -34,6 +36,8 @@ export default async function StaffTastingReportsPage() {
       followUpNeeded: tastingReports.followUpNeeded,
       followUpNotes: tastingReports.followUpNotes,
       reportSubmittedAt: tastingReports.submittedAt,
+      setupPhotoUrl: tastingReports.setupPhotoUrl,
+      shelfPhotoUrls: tastingReports.shelfPhotoUrls,
       invoiceId: tasterInvoices.id,
       payeeName: tasterInvoices.payeeName,
       hourlyRate: tasterInvoices.hourlyRate,
@@ -49,6 +53,20 @@ export default async function StaffTastingReportsPage() {
     .leftJoin(tasterInvoices, eq(tasterInvoices.tastingId, tastings.id))
     .orderBy(desc(tastings.scheduledAt))
 
+  const tastingIds = rows.map(r => r.tastingId)
+  let analysesMap: Record<string, SerializedTastingAnalysis> = {}
+  try {
+    const analyses = await getTastingAnalysesForTastings(tastingIds)
+    analysesMap = Object.fromEntries(
+      analyses.map(a => [a.tastingId, {
+        ...a,
+        createdAt: a.createdAt instanceof Date ? a.createdAt.toISOString() : a.createdAt,
+      } as SerializedTastingAnalysis])
+    )
+  } catch {
+    // table may not exist yet — degrade gracefully
+  }
+
   return (
     <div className="p-4 sm:p-8 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -62,7 +80,7 @@ export default async function StaffTastingReportsPage() {
           </div>
         </div>
       </div>
-      <TastingReportsView rows={rows} />
+      <TastingReportsView rows={rows} analysesMap={analysesMap} />
     </div>
   )
 }
