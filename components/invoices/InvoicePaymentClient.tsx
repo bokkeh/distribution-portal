@@ -114,25 +114,36 @@ export default function InvoicePaymentClient({
                   description: `Includes a ${formatCurrency(cardBreakdown.processingFee)} Stripe processing fee.`,
                   totalLabel: formatCurrency(cardBreakdown.totalAmount),
                 },
-              ] as const).map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setPaymentMethod(option.value)}
-                  className={cn(
-                    'rounded-lg border p-3 text-left transition',
-                    paymentMethod === option.value ? 'border-slate-900 bg-slate-50' : 'border-slate-200 hover:border-slate-300',
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900">{option.title}</p>
-                      <p className="text-xs text-muted-foreground">{option.description}</p>
+              ] as const).map((option) => {
+                const selected = paymentMethod === option.value
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setPaymentMethod(option.value)}
+                    className={cn(
+                      'rounded-lg border-2 p-3 text-left transition-all',
+                      selected
+                        ? 'border-slate-900 bg-slate-50 shadow-sm'
+                        : 'border-slate-200 hover:border-slate-300 bg-white',
+                    )}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
+                        selected ? 'border-slate-900 bg-slate-900' : 'border-slate-300 bg-white',
+                      )}>
+                        {selected && <div className="h-2 w-2 rounded-full bg-white" />}
+                      </div>
+                      <div className="flex-1">
+                        <p className={cn('text-sm font-semibold', selected ? 'text-slate-900' : 'text-slate-700')}>{option.title}</p>
+                        <p className="text-xs text-muted-foreground">{option.description}</p>
+                      </div>
+                      <div className={cn('text-sm font-semibold', selected ? 'text-slate-900' : 'text-slate-500')}>{option.totalLabel}</div>
                     </div>
-                    <div className="text-sm font-semibold text-slate-900">{option.totalLabel}</div>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                )
+              })}
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
               <div className="flex justify-between">
