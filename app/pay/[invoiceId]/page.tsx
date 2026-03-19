@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { getInvoiceDetailData } from '@/lib/invoices/read'
 import InvoicePaymentClient from '@/components/invoices/InvoicePaymentClient'
 import { InvoiceVisual } from '@/components/invoices/InvoiceVisual'
+import { createPublicPaymentIntent } from '@/actions/invoices'
 import { Badge } from '@/components/ui/badge'
 import Image from 'next/image'
 
@@ -39,6 +40,7 @@ export default async function PublicPayPage({ params }: { params: Promise<{ invo
             invoiceId={invoice.id}
             total={String(invoice.total)}
             returnUrl={`/pay/${invoiceId}/success`}
+            paymentIntentAction={createPublicPaymentIntent}
           />
         )}
 

@@ -150,10 +150,17 @@ export function AccountEditForm({ account, mode }: { account: Account; mode: 'ad
         <div className="space-y-2">
           <Label htmlFor={`${mode}-paymentTerms`}>Payment Terms</Label>
           <select id={`${mode}-paymentTerms`} name="paymentTerms" defaultValue={account.paymentTerms ?? 'NET30'} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
-            <option value="NET30">NET30</option>
-            <option value="NET15">NET15</option>
-            <option value="COD">COD</option>
-            <option value="PREPAID">PREPAID</option>
+            <option value="PREPAID">Prepaid</option>
+            <option value="DUE_ON_RECEIPT">Due on Receipt</option>
+            <option value="NET7">Net 7</option>
+            <option value="NET10">Net 10</option>
+            <option value="NET15">Net 15</option>
+            <option value="NET30">Net 30</option>
+            <option value="NET45">Net 45</option>
+            <option value="NET60">Net 60</option>
+            <option value="NET90">Net 90</option>
+            <option value="COD">COD (Cash on Delivery)</option>
+            <option value="2/10_NET30">2/10 Net 30 (Early Pay Discount)</option>
           </select>
         </div>
       </div>

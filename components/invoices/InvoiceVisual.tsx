@@ -1,6 +1,25 @@
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { InvoiceDetailData } from '@/lib/invoices/read'
 
+const PAYMENT_TERMS_LABELS: Record<string, string> = {
+  PREPAID: 'Prepaid',
+  DUE_ON_RECEIPT: 'Due on Receipt',
+  NET7: 'Net 7',
+  NET10: 'Net 10',
+  NET15: 'Net 15',
+  NET30: 'Net 30',
+  NET45: 'Net 45',
+  NET60: 'Net 60',
+  NET90: 'Net 90',
+  COD: 'COD',
+  '2/10_NET30': '2/10 Net 30',
+}
+
+function formatPaymentTerms(terms: string | null): string {
+  if (!terms) return 'Net 30'
+  return PAYMENT_TERMS_LABELS[terms] ?? terms
+}
+
 const statusStyles: Record<string, string> = {
   draft: 'bg-slate-100 text-slate-700 border-slate-200',
   sent: 'bg-blue-50 text-blue-700 border-blue-200',
@@ -58,7 +77,7 @@ export function InvoiceVisual({ invoice }: { invoice: InvoiceDetailData }) {
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <div className="rounded-xl bg-slate-50 p-3">
               <p className="text-xs uppercase tracking-wide text-slate-500">Terms</p>
-              <p className="mt-1 text-sm font-medium text-slate-900">{invoice.paymentTerms ?? 'NET30'}</p>
+              <p className="mt-1 text-sm font-medium text-slate-900">{formatPaymentTerms(invoice.paymentTerms)}</p>
             </div>
             <div className="rounded-xl bg-slate-50 p-3">
               <p className="text-xs uppercase tracking-wide text-slate-500">Linked Order</p>

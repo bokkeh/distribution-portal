@@ -59,7 +59,19 @@ function InvoicePaymentForm({
   )
 }
 
-export default function InvoicePaymentClient({ invoiceId, total, returnUrl = '/customer/invoices' }: { invoiceId: string; total: string; returnUrl?: string }) {
+type PaymentIntentAction = (invoiceId: string, paymentMethod: CustomerPaymentMethod) => Promise<{ clientSecret: string | null; amount: string; processingFee: string }>
+
+export default function InvoicePaymentClient({
+  invoiceId,
+  total,
+  returnUrl = '/customer/invoices',
+  paymentIntentAction = createPaymentIntent,
+}: {
+  invoiceId: string
+  total: string
+  returnUrl?: string
+  paymentIntentAction?: PaymentIntentAction
+}) {
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState<CustomerPaymentMethod>('us_bank_account')
@@ -72,7 +84,7 @@ export default function InvoicePaymentClient({ invoiceId, total, returnUrl = '/c
   async function initPayment() {
     try {
       setLoading(true)
-      const result = await createPaymentIntent(invoiceId, paymentMethod)
+      const result = await paymentIntentAction(invoiceId, paymentMethod)
       setClientSecret(result.clientSecret!)
       setPayableTotal(result.amount)
       setProcessingFee(result.processingFee)

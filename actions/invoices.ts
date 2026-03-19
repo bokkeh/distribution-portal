@@ -317,8 +317,17 @@ export async function createInvoiceAdjustment(formData: FormData) {
   redirect(`/admin/invoicing/${invoice.id}?success=${encodeURIComponent('Invoice adjustment recorded.')}`)
 }
 
+export async function createPublicPaymentIntent(invoiceId: string, paymentMethod: CustomerPaymentMethod) {
+  // No auth required — invoice ID acts as an unguessable token for public pay links
+  return _createPaymentIntent(invoiceId, paymentMethod)
+}
+
 export async function createPaymentIntent(invoiceId: string, paymentMethod: CustomerPaymentMethod) {
   await requireAuth()
+  return _createPaymentIntent(invoiceId, paymentMethod)
+}
+
+async function _createPaymentIntent(invoiceId: string, paymentMethod: CustomerPaymentMethod) {
 
   const [invoice] = await db.select().from(invoices).where(eq(invoices.id, invoiceId))
   if (!invoice) throw new Error('Invoice not found')

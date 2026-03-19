@@ -1,6 +1,14 @@
 import { Document, Page, StyleSheet, Text, View } from '@react-pdf/renderer'
 import type { InvoiceDetailData } from '@/lib/invoices/read'
 
+const PAYMENT_TERMS_LABELS: Record<string, string> = {
+  PREPAID: 'Prepaid', DUE_ON_RECEIPT: 'Due on Receipt',
+  NET7: 'Net 7', NET10: 'Net 10', NET15: 'Net 15', NET30: 'Net 30',
+  NET45: 'Net 45', NET60: 'Net 60', NET90: 'Net 90', COD: 'COD',
+  '2/10_NET30': '2/10 Net 30',
+}
+function formatPaymentTerms(t: string | null) { return t ? (PAYMENT_TERMS_LABELS[t] ?? t) : 'Net 30' }
+
 const styles = StyleSheet.create({
   page: { padding: 36, backgroundColor: '#ffffff', fontSize: 11, color: '#0f172a' },
   header: { backgroundColor: '#0f172a', borderRadius: 18, padding: 24, marginBottom: 24 },
@@ -72,7 +80,7 @@ export function InvoicePdfDocument({ invoice }: { invoice: InvoiceDetailData }) 
           </View>
           <View style={styles.panel}>
             <Text style={styles.panelEyebrow}>Terms</Text>
-            <Text style={styles.panelHeading}>{invoice.paymentTerms ?? 'NET30'}</Text>
+            <Text style={styles.panelHeading}>{formatPaymentTerms(invoice.paymentTerms)}</Text>
             <Text style={[styles.panelText, { marginTop: 10 }]}>Linked Order</Text>
             <Text style={styles.panelText}>{invoice.orderId ? invoice.orderId.slice(-8).toUpperCase() : 'Direct invoice'}</Text>
             <Text style={[styles.panelText, { marginTop: 10 }]}>Status</Text>
