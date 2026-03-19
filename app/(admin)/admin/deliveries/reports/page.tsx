@@ -1,6 +1,6 @@
 import { db } from '@/db'
-import { deliveries, deliveryStops, drivers, users, customerAccounts } from '@/db/schema'
-import { eq, desc, inArray } from 'drizzle-orm'
+import { deliveries, deliveryStops, drivers, users, customerAccounts, shelfAnalyses } from '@/db/schema'
+import { eq, desc, inArray, and } from 'drizzle-orm'
 import { requireAdmin } from '@/lib/auth/session'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -9,6 +9,8 @@ import { formatDate } from '@/lib/utils'
 import Image from 'next/image'
 import Link from 'next/link'
 import { ArrowLeft, Clock, MapPin, Camera, User, Truck } from 'lucide-react'
+import { ShelfInsightsCard } from '@/components/deliveries/ShelfInsightsCard'
+import type { SerializedShelfAnalysis } from '@/components/deliveries/ShelfInsightsCard'
 
 function haversineMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 3958.8 // Earth radius in miles
@@ -131,6 +133,31 @@ export default async function DeliveryReportsPage() {
     const list = stopsByDelivery.get(stop.deliveryId) ?? []
     list.push(stop)
     stopsByDelivery.set(stop.deliveryId, list)
+  }
+
+  // Fetch existing shelf analyses for stops that have shelf photos
+  const shelfStopIds = allStops.filter(s => s.shelfPhotoUrl).map(s => s.id)
+  const shelfAnalysesMap = new Map<string, SerializedShelfAnalysis>()
+  if (shelfStopIds.length > 0) {
+    try {
+      const analyses = await db
+        .select()
+        .from(shelfAnalyses)
+        .where(and(inArray(shelfAnalyses.deliveryStopId, shelfStopIds), eq(shelfAnalyses.status, 'complete')))
+        .orderBy(desc(shelfAnalyses.createdAt))
+      const seen = new Set<string>()
+      for (const a of analyses) {
+        if (!seen.has(a.deliveryStopId)) {
+          seen.add(a.deliveryStopId)
+          shelfAnalysesMap.set(a.deliveryStopId, {
+            ...a,
+            createdAt: a.createdAt.toISOString(),
+          } as SerializedShelfAnalysis)
+        }
+      }
+    } catch {
+      // shelf_analyses table may not exist yet — silently skip
+    }
   }
 
   return (
@@ -318,6 +345,36 @@ export default async function DeliveryReportsPage() {
                     ))}
                   </div>
                 </div>
+
+                {/* AI Shelf Insights — one card per stop with a shelf photo */}
+                {(() => {
+                  const shelfStops = stops.filter(s => s.shelfPhotoUrl)
+                  if (shelfStops.length === 0) return null
+                  return (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">AI Shelf Analysis</p>
+                      <div className="space-y-3">
+                        {shelfStops.map(stop => (
+                          <div key={stop.id}>
+                            {shelfStops.length > 1 && (
+                              <p className="mb-1.5 text-xs font-medium text-slate-600">{stop.companyName ?? stop.address}</p>
+                            )}
+                            <ShelfInsightsCard
+                              stop={{
+                                id: stop.id,
+                                shelfPhotoUrl: stop.shelfPhotoUrl,
+                                additionalPhotoUrl: stop.additionalPhotoUrl ?? null,
+                                companyName: stop.companyName,
+                                address: stop.address,
+                              }}
+                              existingAnalysis={shelfAnalysesMap.get(stop.id) ?? null}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })()}
               </CardContent>
             </Card>
           )
