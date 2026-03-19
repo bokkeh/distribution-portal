@@ -1,4 +1,4 @@
-import { boolean, integer, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
+import { boolean, integer, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
 import { tastings } from './tastings'
 import { users } from './users'
 
@@ -17,6 +17,8 @@ export const tastingReports = pgTable('tasting_reports', {
   issues: text('issues'),
   followUpNeeded: boolean('follow_up_needed').notNull().default(false),
   followUpNotes: text('follow_up_notes'),
+  setupPhotoUrl: text('setup_photo_url'),
+  shelfPhotoUrls: jsonb('shelf_photo_urls').$type<string[]>().default([]),
   submittedAt: timestamp('submitted_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

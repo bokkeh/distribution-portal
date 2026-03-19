@@ -23,6 +23,8 @@ type ReportRecord = {
   issues: string | null
   followUpNeeded: boolean
   followUpNotes: string | null
+  setupPhotoUrl: string | null
+  shelfPhotoUrls: string[] | null
   submittedAt: Date
 } | null
 

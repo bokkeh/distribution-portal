@@ -1,7 +1,9 @@
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { formatEasternDateTime } from '@/lib/tastings/time'
 import { formatCurrency } from '@/lib/utils'
+import { TastingInsightsCard } from './TastingInsightsCard'
+import type { SerializedTastingAnalysis } from './TastingInsightsCard'
 
 export type TastingReportRow = {
   tastingId: string
@@ -27,6 +29,8 @@ export type TastingReportRow = {
   followUpNeeded: boolean | null
   followUpNotes: string | null
   reportSubmittedAt: Date | null
+  setupPhotoUrl: string | null
+  shelfPhotoUrls: string[] | null
   // invoice
   invoiceId: string | null
   payeeName: string | null
@@ -51,7 +55,13 @@ function invoiceStatusVariant(s: string | null): 'secondary' | 'success' | 'warn
   return 'secondary'
 }
 
-export function TastingReportsView({ rows }: { rows: TastingReportRow[] }) {
+export function TastingReportsView({
+  rows,
+  analysesMap = {},
+}: {
+  rows: TastingReportRow[]
+  analysesMap?: Record<string, SerializedTastingAnalysis>
+}) {
   const withReport = rows.filter(r => r.reportId)
   const withInvoice = rows.filter(r => r.invoiceId)
   const followUp = rows.filter(r => r.followUpNeeded)
@@ -61,29 +71,29 @@ export function TastingReportsView({ rows }: { rows: TastingReportRow[] }) {
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total Tastings</CardTitle></CardHeader>
-          <CardContent><p className="text-3xl font-semibold text-slate-900">{rows.length}</p></CardContent>
+          <div className="p-6 pb-2"><p className="text-sm font-medium text-muted-foreground">Total Tastings</p></div>
+          <div className="px-6 pb-6"><p className="text-3xl font-semibold text-slate-900">{rows.length}</p></div>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Reports Submitted</CardTitle></CardHeader>
-          <CardContent>
+          <div className="p-6 pb-2"><p className="text-sm font-medium text-muted-foreground">Reports Submitted</p></div>
+          <div className="px-6 pb-6">
             <p className="text-3xl font-semibold text-slate-900">{withReport.length}</p>
             <p className="mt-1 text-sm text-muted-foreground">{rows.length - withReport.length} missing</p>
-          </CardContent>
+          </div>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Invoices Submitted</CardTitle></CardHeader>
-          <CardContent>
+          <div className="p-6 pb-2"><p className="text-sm font-medium text-muted-foreground">Invoices Submitted</p></div>
+          <div className="px-6 pb-6">
             <p className="text-3xl font-semibold text-slate-900">{withInvoice.length}</p>
             <p className="mt-1 text-sm text-muted-foreground">{rows.length - withInvoice.length} missing</p>
-          </CardContent>
+          </div>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Total Invoice Value</CardTitle></CardHeader>
-          <CardContent>
+          <div className="p-6 pb-2"><p className="text-sm font-medium text-muted-foreground">Total Invoice Value</p></div>
+          <div className="px-6 pb-6">
             <p className="text-3xl font-semibold text-slate-900">{formatCurrency(totalPayout)}</p>
             {followUp.length > 0 && <p className="mt-1 text-sm text-amber-600">{followUp.length} follow-up needed</p>}
-          </CardContent>
+          </div>
         </Card>
       </div>
 
@@ -107,18 +117,14 @@ export function TastingReportsView({ rows }: { rows: TastingReportRow[] }) {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Badge variant={statusVariant(row.status)}>{row.status}</Badge>
-                    {row.reportId ? (
-                      <Badge variant="success">Report submitted</Badge>
-                    ) : (
-                      <Badge variant="secondary">No report</Badge>
-                    )}
-                    {row.invoiceId ? (
-                      <Badge variant={invoiceStatusVariant(row.invoiceStatus)}>
-                        Invoice: {row.invoiceStatus}
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary">No invoice</Badge>
-                    )}
+                    {row.reportId
+                      ? <Badge variant="success">Report submitted</Badge>
+                      : <Badge variant="secondary">No report</Badge>
+                    }
+                    {row.invoiceId
+                      ? <Badge variant={invoiceStatusVariant(row.invoiceStatus)}>Invoice: {row.invoiceStatus}</Badge>
+                      : <Badge variant="secondary">No invoice</Badge>
+                    }
                     {row.followUpNeeded && <Badge variant="warning">Follow-up needed</Badge>}
                   </div>
                 </div>
@@ -160,6 +166,28 @@ export function TastingReportsView({ rows }: { rows: TastingReportRow[] }) {
                         </div>
                       ) : null
                     )}
+
+                    {/* Captured photos */}
+                    {(row.setupPhotoUrl || (row.shelfPhotoUrls && row.shelfPhotoUrls.length > 0)) && (
+                      <div className="space-y-1.5">
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Captured Photos</p>
+                        <div className="flex flex-wrap gap-2">
+                          {row.setupPhotoUrl && (
+                            <a href={row.setupPhotoUrl} target="_blank" rel="noreferrer"
+                              className="block h-14 w-14 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
+                              <img src={row.setupPhotoUrl} alt="Setup" className="h-full w-full object-cover" />
+                            </a>
+                          )}
+                          {(row.shelfPhotoUrls ?? []).map((url, i) => (
+                            <a key={i} href={url} target="_blank" rel="noreferrer"
+                              className="block h-14 w-14 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
+                              <img src={url} alt={`Shelf ${i + 1}`} className="h-full w-full object-cover" />
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {row.followUpNeeded && (
                       <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-0.5">
                         <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Follow-up Required</p>
@@ -171,6 +199,14 @@ export function TastingReportsView({ rows }: { rows: TastingReportRow[] }) {
                   <div className="rounded-xl border border-dashed border-slate-200 p-4 text-sm text-muted-foreground">
                     No report submitted yet.
                   </div>
+                )}
+
+                {/* AI Tasting Analysis — shown when report exists */}
+                {row.reportId && (
+                  <TastingInsightsCard
+                    tastingId={row.tastingId}
+                    existingAnalysis={analysesMap[row.tastingId] ?? null}
+                  />
                 )}
 
                 {/* Invoice details */}

@@ -649,6 +649,12 @@ export async function submitTastingReport(formData: FormData) {
     redirect('/unauthorized')
   }
 
+  let shelfPhotoUrls: string[] = []
+  try {
+    const raw = (formData.get('shelfPhotoUrls') as string) || '[]'
+    shelfPhotoUrls = JSON.parse(raw).filter(Boolean)
+  } catch { /* ignore parse errors */ }
+
   const payload = {
     submittedByUserId: session.user.id,
     actualStartTime: ((formData.get('actualStartTime') as string) || '').trim() || null,
@@ -662,6 +668,8 @@ export async function submitTastingReport(formData: FormData) {
     issues: ((formData.get('issues') as string) || '').trim() || null,
     followUpNeeded: formData.get('followUpNeeded') === 'on',
     followUpNotes: ((formData.get('followUpNotes') as string) || '').trim() || null,
+    setupPhotoUrl: ((formData.get('setupPhotoUrl') as string) || '').trim() || null,
+    shelfPhotoUrls,
   }
 
   const [existing] = await db

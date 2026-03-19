@@ -51,7 +51,7 @@ export default async function TasterTastingDetailPage({
 
   try {
     const [report, invoice, assignedUser] = await Promise.all([
-      db.select().from(tastingReports).where(eq(tastingReports.tastingId, tastingId)).then(rows => rows[0] ?? null),
+      db.select().from(tastingReports).where(eq(tastingReports.tastingId, tastingId)).then(r => r[0] ?? null),
       db.select().from(tasterInvoices).where(eq(tasterInvoices.tastingId, tastingId)).then(rows => rows[0] ?? null),
       db.select({ phone: users.phone }).from(users).where(eq(users.id, tasting.assignedUserId)).then(rows => rows[0] ?? null),
     ])
@@ -106,6 +106,8 @@ export default async function TasterTastingDetailPage({
             issues: report.issues,
             followUpNeeded: report.followUpNeeded,
             followUpNotes: report.followUpNotes,
+            setupPhotoUrl: report.setupPhotoUrl ?? null,
+            shelfPhotoUrls: (report.shelfPhotoUrls as string[] | null) ?? null,
             submittedAt: report.submittedAt,
           } : null}
           invoice={invoice ? {

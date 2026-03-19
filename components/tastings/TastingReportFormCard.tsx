@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { submitTastingReport } from '@/actions/tastings'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useFormDraftAutosave } from '@/hooks/useFormDraftAutosave'
 import { formatEasternTimeInput } from '@/lib/tastings/time'
+import { Camera, Loader2, LayoutGrid } from 'lucide-react'
 
 type ReportRecord = {
   actualStartTime: string | null
@@ -21,8 +23,12 @@ type ReportRecord = {
   issues: string | null
   followUpNeeded: boolean
   followUpNotes: string | null
+  setupPhotoUrl: string | null
+  shelfPhotoUrls: string[] | null
   submittedAt: Date
 } | null
+
+const MAX_SHELF_PHOTOS = 4
 
 export function TastingReportFormCard({
   tasting,
@@ -44,9 +50,67 @@ export function TastingReportFormCard({
   const reportFormRef = useRef<HTMLFormElement | null>(null)
   const reportDraft = useFormDraftAutosave(reportFormRef, `tasting-report:${tasting.id}`)
 
+  // Photo state
+  const [setupPhotoUrl, setSetupPhotoUrl] = useState(report?.setupPhotoUrl ?? '')
+  const [shelfPhotoUrls, setShelfPhotoUrls] = useState<string[]>(report?.shelfPhotoUrls ?? [])
+  const [uploadingSetup, setUploadingSetup] = useState(false)
+  const [uploadingShelf, setUploadingShelf] = useState<boolean[]>([false, false, false, false])
+
   useEffect(() => {
     if (success === 'report_submitted') reportDraft.clearDraft()
   }, [reportDraft, success])
+
+  async function handleUploadSetup(file: File) {
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('File too large', { description: 'Maximum 10MB.' })
+      return
+    }
+    setUploadingSetup(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('folder', 'tastings')
+      formData.append('filename', `setup-${file.name}`)
+      const res = await fetch('/api/upload', { method: 'POST', body: formData })
+      const payload = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(payload?.error || 'Upload failed')
+      setSetupPhotoUrl(payload.publicUrl)
+      toast.success('Setup photo uploaded')
+    } catch (e) {
+      toast.error('Upload failed', { description: e instanceof Error ? e.message : undefined })
+    } finally {
+      setUploadingSetup(false)
+    }
+  }
+
+  async function handleUploadShelf(file: File, index: number) {
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('File too large', { description: 'Maximum 10MB.' })
+      return
+    }
+    setUploadingShelf(prev => { const next = [...prev]; next[index] = true; return next })
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('folder', 'tastings')
+      formData.append('filename', `shelf-${index + 1}-${file.name}`)
+      const res = await fetch('/api/upload', { method: 'POST', body: formData })
+      const payload = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(payload?.error || 'Upload failed')
+      setShelfPhotoUrls(prev => {
+        const next = [...prev]
+        next[index] = payload.publicUrl
+        return next
+      })
+      toast.success(`Shelf photo ${index + 1} uploaded`)
+    } catch (e) {
+      toast.error('Upload failed', { description: e instanceof Error ? e.message : undefined })
+    } finally {
+      setUploadingShelf(prev => { const next = [...prev]; next[index] = false; return next })
+    }
+  }
+
+  const shelfSlots = Array.from({ length: MAX_SHELF_PHOTOS }, (_, i) => i)
 
   return (
     <Card id="report">
@@ -56,8 +120,63 @@ export function TastingReportFormCard({
       <CardContent>
         {success ? <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</div> : null}
         {error ? <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
+
+        {/* Photo Upload Section */}
+        <div className="mb-6 space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Event Photos</p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+            {/* Setup photo */}
+            <label className="block cursor-pointer sm:col-span-1">
+              <span className="mb-1 block truncate text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Setup Photo</span>
+              <span className="flex aspect-square w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-1.5 py-2 text-center transition-colors hover:border-violet-400 hover:bg-violet-50">
+                {uploadingSetup
+                  ? <Loader2 className="mb-1 h-5 w-5 animate-spin text-slate-500" />
+                  : <Camera className="mb-1 h-5 w-5 text-slate-400" />
+                }
+                <span className="text-[11px] font-semibold leading-tight text-slate-900">
+                  {setupPhotoUrl ? 'Replace' : 'Upload'}
+                </span>
+                <span className="mt-0.5 text-[10px] leading-tight text-muted-foreground">Table setup</span>
+                {setupPhotoUrl && (
+                  <a href={setupPhotoUrl} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+                    className="mt-1 text-[10px] font-medium text-violet-600 underline">Preview</a>
+                )}
+              </span>
+              <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) void handleUploadSetup(f) }} />
+            </label>
+
+            {/* Shelf photos */}
+            {shelfSlots.map(i => (
+              <label key={i} className="block cursor-pointer">
+                <span className="mb-1 block truncate text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Shelf {i + 1}</span>
+                <span className="flex aspect-square w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-1.5 py-2 text-center transition-colors hover:border-violet-400 hover:bg-violet-50">
+                  {uploadingShelf[i]
+                    ? <Loader2 className="mb-1 h-5 w-5 animate-spin text-slate-500" />
+                    : <LayoutGrid className="mb-1 h-5 w-5 text-slate-400" />
+                  }
+                  <span className="text-[11px] font-semibold leading-tight text-slate-900">
+                    {shelfPhotoUrls[i] ? 'Replace' : 'Upload'}
+                  </span>
+                  <span className="mt-0.5 text-[10px] leading-tight text-muted-foreground">Shelf photo</span>
+                  {shelfPhotoUrls[i] && (
+                    <a href={shelfPhotoUrls[i]} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+                      className="mt-1 text-[10px] font-medium text-violet-600 underline">Preview</a>
+                  )}
+                </span>
+                <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) void handleUploadShelf(f, i) }} />
+              </label>
+            ))}
+          </div>
+        </div>
+
         <form ref={reportFormRef} action={submitTastingReport} className="space-y-4">
           <input type="hidden" name="tastingId" value={tasting.id} />
+          {/* Photo URL hidden inputs — kept in sync with state */}
+          <input type="hidden" name="setupPhotoUrl" value={setupPhotoUrl} />
+          <input type="hidden" name="shelfPhotoUrls" value={JSON.stringify(shelfPhotoUrls.filter(Boolean))} />
+
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="actualStartTime">Actual Start Time</Label>
