@@ -10,10 +10,20 @@ import { generateSignedReadUrl } from '@/lib/gcs/client'
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
-function extractGCSFilePath(publicUrl: string): string | null {
+function extractGCSFilePath(url: string): string | null {
+  // /api/image?path=deliveries%2FFILE.jpg  (proxy format used when storing)
+  if (url.startsWith('/api/image')) {
+    try {
+      const params = new URLSearchParams(url.split('?')[1] ?? '')
+      return params.get('path')
+    } catch {
+      return null
+    }
+  }
+  // https://storage.googleapis.com/BUCKET/path  (direct GCS URL)
   const bucketName = process.env.GCS_BUCKET_NAME ?? ''
   const prefix = `https://storage.googleapis.com/${bucketName}/`
-  if (publicUrl.startsWith(prefix)) return publicUrl.slice(prefix.length)
+  if (url.startsWith(prefix)) return url.slice(prefix.length)
   return null
 }
 
