@@ -1,4 +1,4 @@
-import { Document, Page, StyleSheet, Text, View } from '@react-pdf/renderer'
+import { Document, Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer'
 import type { InvoiceDetailData } from '@/lib/invoices/read'
 
 const PAYMENT_TERMS_LABELS: Record<string, string> = {
@@ -51,14 +51,19 @@ function fmtDate(value: Date | null) {
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(value)
 }
 
-export function InvoicePdfDocument({ invoice }: { invoice: InvoiceDetailData }) {
+export function InvoicePdfDocument({ invoice, logoDataUrl }: { invoice: InvoiceDetailData; logoDataUrl?: string | null }) {
   return (
     <Document title={invoice.invoiceNumber}>
       <Page size="LETTER" style={styles.page}>
         <View style={styles.header}>
           <View style={styles.headerRow}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.eyebrow}>AHAWC Distribution</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 10 }}>
+                {logoDataUrl ? (
+                  <Image src={logoDataUrl} style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.1)' }} />
+                ) : null}
+                <Text style={styles.eyebrow}>AHAWC Distribution</Text>
+              </View>
               <Text style={styles.title}>Invoice</Text>
               <Text style={styles.subtitle}>Premium distribution billing statement for products, tasting support, and related account charges.</Text>
             </View>

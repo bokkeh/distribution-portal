@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { InvoiceDetailData } from '@/lib/invoices/read'
 
@@ -33,8 +34,13 @@ export function InvoiceVisual({ invoice }: { invoice: InvoiceDetailData }) {
       <div className="border-b border-slate-200 bg-slate-950 px-6 py-8 text-white sm:px-8">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-blue-200">AHAWC Distribution</p>
-            <h2 className="mt-3 text-3xl font-bold">Invoice</h2>
+            <div className="mb-4 flex items-center gap-3">
+              <div className="relative h-10 w-10 overflow-hidden rounded-lg bg-white/10 shrink-0">
+                <Image src="/brand/logo.png" alt="AHAWC" fill className="object-contain p-1" unoptimized />
+              </div>
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-blue-200">AHAWC Distribution</p>
+            </div>
+            <h2 className="text-3xl font-bold">Invoice</h2>
             <p className="mt-2 max-w-md text-sm text-slate-300">
               Premium distribution billing statement for products, tasting support, and related account charges.
             </p>

@@ -1,4 +1,6 @@
 import React from 'react'
+import fs from 'fs'
+import path from 'path'
 import { NextResponse } from 'next/server'
 import { renderToBuffer } from '@react-pdf/renderer'
 import type { DocumentProps } from '@react-pdf/renderer'
@@ -8,6 +10,16 @@ import { customerAccounts } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { getInvoiceDetailData } from '@/lib/invoices/read'
 import { InvoicePdfDocument } from '@/components/invoices/InvoicePdfDocument'
+
+function getLogoDataUrl(): string | null {
+  try {
+    const logoPath = path.join(process.cwd(), 'public', 'brand', 'logo.png')
+    const buf = fs.readFileSync(logoPath)
+    return `data:image/png;base64,${buf.toString('base64')}`
+  } catch {
+    return null
+  }
+}
 
 export const runtime = 'nodejs'
 
@@ -33,7 +45,8 @@ export async function GET(
     return new NextResponse('Unauthorized', { status: 403 })
   }
 
-  const document = React.createElement(InvoicePdfDocument, { invoice }) as unknown as React.ReactElement<DocumentProps>
+  const logoDataUrl = getLogoDataUrl()
+  const document = React.createElement(InvoicePdfDocument, { invoice, logoDataUrl }) as unknown as React.ReactElement<DocumentProps>
   const buffer = await renderToBuffer(document)
   return new NextResponse(buffer as BodyInit, {
     status: 200,
