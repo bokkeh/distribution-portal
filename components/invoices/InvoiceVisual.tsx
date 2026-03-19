@@ -35,7 +35,7 @@ export function InvoiceVisual({ invoice }: { invoice: InvoiceDetailData }) {
         <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="mb-4 flex items-center gap-3">
-              <div className="relative h-10 w-10 overflow-hidden rounded-lg bg-white/10 shrink-0">
+              <div className="relative h-10 w-10 overflow-hidden rounded-lg bg-white shrink-0">
                 <Image src="/brand/logo.png" alt="AHAWC" fill className="object-contain p-1" unoptimized />
               </div>
               <p className="text-xs font-semibold uppercase tracking-[0.28em] text-blue-200">AHAWC Distribution</p>
