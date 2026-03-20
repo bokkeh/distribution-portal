@@ -29,6 +29,7 @@ export interface AccountRow {
   starred: boolean
   pendingCases: number
   totalCasesPurchased: number
+  healthScore: number
 }
 
 const COLUMN_OPTIONS = [
@@ -47,11 +48,12 @@ const COLUMN_OPTIONS = [
   { key: 'totalPurchased', label: 'Total Purchased' },
   { key: 'balance', label: 'Balance' },
   { key: 'hubspot', label: 'HubSpot' },
+  { key: 'health', label: 'Health Score' },
 ] as const
 
 type ColumnKey = (typeof COLUMN_OPTIONS)[number]['key']
 
-const DEFAULT_COLUMNS: ColumnKey[] = ['company', 'location', 'phone', 'terms', 'pendingCases', 'totalPurchased', 'balance', 'hubspot']
+const DEFAULT_COLUMNS: ColumnKey[] = ['company', 'location', 'phone', 'terms', 'pendingCases', 'totalPurchased', 'balance', 'health', 'hubspot']
 
 function AccountTable({
   accounts,
@@ -98,6 +100,7 @@ function AccountTable({
           {visibleColumns.has('totalPurchased') && <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Total Purchased</th>}
           {visibleColumns.has('balance') && <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Balance</th>}
           {visibleColumns.has('hubspot') && <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">HubSpot</th>}
+          {visibleColumns.has('health') && <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Health</th>}
           <th className="px-4 py-3" />
         </tr>
       </thead>
@@ -192,6 +195,27 @@ function AccountTable({
                 )}
               </td>
             )}
+            {visibleColumns.has('health') && (
+              <td className="px-4 py-3 text-right">
+                <div className="inline-flex flex-col items-end gap-0.5">
+                  <span className={`text-sm font-bold ${
+                    account.healthScore >= 70 ? 'text-emerald-600' :
+                    account.healthScore >= 40 ? 'text-amber-600' : 'text-red-600'
+                  }`}>
+                    {account.healthScore}
+                  </span>
+                  <div className="h-1 w-12 rounded-full bg-slate-100 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${
+                        account.healthScore >= 70 ? 'bg-emerald-500' :
+                        account.healthScore >= 40 ? 'bg-amber-500' : 'bg-red-500'
+                      }`}
+                      style={{ width: `${account.healthScore}%` }}
+                    />
+                  </div>
+                </div>
+              </td>
+            )}
             <td className="px-4 py-3">
               <Link href={`${basePath}/${account.id}`}>
                 <Button variant="ghost" size="sm">View</Button>
@@ -219,7 +243,7 @@ export function LocalAccountsTable({
   const filterStorageKey = useMemo(() => `crm-view:${userId}:${basePath}`, [userId, basePath])
   const [selectedColumns, setSelectedColumns] = useState<ColumnKey[]>(DEFAULT_COLUMNS)
   const [searchQuery, setSearchQuery] = useState('')
-  const [sortBy, setSortBy] = useState<'company' | 'balance' | 'pendingCases'>('company')
+  const [sortBy, setSortBy] = useState<'company' | 'balance' | 'pendingCases' | 'health'>('company')
 
   useEffect(() => {
     try {
@@ -244,9 +268,9 @@ export function LocalAccountsTable({
     try {
       const raw = window.localStorage.getItem(filterStorageKey)
       if (!raw) return
-      const parsed = JSON.parse(raw) as { searchQuery?: string; sortBy?: 'company' | 'balance' | 'pendingCases' }
+      const parsed = JSON.parse(raw) as { searchQuery?: string; sortBy?: 'company' | 'balance' | 'pendingCases' | 'health' }
       if (typeof parsed.searchQuery === 'string') setSearchQuery(parsed.searchQuery)
-      if (parsed.sortBy === 'company' || parsed.sortBy === 'balance' || parsed.sortBy === 'pendingCases') {
+      if (parsed.sortBy === 'company' || parsed.sortBy === 'balance' || parsed.sortBy === 'pendingCases' || parsed.sortBy === 'health') {
         setSortBy(parsed.sortBy)
       }
     } catch {}
@@ -293,6 +317,7 @@ export function LocalAccountsTable({
   const sortedAccounts = [...filteredAccounts].sort((left, right) => {
     if (sortBy === 'balance') return Number(right.balance ?? 0) - Number(left.balance ?? 0)
     if (sortBy === 'pendingCases') return right.pendingCases - left.pendingCases
+    if (sortBy === 'health') return right.healthScore - left.healthScore
     return left.companyName.localeCompare(right.companyName)
   })
 
@@ -323,6 +348,7 @@ export function LocalAccountsTable({
             <option value="company">Sort: Company</option>
             <option value="balance">Sort: Balance</option>
             <option value="pendingCases">Sort: Pending Cases</option>
+            <option value="health">Sort: Health Score</option>
           </select>
           <div className="relative">
             <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => setShowColumnPicker(prev => !prev)}>

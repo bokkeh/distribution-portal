@@ -11,6 +11,7 @@ import SortableStopList from '@/components/deliveries/SortableStopList'
 import Link from 'next/link'
 import { ArrowLeft, Eye, Settings2 } from 'lucide-react'
 import { reassignDeliveryDriver } from '@/actions/deliveries'
+import { OptimizeRouteButton } from '@/components/deliveries/OptimizeRouteButton'
 import AddDeliveryStopForm from '@/components/deliveries/AddStopForm'
 import { getActivityTimeline } from '@/lib/activity/read'
 import { ActivityTimeline } from '@/components/activity/ActivityTimeline'
@@ -263,10 +264,15 @@ export default async function DeliveryDetailPage({
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              {stops.length} Stops
-              {isDriverView && <Badge variant="secondary">Driver View</Badge>}
-            </CardTitle>
+            <div className="flex items-start justify-between gap-3">
+              <CardTitle className="flex items-center gap-2">
+                {stops.length} Stops
+                {isDriverView && <Badge variant="secondary">Driver View</Badge>}
+              </CardTitle>
+              {!isDriverView && delivery.status !== 'completed' && (
+                <OptimizeRouteButton deliveryId={resolvedParams.deliveryId} />
+              )}
+            </div>
           </CardHeader>
           <CardContent className="space-y-3">
             <SortableStopList

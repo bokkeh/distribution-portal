@@ -959,6 +959,88 @@ export async function setDeliveryOrigin(deliveryId: string, formData: FormData) 
   return { success: true }
 }
 
+export async function optimizeDeliveryRoute(deliveryId: string): Promise<{ success?: boolean; error?: string }> {
+  await requireAdmin()
+
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY
+  if (!apiKey) return { error: 'Google Maps API key not configured.' }
+
+  // Fetch stops with coordinates
+  const stops = await db
+    .select({
+      id: deliveryStops.id,
+      sequenceNumber: deliveryStops.sequenceNumber,
+      address: deliveryStops.address,
+      lat: deliveryStops.lat,
+      lng: deliveryStops.lng,
+      status: deliveryStops.status,
+    })
+    .from(deliveryStops)
+    .where(eq(deliveryStops.deliveryId, deliveryId))
+    .orderBy(deliveryStops.sequenceNumber)
+
+  // Only optimize pending stops that have coordinates
+  const pending = stops.filter(s => s.status === 'pending' && s.lat && s.lng)
+  if (pending.length < 2) return { error: 'Need at least 2 pending stops with coordinates to optimize.' }
+
+  const [delivery] = await db
+    .select({ originLat: deliveries.originLat, originLng: deliveries.originLng })
+    .from(deliveries)
+    .where(eq(deliveries.id, deliveryId))
+  if (!delivery) return { error: 'Delivery not found.' }
+
+  const originLat = delivery.originLat ? parseFloat(delivery.originLat) : null
+  const originLng = delivery.originLng ? parseFloat(delivery.originLng) : null
+
+  // Build Directions API request
+  const origin =
+    originLat && originLng
+      ? `${originLat},${originLng}`
+      : `${pending[0].lat},${pending[0].lng}`
+  const destination = origin
+  // Waypoints: all stops (or all but first if no origin)
+  const waypoints = pending.map(s => `${s.lat},${s.lng}`)
+  const waypointsParam = `optimize:true|${waypoints.join('|')}`
+
+  const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&waypoints=${encodeURIComponent(waypointsParam)}&key=${apiKey}`
+
+  try {
+    const res = await fetch(url)
+    const data = await res.json() as {
+      status: string
+      routes?: Array<{ waypoint_order: number[] }>
+    }
+
+    if (data.status !== 'OK' || !data.routes?.[0]) {
+      return { error: `Directions API returned: ${data.status}` }
+    }
+
+    const order = data.routes[0].waypoint_order // e.g. [2, 0, 1]
+
+    // Reorder stops: completed stays in place, pending gets new sequence
+    const completedStops = stops.filter(s => s.status !== 'pending')
+    const completedCount = completedStops.length
+    const reorderedPending = order.map(i => pending[i])
+
+    // Assign sequence numbers: completed first, then optimized pending
+    for (let i = 0; i < completedStops.length; i++) {
+      await db.update(deliveryStops)
+        .set({ sequenceNumber: i + 1 })
+        .where(eq(deliveryStops.id, completedStops[i].id))
+    }
+    for (let i = 0; i < reorderedPending.length; i++) {
+      await db.update(deliveryStops)
+        .set({ sequenceNumber: completedCount + i + 1 })
+        .where(eq(deliveryStops.id, reorderedPending[i].id))
+    }
+
+    revalidatePath(`/admin/deliveries/${deliveryId}`)
+    return { success: true }
+  } catch {
+    return { error: 'Failed to call Directions API.' }
+  }
+}
+
 export async function deleteDelivery(deliveryId: string) {
   await requireAdmin()
   await db.delete(deliveries).where(eq(deliveries.id, deliveryId))

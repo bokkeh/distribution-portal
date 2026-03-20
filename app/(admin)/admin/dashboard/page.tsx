@@ -1,14 +1,16 @@
 import { db } from '@/db'
-import { orders, invoices, customerAccounts, inventory, products, wholesaleAccountRequests, tastingReports, tastings, scheduledSmsJobs } from '@/db/schema'
-import { eq, sql, desc, and, gte, ne } from 'drizzle-orm'
+import { orders, invoices, customerAccounts, inventory, wholesaleAccountRequests, tastingReports, tastings, scheduledSmsJobs, deliveries, deliveryStops } from '@/db/schema'
+import { eq, sql, desc, and, ne, inArray } from 'drizzle-orm'
 import KpiCard from '@/components/dashboard/KpiCard'
-import { DollarSign, ShoppingCart, Users, MessageSquare, AlertTriangle, HeartPulse, ClipboardList } from 'lucide-react'
+import { DollarSign, ShoppingCart, Users, MessageSquare, AlertTriangle, HeartPulse, Truck, Wine } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { getSmsInboxSummary } from '@/lib/inbox/summary'
 import Link from 'next/link'
 import { getSystemHealthSnapshot } from '@/lib/ops/system-health'
+import { RevenueChart } from '@/components/dashboard/RevenueChart'
+import type { MonthlyRevenuePoint } from '@/components/dashboard/RevenueChart'
 
 export default async function AdminDashboard() {
   const [
@@ -23,6 +25,10 @@ export default async function AdminDashboard() {
     missingTastingReports,
     failedJobs,
     systemHealth,
+    monthlyRevenue,
+    tastingConvStats,
+    topAccounts,
+    deliveryStats,
   ] = await Promise.all([
     db.select({ total: sql<string>`COALESCE(SUM(total), 0)` }).from(orders).where(ne(orders.status, 'cancelled')),
     db.select({ count: sql<number>`COUNT(*)` }).from(orders),
@@ -39,7 +45,66 @@ export default async function AdminDashboard() {
       .where(and(eq(tastings.status, 'completed'), sql`${tastingReports.id} is null`)),
     db.select({ count: sql<number>`COUNT(*)` }).from(scheduledSmsJobs).where(eq(scheduledSmsJobs.status, 'failed')),
     getSystemHealthSnapshot(),
+    // Monthly revenue (last 12 months)
+    db.select({
+      month: sql<string>`TO_CHAR(DATE_TRUNC('month', ${orders.createdAt}), 'Mon YYYY')`,
+      monthOrder: sql<string>`DATE_TRUNC('month', ${orders.createdAt})`,
+      revenue: sql<string>`COALESCE(SUM(${orders.total}), 0)`,
+    })
+      .from(orders)
+      .where(and(
+        ne(orders.status, 'cancelled'),
+        sql`${orders.createdAt} >= NOW() - INTERVAL '12 months'`
+      ))
+      .groupBy(sql`DATE_TRUNC('month', ${orders.createdAt})`)
+      .orderBy(sql`DATE_TRUNC('month', ${orders.createdAt})`),
+    // Tasting conversion stats
+    db.select({
+      totalInteractions: sql<number>`COALESCE(SUM(${tastingReports.consumerInteractions}), 0)`,
+      totalBottles: sql<number>`COALESCE(SUM(${tastingReports.bottlesSold}), 0)`,
+    }).from(tastingReports),
+    // Top accounts by total orders
+    db.select({
+      companyName: customerAccounts.companyName,
+      customerId: customerAccounts.id,
+      total: sql<string>`COALESCE(SUM(${orders.total}), 0)`,
+    })
+      .from(customerAccounts)
+      .leftJoin(orders, and(eq(orders.customerId, customerAccounts.id), ne(orders.status, 'cancelled')))
+      .groupBy(customerAccounts.id, customerAccounts.companyName)
+      .orderBy(desc(sql`COALESCE(SUM(${orders.total}), 0)`))
+      .limit(5),
+    // Delivery completion stats
+    (async () => {
+      const allDeliveries = await db.select({ id: deliveries.id, status: deliveries.status }).from(deliveries)
+      const allDeliveryIds = allDeliveries.map(d => d.id)
+      if (allDeliveryIds.length === 0) return { totalStops: 0, deliveredStops: 0 }
+      const stopStats = await db.select({
+        total: sql<number>`COUNT(*)`,
+        delivered: sql<number>`COUNT(*) FILTER (WHERE ${deliveryStops.status} = 'delivered')`,
+      })
+        .from(deliveryStops)
+        .where(inArray(deliveryStops.deliveryId, allDeliveryIds))
+      return {
+        totalStops: Number(stopStats[0]?.total ?? 0),
+        deliveredStops: Number(stopStats[0]?.delivered ?? 0),
+      }
+    })(),
   ])
+
+  const chartData: MonthlyRevenuePoint[] = monthlyRevenue.map(r => ({
+    month: r.month.split(' ')[0], // "Jan 2025" → "Jan"
+    revenue: Number(r.revenue),
+  }))
+
+  const tastingConversion = tastingConvStats[0]
+  const convRate = tastingConversion && Number(tastingConversion.totalInteractions) > 0
+    ? ((Number(tastingConversion.totalBottles) / Number(tastingConversion.totalInteractions)) * 100).toFixed(1)
+    : null
+
+  const deliveryCompletionRate = deliveryStats.totalStops > 0
+    ? ((deliveryStats.deliveredStops / deliveryStats.totalStops) * 100).toFixed(0)
+    : null
 
   const statusColor: Record<string, 'default' | 'success' | 'warning' | 'destructive' | 'info'> = {
     pending: 'warning',
@@ -83,6 +148,22 @@ export default async function AdminDashboard() {
           icon={AlertTriangle}
           iconColor="text-orange-600"
         />
+        <KpiCard
+          title="Delivery Completion"
+          value={deliveryCompletionRate != null ? `${deliveryCompletionRate}%` : '—'}
+          change={`${deliveryStats.deliveredStops} of ${deliveryStats.totalStops} stops`}
+          changeType={deliveryCompletionRate != null && Number(deliveryCompletionRate) >= 90 ? 'positive' : 'neutral'}
+          icon={Truck}
+          iconColor="text-sky-600"
+        />
+        <KpiCard
+          title="Tasting Conversion"
+          value={convRate != null ? `${convRate}%` : '—'}
+          change={`${tastingConversion?.totalBottles ?? 0} bottles from tastings`}
+          changeType={convRate != null && Number(convRate) >= 15 ? 'positive' : 'neutral'}
+          icon={Wine}
+          iconColor="text-violet-600"
+        />
         <Card className="border-0 bg-white shadow-sm">
           <CardContent className="p-6">
             <div className="flex items-start justify-between gap-4">
@@ -119,6 +200,19 @@ export default async function AdminDashboard() {
           iconColor="text-rose-600"
         />
       </div>
+
+      {/* Monthly Revenue Chart */}
+      {chartData.length > 0 && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-base">Monthly Revenue (Last 12 Months)</CardTitle>
+            <Link href="/admin/orders" className="text-xs text-primary hover:underline">View orders</Link>
+          </CardHeader>
+          <CardContent className="pt-0 pb-4">
+            <RevenueChart data={chartData} />
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Orders */}
@@ -203,6 +297,30 @@ export default async function AdminDashboard() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Top Accounts */}
+        {topAccounts.length > 0 && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-base">Top Accounts by Revenue</CardTitle>
+              <Link href="/admin/crm" className="text-xs text-primary hover:underline">View all</Link>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="divide-y">
+                {topAccounts.map((acct, i) => (
+                  <div key={acct.customerId} className="flex items-center gap-3 px-5 py-3">
+                    <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold
+                      ${i === 0 ? 'bg-amber-100 text-amber-700' : i === 1 ? 'bg-slate-100 text-slate-600' : 'bg-slate-50 text-slate-500'}`}>
+                      {i + 1}
+                    </span>
+                    <span className="flex-1 min-w-0 text-sm font-medium text-slate-900 truncate">{acct.companyName}</span>
+                    <span className="text-sm font-semibold text-slate-700 shrink-0">{formatCurrency(acct.total ?? '0')}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   )

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency } from '@/lib/utils'
 import Link from 'next/link'
-import { Plus } from 'lucide-react'
+import { Plus, AlertTriangle } from 'lucide-react'
 import { AdminInventoryRowActions } from '@/components/inventory/AdminInventoryRowActions'
 import SampleHoldersPanel from '@/components/inventory/SampleHoldersPanel'
 
@@ -103,6 +103,12 @@ export default async function InventoryPage() {
     }
   }
 
+  const lowStockItems = items.filter(item =>
+    item.active &&
+    item.reorderLevel != null &&
+    (item.quantityPaid ?? 0) <= (item.reorderLevel ?? 0)
+  )
+
   return (
     <div className="p-4 sm:p-8 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -114,6 +120,30 @@ export default async function InventoryPage() {
           <Button><Plus className="w-4 h-4 mr-2" />Add Product</Button>
         </Link>
       </div>
+
+      {lowStockItems.length > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-amber-800">
+                {lowStockItems.length} product{lowStockItems.length !== 1 ? 's' : ''} at or below reorder level
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {lowStockItems.map(item => (
+                  <span key={item.id} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-white px-2.5 py-1 text-xs font-medium text-amber-900">
+                    <span className="font-semibold">{item.name}</span>
+                    <span className="text-amber-600">
+                      {item.quantityPaid ?? 0} case{(item.quantityPaid ?? 0) !== 1 ? 's' : ''} left
+                      {item.reorderLevel != null && ` (min ${item.reorderLevel})`}
+                    </span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Card>
         <CardContent className="p-0">

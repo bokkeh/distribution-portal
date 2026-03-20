@@ -8,7 +8,7 @@ import { LocalAccountsTable } from '@/components/crm/LocalAccountsTable'
 import { LocalPeopleTable } from '@/components/crm/LocalPeopleTable'
 import { CRMEntityMergeCard } from '@/components/crm/CRMEntityMergeCard'
 import { CRMTabs } from '@/components/crm/CRMTabs'
-import { sql, eq, and, inArray } from 'drizzle-orm'
+import { sql, eq, and, inArray, max } from 'drizzle-orm'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import { requireFeature } from '@/lib/auth/session'
@@ -95,10 +95,51 @@ export default async function CRMPage() {
   const pendingMap = new Map(pendingStats.map(r => [r.customerId, Number(r.cases)]))
   const totalMap = new Map(totalStats.map(r => [r.customerId, Number(r.cases)]))
 
+  // Last order date per customer (for recency score)
+  const lastOrderStats = accountIds.length === 0 ? [] : await db
+    .select({
+      customerId: orders.customerId,
+      lastOrderAt: max(orders.createdAt).as('last_order_at'),
+    })
+    .from(orders)
+    .where(inArray(orders.customerId, accountIds))
+    .groupBy(orders.customerId)
+  const lastOrderMap = new Map(lastOrderStats.map(r => [r.customerId, r.lastOrderAt]))
+
+  const now = Date.now()
+  function computeHealthScore(a: typeof accounts[0]): number {
+    const lastOrder = lastOrderMap.get(a.id)
+    const daysSince = lastOrder ? (now - new Date(lastOrder).getTime()) / 86400000 : null
+    const recency =
+      daysSince == null ? 0 :
+      daysSince <= 30 ? 40 :
+      daysSince <= 60 ? 30 :
+      daysSince <= 90 ? 20 :
+      daysSince <= 180 ? 10 : 0
+
+    const credit = Number(a.creditLimit ?? 0)
+    const bal = Number(a.balance ?? 0)
+    const payment =
+      bal <= 0 ? 40 :
+      credit > 0 && bal < credit * 0.25 ? 30 :
+      credit > 0 && bal < credit * 0.5 ? 20 :
+      credit > 0 && bal < credit ? 10 : 0
+
+    const cases = totalMap.get(a.id) ?? 0
+    const volume =
+      cases > 100 ? 20 :
+      cases > 50 ? 15 :
+      cases > 20 ? 10 :
+      cases > 5 ? 5 : 0
+
+    return recency + payment + volume
+  }
+
   const accountRows = accounts.map(a => ({
     ...a,
     pendingCases: pendingMap.get(a.id) ?? 0,
     totalCasesPurchased: totalMap.get(a.id) ?? 0,
+    healthScore: computeHealthScore(a),
   }))
 
   const localAccountIds = new Map<string, string>(
