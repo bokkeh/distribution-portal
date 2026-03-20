@@ -164,7 +164,7 @@ export default async function InvoiceAgingPage() {
                         </Badge>
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <CopyPaymentLinkButton invoiceId={inv.id} size="xs" />
+                        <CopyPaymentLinkButton invoiceId={inv.id} />
                       </td>
                     </tr>
                   ))}
