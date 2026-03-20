@@ -102,6 +102,7 @@ export default async function StaffCRMPage({
     ...a,
     pendingCases: pendingMap.get(a.id) ?? 0,
     totalCasesPurchased: totalMap.get(a.id) ?? 0,
+    healthScore: 0,
   }))
 
   const localAccountIds = new Map<string, string>(
