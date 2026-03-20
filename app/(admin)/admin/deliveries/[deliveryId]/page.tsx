@@ -254,10 +254,10 @@ export default async function DeliveryDetailPage({
         </Card>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="lg:col-span-1">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:items-stretch">
+        <Card className="lg:col-span-1 flex flex-col">
           <CardHeader><CardTitle>Route Map</CardTitle></CardHeader>
-          <CardContent className="p-0 h-96 rounded-b-xl overflow-hidden">
+          <CardContent className="p-0 rounded-b-xl overflow-hidden flex-1 min-h-96">
             <DeliveryMapWrapper stops={mapStops} origin={origin} />
           </CardContent>
         </Card>
