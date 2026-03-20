@@ -9,6 +9,7 @@ export const smsThreads = pgTable('sms_threads', {
   assignedUserId: uuid('assigned_user_id').references(() => users.id, { onDelete: 'set null' }),
   status: text('status', { enum: ['open', 'resolved'] }).notNull().default('open'),
   priority: text('priority', { enum: ['normal', 'starred'] }).notNull().default('normal'),
+  groupParticipants: text('group_participants').array(),
   mutedUntil: timestamp('muted_until', { withTimezone: true }),
   lastMessageAt: timestamp('last_message_at', { withTimezone: true }).notNull().defaultNow(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

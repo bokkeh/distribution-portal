@@ -9,7 +9,7 @@ export async function sendSms({
   userId,
   contactName,
 }: {
-  to: string
+  to: string | string[]
   body: string
   mediaUrls?: string[]
   bypassOptOut?: boolean
@@ -23,13 +23,19 @@ export async function sendSms({
     throw new Error('Telnyx is not configured')
   }
 
-  const normalizedTo = normalizePhone(to)
-  if (!bypassOptOut && await isSmsBlocked(normalizedTo)) {
-    throw new Error('Recipient has opted out of SMS')
+  const recipients = Array.isArray(to) ? to.map(normalizePhone) : [normalizePhone(to)]
+
+  if (!bypassOptOut) {
+    for (const recipient of recipients) {
+      if (await isSmsBlocked(recipient)) {
+        throw new Error('Recipient has opted out of SMS')
+      }
+    }
   }
 
   const normalizedMediaUrls = (mediaUrls ?? []).filter(Boolean)
   const loggedBody = body || (normalizedMediaUrls.length ? '[Image attachment]' : '')
+  const toField = recipients.length === 1 ? recipients[0] : recipients
 
   const res = await fetch('https://api.telnyx.com/v2/messages', {
     method: 'POST',
@@ -39,18 +45,20 @@ export async function sendSms({
     },
     body: JSON.stringify({
       from,
-      to: normalizedTo,
+      to: toField,
       text: body,
       media_urls: normalizedMediaUrls.length ? normalizedMediaUrls : undefined,
     }),
   })
+
+  const primaryPhone = recipients[0]
 
   if (!res.ok) {
     const errorText = await res.text()
     await logSmsMessage({
       userId,
       direction: 'outbound',
-      phoneNumber: normalizedTo,
+      phoneNumber: primaryPhone,
       contactName,
       body: loggedBody,
       mediaUrls: normalizedMediaUrls,
@@ -65,7 +73,7 @@ export async function sendSms({
   await logSmsMessage({
     userId,
     direction: 'outbound',
-    phoneNumber: normalizedTo,
+    phoneNumber: primaryPhone,
     contactName,
     body: loggedBody,
     mediaUrls: normalizedMediaUrls,

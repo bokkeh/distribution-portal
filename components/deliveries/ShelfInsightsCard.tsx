@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { analyzeShelfImages } from '@/actions/shelf-analysis'
+import { analyzeShelfImages, updateShelfAnalysisOverrides } from '@/actions/shelf-analysis'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,9 @@ import {
   LayoutGrid,
   ShieldX,
   CheckCircle2,
+  Pencil,
+  Check,
+  X,
 } from 'lucide-react'
 
 // Serialized shape from server (dates become strings over the wire)
@@ -48,6 +51,7 @@ export type SerializedShelfAnalysis = {
   trend: string | null
   trendNotes: string | null
   errorMessage: string | null
+  userOverrides: unknown
   createdAt: string | Date
 }
 
@@ -77,6 +81,15 @@ function formatLabel(key: string) {
   return key.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()).trim()
 }
 
+type Overrides = {
+  shelfLevel?: string
+  facings?: number | null
+  detectedPrice?: string | null
+  promoDetected?: boolean | null
+  stockLevel?: string
+  visibilityScore?: number | null
+}
+
 export function ShelfInsightsCard({
   stop,
   existingAnalysis,
@@ -87,6 +100,9 @@ export function ShelfInsightsCard({
   const [analysis, setAnalysis] = useState<SerializedShelfAnalysis | null>(existingAnalysis)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [isEditing, setIsEditing] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [draft, setDraft] = useState<Overrides>({})
 
   const hasPhotos = !!(stop.shelfPhotoUrl || stop.additionalPhotoUrl)
   if (!hasPhotos) return null
@@ -99,6 +115,40 @@ export function ShelfInsightsCard({
         setError(result.error)
       } else {
         setAnalysis(result as unknown as SerializedShelfAnalysis)
+      }
+    })
+  }
+
+  function startEdit() {
+    if (!analysis) return
+    const ov = (analysis.userOverrides ?? {}) as Overrides
+    setDraft({
+      shelfLevel: ov.shelfLevel ?? analysis.shelfLevel ?? '',
+      facings: ov.facings !== undefined ? ov.facings : analysis.facings,
+      detectedPrice: ov.detectedPrice !== undefined ? ov.detectedPrice : analysis.detectedPrice,
+      promoDetected: ov.promoDetected !== undefined ? ov.promoDetected : analysis.promoDetected,
+      stockLevel: ov.stockLevel ?? analysis.stockLevel ?? '',
+      visibilityScore: ov.visibilityScore !== undefined ? ov.visibilityScore : analysis.visibilityScore,
+    })
+    setSaveError(null)
+    setIsEditing(true)
+  }
+
+  function cancelEdit() {
+    setIsEditing(false)
+    setSaveError(null)
+  }
+
+  function handleSave() {
+    if (!analysis) return
+    setSaveError(null)
+    startTransition(async () => {
+      const result = await updateShelfAnalysisOverrides(analysis.id, draft)
+      if ('error' in result) {
+        setSaveError(result.error)
+      } else {
+        setAnalysis({ ...analysis, userOverrides: { ...(analysis.userOverrides as object ?? {}), ...draft } })
+        setIsEditing(false)
       }
     })
   }
@@ -122,7 +172,7 @@ export function ShelfInsightsCard({
   }
 
   // --- Loading state ---
-  if (isPending) {
+  if (isPending && !isEditing) {
     return (
       <div className="flex items-center gap-3 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3">
         <div className="h-4 w-4 animate-spin rounded-full border-2 border-violet-300 border-t-violet-700 shrink-0" />
@@ -152,12 +202,24 @@ export function ShelfInsightsCard({
   if (!analysis) return null
 
   const a = analysis
+  const ov = (a.userOverrides ?? {}) as Overrides
   const insights = (a.insights ?? {}) as Record<string, string>
   const recommendations = (a.recommendations ?? []) as string[]
   const competitors = (a.competitors ?? []) as string[]
   const createdAtStr = typeof a.createdAt === 'string'
     ? new Date(a.createdAt).toLocaleString()
     : a.createdAt instanceof Date ? a.createdAt.toLocaleString() : ''
+
+  // Resolved values: override takes precedence over AI
+  const resolved = {
+    shelfLevel: ov.shelfLevel ?? a.shelfLevel,
+    facings: ov.facings !== undefined ? ov.facings : a.facings,
+    detectedPrice: ov.detectedPrice !== undefined ? ov.detectedPrice : a.detectedPrice,
+    promoDetected: ov.promoDetected !== undefined ? ov.promoDetected : a.promoDetected,
+    stockLevel: ov.stockLevel ?? a.stockLevel,
+    visibilityScore: ov.visibilityScore !== undefined ? ov.visibilityScore : a.visibilityScore,
+  }
+  const hasAnyOverride = Object.keys(ov).length > 0
 
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -177,19 +239,43 @@ export function ShelfInsightsCard({
               {a.confidence} confidence
             </Badge>
           )}
+          {hasAnyOverride && !isEditing && (
+            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-amber-100 text-amber-700 border-amber-200">
+              human-corrected
+            </Badge>
+          )}
         </div>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-7 shrink-0 px-2 text-xs text-muted-foreground"
-          onClick={handleAnalyze}
-          disabled={isPending}
-        >
-          <RefreshCw className="mr-1 h-3 w-3" />Re-analyze
-        </Button>
+        <div className="flex items-center gap-1 shrink-0">
+          {isEditing ? (
+            <>
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-red-600 hover:text-red-700" onClick={cancelEdit} disabled={isPending}>
+                <X className="mr-1 h-3 w-3" />Cancel
+              </Button>
+              <Button size="sm" className="h-7 px-2 text-xs" onClick={handleSave} disabled={isPending}>
+                <Check className="mr-1 h-3 w-3" />{isPending ? 'Saving…' : 'Save'}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground" onClick={startEdit}>
+                <Pencil className="mr-1 h-3 w-3" />Edit
+              </Button>
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground" onClick={handleAnalyze} disabled={isPending}>
+                <RefreshCw className="mr-1 h-3 w-3" />Re-analyze
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="space-y-5 p-5">
+        {saveError && (
+          <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2">
+            <AlertCircle className="h-4 w-4 shrink-0 text-red-500" />
+            <p className="text-sm text-red-700">{saveError}</p>
+          </div>
+        )}
+
         {/* Wisher not detected banner */}
         {a.wisherDetected === false && (
           <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
@@ -213,26 +299,122 @@ export function ShelfInsightsCard({
 
         {/* Metrics grid */}
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-          {[
-            { label: 'Shelf Level', value: a.shelfLevel?.replace(/_/g, ' ') ?? '—', icon: <LayoutGrid className="h-3.5 w-3.5" />, score: null },
-            { label: 'Facings', value: a.facings != null ? String(a.facings) : '—', icon: <LayoutGrid className="h-3.5 w-3.5" />, score: a.facingScore },
-            { label: 'Visibility', value: a.visibilityScore != null ? `${a.visibilityScore}` : '—', icon: <Eye className="h-3.5 w-3.5" />, score: a.visibilityScore },
-            { label: 'Price', value: a.detectedPrice ?? 'Not detected', icon: <Tag className="h-3.5 w-3.5" />, score: null },
-            { label: 'Promo', value: a.promoDetected === true ? 'Yes' : a.promoDetected === false ? 'None' : '—', icon: <Sparkles className="h-3.5 w-3.5" />, score: null },
-            { label: 'Stock', value: a.stockLevel?.replace(/_/g, ' ') ?? '—', icon: <Package className="h-3.5 w-3.5" />, score: null },
-          ].map(m => (
-            <div
-              key={m.label}
-              className={cn('rounded-lg border px-3 py-2.5', m.score != null ? scoreBg(m.score) : 'border-slate-200 bg-slate-50')}
+          {/* Shelf Level */}
+          <MetricCell
+            label="Shelf Level"
+            icon={<LayoutGrid className="h-3.5 w-3.5" />}
+            isEditing={isEditing}
+            isOverridden={!!ov.shelfLevel}
+            displayValue={resolved.shelfLevel?.replace(/_/g, ' ') ?? '—'}
+            score={null}
+          >
+            <select
+              value={draft.shelfLevel ?? ''}
+              onChange={e => setDraft(d => ({ ...d, shelfLevel: e.target.value }))}
+              className="w-full rounded border border-slate-200 bg-white px-1.5 py-1 text-xs"
             >
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                {m.label}
-              </p>
-              <p className={cn('text-sm font-semibold capitalize', m.score != null ? scoreColor(m.score) : 'text-slate-900')}>
-                {m.value}
-              </p>
-            </div>
-          ))}
+              <option value="">—</option>
+              {['top', 'eye', 'mid', 'bottom', 'unknown'].map(v => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </select>
+          </MetricCell>
+
+          {/* Facings */}
+          <MetricCell
+            label="Facings"
+            icon={<LayoutGrid className="h-3.5 w-3.5" />}
+            isEditing={isEditing}
+            isOverridden={ov.facings !== undefined}
+            displayValue={resolved.facings != null ? String(resolved.facings) : '—'}
+            score={a.facingScore}
+          >
+            <input
+              type="number"
+              min={0}
+              value={draft.facings ?? ''}
+              onChange={e => setDraft(d => ({ ...d, facings: e.target.value === '' ? null : Number(e.target.value) }))}
+              className="w-full rounded border border-slate-200 bg-white px-1.5 py-1 text-xs"
+            />
+          </MetricCell>
+
+          {/* Visibility */}
+          <MetricCell
+            label="Visibility"
+            icon={<Eye className="h-3.5 w-3.5" />}
+            isEditing={isEditing}
+            isOverridden={ov.visibilityScore !== undefined}
+            displayValue={resolved.visibilityScore != null ? String(resolved.visibilityScore) : '—'}
+            score={resolved.visibilityScore}
+          >
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={draft.visibilityScore ?? ''}
+              onChange={e => setDraft(d => ({ ...d, visibilityScore: e.target.value === '' ? null : Number(e.target.value) }))}
+              className="w-full rounded border border-slate-200 bg-white px-1.5 py-1 text-xs"
+            />
+          </MetricCell>
+
+          {/* Price */}
+          <MetricCell
+            label="Price"
+            icon={<Tag className="h-3.5 w-3.5" />}
+            isEditing={isEditing}
+            isOverridden={ov.detectedPrice !== undefined}
+            displayValue={resolved.detectedPrice ?? 'Not detected'}
+            score={null}
+          >
+            <input
+              type="text"
+              placeholder="$0.00"
+              value={draft.detectedPrice ?? ''}
+              onChange={e => setDraft(d => ({ ...d, detectedPrice: e.target.value || null }))}
+              className="w-full rounded border border-slate-200 bg-white px-1.5 py-1 text-xs"
+            />
+          </MetricCell>
+
+          {/* Promo */}
+          <MetricCell
+            label="Promo"
+            icon={<Sparkles className="h-3.5 w-3.5" />}
+            isEditing={isEditing}
+            isOverridden={ov.promoDetected !== undefined}
+            displayValue={resolved.promoDetected === true ? 'Yes' : resolved.promoDetected === false ? 'None' : '—'}
+            score={null}
+          >
+            <select
+              value={draft.promoDetected === null || draft.promoDetected === undefined ? '' : String(draft.promoDetected)}
+              onChange={e => setDraft(d => ({ ...d, promoDetected: e.target.value === '' ? null : e.target.value === 'true' }))}
+              className="w-full rounded border border-slate-200 bg-white px-1.5 py-1 text-xs"
+            >
+              <option value="">—</option>
+              <option value="true">Yes</option>
+              <option value="false">None</option>
+            </select>
+          </MetricCell>
+
+          {/* Stock */}
+          <MetricCell
+            label="Stock"
+            icon={<Package className="h-3.5 w-3.5" />}
+            isEditing={isEditing}
+            isOverridden={!!ov.stockLevel}
+            displayValue={resolved.stockLevel?.replace(/_/g, ' ') ?? '—'}
+            score={null}
+          >
+            <select
+              value={draft.stockLevel ?? ''}
+              onChange={e => setDraft(d => ({ ...d, stockLevel: e.target.value }))}
+              className="w-full rounded border border-slate-200 bg-white px-1.5 py-1 text-xs"
+            >
+              <option value="">—</option>
+              {['full', 'medium', 'low', 'nearly_empty', 'unknown'].map(v => (
+                <option key={v} value={v}>{v.replace('_', ' ')}</option>
+              ))}
+            </select>
+          </MetricCell>
         </div>
 
         {/* Overall score bar */}
@@ -359,6 +541,49 @@ export function ShelfInsightsCard({
           AI analysis by GPT-4o · {createdAtStr} · Insights are AI-generated estimates based on image content only
         </p>
       </div>
+    </div>
+  )
+}
+
+function MetricCell({
+  label,
+  icon,
+  isEditing,
+  isOverridden,
+  displayValue,
+  score,
+  children,
+}: {
+  label: string
+  icon: React.ReactNode
+  isEditing: boolean
+  isOverridden: boolean
+  displayValue: string
+  score: number | null | undefined
+  children: React.ReactNode
+}) {
+  return (
+    <div
+      className={cn(
+        'rounded-lg border px-3 py-2.5',
+        isEditing ? 'border-violet-300 bg-violet-50/50' : score != null ? scoreBg(score) : 'border-slate-200 bg-slate-50',
+      )}
+    >
+      <div className="mb-1 flex items-center justify-between gap-1">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+        {isOverridden && !isEditing && (
+          <span title="Human-corrected" className="text-amber-500">
+            <Pencil className="h-2.5 w-2.5" />
+          </span>
+        )}
+      </div>
+      {isEditing ? (
+        children
+      ) : (
+        <p className={cn('text-sm font-semibold capitalize', score != null ? scoreColor(score) : 'text-slate-900')}>
+          {displayValue}
+        </p>
+      )}
     </div>
   )
 }

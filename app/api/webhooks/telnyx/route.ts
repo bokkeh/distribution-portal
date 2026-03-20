@@ -18,11 +18,13 @@ type TelnyxWebhookPayload = {
   text?: string
   body?: string
   from?: string | { phone_number?: string }
+  to?: Array<{ phone_number?: string }> | string
   payload?: {
     id?: string
     event_type?: string
     text?: string
     from?: { phone_number?: string }
+    to?: Array<{ phone_number?: string }> | string
   }
   media?: Array<{ url?: string }>
 }
@@ -39,6 +41,20 @@ function getInboundFrom(payload: TelnyxWebhookPayload) {
 
 function getProviderMessageId(payload: TelnyxWebhookPayload) {
   return payload?.id ?? payload?.payload?.id ?? null
+}
+
+function getGroupParticipants(body: any, payload: TelnyxWebhookPayload, fromPhone: string): string[] {
+  const ownNumber = (process.env.TELNYX_FROM_NUMBER ?? '').replace(/\D/g, '')
+  const toField = body?.data?.payload?.to ?? body?.data?.to ?? payload?.to ?? payload?.payload?.to
+  if (!toField) return []
+  const entries = Array.isArray(toField) ? toField : []
+  return entries
+    .map((e: { phone_number?: string } | string) => typeof e === 'string' ? e : (e?.phone_number ?? ''))
+    .filter(Boolean)
+    .filter((num: string) => {
+      const digits = num.replace(/\D/g, '')
+      return digits !== ownNumber && num !== fromPhone
+    })
 }
 
 function getInboundMediaUrls(body: any, payload: TelnyxWebhookPayload) {
@@ -77,6 +93,7 @@ export async function POST(req: NextRequest) {
   const phoneNormalized = normalizePhone(from)
   const keyword = detectSmsKeyword(text)
   const providerMessageId = getProviderMessageId(payload)
+  const groupParticipants = getGroupParticipants(body, payload, phoneNormalized)
 
   await logSmsMessage({
     direction: 'inbound',
@@ -85,6 +102,7 @@ export async function POST(req: NextRequest) {
     mediaUrls,
     status: 'received',
     providerMessageId,
+    groupParticipants: groupParticipants.length ? groupParticipants : undefined,
   })
 
   const alertPhone = process.env.ADMIN_NOTIFICATION_PHONE

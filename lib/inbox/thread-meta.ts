@@ -21,6 +21,7 @@ export async function upsertSmsThread(input: {
   phoneNumber: string
   customerId?: string | null
   lastMessageAt?: Date
+  groupParticipants?: string[]
 }) {
   try {
     const [existing] = await db
@@ -35,6 +36,7 @@ export async function upsertSmsThread(input: {
           customerId: input.customerId ?? undefined,
           lastMessageAt: input.lastMessageAt ?? new Date(),
           updatedAt: new Date(),
+          ...(input.groupParticipants?.length ? { groupParticipants: input.groupParticipants } : {}),
         })
         .where(eq(smsThreads.id, existing.id))
       return
@@ -44,6 +46,7 @@ export async function upsertSmsThread(input: {
       phoneNumber: input.phoneNumber,
       customerId: input.customerId ?? null,
       lastMessageAt: input.lastMessageAt ?? new Date(),
+      groupParticipants: input.groupParticipants?.length ? input.groupParticipants : null,
     })
   } catch (error) {
     if (!isMissingInboxThreadTable(error)) {

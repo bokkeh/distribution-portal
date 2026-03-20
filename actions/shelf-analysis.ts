@@ -263,6 +263,30 @@ export async function analyzeShelfImages(
   }
 }
 
+export async function updateShelfAnalysisOverrides(
+  analysisId: string,
+  overrides: Record<string, unknown>,
+): Promise<{ success: boolean } | { error: string }> {
+  await requireAdminOrStaff()
+
+  const [existing] = await db
+    .select({ userOverrides: shelfAnalyses.userOverrides })
+    .from(shelfAnalyses)
+    .where(eq(shelfAnalyses.id, analysisId))
+    .limit(1)
+
+  if (!existing) return { error: 'Analysis not found.' }
+
+  const merged = { ...(existing.userOverrides ?? {}), ...overrides }
+
+  await db
+    .update(shelfAnalyses)
+    .set({ userOverrides: merged })
+    .where(eq(shelfAnalyses.id, analysisId))
+
+  return { success: true }
+}
+
 // Server-side helper to fetch existing analyses for a batch of stop IDs
 export async function getShelfAnalysesForStops(stopIds: string[]): Promise<ShelfAnalysis[]> {
   if (!stopIds.length) return []

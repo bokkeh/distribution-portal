@@ -17,6 +17,7 @@ export async function logSmsMessage({
   mediaUrls,
   status,
   providerMessageId,
+  groupParticipants,
 }: {
   userId?: string | null
   direction: 'inbound' | 'outbound'
@@ -26,6 +27,7 @@ export async function logSmsMessage({
   mediaUrls?: string[] | null
   status: 'received' | 'sent' | 'failed'
   providerMessageId?: string | null
+  groupParticipants?: string[]
 }) {
   try {
     const customerId = await inferThreadCustomerId(phoneNumber)
@@ -33,6 +35,7 @@ export async function logSmsMessage({
       phoneNumber,
       customerId,
       lastMessageAt: new Date(),
+      groupParticipants,
     })
 
     await db.insert(smsMessages).values({

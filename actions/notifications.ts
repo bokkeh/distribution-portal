@@ -1,7 +1,8 @@
 'use server'
 
+import { eq } from 'drizzle-orm'
 import { db } from '@/db'
-import { notificationsLog } from '@/db/schema'
+import { notificationsLog, smsThreads } from '@/db/schema'
 import { requireAdminOrStaff } from '@/lib/auth/session'
 import { sendSms } from '@/lib/telnyx/client'
 import { Resend } from 'resend'
@@ -88,8 +89,17 @@ export async function replyToSmsThread(
   }
 
   try {
+    const [thread] = await db
+      .select({ groupParticipants: smsThreads.groupParticipants })
+      .from(smsThreads)
+      .where(eq(smsThreads.phoneNumber, phone))
+      .limit(1)
+
+    const groupParticipants = thread?.groupParticipants ?? []
+    const recipients = groupParticipants.length > 0 ? [phone, ...groupParticipants] : phone
+
     await sendSms({
-      to: phone,
+      to: recipients,
       body,
       mediaUrls,
       userId: session.user.id,
