@@ -45,7 +45,7 @@ export function RevenueChart({ data }: { data: MonthlyRevenuePoint[] }) {
           width={40}
         />
         <Tooltip
-          formatter={(value: number) => [`$${value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`, 'Revenue']}
+          formatter={(value) => [`$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`, 'Revenue']}
           contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: 12 }}
         />
         <Area
