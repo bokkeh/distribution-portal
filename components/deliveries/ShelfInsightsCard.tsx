@@ -508,12 +508,24 @@ export function ShelfInsightsCard({
             <div className="space-y-1.5">
               {Object.entries(insights)
                 .filter(([, v]) => v && v !== 'null')
-                .map(([k, v]) => (
-                  <div key={k} className="flex gap-2 text-sm">
-                    <span className="w-24 shrink-0 text-muted-foreground">{formatLabel(k)}:</span>
-                    <span className="text-slate-700">{v}</span>
-                  </div>
-                ))}
+                .map(([k, v]) => {
+                  let display = v
+                  if (k === 'pricing' && ov.detectedPrice) {
+                    display = v.replace(/\$[\d,.]+/, ov.detectedPrice)
+                    if (display === v) display = `Wisher Vodka is priced at ${ov.detectedPrice}.`
+                  }
+                  return (
+                    <div key={k} className="flex gap-2 text-sm">
+                      <span className="w-24 shrink-0 text-muted-foreground">{formatLabel(k)}:</span>
+                      <span className="text-slate-700">
+                        {display}
+                        {k === 'pricing' && ov.detectedPrice && (
+                          <span className="ml-1.5 text-[10px] text-amber-600 font-medium">(corrected)</span>
+                        )}
+                      </span>
+                    </div>
+                  )
+                })}
             </div>
           </div>
         )}
