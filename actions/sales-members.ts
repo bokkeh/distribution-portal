@@ -357,6 +357,14 @@ export async function updateSalesRegion(
   return { success: true }
 }
 
+export async function deleteSalesRegion(id: string): Promise<{ success: boolean }> {
+  await requireAdminOrStaff()
+  // Unassign any accounts in this region
+  await db.update(customerAccounts).set({ assignedRegionId: null }).where(eq(customerAccounts.assignedRegionId, id))
+  await db.delete(salesRegions).where(eq(salesRegions.id, id))
+  return { success: true }
+}
+
 // ─── Commission Plans CRUD ─────────────────────────────────────────────────────
 
 export async function createCommissionPlan(input: {

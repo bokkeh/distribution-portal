@@ -1,13 +1,10 @@
 import { requireAdmin } from '@/lib/auth/session'
-import { getAllPendingCommissions, getSalesMembers } from '@/actions/sales-members'
-import { db } from '@/db'
-import { commissions, salesMembers, orders, users } from '@/db/schema'
-import { desc, eq } from 'drizzle-orm'
+import { getAllCommissions, getSalesMembers } from '@/actions/sales-members'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { DollarSign } from 'lucide-react'
-import { CommissionApproveButton } from './CommissionApproveButton'
 import { ManualCommissionForm } from './ManualCommissionForm'
+import { CommissionRowActions } from './CommissionRowActions'
 
 const TYPE_LABELS: Record<string, string> = {
   order_based: 'Order',
@@ -25,27 +22,27 @@ const TYPE_COLORS: Record<string, string> = {
   order_based: 'text-slate-600 border-slate-200',
 }
 
+const STATUS_COLORS: Record<string, string> = {
+  pending: 'text-amber-700 border-amber-300 bg-amber-50',
+  approved: 'text-blue-700 border-blue-300 bg-blue-50',
+  paid: 'text-green-700 border-green-300 bg-green-50',
+  voided: 'text-slate-400 border-slate-200 bg-slate-50',
+}
+
 export default async function CommissionsPage() {
   const session = await requireAdmin()
 
-  const [pending, members, recentRows] = await Promise.all([
-    getAllPendingCommissions(),
+  const [allRows, members] = await Promise.all([
+    getAllCommissions(),
     getSalesMembers(),
-    db
-      .select({
-        commission: commissions,
-        member: salesMembers,
-        user: { id: users.id, name: users.name },
-        order: { id: orders.id, total: orders.total, createdAt: orders.createdAt },
-      })
-      .from(commissions)
-      .innerJoin(salesMembers, eq(commissions.salesMemberId, salesMembers.id))
-      .innerJoin(users, eq(salesMembers.userId, users.id))
-      .leftJoin(orders, eq(commissions.orderId, orders.id))
-      .where(eq(commissions.status, 'approved'))
-      .orderBy(desc(commissions.createdAt))
-      .limit(30),
   ])
+
+  const pending = allRows.filter(r => r.commission.status === 'pending')
+  const approved = allRows.filter(r => r.commission.status === 'approved')
+  const voided = allRows.filter(r => r.commission.status === 'voided')
+
+  const totalPending = pending.reduce((s, r) => s + parseFloat(r.commission.amount ?? '0'), 0)
+  const totalApproved = approved.reduce((s, r) => s + parseFloat(r.commission.amount ?? '0'), 0)
 
   const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
 
@@ -59,102 +56,97 @@ export default async function CommissionsPage() {
     return 'Order'
   }
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Commissions</h1>
-          <p className="text-slate-500 mt-1">{pending.length} pending approval</p>
+  function CommissionRow({ r }: { r: typeof allRows[number] }) {
+    return (
+      <div className="flex items-center justify-between py-3 border-b last:border-0 gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <p className="font-medium text-slate-900 text-sm">{r.user.name}</p>
+            <Badge variant="outline" className={`text-xs ${TYPE_COLORS[r.commission.type] ?? 'text-slate-600 border-slate-200'}`}>
+              {TYPE_LABELS[r.commission.type] ?? r.commission.type}
+            </Badge>
+            {r.commission.isManual && (
+              <Badge variant="outline" className="text-xs text-violet-700 border-violet-300">Manual</Badge>
+            )}
+          </div>
+          <p className="text-xs text-slate-400 mt-0.5">{commissionLabel(r)}</p>
+          {r.commission.notes && (
+            <p className="text-xs text-slate-500 mt-0.5 italic">{r.commission.notes}</p>
+          )}
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <span className="font-semibold text-slate-900">{fmt(parseFloat(r.commission.amount ?? '0'))}</span>
+          <CommissionRowActions
+            commissionId={r.commission.id}
+            currentAmount={r.commission.amount ?? '0'}
+            status={r.commission.status}
+            currentUserId={session.user.id}
+          />
         </div>
       </div>
+    )
+  }
 
-      {/* Manual commission entry */}
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900">Commissions</h1>
+        <p className="text-slate-500 mt-1">
+          {fmt(totalPending)} pending · {fmt(totalApproved)} approved
+        </p>
+      </div>
+
       <ManualCommissionForm members={members} currentUserId={session.user.id} />
 
-      {/* Pending approval */}
+      {/* Pending */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <DollarSign className="w-4 h-4 text-amber-500" />
-            Pending Approval
+            Pending Approval ({pending.length})
           </CardTitle>
         </CardHeader>
         <CardContent>
           {pending.length === 0 ? (
             <p className="text-sm text-slate-400 py-4 text-center">No pending commissions.</p>
           ) : (
-            <div className="space-y-3">
-              {pending.map(r => (
-                <div key={r.commission.id} className="flex items-center justify-between py-3 border-b last:border-0 gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium text-slate-900">{r.user.name}</p>
-                      <Badge
-                        variant="outline"
-                        className={`text-xs ${TYPE_COLORS[r.commission.type] ?? 'text-slate-600 border-slate-200'}`}
-                      >
-                        {TYPE_LABELS[r.commission.type] ?? r.commission.type}
-                      </Badge>
-                      {r.commission.isManual && (
-                        <Badge variant="outline" className="text-xs text-violet-700 border-violet-300">Manual</Badge>
-                      )}
-                    </div>
-                    <p className="text-xs text-slate-400 mt-0.5">{commissionLabel(r)}</p>
-                    {r.commission.notes && (
-                      <p className="text-xs text-slate-500 mt-0.5">{r.commission.notes}</p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <span className="font-semibold text-lg text-slate-900">{fmt(parseFloat(r.commission.amount ?? '0'))}</span>
-                    <CommissionApproveButton
-                      commissionId={r.commission.id}
-                      approvedByUserId={session.user.id}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+            pending.map(r => <CommissionRow key={r.commission.id} r={r} />)
           )}
         </CardContent>
       </Card>
 
-      {/* Recently approved */}
+      {/* Approved */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Recently Approved</CardTitle>
+          <CardTitle className="text-base">Approved ({approved.length})</CardTitle>
         </CardHeader>
         <CardContent>
-          {recentRows.length === 0 ? (
-            <p className="text-sm text-slate-400 py-4 text-center">No approved commissions yet.</p>
+          {approved.length === 0 ? (
+            <p className="text-sm text-slate-400 py-4 text-center">No approved commissions.</p>
           ) : (
-            <div className="space-y-2">
-              {recentRows.map(r => (
-                <div key={r.commission.id} className="flex items-center justify-between text-sm py-2 border-b last:border-0">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium text-slate-800">{r.user.name}</p>
-                      <Badge
-                        variant="outline"
-                        className={`text-xs ${TYPE_COLORS[r.commission.type] ?? 'text-slate-600 border-slate-200'}`}
-                      >
-                        {TYPE_LABELS[r.commission.type] ?? r.commission.type}
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-slate-400">
-                      {new Date(r.commission.createdAt).toLocaleDateString()}
-                      {r.commission.description ? ` · ${r.commission.description}` : ''}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Badge variant="outline" className="text-xs text-blue-700 border-blue-300">approved</Badge>
-                    <span className="font-semibold">{fmt(parseFloat(r.commission.amount ?? '0'))}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
+            approved.slice(0, 30).map(r => <CommissionRow key={r.commission.id} r={r} />)
           )}
         </CardContent>
       </Card>
+
+      {/* Voided */}
+      {voided.length > 0 && (
+        <Card className="opacity-70">
+          <CardHeader>
+            <CardTitle className="text-base text-slate-500">Voided ({voided.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {voided.slice(0, 20).map(r => (
+              <div key={r.commission.id} className="flex items-center justify-between py-2 border-b last:border-0 gap-4 text-slate-400">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm">{r.user.name} · {commissionLabel(r)}</p>
+                </div>
+                <span className="text-sm line-through">{fmt(parseFloat(r.commission.amount ?? '0'))}</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

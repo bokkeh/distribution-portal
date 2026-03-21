@@ -6,6 +6,7 @@ import { ChevronDown, Layers, Sparkles } from 'lucide-react'
 const VIEW_OPTIONS = [
   { id: 'admin', label: 'Admin', href: '/admin/dashboard' },
   { id: 'staff', label: 'Staff', href: '/staff/dashboard' },
+  { id: 'sales', label: 'Sales Rep', href: '/sales/dashboard' },
   { id: 'customer', label: 'Customer', href: '/customer/dashboard' },
   { id: 'driver', label: 'Driver', href: '/driver/deliveries' },
   { id: 'taster', label: 'Taster', href: '/taster/tastings' },
@@ -14,6 +15,7 @@ const VIEW_OPTIONS = [
 function getCurrentView(pathname: string) {
   if (pathname.startsWith('/admin')) return 'admin'
   if (pathname.startsWith('/staff')) return 'staff'
+  if (pathname.startsWith('/sales')) return 'sales'
   if (pathname.startsWith('/driver')) return 'driver'
   if (pathname.startsWith('/taster')) return 'taster'
   if (pathname.startsWith('/customer')) return 'customer'
