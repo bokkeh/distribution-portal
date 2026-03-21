@@ -2,11 +2,10 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { approveCommission, voidCommission } from '@/actions/sales-members'
-import { db } from '@/db'
+import { approveCommission, voidCommission, markCommissionPaid } from '@/actions/sales-members'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { CheckCircle2, Trash2, Pencil, Loader2, X, Check } from 'lucide-react'
+import { CheckCircle2, Trash2, Pencil, Loader2, X, Check, Banknote } from 'lucide-react'
 
 interface Props {
   commissionId: string
@@ -100,6 +99,23 @@ export function CommissionRowActions({ commissionId, currentAmount, status, curr
         >
           {isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3 mr-1" />}
           Approve
+        </Button>
+      )}
+      {status === 'approved' && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 text-xs text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+          onClick={() => {
+            startTransition(async () => {
+              await markCommissionPaid(commissionId, currentUserId)
+              router.refresh()
+            })
+          }}
+          disabled={isPending}
+        >
+          {isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Banknote className="w-3 h-3 mr-1" />}
+          Mark Paid
         </Button>
       )}
       <Button

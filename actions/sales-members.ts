@@ -1,6 +1,6 @@
 'use server'
 
-import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNull, sql, sum } from 'drizzle-orm'
 import { db } from '@/db'
 import {
   salesMembers,
@@ -8,6 +8,8 @@ import {
   commissionPlans,
   customerAccounts,
   orders,
+  orderItems,
+  salesRouteStops,
   commissions,
   users,
 } from '@/db/schema'
@@ -420,18 +422,23 @@ export async function calculateCommissionForOrder(orderId: string): Promise<{ am
   const total = parseFloat(order.total ?? '0')
   let amount = 0
 
+  // Count actual cases from order items
+  const [caseSum] = await db
+    .select({ total: sum(orderItems.quantity) })
+    .from(orderItems)
+    .where(and(eq(orderItems.orderId, orderId), eq(orderItems.unit, 'case')))
+  const totalCases = parseFloat(caseSum?.total ?? '0')
+
   if (plan.type === 'percent_revenue') {
     const pct = parseFloat(plan.revenuePercent ?? '0')
     amount = (total * pct) / 100
   } else if (plan.type === 'flat_case') {
-    // Flat rate per case — approximate from order total / avg price (simplified)
     const rate = parseFloat(plan.ratePerCase ?? '0')
-    amount = rate // Will be refined once orderItems line count is available
+    amount = rate * totalCases
   } else if (plan.type === 'tiered' && plan.tiers) {
-    // Use subtotal as proxy for cases placed (caller can override)
     const tiers = plan.tiers as Array<{ minCases: number; maxCases: number | null; rate: number }>
     for (const tier of tiers) {
-      if (total >= tier.minCases && (tier.maxCases === null || total <= tier.maxCases)) {
+      if (totalCases >= tier.minCases && (tier.maxCases === null || totalCases <= tier.maxCases)) {
         amount = (total * tier.rate) / 100
         break
       }
@@ -588,4 +595,54 @@ export async function getAllCommissions() {
     .orderBy(desc(commissions.createdAt))
 
   return rows
+}
+
+export async function markCommissionPaid(
+  commissionId: string,
+  paidByUserId: string,
+): Promise<{ success: boolean }> {
+  await requireAdminOrStaff()
+
+  await db
+    .update(commissions)
+    .set({ status: 'paid', paidAt: new Date() })
+    .where(eq(commissions.id, commissionId))
+
+  return { success: true }
+}
+
+// ─── Visit Tracking ────────────────────────────────────────────────────────────
+
+export async function logVisit(customerId: string, salesMemberId: string): Promise<{ success: boolean }> {
+  const now = new Date()
+
+  const [account] = await db
+    .select({ visitFrequency: customerAccounts.visitFrequency, assignedSalesRepId: customerAccounts.assignedSalesRepId })
+    .from(customerAccounts)
+    .where(eq(customerAccounts.id, customerId))
+    .limit(1)
+
+  if (!account || account.assignedSalesRepId !== salesMemberId) {
+    return { success: false }
+  }
+
+  const frequencyDays = account.visitFrequency ?? 30
+  const nextVisit = new Date(now)
+  nextVisit.setDate(nextVisit.getDate() + frequencyDays)
+
+  await db
+    .update(customerAccounts)
+    .set({ lastVisitDate: now, nextRequiredVisitDate: nextVisit })
+    .where(eq(customerAccounts.id, customerId))
+
+  return { success: true }
+}
+
+export async function checkInRouteStop(stopId: string): Promise<{ success: boolean }> {
+  await db
+    .update(salesRouteStops)
+    .set({ visitedAt: new Date() })
+    .where(eq(salesRouteStops.id, stopId))
+
+  return { success: true }
 }

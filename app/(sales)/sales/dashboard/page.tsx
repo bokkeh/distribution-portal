@@ -1,17 +1,17 @@
 import { requireRole } from '@/lib/auth/session'
 import { db } from '@/db'
 import { salesMembers, customerAccounts, orders, commissions, users } from '@/db/schema'
-import { eq, and, desc, sum, count, gte } from 'drizzle-orm'
+import { eq, and, desc, sum, count } from 'drizzle-orm'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Building2, DollarSign, TrendingUp, Clock, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Building2, DollarSign, TrendingUp, Clock, CheckCircle2, AlertCircle, Users } from 'lucide-react'
 import Link from 'next/link'
 
 export default async function SalesDashboardPage() {
   const session = await requireRole('sales_rep', 'sales_manager', 'admin')
   const userId = session.user.id
+  const isManager = session.user.roles?.includes('sales_manager') || session.user.roles?.includes('admin')
 
-  // Find the sales member record for this user
   const [member] = await db
     .select()
     .from(salesMembers)
@@ -34,17 +34,13 @@ export default async function SalesDashboardPage() {
     .from(customerAccounts)
     .where(eq(customerAccounts.assignedSalesRepId, member.id))
 
-  const accountIds = accounts.map(a => a.id)
-
   // Recent orders attributed to this rep
-  const recentOrders = accountIds.length
-    ? await db
-        .select()
-        .from(orders)
-        .where(eq(orders.attributedSalesMemberId, member.id))
-        .orderBy(desc(orders.createdAt))
-        .limit(10)
-    : []
+  const recentOrders = await db
+    .select()
+    .from(orders)
+    .where(eq(orders.attributedSalesMemberId, member.id))
+    .orderBy(desc(orders.createdAt))
+    .limit(10)
 
   // Commission summary
   const [commissionSum] = await db
@@ -57,7 +53,6 @@ export default async function SalesDashboardPage() {
     .from(commissions)
     .where(and(eq(commissions.salesMemberId, member.id), eq(commissions.status, 'pending')))
 
-  // Accounts needing a visit
   const now = new Date()
   const overdueAccounts = accounts.filter(a => {
     if (!a.nextRequiredVisitDate) return false
@@ -65,8 +60,55 @@ export default async function SalesDashboardPage() {
   })
 
   const totalRevenue = recentOrders.reduce((s, o) => s + parseFloat(o.total ?? '0'), 0)
-
   const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
+
+  // Manager: fetch team overview
+  let teamStats: Array<{
+    member: typeof salesMembers.$inferSelect
+    user: { id: string; name: string; email: string }
+    accountCount: number
+    pendingCommissions: number
+    recentRevenue: number
+  }> = []
+
+  if (isManager) {
+    const teamMembers = await db
+      .select({ member: salesMembers, user: { id: users.id, name: users.name, email: users.email } })
+      .from(salesMembers)
+      .innerJoin(users, eq(salesMembers.userId, users.id))
+      .where(eq(salesMembers.managerId, member.id))
+
+    teamStats = await Promise.all(
+      teamMembers.map(async ({ member: tm, user }) => {
+        const [acctCount] = await db
+          .select({ count: count() })
+          .from(customerAccounts)
+          .where(eq(customerAccounts.assignedSalesRepId, tm.id))
+
+        const [pending] = await db
+          .select({ total: sum(commissions.amount) })
+          .from(commissions)
+          .where(and(eq(commissions.salesMemberId, tm.id), eq(commissions.status, 'pending')))
+
+        const repOrders = await db
+          .select({ total: orders.total })
+          .from(orders)
+          .where(eq(orders.attributedSalesMemberId, tm.id))
+          .orderBy(desc(orders.createdAt))
+          .limit(20)
+
+        const recentRevenue = repOrders.reduce((s, o) => s + parseFloat(o.total ?? '0'), 0)
+
+        return {
+          member: tm,
+          user,
+          accountCount: acctCount?.count ?? 0,
+          pendingCommissions: parseFloat(pending?.total ?? '0'),
+          recentRevenue,
+        }
+      })
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -156,8 +198,8 @@ export default async function SalesDashboardPage() {
                 </div>
               ))}
               {overdueAccounts.length > 5 && (
-                <Link href="/sales/accounts?filter=overdue" className="text-xs text-blue-600 hover:underline">
-                  +{overdueAccounts.length - 5} more
+                <Link href="/sales/accounts" className="text-xs text-blue-600 hover:underline">
+                  +{overdueAccounts.length - 5} more →
                 </Link>
               )}
             </CardContent>
@@ -200,6 +242,67 @@ export default async function SalesDashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Manager: Team Overview */}
+      {isManager && teamStats.length > 0 && (
+        <div>
+          <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+            <Users className="w-5 h-5 text-slate-400" />
+            My Team ({teamStats.length})
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {teamStats.map(({ member: tm, user, accountCount, pendingCommissions, recentRevenue }) => (
+              <Card key={tm.id}>
+                <CardContent className="pt-5">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                      <span className="text-sm font-bold text-blue-700">
+                        {user.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-900 truncate">{user.name}</p>
+                      <Badge
+                        variant="outline"
+                        className={`text-xs mt-0.5 ${
+                          tm.status === 'active' ? 'text-green-700 border-green-300' :
+                          tm.status === 'inactive' ? 'text-amber-700 border-amber-300' :
+                          'text-red-700 border-red-300'
+                        }`}
+                      >
+                        {tm.status}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 text-center">
+                    <div>
+                      <p className="text-xs text-slate-400">Accounts</p>
+                      <p className="font-bold text-slate-900 text-lg">{accountCount}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-400">Revenue</p>
+                      <p className="font-bold text-slate-900 text-lg">{fmt(recentRevenue)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-400">Pending</p>
+                      <p className="font-bold text-amber-600 text-lg">{fmt(pendingCommissions)}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {isManager && teamStats.length === 0 && (
+        <Card className="border-dashed">
+          <CardContent className="py-10 text-center text-slate-400">
+            <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
+            <p className="text-sm">No reps assigned to you yet. Admins can set manager assignments on each sales member's profile.</p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
