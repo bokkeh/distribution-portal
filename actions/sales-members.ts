@@ -1,6 +1,6 @@
 'use server'
 
-import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { db } from '@/db'
 import {
   salesMembers,
@@ -279,6 +279,52 @@ export async function getAccountsForRep(salesRepId: string) {
     .orderBy(asc(customerAccounts.companyName))
 }
 
+export async function getAllCustomerAccountsForAssignment() {
+  await requireAdminOrStaff()
+
+  return db
+    .select({
+      id: customerAccounts.id,
+      companyName: customerAccounts.companyName,
+      city: customerAccounts.city,
+      state: customerAccounts.state,
+      businessType: customerAccounts.businessType,
+      accountType: customerAccounts.accountType,
+      accountPriority: customerAccounts.accountPriority,
+      dealStage: customerAccounts.dealStage,
+      assignedSalesRepId: customerAccounts.assignedSalesRepId,
+      assignedRegionId: customerAccounts.assignedRegionId,
+      visitFrequency: customerAccounts.visitFrequency,
+    })
+    .from(customerAccounts)
+    .orderBy(asc(customerAccounts.companyName))
+}
+
+export async function bulkUpdateAccountAssignment(
+  customerIds: string[],
+  updates: {
+    salesRepId?: string | null
+    regionId?: string | null
+    visitFrequency?: number | null
+    accountPriority?: 'high' | 'medium' | 'low' | null
+  },
+): Promise<{ success: boolean }> {
+  await requireAdminOrStaff()
+  if (!customerIds.length) return { success: true }
+
+  await db
+    .update(customerAccounts)
+    .set({
+      ...(('salesRepId' in updates) && { assignedSalesRepId: updates.salesRepId }),
+      ...(('regionId' in updates) && { assignedRegionId: updates.regionId }),
+      ...(('visitFrequency' in updates) && { visitFrequency: updates.visitFrequency }),
+      ...(('accountPriority' in updates) && { accountPriority: updates.accountPriority }),
+    })
+    .where(inArray(customerAccounts.id, customerIds))
+
+  return { success: true }
+}
+
 export async function getUnassignedAccounts() {
   await requireAdminOrStaff()
 
@@ -406,6 +452,9 @@ export async function recordCommission(input: {
     orderId: input.orderId,
     amount: String(input.amount),
     notes: input.notes ?? null,
+    type: 'order_based',
+    isManual: false,
+    source: 'system',
   })
 
   await db
@@ -415,6 +464,57 @@ export async function recordCommission(input: {
       commissionAmount: String(input.amount),
     })
     .where(eq(orders.id, input.orderId))
+
+  return { success: true }
+}
+
+export async function createManualCommission(input: {
+  salesMemberId: string
+  type: 'manual_bonus' | 'adjustment' | 'spiff' | 'penalty'
+  amount: number
+  description: string
+  notes?: string
+  accountId?: string
+  orderId?: string
+  reasonCode?: string
+  effectiveDate?: string
+  createdByAdminId: string
+}): Promise<{ success: boolean; error?: string }> {
+  await requireAdminOrStaff()
+
+  await db.insert(commissions).values({
+    salesMemberId: input.salesMemberId,
+    orderId: input.orderId ?? null,
+    accountId: input.accountId ?? null,
+    type: input.type,
+    isManual: true,
+    source: 'admin_manual',
+    description: input.description,
+    reasonCode: input.reasonCode ?? null,
+    createdByAdminId: input.createdByAdminId,
+    amount: String(input.amount),
+    notes: input.notes ?? null,
+    effectiveDate: input.effectiveDate ? new Date(input.effectiveDate) : null,
+  })
+
+  return { success: true }
+}
+
+export async function voidCommission(
+  commissionId: string,
+  voidedByUserId: string,
+  reason?: string,
+): Promise<{ success: boolean }> {
+  await requireAdminOrStaff()
+
+  const voidNote = reason ? `[Void reason: ${reason}]` : null
+  await db
+    .update(commissions)
+    .set({
+      status: 'voided',
+      ...(voidNote && { notes: sql`COALESCE(notes || E'\n', '') || ${voidNote}` }),
+    })
+    .where(eq(commissions.id, commissionId))
 
   return { success: true }
 }
@@ -456,8 +556,27 @@ export async function getAllPendingCommissions() {
     .from(commissions)
     .innerJoin(salesMembers, eq(commissions.salesMemberId, salesMembers.id))
     .innerJoin(users, eq(salesMembers.userId, users.id))
-    .innerJoin(orders, eq(commissions.orderId, orders.id))
+    .leftJoin(orders, eq(commissions.orderId, orders.id))
     .where(eq(commissions.status, 'pending'))
+    .orderBy(desc(commissions.createdAt))
+
+  return rows
+}
+
+export async function getAllCommissions() {
+  await requireAdminOrStaff()
+
+  const rows = await db
+    .select({
+      commission: commissions,
+      member: salesMembers,
+      user: { id: users.id, name: users.name, email: users.email },
+      order: { id: orders.id, total: orders.total, createdAt: orders.createdAt },
+    })
+    .from(commissions)
+    .innerJoin(salesMembers, eq(commissions.salesMemberId, salesMembers.id))
+    .innerJoin(users, eq(salesMembers.userId, users.id))
+    .leftJoin(orders, eq(commissions.orderId, orders.id))
     .orderBy(desc(commissions.createdAt))
 
   return rows

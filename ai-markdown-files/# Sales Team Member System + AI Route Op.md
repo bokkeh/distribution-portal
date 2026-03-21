@@ -448,3 +448,264 @@ System is complete when:
 - advanced analytics
 
 ---
+
+
+# 🔥 PATCH: Commission Control + Account Assignment System Fixes
+
+---
+
+# 1. Manual Commission Controls (Admin + Manager)
+
+## Objective
+Allow admins (and optionally sales managers) to manually add, adjust, override, or bonus commissions for sales reps outside of automatic order attribution.
+
+Because not every sale comes from the portal, and sometimes you need to reward behavior, not just transactions.
+
+---
+
+## 1.1 New Admin Capabilities
+
+Admins must be able to:
+
+- Manually add commission to a sales rep
+- Adjust an existing commission
+- Apply bonuses or incentives
+- Deduct or void commission
+- Assign commission to:
+  - a specific order
+  - an account
+  - a custom/manual entry (no order)
+
+---
+
+## 1.2 Commission Entry Types
+
+Add field:
+
+- commission_type:
+  - `order_based`
+  - `manual_bonus`
+  - `adjustment`
+  - `spiff`
+  - `penalty`
+
+---
+
+## 1.3 Manual Commission Form (Admin UI)
+
+Admin can create a commission entry with:
+
+- sales_member_id
+- account_id (optional)
+- order_id (optional)
+- commission_type
+- amount
+- notes (required)
+- effective_date
+
+---
+
+## 1.4 Commission Model Updates
+
+Add fields:
+
+- created_by_admin_id
+- is_manual (boolean)
+- source (`system`, `admin_manual`)
+- reason_code
+- adjustment_reference_id (if modifying another commission)
+
+---
+
+## 1.5 Permissions
+
+### Admin
+- full control over all commission entries
+
+### Sales Manager (optional toggle)
+- can add manual bonuses
+- cannot delete or payout commissions
+
+---
+
+## 1.6 Audit Requirements
+
+Every manual commission must log:
+- who created it
+- timestamp
+- reason
+- any linked records
+
+---
+
+## 1.7 Acceptance Criteria
+
+- Admin can add commission without an order
+- Admin can adjust existing commission
+- All manual commissions appear in rep dashboard
+- Manual entries are included in payout batches
+- Full audit trail exists
+
+---
+
+# 2. Account Assignment System (Fix Broken Flow)
+
+## Problem
+Current system only links to CRM but does NOT actually assign accounts to sales reps or routes.
+
+This must be a fully functional workflow, not a redirect.
+
+---
+
+## 2.1 Required Behavior
+
+Admins and Sales Managers must be able to:
+
+- View all CRM accounts inside the assignment UI
+- Select accounts
+- Assign them to:
+  - a sales rep
+  - a region
+  - a route
+- Set visit cadence
+- Save assignments directly
+
+No redirect-only behavior.
+
+---
+
+## 2.2 Replace "Assign from CRM" Link with:
+
+### "Account Assignment Modal / Page"
+
+This should open a full UI with:
+
+#### Left Panel: CRM Accounts
+- searchable list
+- filters:
+  - region
+  - account type
+  - state
+  - revenue
+  - last order date
+- multi-select checkboxes
+
+#### Right Panel: Assignment Settings
+- assign to sales rep
+- assign to region
+- assign to route (optional)
+- visit frequency:
+  - weekly
+  - biweekly
+  - monthly
+  - custom
+- account priority
+- effective start date
+
+---
+
+## 2.3 Bulk Assignment Actions
+
+Admins and managers should be able to:
+
+- assign multiple accounts at once
+- reassign accounts between reps
+- add accounts to existing routes
+- create new route from selected accounts
+
+---
+
+## 2.4 Route Integration
+
+When assigning accounts:
+
+- option to:
+  - add to existing route
+  - create new route
+  - let AI assign to route automatically
+
+---
+
+## 2.5 Data Model Updates
+
+### account_sales_assignments
+
+Add:
+- assigned_by_user_id
+- assignment_method (`manual`, `bulk`, `ai`)
+- source (`crm_import`, `admin_action`)
+- route_id (nullable but strongly encouraged)
+
+---
+
+## 2.6 UX Requirements
+
+### On Sales Rep Profile Page
+
+Replace:
+> "Assign accounts from CRM →"
+
+With:
+
+- "Assign Accounts" button
+- opens assignment modal
+- shows:
+  - currently assigned accounts
+  - add/remove controls
+  - quick filters
+
+---
+
+## 2.7 Validation Rules
+
+- account cannot be assigned to multiple reps unless explicitly allowed
+- assignment must include:
+  - rep
+  - start date
+- route assignment optional but recommended
+- warn if:
+  - account already assigned elsewhere
+  - cadence conflicts with route
+
+---
+
+## 2.8 Acceptance Criteria
+
+- Admin can assign accounts without leaving page
+- Accounts appear immediately under rep profile
+- Assigned accounts populate:
+  - routes
+  - CRM views
+  - attribution logic
+- Bulk assignment works
+- No dead-end links to CRM
+
+---
+
+# 3. Optional Enhancement (Highly Recommended)
+
+## “Smart Assign” Mode
+
+Allow admin to:
+
+- select accounts
+- click “Auto Assign”
+
+System will:
+- assign to reps based on region
+- distribute workload evenly
+- automatically attach to AI-generated routes
+
+---
+
+# 4. Claude Instruction Add-On
+
+Add this to your Claude prompt:
+
+---
+
+Fix the account assignment flow so that admins and sales managers can directly assign CRM accounts to sales reps within the portal. Replace any external CRM redirect with an internal assignment interface that supports bulk selection, route assignment, and visit cadence configuration.
+
+Also add support for manual commission entries. Admins must be able to create, adjust, and assign commissions to reps independently of orders, including bonuses and overrides. Ensure all manual commissions are auditable and included in payout workflows.
+
+---

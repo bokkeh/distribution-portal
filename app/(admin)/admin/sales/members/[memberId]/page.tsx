@@ -1,5 +1,5 @@
 import { requireAdmin } from '@/lib/auth/session'
-import { getSalesMemberById, getAccountsForRep, getCommissionsForMember, getCommissionPlans, getSalesMembers } from '@/actions/sales-members'
+import { getSalesMemberById, getCommissionsForMember, getCommissionPlans, getSalesMembers, getAllCustomerAccountsForAssignment } from '@/actions/sales-members'
 import { notFound } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -17,15 +17,15 @@ export default async function SalesMemberDetailPage({ params }: Props) {
   await requireAdmin()
   const { memberId } = await params
 
-  const [member, plans, allMembers] = await Promise.all([
+  const [member, plans, allMembers, allAccounts] = await Promise.all([
     getSalesMemberById(memberId),
     getCommissionPlans(),
     getSalesMembers(),
+    getAllCustomerAccountsForAssignment(),
   ])
 
   if (!member) notFound()
 
-  const accounts = await getAccountsForRep(memberId)
   const memberCommissions = await getCommissionsForMember(memberId)
 
   const managers = allMembers.filter(m => m.id !== memberId)
@@ -95,7 +95,7 @@ export default async function SalesMemberDetailPage({ params }: Props) {
         <SalesMemberEditForm member={member} plans={plans} managers={managers} />
 
         {/* Accounts panel */}
-        <AccountAssignmentPanel memberId={memberId} accounts={accounts} />
+        <AccountAssignmentPanel memberId={memberId} memberName={member.user.name} allAccounts={allAccounts} />
       </div>
 
       {/* Commission history */}
