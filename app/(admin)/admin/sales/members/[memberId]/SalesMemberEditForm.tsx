@@ -21,8 +21,8 @@ export function SalesMemberEditForm({ member, plans, managers }: Props) {
   const [isPending, startTransition] = useTransition()
   const [saved, setSaved] = useState(false)
   const [status, setStatus] = useState(member.status as 'active' | 'inactive' | 'terminated')
-  const [commissionPlanId, setCommissionPlanId] = useState(member.commissionPlanId ?? '')
-  const [managerId, setManagerId] = useState(member.managerId ?? '')
+  const [commissionPlanId, setCommissionPlanId] = useState(member.commissionPlanId ?? 'none')
+  const [managerId, setManagerId] = useState(member.managerId ?? 'none')
   const [onboardingStatus, setOnboardingStatus] = useState<'pending' | 'in_progress' | 'complete'>(member.onboardingStatus as 'pending' | 'in_progress' | 'complete')
   const [hireDate, setHireDate] = useState(member.hireDate ?? '')
   const [homeRegion, setHomeRegion] = useState(member.homeRegion ?? '')
@@ -33,8 +33,8 @@ export function SalesMemberEditForm({ member, plans, managers }: Props) {
     startTransition(async () => {
       await updateSalesMember(member.id, {
         status,
-        commissionPlanId: commissionPlanId || null,
-        managerId: managerId || null,
+        commissionPlanId: commissionPlanId === 'none' ? null : commissionPlanId || null,
+        managerId: managerId === 'none' ? null : managerId || null,
         onboardingStatus,
         hireDate: hireDate || null,
         homeRegion: homeRegion || null,
@@ -71,7 +71,7 @@ export function SalesMemberEditForm({ member, plans, managers }: Props) {
               <SelectValue placeholder="None" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">None</SelectItem>
+              <SelectItem value="none">None</SelectItem>
               {plans.map(p => (
                 <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
               ))}
@@ -86,7 +86,7 @@ export function SalesMemberEditForm({ member, plans, managers }: Props) {
               <SelectValue placeholder="None" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">None</SelectItem>
+              <SelectItem value="none">None</SelectItem>
               {managers.map(m => (
                 <SelectItem key={m.id} value={m.id}>{m.user.name}</SelectItem>
               ))}

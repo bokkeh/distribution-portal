@@ -147,6 +147,57 @@ export async function createSalesMember(input: {
   return { success: true, id: newMember.id }
 }
 
+// Get users that could be promoted to sales members (not yet in salesMembers)
+export async function getPromotableUsers() {
+  await requireAdminOrStaff()
+
+  const existingMemberUserIds = await db
+    .select({ userId: salesMembers.userId })
+    .from(salesMembers)
+
+  const excludedIds = existingMemberUserIds.map(r => r.userId)
+
+  const allUsers = await db
+    .select({ id: users.id, name: users.name, email: users.email, phone: users.phone, role: users.role })
+    .from(users)
+    .orderBy(asc(users.name))
+
+  return allUsers.filter(u => !excludedIds.includes(u.id))
+}
+
+// Promote an existing user (e.g. CRM contact) to a sales member
+export async function promoteUserToSalesMember(input: {
+  userId: string
+  hireDate?: string
+  homeRegion?: string
+  notes?: string
+}): Promise<{ success: boolean; id?: string; error?: string }> {
+  await requireAdminOrStaff()
+
+  // Check they don't already have a salesMembers record
+  const existing = await db.select({ id: salesMembers.id }).from(salesMembers).where(eq(salesMembers.userId, input.userId)).limit(1)
+  if (existing[0]) return { success: false, error: 'This user already has a sales member profile.' }
+
+  // Update their role
+  const [existingUser] = await db.select({ roles: users.roles }).from(users).where(eq(users.id, input.userId)).limit(1)
+  if (!existingUser) return { success: false, error: 'User not found.' }
+
+  const updatedRoles = Array.from(new Set([...existingUser.roles, 'sales_rep']))
+  await db.update(users).set({ role: 'sales_rep', roles: updatedRoles }).where(eq(users.id, input.userId))
+
+  const [newMember] = await db
+    .insert(salesMembers)
+    .values({
+      userId: input.userId,
+      hireDate: input.hireDate ?? null,
+      homeRegion: input.homeRegion ?? null,
+      notes: input.notes ?? null,
+    })
+    .returning()
+
+  return { success: true, id: newMember.id }
+}
+
 export async function updateSalesMember(
   id: string,
   input: {

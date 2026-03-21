@@ -9,10 +9,12 @@ import { ALL_FEATURES } from '@/lib/users/features'
 
 const allRoles = [
   { value: 'admin', label: 'Admin' },
-  { value: 'staff', label: 'Staff / Sales Rep' },
+  { value: 'staff', label: 'Staff' },
   { value: 'driver', label: 'Driver' },
   { value: 'taster', label: 'Taster' },
   { value: 'customer', label: 'Customer' },
+  { value: 'sales_rep', label: 'Sales Rep' },
+  { value: 'sales_manager', label: 'Sales Manager' },
 ]
 
 export default function NewUserPage() {

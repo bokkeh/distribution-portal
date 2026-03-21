@@ -16,7 +16,7 @@ export function NewRegionForm({ members }: { members: SalesMemberWithUser[] }) {
   const [isPending, startTransition] = useTransition()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
-  const [managerId, setManagerId] = useState('')
+  const [managerId, setManagerId] = useState('none')
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -25,11 +25,11 @@ export function NewRegionForm({ members }: { members: SalesMemberWithUser[] }) {
       await createSalesRegion({
         name: name.trim(),
         description: description.trim() || undefined,
-        assignedManagerId: managerId || undefined,
+        assignedManagerId: managerId === 'none' ? undefined : managerId || undefined,
       })
       setName('')
       setDescription('')
-      setManagerId('')
+      setManagerId('none')
       router.refresh()
     })
   }
@@ -56,7 +56,7 @@ export function NewRegionForm({ members }: { members: SalesMemberWithUser[] }) {
                 <SelectValue placeholder="None" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">None</SelectItem>
+                <SelectItem value="none">None</SelectItem>
                 {members.map(m => (
                   <SelectItem key={m.id} value={m.id}>{m.user.name}</SelectItem>
                 ))}

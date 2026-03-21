@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 
-const ALL_ROLES = ['admin', 'staff', 'driver', 'customer', 'taster'] as const
+const ALL_ROLES = ['admin', 'staff', 'driver', 'customer', 'taster', 'sales_rep', 'sales_manager'] as const
 
 interface Props {
   user: {
@@ -69,7 +69,7 @@ export function UserRoleForm({ user, accountId }: Props) {
             <Label>Role Tags</Label>
             <div className="grid grid-cols-2 gap-3 rounded-md border border-input p-3 text-sm">
               {ALL_ROLES.map(role => (
-                <label key={role} className="flex items-center gap-2 capitalize">
+                <label key={role} className="flex items-center gap-2">
                   <input
                     type="checkbox"
                     name="roles"
@@ -77,7 +77,7 @@ export function UserRoleForm({ user, accountId }: Props) {
                     defaultChecked={user.roles.includes(role)}
                     className="rounded"
                   />
-                  {role}
+                  {role.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
                 </label>
               ))}
             </div>
