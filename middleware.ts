@@ -49,6 +49,11 @@ export default auth((req) => {
     return NextResponse.redirect(new URL('/unauthorized', req.url))
   }
 
+  // Sales routes
+  if (pathname.startsWith('/sales') && !roles.some(r => ['admin', 'sales_rep', 'sales_manager'].includes(r))) {
+    return NextResponse.redirect(new URL('/unauthorized', req.url))
+  }
+
   return NextResponse.next()
 })
 
@@ -58,6 +63,8 @@ function getDashboardForRole(role?: string) {
     case 'staff': return '/staff/dashboard'
     case 'driver': return '/driver/deliveries'
     case 'customer': return '/customer/dashboard'
+    case 'sales_rep': return '/sales/dashboard'
+    case 'sales_manager': return '/sales/dashboard'
     default: return '/login'
   }
 }

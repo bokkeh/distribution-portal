@@ -5,7 +5,7 @@ export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   email: text('email').notNull().unique(),
   passwordHash: text('password_hash').notNull(),
-  role: text('role', { enum: ['admin', 'staff', 'driver', 'customer', 'taster'] }).notNull(),
+  role: text('role', { enum: ['admin', 'staff', 'driver', 'customer', 'taster', 'sales_rep', 'sales_manager'] }).notNull(),
   roles: text('roles').array().notNull().default(sql`ARRAY['customer']::text[]`),
   name: text('name').notNull(),
   phone: text('phone'),

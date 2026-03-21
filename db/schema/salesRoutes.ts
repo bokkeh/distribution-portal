@@ -1,6 +1,8 @@
 import { pgTable, uuid, text, integer, numeric, timestamp } from 'drizzle-orm/pg-core'
 import { customerAccounts } from './customers'
 import { users } from './users'
+import { salesMembers } from './salesMembers'
+import { salesRegions } from './salesRegions'
 
 export const salesRoutes = pgTable('sales_routes', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -9,6 +11,9 @@ export const salesRoutes = pgTable('sales_routes', {
   status: text('status', { enum: ['active', 'archived'] }).notNull().default('active'),
   region: text('region'),
   assignedRepUserId: uuid('assigned_rep_user_id').references(() => users.id),
+  assignedSalesMemberId: uuid('assigned_sales_member_id').references(() => salesMembers.id, { onDelete: 'set null' }),
+  regionId: uuid('region_id').references(() => salesRegions.id, { onDelete: 'set null' }),
+  frequency: text('frequency', { enum: ['weekly', 'biweekly', 'monthly'] }).default('monthly'),
   hourlyRate: numeric('hourly_rate', { precision: 10, scale: 2 }),
   originAddress: text('origin_address'),
   originLat: numeric('origin_lat', { precision: 10, scale: 7 }),

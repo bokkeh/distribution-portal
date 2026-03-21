@@ -2,6 +2,7 @@ import { pgTable, uuid, text, numeric, timestamp } from 'drizzle-orm/pg-core'
 import { customerAccounts } from './customers'
 import { users } from './users'
 import { products } from './products'
+import { salesMembers } from './salesMembers'
 
 export const orders = pgTable('orders', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -14,6 +15,11 @@ export const orders = pgTable('orders', {
   tax: numeric('tax', { precision: 12, scale: 2 }).notNull().default('0'),
   total: numeric('total', { precision: 12, scale: 2 }).notNull().default('0'),
   notes: text('notes'),
+  // Sales attribution
+  attributedSalesMemberId: uuid('attributed_sales_member_id').references(() => salesMembers.id, { onDelete: 'set null' }),
+  attributionSource: text('attribution_source', { enum: ['auto_assigned', 'manual', 'self_placed'] }),
+  commissionStatus: text('commission_status', { enum: ['none', 'pending', 'calculated', 'approved', 'paid'] }).default('none'),
+  commissionAmount: numeric('commission_amount', { precision: 12, scale: 2 }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

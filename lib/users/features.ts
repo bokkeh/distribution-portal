@@ -16,6 +16,7 @@ export const ALL_FEATURES = [
   { key: 'cart', label: 'Cart' },
   { key: 'invoices', label: 'Invoices' },
   { key: 'map', label: 'Map' },
+  { key: 'sales', label: 'Sales Dashboard' },
 ] as const
 
 export type FeatureKey = typeof ALL_FEATURES[number]['key']
@@ -26,6 +27,8 @@ const ROLE_DEFAULTS: Record<string, FeatureKey[]> = {
   driver: ['deliveries', 'map', 'profile'],
   customer: ['dashboard', 'products', 'orders', 'cart', 'invoices', 'profile'],
   taster: ['tastings', 'profile'],
+  sales_rep: ['sales', 'profile'],
+  sales_manager: ['sales', 'profile', 'crm'],
 }
 
 export function getDefaultFeaturesForRoles(roles: string[]) {

@@ -1,5 +1,7 @@
-import { pgTable, uuid, text, numeric, timestamp, boolean } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, numeric, timestamp, boolean, integer } from 'drizzle-orm/pg-core'
 import { users } from './users'
+import { salesMembers } from './salesMembers'
+import { salesRegions } from './salesRegions'
 
 export const customerAccounts = pgTable('customer_accounts', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -36,6 +38,14 @@ export const customerAccounts = pgTable('customer_accounts', {
   creditLimit: numeric('credit_limit', { precision: 12, scale: 2 }).notNull().default('0'),
   balance: numeric('balance', { precision: 12, scale: 2 }).notNull().default('0'),
   paymentTerms: text('payment_terms').default('NET30'),
+  // Sales assignment
+  assignedSalesRepId: uuid('assigned_sales_rep_id').references(() => salesMembers.id, { onDelete: 'set null' }),
+  assignedRegionId: uuid('assigned_region_id').references(() => salesRegions.id, { onDelete: 'set null' }),
+  accountPriority: text('account_priority', { enum: ['high', 'medium', 'low'] }).default('medium'),
+  accountType: text('account_type', { enum: ['on_premise', 'off_premise', 'chain', 'independent'] }),
+  visitFrequency: integer('visit_frequency').default(30), // days between required visits
+  lastVisitDate: timestamp('last_visit_date', { withTimezone: true }),
+  nextRequiredVisitDate: timestamp('next_required_visit_date', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

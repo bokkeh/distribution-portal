@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, FileText, BookOpen, Users, Package,
-  Truck, Map, Building2, LogOut, ChevronRight, Menu, X, UserCircle, CalendarDays, MessageSquare, HeartPulse, ListChecks, ClipboardList, Workflow, BarChart3, TrendingUp,
+  Truck, Map, Building2, LogOut, ChevronRight, Menu, X, UserCircle, CalendarDays, MessageSquare, HeartPulse, ListChecks, ClipboardList, Workflow, BarChart3, TrendingUp, UserCheck, DollarSign, Globe,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { signOut } from 'next-auth/react'
@@ -58,6 +58,14 @@ const navSections = [
       { href: '/admin/finance/reconciliation', label: 'Reconciliation', icon: ClipboardList, feature: 'accounting' },
       { href: '/admin/finance/statements', label: 'Statements', icon: FileText, feature: 'accounting' },
       { href: '/admin/accounts', label: 'Chart of Accounts', icon: BookOpen, feature: 'accounting' },
+    ],
+  },
+  {
+    title: 'Sales Team',
+    items: [
+      { href: '/admin/sales/members', label: 'Members', icon: UserCheck, feature: 'dashboard' },
+      { href: '/admin/sales/regions', label: 'Regions', icon: Globe, feature: 'dashboard' },
+      { href: '/admin/sales/commissions', label: 'Commissions', icon: DollarSign, feature: 'dashboard' },
     ],
   },
   {

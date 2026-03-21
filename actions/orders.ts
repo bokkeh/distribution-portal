@@ -1,9 +1,10 @@
 'use server'
 
 import { db } from '@/db'
-import { customerAccounts, inventory, orderItems, orders, products } from '@/db/schema'
+import { customerAccounts, inventory, orderItems, orders, products, salesMembers } from '@/db/schema'
 import { requireAuth } from '@/lib/auth/session'
 import { eq, inArray } from 'drizzle-orm'
+import { calculateCommissionForOrder, recordCommission } from '@/actions/sales-members'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { postGoogleChat } from '@/lib/google-chat/webhook'
@@ -153,6 +154,23 @@ export async function createOrder(formData: FormData) {
     }).returning()
 
     await db.insert(orderItems).values(lineItems.map(item => ({ ...item, orderId: order.id })))
+
+    // Auto-attribute order to assigned sales rep
+    const [acct] = await db
+      .select({ assignedSalesRepId: customerAccounts.assignedSalesRepId })
+      .from(customerAccounts)
+      .where(eq(customerAccounts.id, customerId))
+      .limit(1)
+    if (acct?.assignedSalesRepId) {
+      await db
+        .update(orders)
+        .set({ attributedSalesMemberId: acct.assignedSalesRepId, attributionSource: 'auto_assigned' })
+        .where(eq(orders.id, order.id))
+      const { amount } = await calculateCommissionForOrder(order.id)
+      if (amount !== null && amount > 0) {
+        await recordCommission({ salesMemberId: acct.assignedSalesRepId, orderId: order.id, amount })
+      }
+    }
 
     await logActivityEvent({
       entityType: 'order',
