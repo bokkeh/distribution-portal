@@ -8,7 +8,7 @@ import { db } from '@/db'
 import { customerAccounts, drivers, userFeatureSettings, users } from '@/db/schema'
 import { requireAdmin } from '@/lib/auth/session'
 
-const ALL_ROLES = ['admin', 'staff', 'driver', 'customer', 'taster'] as const
+const ALL_ROLES = ['admin', 'staff', 'driver', 'customer', 'taster', 'sales_rep', 'sales_manager'] as const
 type UserRole = typeof ALL_ROLES[number]
 
 function parseRoles(formData: FormData, primaryRole: UserRole) {
