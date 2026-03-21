@@ -121,7 +121,7 @@ export default async function AdminDashboard() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
         <KpiCard
           title="Total Revenue"
           value={formatCurrency(totalRevenue[0]?.total ?? '0')}
@@ -166,17 +166,17 @@ export default async function AdminDashboard() {
         />
         <Card className="border-0 bg-white shadow-sm">
           <CardContent className="p-6">
-            <div className="flex items-start justify-between gap-4">
-              <div>
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-slate-500">SMS Inbox</p>
-                <p className="mt-6 text-4xl font-bold tracking-tight text-slate-950">{smsInboxSummary.totalTexts}</p>
-                <p className="mt-2 text-sm font-medium text-slate-500">Total texts logged</p>
+                <p className="mt-3 text-2xl font-bold tracking-tight text-slate-950">{smsInboxSummary.totalTexts}</p>
+                <p className="mt-1.5 text-xs font-medium text-slate-500">Total texts logged</p>
               </div>
-              <div className="rounded-xl bg-slate-100 p-3 text-emerald-600">
-                <MessageSquare className="h-5 w-5" />
+              <div className="rounded-xl bg-slate-100 p-2.5 shrink-0 text-emerald-600">
+                <MessageSquare className="h-4 w-4" />
               </div>
             </div>
-            <div className="mt-6 flex items-end justify-between gap-3">
+            <div className="mt-4 flex items-end justify-between gap-3">
               <div>
                 <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Open Threads</p>
                 <p className="mt-1 text-lg font-semibold text-slate-900">{smsInboxSummary.openThreads}</p>
