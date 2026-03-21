@@ -355,7 +355,51 @@ export async function updateSalesRegion(
   input: { name?: string; description?: string; assignedManagerId?: string | null },
 ): Promise<{ success: boolean }> {
   await requireAdminOrStaff()
+
+  // Cascade rep change to all accounts in this region
+  if ('assignedManagerId' in input) {
+    await db
+      .update(customerAccounts)
+      .set({ assignedSalesRepId: input.assignedManagerId ?? null })
+      .where(eq(customerAccounts.assignedRegionId, id))
+  }
+
   await db.update(salesRegions).set(input).where(eq(salesRegions.id, id))
+  return { success: true }
+}
+
+export async function getRegionAccountStats(regionIds: string[]): Promise<Record<string, number>> {
+  await requireAdminOrStaff()
+  if (!regionIds.length) return {}
+
+  const rows = await db
+    .select({
+      regionId: customerAccounts.assignedRegionId,
+      count: sql<number>`COUNT(*)`,
+    })
+    .from(customerAccounts)
+    .where(inArray(customerAccounts.assignedRegionId, regionIds))
+    .groupBy(customerAccounts.assignedRegionId)
+
+  return Object.fromEntries(rows.map(r => [r.regionId!, Number(r.count)]))
+}
+
+export async function assignAccountsToRegion(
+  accountIds: string[],
+  regionId: string | null,
+  repId: string | null,
+): Promise<{ success: boolean }> {
+  await requireAdminOrStaff()
+  if (!accountIds.length) return { success: true }
+
+  await db
+    .update(customerAccounts)
+    .set({
+      assignedRegionId: regionId,
+      assignedSalesRepId: repId,
+    })
+    .where(inArray(customerAccounts.id, accountIds))
+
   return { success: true }
 }
 
