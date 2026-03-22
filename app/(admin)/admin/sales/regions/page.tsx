@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { requireAdmin } from '@/lib/auth/session'
 import { getSalesRegions, getSalesMembers, getAllCustomerAccountsForAssignment, getRegionAccountStats } from '@/actions/sales-members'
 import { getRegionMapData } from '@/actions/regions-map'

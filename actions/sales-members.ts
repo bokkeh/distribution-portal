@@ -1,7 +1,7 @@
 'use server'
 
 import { and, asc, desc, eq, inArray, isNull, sql, sum } from 'drizzle-orm'
-import { revalidatePath, unstable_noStore as noStore } from 'next/cache'
+import { revalidatePath } from 'next/cache'
 import { db } from '@/db'
 import {
   salesMembers,
@@ -94,7 +94,6 @@ export async function getSalesMemberById(id: string): Promise<SalesMemberWithUse
 }
 
 export async function getSalesRegions() {
-  noStore()
   await requireAdminOrStaff()
   return db.select().from(salesRegions).orderBy(asc(salesRegions.name))
 }
@@ -284,7 +283,6 @@ export async function getAccountsForRep(salesRepId: string) {
 }
 
 export async function getAllCustomerAccountsForAssignment() {
-  noStore()
   await requireAdminOrStaff()
 
   return db
@@ -372,7 +370,6 @@ export async function updateSalesRegion(
 }
 
 export async function getRegionAccountStats(regionIds: string[]): Promise<Record<string, number>> {
-  noStore()
   await requireAdminOrStaff()
   if (!regionIds.length) return {}
 

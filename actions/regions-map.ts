@@ -5,7 +5,6 @@ import { db } from '@/db'
 import { customerAccounts, deliveryStops, invoices, salesMembers, salesRegions, tastings, users } from '@/db/schema'
 import { requireAdmin } from '@/lib/auth/session'
 import { geocodeAddress } from '@/lib/maps/geocode'
-import { unstable_noStore as noStore } from 'next/cache'
 
 export type RegionMapAccount = {
   id: string
@@ -49,7 +48,6 @@ export type RegionMapData = {
 }
 
 export async function getRegionMapData(): Promise<RegionMapData> {
-  noStore()
   await requireAdmin()
 
   // Regions with assigned rep info
