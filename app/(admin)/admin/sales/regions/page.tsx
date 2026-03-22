@@ -10,17 +10,36 @@ import { RegionsViewToggle } from './RegionsViewToggle'
 export default async function SalesRegionsPage() {
   await requireAdmin()
 
-  const [regions, members, allAccounts, mapData] = await Promise.all([
-    getSalesRegions(),
-    getSalesMembers(),
-    getAllCustomerAccountsForAssignment(),
-    getRegionMapData(),
-  ])
+  let regions: Awaited<ReturnType<typeof getSalesRegions>> = []
+  let members: Awaited<ReturnType<typeof getSalesMembers>> = []
+  let allAccounts: Awaited<ReturnType<typeof getAllCustomerAccountsForAssignment>> = []
+  let mapData: Awaited<ReturnType<typeof getRegionMapData>> = { regions: [], accounts: [] }
+  let loadError: string | null = null
 
-  const accountStats = await getRegionAccountStats(regions.map(r => r.id))
+  try {
+    ;[regions, members, allAccounts, mapData] = await Promise.all([
+      getSalesRegions(),
+      getSalesMembers(),
+      getAllCustomerAccountsForAssignment(),
+      getRegionMapData(),
+    ])
+  } catch (e) {
+    console.error('[SalesRegionsPage] data load error:', e)
+    loadError = e instanceof Error ? e.message : String(e)
+  }
+
+  const accountStats = regions.length ? await getRegionAccountStats(regions.map(r => r.id)).catch(e => {
+    console.error('[SalesRegionsPage] accountStats error:', e)
+    return {} as Record<string, number>
+  }) : {}
 
   return (
     <div className="space-y-6">
+      {loadError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 font-mono whitespace-pre-wrap">
+          <strong>Page load error:</strong> {loadError}
+        </div>
+      )}
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Sales Regions</h1>
         <p className="text-slate-500 mt-1">{regions.length} region{regions.length !== 1 ? 's' : ''}</p>
