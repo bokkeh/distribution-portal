@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { getUserAccessSummaryMap } from '@/lib/auth/activity'
+import { toDisplayAvatarUrl } from '@/lib/users/avatar'
 import { formatDate } from '@/lib/utils'
 
 const roleColors: Record<string, 'default' | 'success' | 'warning' | 'destructive' | 'info'> = {
@@ -68,14 +69,22 @@ export default async function UsersPage() {
               <tbody className="divide-y">
                 {allUsers.map((user) => {
                   const access = accessSummaryMap.get(user.id)
+                  const avatarUrl = toDisplayAvatarUrl(user.avatarUrl)
 
                   return (
                     <tr key={user.id} className="transition-colors hover:bg-slate-50">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200">
-                            {user.avatarUrl ? (
-                              <Image src={user.avatarUrl} alt={user.name ?? ''} width={32} height={32} className="h-8 w-8 rounded-full object-cover" unoptimized={user.avatarUrl.includes('googleusercontent.com') || user.avatarUrl.startsWith('/api/')} />
+                            {avatarUrl ? (
+                              <Image
+                                src={avatarUrl}
+                                alt={user.name ?? ''}
+                                width={32}
+                                height={32}
+                                className="h-8 w-8 rounded-full object-cover"
+                                unoptimized={avatarUrl.includes('googleusercontent.com') || avatarUrl.startsWith('/api/')}
+                              />
                             ) : (
                               <User className="h-4 w-4 text-slate-500" />
                             )}

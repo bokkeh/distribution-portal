@@ -4,19 +4,11 @@ import { eq } from 'drizzle-orm'
 import { db } from '@/db'
 import { contacts, customerAccounts, users } from '@/db/schema'
 import { normalizePhone } from '@/lib/telnyx/compliance'
+import { toDisplayAvatarUrl } from '@/lib/users/avatar'
 
 type ContactMatch = {
   name: string
   avatarUrl: string | null
-}
-
-function toProxyUrl(avatarUrl: string | null | undefined): string | null {
-  if (!avatarUrl) return null
-  if (avatarUrl.startsWith('https://storage.googleapis.com/')) {
-    const filePath = avatarUrl.replace(/^https:\/\/storage\.googleapis\.com\/[^/]+\//, '')
-    return `/api/image?path=${encodeURIComponent(filePath)}`
-  }
-  return avatarUrl
 }
 
 function safeNormalizePhone(value: string | null | undefined) {
@@ -72,7 +64,7 @@ export async function getInboxContactMatches(phones: string[]) {
       if (!normalized || !targetPhones.has(normalized) || results.has(normalized)) continue
       results.set(normalized, {
         name: candidate.name || account.companyName,
-        avatarUrl: toProxyUrl(account.avatarUrl),
+        avatarUrl: toDisplayAvatarUrl(account.avatarUrl),
       })
     }
   }
@@ -82,7 +74,7 @@ export async function getInboxContactMatches(phones: string[]) {
     if (!normalized || !targetPhones.has(normalized) || results.has(normalized)) continue
     results.set(normalized, {
       name: user.name,
-      avatarUrl: toProxyUrl(user.avatarUrl),
+      avatarUrl: toDisplayAvatarUrl(user.avatarUrl),
     })
   }
 

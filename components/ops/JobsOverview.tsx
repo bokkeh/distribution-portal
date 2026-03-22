@@ -1,3 +1,4 @@
+import { Mail, MessageSquare, Radio, Send } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { formatDate } from '@/lib/utils'
@@ -27,6 +28,38 @@ export function JobsOverview({
     {} as Record<string, number>
   )
 
+  function iconForType(type: string) {
+    if (type === 'scheduled_sms' || type.startsWith('sms')) {
+      return {
+        icon: MessageSquare,
+        className: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200',
+        label: 'SMS',
+      }
+    }
+
+    if (type.startsWith('email')) {
+      return {
+        icon: Mail,
+        className: 'bg-blue-50 text-blue-700 ring-1 ring-blue-200',
+        label: 'Email',
+      }
+    }
+
+    if (type.startsWith('chat')) {
+      return {
+        icon: Radio,
+        className: 'bg-violet-50 text-violet-700 ring-1 ring-violet-200',
+        label: 'Chat',
+      }
+    }
+
+    return {
+      icon: Send,
+      className: 'bg-slate-100 text-slate-700 ring-1 ring-slate-200',
+      label: 'Job',
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-4">
@@ -46,7 +79,21 @@ export function JobsOverview({
           {rows.length === 0 ? (
             <div className="px-5 py-10 text-sm text-slate-500">No jobs have been recorded yet.</div>
           ) : rows.map((row) => (
-            <div key={row.id} className="grid gap-3 px-5 py-4 lg:grid-cols-[1.2fr_0.8fr_0.8fr_1fr_auto]">
+            <div key={row.id} className="grid gap-3 px-5 py-4 lg:grid-cols-[auto_1.2fr_0.8fr_0.8fr_1fr_auto]">
+              <div className="flex items-start pr-3 pt-0.5">
+                {(() => {
+                  const { icon: Icon, className, label } = iconForType(row.type)
+                  return (
+                    <div
+                      className={`flex h-10 w-10 items-center justify-center rounded-xl ${className}`}
+                      aria-label={label}
+                      title={label}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </div>
+                  )
+                })()}
+              </div>
               <div>
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-semibold text-slate-900">{row.type}</p>

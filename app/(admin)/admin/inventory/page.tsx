@@ -4,6 +4,7 @@ import { asc, desc, eq, inArray } from 'drizzle-orm'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { toDisplayAvatarUrl } from '@/lib/users/avatar'
 import { formatCurrency } from '@/lib/utils'
 import Link from 'next/link'
 import { Plus, AlertTriangle } from 'lucide-react'
@@ -29,6 +30,7 @@ export default async function InventoryPage() {
       checkedOutAt: inventorySampleHolders.checkedOutAt,
       productName: products.name,
       userName: users.name,
+      userAvatarUrl: users.avatarUrl,
     })
     .from(inventorySampleHolders)
     .innerJoin(products, eq(inventorySampleHolders.productId, products.id))
@@ -200,7 +202,11 @@ export default async function InventoryPage() {
         </CardHeader>
         <CardContent>
           <SampleHoldersPanel
-            holders={sampleHolders.map(h => ({ ...h, userId: h.userId! }))}
+            holders={sampleHolders.map(h => ({
+              ...h,
+              userId: h.userId!,
+              userAvatarUrl: toDisplayAvatarUrl(h.userAvatarUrl),
+            }))}
             products={items.map(i => ({
               id: i.productId ?? i.id,
               name: i.name,

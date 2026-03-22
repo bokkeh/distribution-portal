@@ -8,7 +8,7 @@ export default auth((req) => {
   const roles = session?.user?.roles ?? (role ? [role] : [])
 
   // Always-public routes (no redirect even when logged in)
-  if (pathname.startsWith('/share') || pathname === '/join' || pathname.startsWith('/pay')) {
+  if (pathname.startsWith('/share') || pathname === '/join' || pathname.startsWith('/pay') || pathname === '/taster-signup') {
     return NextResponse.next()
   }
 
@@ -54,6 +54,11 @@ export default auth((req) => {
     return NextResponse.redirect(new URL('/unauthorized', req.url))
   }
 
+  // Taster routes
+  if (pathname.startsWith('/taster') && !roles.some(r => ['admin', 'taster'].includes(r))) {
+    return NextResponse.redirect(new URL('/unauthorized', req.url))
+  }
+
   return NextResponse.next()
 })
 
@@ -65,6 +70,7 @@ function getDashboardForRole(role?: string) {
     case 'customer': return '/customer/dashboard'
     case 'sales_rep': return '/sales/dashboard'
     case 'sales_manager': return '/sales/dashboard'
+    case 'taster': return '/taster/welcome'
     default: return '/login'
   }
 }

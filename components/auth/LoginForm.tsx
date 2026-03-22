@@ -10,8 +10,8 @@ declare global {
 import { useState } from 'react'
 import Image from 'next/image'
 import { signIn } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
-import { Chrome, Loader2 } from 'lucide-react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Chrome, Loader2, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -23,6 +23,9 @@ interface Props {
 
 export function LoginForm({ onSuccess }: Props) {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const defaultEmail = searchParams.get('email') ?? ''
+  const fromTasterSignup = searchParams.get('from') === 'taster-signup'
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
@@ -70,7 +73,7 @@ export function LoginForm({ onSuccess }: Props) {
       admin: '/admin/dashboard',
       staff: '/staff/dashboard',
       driver: '/driver/deliveries',
-      taster: '/taster/tastings',
+      taster: '/taster/welcome',
       customer: '/customer/dashboard',
     }
     router.push(map[role] ?? '/admin/dashboard')
@@ -99,6 +102,13 @@ export function LoginForm({ onSuccess }: Props) {
         <p className="text-sm text-muted-foreground">Sign in to your account</p>
       </div>
 
+      {fromTasterSignup && (
+        <div className="flex items-start gap-2.5 rounded-lg border border-green-200 bg-green-50 px-3.5 py-3 text-sm text-green-800">
+          <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-green-600" />
+          <span>Account created! Sign in below to access your taster portal.</span>
+        </div>
+      )}
+
       {/* Google */}
       <Button type="button" variant="outline" className="w-full" onClick={handleGoogle} disabled={googleLoading}>
         {googleLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Chrome className="w-4 h-4" />}
@@ -115,7 +125,7 @@ export function LoginForm({ onSuccess }: Props) {
       <form onSubmit={handleSubmit} autoComplete="on" className="space-y-3">
         <div className="space-y-1.5">
           <Label htmlFor="lf-email">Email</Label>
-          <Input id="lf-email" name="email" type="email" placeholder="you@ahawc.com" required autoComplete="email" autoFocus />
+          <Input id="lf-email" name="email" type="email" placeholder="you@ahawc.com" required autoComplete="email" autoFocus defaultValue={defaultEmail} />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="lf-password">Password</Label>

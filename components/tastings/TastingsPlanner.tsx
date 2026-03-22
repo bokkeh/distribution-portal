@@ -162,16 +162,16 @@ export function TastingsPlanner({ mode, tastings, accounts, tasters, success, er
                   </select>
                 </div>
 
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="date">Date</Label>
-                      <Input id="date" name="date" type="date" defaultValue={format(selectedDate, 'yyyy-MM-dd')} required />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="time">Start Time (ET)</Label>
-                      <Input id="time" name="time" type="time" defaultValue="17:00" required />
-                    </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="date">Date</Label>
+                    <Input id="date" name="date" type="date" defaultValue={format(selectedDate, 'yyyy-MM-dd')} required />
                   </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="time">Start Time (ET)</Label>
+                    <Input id="time" name="time" type="time" defaultValue="17:00" required />
+                  </div>
+                </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="endTime">End Time (ET)</Label>
@@ -284,17 +284,30 @@ export function TastingsPlanner({ mode, tastings, accounts, tasters, success, er
         </CardHeader>
         <CardContent className="space-y-3">
           {tastings.length ? tastings.map(tasting => (
-            <div key={tasting.id} className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <p className="font-semibold text-slate-900">{tasting.eventName}</p>
-                  <Badge variant={statusVariant[tasting.status] ?? 'secondary'}>{tasting.status}</Badge>
+            <div key={tasting.id} className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
+              <div className="flex items-start gap-4">
+                <div className="flex min-w-[84px] flex-col items-center rounded-2xl border border-blue-100 bg-blue-50 px-3 py-3 text-center">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-700">
+                    {format(new Date(tasting.scheduledAt), 'MMM')}
+                  </span>
+                  <span className="mt-1 text-3xl font-bold leading-none text-slate-900">
+                    {format(new Date(tasting.scheduledAt), 'd')}
+                  </span>
+                  <span className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-500">
+                    {format(new Date(tasting.scheduledAt), 'EEE')}
+                  </span>
                 </div>
-                <p className="text-sm text-slate-500">{formatEasternDate(new Date(tasting.scheduledAt))} • {formatTastingTimeRange(new Date(tasting.scheduledAt), tasting.endAt ? new Date(tasting.endAt) : null)} with {tasting.tasterName}</p>
-                <p className="text-sm text-slate-500">{[tasting.storeAddress, tasting.storeCity, tasting.storeState, tasting.storeZip].filter(Boolean).join(', ') || 'Store address not provided'}</p>
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {tasting.reportSubmittedAt ? <Badge variant="success">Report Submitted</Badge> : null}
-                  {tasting.invoiceSubmittedAt ? <Badge variant="info">Invoice {tasting.invoiceStatus ?? 'submitted'}</Badge> : null}
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold text-slate-900">{tasting.eventName}</p>
+                    <Badge variant={statusVariant[tasting.status] ?? 'secondary'}>{tasting.status}</Badge>
+                  </div>
+                  <p className="text-sm text-slate-500">{formatEasternDate(new Date(tasting.scheduledAt))} • {formatTastingTimeRange(new Date(tasting.scheduledAt), tasting.endAt ? new Date(tasting.endAt) : null)} with {tasting.tasterName}</p>
+                  <p className="text-sm text-slate-500">{[tasting.storeAddress, tasting.storeCity, tasting.storeState, tasting.storeZip].filter(Boolean).join(', ') || 'Store address not provided'}</p>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {tasting.reportSubmittedAt ? <Badge variant="success">Report Submitted</Badge> : null}
+                    {tasting.invoiceSubmittedAt ? <Badge variant="info">Invoice {tasting.invoiceStatus ?? 'submitted'}</Badge> : null}
+                  </div>
                 </div>
               </div>
               <div className="flex flex-col items-start gap-2 md:items-end">

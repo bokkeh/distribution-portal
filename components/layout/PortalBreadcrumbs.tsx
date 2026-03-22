@@ -61,7 +61,7 @@ export function PortalBreadcrumbs() {
         const href = hrefForSegments(segments, index)
         const isLast = index === segments.length - 1
         return (
-          <div key={href} className="flex items-center gap-2">
+          <div key={`${index}-${segment}-${href}`} className="flex items-center gap-2">
             {index > 0 ? <span className="text-slate-300">/</span> : null}
             {isLast ? (
               <span className="font-medium text-slate-900">{labelForSegment(segment)}</span>
