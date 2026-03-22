@@ -27,7 +27,9 @@ export default async function TasterWelcomePage() {
         <span key="pay">Payouts and Stripe setup live in your profile and payout screens.</span>,
       ]}
       primaryHref="/taster/profile?onboarding=1"
-      primaryLabel="Complete Profile First"
+      primaryLabel="Get Started"
+      secondaryHref="/taster/profile?onboarding=1"
+      secondaryLabel="Review Profile Settings"
       guidanceText="Complete your profile and notification settings before entering the taster portal."
     />
   )
