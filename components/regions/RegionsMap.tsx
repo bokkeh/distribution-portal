@@ -2,7 +2,7 @@
 
 import { GoogleMap, InfoWindow, Marker, Polygon, useJsApiLoader } from '@react-google-maps/api'
 import { useState, useMemo } from 'react'
-import { MapPin, TrendingUp, Wine, Truck, User, ExternalLink, Building2 } from 'lucide-react'
+import { MapPin, TrendingUp, Wine, Truck, User, ExternalLink, Building2, Phone } from 'lucide-react'
 import type { RegionMapData, RegionMapAccount, RegionMapRegion } from '@/actions/regions-map'
 import { convexHull, expandHull, circlePolygon } from '@/lib/maps/convex-hull'
 import { getRegionColor } from '@/lib/maps/region-colors'
@@ -231,7 +231,7 @@ export function RegionsMap({ data }: { data: RegionMapData }) {
 
         <div className="mt-auto border-t pt-2 space-y-1">
           <p className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Priority</p>
-          {[['#EF4444', 'High'], ['#F59E0B', 'Medium'], ['#94A3B8', 'Low'], ['#64748B', 'Unknown']].map(([c, label]) => (
+          {[['#3B82F6', 'No rep assigned'], ['#EF4444', 'High priority'], ['#F59E0B', 'Medium priority'], ['#94A3B8', 'Low priority']].map(([c, label]) => (
             <div key={label} className="flex items-center gap-1.5 px-1">
               <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: c }} />
               <span className="text-xs text-slate-500">{label}</span>
@@ -289,7 +289,9 @@ export function RegionsMap({ data }: { data: RegionMapData }) {
           {/* Account markers */}
           {mappedAccounts.map(account => {
             const priorityColor: Record<string, string> = { high: '#EF4444', medium: '#F59E0B', low: '#94A3B8' }
-            const color = priorityColor[account.accountPriority ?? ''] ?? '#64748B'
+            const color = !account.assignedSalesRepId
+              ? '#3B82F6'
+              : priorityColor[account.accountPriority ?? ''] ?? '#64748B'
             const accountRegionId = account.regionId ?? '__unassigned__'
             const isActive = hoveredRegionId === null || hoveredRegionId === accountRegionId
             const isSelected = selectedAccount?.id === account.id
@@ -356,6 +358,12 @@ function AccountInfoCard({ account }: { account: RegionMapAccount }) {
     chain: 'Chain',
     independent: 'Independent',
   }
+  const businessTypeLabel: Record<string, string> = {
+    restaurant: 'Restaurant',
+    restaurant_group: 'Restaurant Group',
+    liquor_store: 'Liquor Store',
+    hotel_group: 'Hotel Group',
+  }
   const priorityColors: Record<string, string> = {
     high: '#EF4444',
     medium: '#F59E0B',
@@ -374,6 +382,11 @@ function AccountInfoCard({ account }: { account: RegionMapAccount }) {
       </div>
 
       <div className="flex flex-wrap gap-1">
+        {account.businessType && businessTypeLabel[account.businessType] && (
+          <span className="rounded bg-blue-50 px-1.5 py-0.5 text-xs font-medium text-blue-700">
+            {businessTypeLabel[account.businessType]}
+          </span>
+        )}
         {account.accountType && (
           <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">
             {typeLabel[account.accountType] ?? account.accountType}
@@ -388,6 +401,23 @@ function AccountInfoCard({ account }: { account: RegionMapAccount }) {
           </span>
         )}
       </div>
+
+      {account.phone && (
+        <div className="flex gap-2">
+          <a
+            href={`tel:${account.phone}`}
+            className="flex flex-1 items-center justify-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200"
+          >
+            <Phone className="h-3 w-3" /> Call
+          </a>
+          <a
+            href={`sms:${account.phone}`}
+            className="flex flex-1 items-center justify-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200"
+          >
+            <Phone className="h-3 w-3" /> Text
+          </a>
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-1 rounded-lg bg-slate-50 p-2 text-center text-xs">
         <div>
