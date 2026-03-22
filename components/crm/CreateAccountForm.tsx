@@ -8,6 +8,7 @@ import { createCustomerAccount } from '@/actions/crm'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { AddressAutocomplete } from '@/components/shared/AddressAutocomplete'
 
 export function CreateAccountForm() {
   const router = useRouter()
@@ -67,7 +68,12 @@ export function CreateAccountForm() {
 
       <div className="space-y-2">
         <Label htmlFor="new-address">Address</Label>
-        <Input id="new-address" name="address" placeholder="123 Main St" />
+        <AddressAutocomplete
+          id="new-address"
+          name="address"
+          placeholder="123 Main St — start typing to search"
+          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

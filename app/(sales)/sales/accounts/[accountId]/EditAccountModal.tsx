@@ -1,6 +1,7 @@
 'use client'
 
 import { useActionState, useEffect, useRef } from 'react'
+import { AddressAutocomplete } from '@/components/shared/AddressAutocomplete'
 import { updateAccountBySalesRep } from '@/actions/crm'
 import { Pencil, X, Loader2, CheckCircle2 } from 'lucide-react'
 import type { CustomerAccount } from '@/db/schema/customers'
@@ -65,7 +66,15 @@ export function EditAccountModal({ account }: Props) {
               <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">Address</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="sm:col-span-2">
-                  <Field label="Street Address" name="address" defaultValue={account.address ?? ''} />
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Street Address</label>
+                    <AddressAutocomplete
+                      name="address"
+                      defaultValue={account.address ?? ''}
+                      placeholder="123 Main St — start typing to search"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition"
+                    />
+                  </div>
                 </div>
                 <Field label="City" name="city" defaultValue={account.city ?? ''} />
                 <Field label="State" name="state" defaultValue={account.state ?? ''} />

@@ -3,6 +3,7 @@
 import { db } from '@/db'
 import { accountPreferences, activityEvents, contacts, customerAccounts, deliveryStops, invoices, orders, salesMembers, salesRouteStops, smsThreads, tastings } from '@/db/schema'
 import { requireAdminOrStaff, requireRole } from '@/lib/auth/session'
+import { geocodeAddress } from '@/lib/maps/geocode'
 import { eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { upsertHubSpotContact, getHubSpotCompanies, updateHubSpotCompany } from '@/lib/hubspot/client'
@@ -624,4 +625,39 @@ export async function updateAccountBySalesRep(
   revalidatePath(`/sales/accounts/${id}`)
   revalidatePath('/sales/accounts')
   return { success: true }
+}
+
+export async function geocodeAccount(
+  accountId: string
+): Promise<{ success: boolean; lat?: number; lng?: number; error?: string }> {
+  await requireRole('sales_rep', 'sales_manager', 'admin')
+
+  const [account] = await db
+    .select({
+      address: customerAccounts.address,
+      city: customerAccounts.city,
+      state: customerAccounts.state,
+      zip: customerAccounts.zip,
+    })
+    .from(customerAccounts)
+    .where(eq(customerAccounts.id, accountId))
+    .limit(1)
+
+  if (!account) return { success: false, error: 'Account not found' }
+
+  const parts = [account.address, account.city, account.state, account.zip].filter(Boolean)
+  if (parts.length === 0) return { success: false, error: 'No address on file' }
+
+  const coords = await geocodeAddress(parts.join(', '))
+  if (!coords) return { success: false, error: 'Could not geocode this address' }
+
+  await db
+    .update(customerAccounts)
+    .set({ lat: coords.lat, lng: coords.lng })
+    .where(eq(customerAccounts.id, accountId))
+
+  revalidatePath('/sales/routes')
+  revalidatePath('/admin/crm')
+
+  return { success: true, lat: coords.lat, lng: coords.lng }
 }

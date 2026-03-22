@@ -1,10 +1,12 @@
 'use client'
 
 import { GoogleMap, InfoWindow, Marker, Polygon, useJsApiLoader } from '@react-google-maps/api'
-import { useState, useMemo, useCallback, useRef } from 'react'
-import { MapPin, Building2, Phone, CalendarDays, TrendingUp, Wine } from 'lucide-react'
+import { useState, useMemo, useCallback, useRef, useTransition } from 'react'
+import { MapPin, Building2, Phone, CalendarDays, TrendingUp, Wine, LocateFixed, Loader2 } from 'lucide-react'
 import type { RepMapAccount, RepMapData } from '@/actions/sales-rep-map'
 import { convexHull, expandHull, circlePolygon } from '@/lib/maps/convex-hull'
+import { geocodeAccount } from '@/actions/crm'
+import { useRouter } from 'next/navigation'
 
 function fmt(n: number) {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
@@ -41,8 +43,11 @@ export function SalesRepRegionMap({ data }: { data: RepMapData }) {
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ?? '',
   })
 
+  const router = useRouter()
   const mapRef = useRef<google.maps.Map | null>(null)
   const [selected, setSelected] = useState<RepMapAccount | null>(null)
+  const [geocodePending, startGeocode] = useTransition()
+  const [geocodeMsg, setGeocodeMsg] = useState<{ id: string; text: string; ok: boolean } | null>(null)
 
   const accountsWithCoords = useMemo(
     () => data.accounts.filter(a => a.lat != null && a.lng != null),
@@ -193,12 +198,42 @@ export function SalesRepRegionMap({ data }: { data: RepMapData }) {
               </a>
             )}
 
-            <a
-              href={`/sales/accounts/${selected.id}`}
-              className="mt-2 flex items-center justify-center gap-1 w-full rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-1.5 transition-colors"
-            >
-              <Building2 className="w-3 h-3" /> View Account
-            </a>
+            {geocodeMsg?.id === selected.id && (
+              <p className={`mt-1.5 text-[10px] font-medium ${geocodeMsg.ok ? 'text-green-600' : 'text-red-500'}`}>
+                {geocodeMsg.text}
+              </p>
+            )}
+
+            <div className="mt-2 flex gap-1.5">
+              <button
+                onClick={() => {
+                  const id = selected.id
+                  setGeocodeMsg(null)
+                  startGeocode(async () => {
+                    const result = await geocodeAccount(id)
+                    if (result.success) {
+                      setGeocodeMsg({ id, text: 'Re-geocoded!', ok: true })
+                      router.refresh()
+                    } else {
+                      setGeocodeMsg({ id, text: result.error ?? 'Failed', ok: false })
+                    }
+                  })
+                }}
+                disabled={geocodePending}
+                className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-medium py-1.5 transition-colors disabled:opacity-60"
+              >
+                {geocodePending
+                  ? <Loader2 className="w-3 h-3 animate-spin" />
+                  : <LocateFixed className="w-3 h-3" />}
+                Re-geocode
+              </button>
+              <a
+                href={`/sales/accounts/${selected.id}`}
+                className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-1.5 transition-colors"
+              >
+                <Building2 className="w-3 h-3" /> View Account
+              </a>
+            </div>
           </div>
         </InfoWindow>
       )}

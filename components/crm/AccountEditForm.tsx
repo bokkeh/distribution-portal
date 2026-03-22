@@ -8,6 +8,7 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useFormDraftAutosave } from '@/hooks/useFormDraftAutosave'
+import { AddressAutocomplete } from '@/components/shared/AddressAutocomplete'
 
 type Account = {
   id: string
@@ -106,7 +107,13 @@ export function AccountEditForm({ account, mode }: { account: Account; mode: 'ad
 
       <div className="space-y-2">
         <Label htmlFor={`${mode}-address`}>Address</Label>
-        <Input id={`${mode}-address`} name="address" defaultValue={account.address ?? ''} placeholder="123 Main St" />
+        <AddressAutocomplete
+          id={`${mode}-address`}
+          name="address"
+          defaultValue={account.address ?? ''}
+          placeholder="123 Main St — start typing to search"
+          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
