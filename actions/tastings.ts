@@ -7,6 +7,7 @@ import { db } from '@/db'
 import { customerAccounts, notificationsLog, tasterInvoices, tastingReports, tastings, users } from '@/db/schema'
 import { requireFeature, requireRole } from '@/lib/auth/session'
 import { sendSms } from '@/lib/telnyx/client'
+import { postGoogleChat } from '@/lib/google-chat/webhook'
 import {
   sendInternalAlertEmail,
   sendTasterAssignmentEmail,
@@ -1041,14 +1042,29 @@ export async function requestTastingFromRep({
     })
     .returning()
 
-  // Notify admins
+  const dateLabel = new Date(scheduledAt).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+  const tastingUrl = `${process.env.NEXTAUTH_URL}/admin/tastings/${created.id}`
+
+  // In-app notifications for admins, staff, and sales managers
   await createNotificationsForRoles({
-    roles: ['admin', 'staff'],
+    roles: ['admin', 'staff', 'sales_manager'],
     kind: 'tasting_request',
     title: `Tasting request for ${account.companyName}`,
-    body: `${session.user.name} requested a tasting on ${new Date(scheduledAt).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}`,
+    body: `${session.user.name} requested a tasting on ${dateLabel}`,
     href: `/admin/tastings/${created.id}`,
   })
+
+  const smsBody = `AHAWC: Tasting request from ${session.user.name} for ${account.companyName} on ${dateLabel}. View: ${tastingUrl}`
+  const staffPhones = [
+    process.env.ADMIN_NOTIFICATION_PHONE,
+    '+12489339350',
+    process.env.ORDER_NOTIFY_KRISTEN_PHONE,
+  ].filter(Boolean) as string[]
+
+  await Promise.allSettled([
+    postGoogleChat(`🍷 Tasting Request\nRep: ${session.user.name}\nAccount: ${account.companyName}\nDate: ${dateLabel}\n${tastingUrl}`),
+    ...staffPhones.map(phone => sendSms({ to: phone, body: smsBody, bypassOptOut: true })),
+  ])
 
   revalidatePath('/sales/tastings')
   return { success: true }

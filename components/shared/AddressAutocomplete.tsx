@@ -1,11 +1,59 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
-import { useJsApiLoader } from '@react-google-maps/api'
+import { useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 
-// Stable reference — must not be recreated on each render
-const LIBRARIES: ('places')[] = ['places']
+const MAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ?? ''
+
+/** Ensures the Maps JS API + Places library are available, loading them if needed. */
+function usePlaces() {
+  const [ready, setReady] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function init() {
+      // Already loaded by a map component — just import the places library
+      if (window.google?.maps) {
+        if (window.google.maps.places) {
+          if (!cancelled) setReady(true)
+          return
+        }
+        try {
+          await window.google.maps.importLibrary('places')
+          if (!cancelled) setReady(true)
+        } catch {
+          // importLibrary not supported (old API load) — places still unavailable
+        }
+        return
+      }
+
+      // Maps API not loaded yet — inject script with places
+      const existingScript = document.getElementById('__gmaps_places')
+      if (!existingScript) {
+        const script = document.createElement('script')
+        script.id = '__gmaps_places'
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_KEY}&libraries=places`
+        script.async = true
+        document.head.appendChild(script)
+      }
+
+      // Poll until places is ready
+      const poll = setInterval(() => {
+        if (window.google?.maps?.places) {
+          clearInterval(poll)
+          if (!cancelled) setReady(true)
+        }
+      }, 100)
+      setTimeout(() => clearInterval(poll), 15_000)
+    }
+
+    init()
+    return () => { cancelled = true }
+  }, [])
+
+  return ready
+}
 
 interface Props extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'> {
   /** name attribute of the city input in the same form */
@@ -18,7 +66,7 @@ interface Props extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onCha
 
 /**
  * Drop-in replacement for an address <input> that attaches Google Places
- * Autocomplete. On selection it also fills sibling city / state / zip inputs
+ * Autocomplete. On selection it auto-fills sibling city / state / zip inputs
  * found by their `name` attribute within the same <form>.
  */
 export function AddressAutocomplete({
@@ -30,14 +78,10 @@ export function AddressAutocomplete({
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
   const acRef = useRef<google.maps.places.Autocomplete | null>(null)
-
-  const { isLoaded } = useJsApiLoader({
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ?? '',
-    libraries: LIBRARIES,
-  })
+  const placesReady = usePlaces()
 
   useEffect(() => {
-    if (!isLoaded || !inputRef.current || acRef.current) return
+    if (!placesReady || !inputRef.current || acRef.current) return
 
     acRef.current = new window.google.maps.places.Autocomplete(inputRef.current, {
       types: ['address'],
@@ -89,7 +133,7 @@ export function AddressAutocomplete({
         acRef.current = null
       }
     }
-  }, [isLoaded, cityField, stateField, zipField])
+  }, [placesReady, cityField, stateField, zipField])
 
   return (
     <input
