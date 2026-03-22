@@ -1042,13 +1042,13 @@ export async function requestTastingFromRep({
     .returning()
 
   // Notify admins
-  await createNotificationsForRoles(
-    ['admin', 'staff'],
-    'tasting_request',
-    `Tasting request for ${account.companyName}`,
-    `${session.user.name} requested a tasting on ${new Date(scheduledAt).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}`,
-    `/admin/tastings/${created.id}`,
-  )
+  await createNotificationsForRoles({
+    roles: ['admin', 'staff'],
+    kind: 'tasting_request',
+    title: `Tasting request for ${account.companyName}`,
+    body: `${session.user.name} requested a tasting on ${new Date(scheduledAt).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}`,
+    href: `/admin/tastings/${created.id}`,
+  })
 
   revalidatePath('/sales/tastings')
   return { success: true }

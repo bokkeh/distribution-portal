@@ -1,8 +1,8 @@
 'use server'
 
 import { db } from '@/db'
-import { accountPreferences, activityEvents, contacts, customerAccounts, deliveryStops, invoices, orders, salesRouteStops, smsThreads, tastings } from '@/db/schema'
-import { requireAdminOrStaff } from '@/lib/auth/session'
+import { accountPreferences, activityEvents, contacts, customerAccounts, deliveryStops, invoices, orders, salesMembers, salesRouteStops, smsThreads, tastings } from '@/db/schema'
+import { requireAdminOrStaff, requireRole } from '@/lib/auth/session'
 import { eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { upsertHubSpotContact, getHubSpotCompanies, updateHubSpotCompany } from '@/lib/hubspot/client'
@@ -566,4 +566,62 @@ export async function createCustomerAccount(
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Failed to create account.' }
   }
+}
+
+export async function updateAccountBySalesRep(
+  _prev: { error?: string; success?: boolean } | null,
+  formData: FormData
+): Promise<{ error?: string; success?: boolean }> {
+  const session = await requireRole('sales_rep', 'sales_manager', 'admin')
+  const id = formData.get('id') as string
+
+  // Verify the rep is assigned to this account (managers/admins can edit any)
+  const isRepOnly = (session.user.roles as string[])?.includes('sales_rep') &&
+    !(session.user.roles as string[])?.includes('sales_manager') &&
+    !(session.user.roles as string[])?.includes('admin')
+
+  if (isRepOnly) {
+    const [member] = await db.select({ id: salesMembers.id })
+      .from(salesMembers)
+      .where(eq(salesMembers.userId, session.user.id))
+      .limit(1)
+
+    if (!member) return { error: 'No sales member profile found.' }
+
+    const [account] = await db
+      .select({ assignedSalesRepId: customerAccounts.assignedSalesRepId })
+      .from(customerAccounts)
+      .where(eq(customerAccounts.id, id))
+      .limit(1)
+
+    if (!account || account.assignedSalesRepId !== member.id) {
+      return { error: 'You are not assigned to this account.' }
+    }
+  }
+
+  await db.update(customerAccounts).set({
+    companyName: formData.get('companyName') as string,
+    contactName: (formData.get('contactName') as string) || null,
+    phone: (formData.get('phone') as string) || null,
+    email: (formData.get('email') as string) || null,
+    address: (formData.get('address') as string) || null,
+    city: (formData.get('city') as string) || null,
+    state: (formData.get('state') as string) || null,
+    zip: (formData.get('zip') as string) || null,
+    pocName: (formData.get('pocName') as string) || null,
+    pocPhone: (formData.get('pocPhone') as string) || null,
+    pocEmail: (formData.get('pocEmail') as string) || null,
+    hoursOfOperation: (formData.get('hoursOfOperation') as string) || null,
+    preferredDeliveryDays: (formData.get('preferredDeliveryDays') as string) || null,
+    preferredDeliveryTimes: (formData.get('preferredDeliveryTimes') as string) || null,
+    businessType: (formData.get('businessType') as string) || null,
+    dcAbraNumber: (formData.get('dcAbraNumber') as string) || null,
+    liquorLicenseNumber: (formData.get('liquorLicenseNumber') as string) || null,
+    liquorLicenseState: (formData.get('liquorLicenseState') as string) || null,
+    liquorLicenseExpiration: (formData.get('liquorLicenseExpiration') as string) || null,
+  }).where(eq(customerAccounts.id, id))
+
+  revalidatePath(`/sales/accounts/${id}`)
+  revalidatePath('/sales/accounts')
+  return { success: true }
 }

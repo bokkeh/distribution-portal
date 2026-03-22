@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Building2, MapPin, Phone, Mail, Clock, AlertCircle, CheckCircle2, ArrowLeft, Package, FileText, ShoppingCart } from 'lucide-react'
 import Link from 'next/link'
 import { CheckInModal } from './CheckInModal'
+import { EditAccountModal } from './EditAccountModal'
 import { PhoneActions } from '@/components/shared/PhoneActions'
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -99,6 +100,7 @@ export default async function SalesAccountDetailPage({
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <EditAccountModal account={account} />
             {account.accountPriority && (
               <Badge variant="outline" className={`capitalize ${PRIORITY_COLORS[account.accountPriority] ?? ''}`}>
                 {account.accountPriority} priority
