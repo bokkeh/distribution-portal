@@ -21,7 +21,7 @@ async function applyViewAs(session: Session): Promise<Session> {
     if (!viewAsUserId) return session
 
     const [target] = await db
-      .select({ id: users.id, name: users.name, email: users.email, role: users.role, roles: users.roles, featureFlags: users.featureFlags })
+      .select({ id: users.id, name: users.name, email: users.email, role: users.role, roles: users.roles })
       .from(users)
       .where(eq(users.id, viewAsUserId))
       .limit(1)
@@ -38,7 +38,6 @@ async function applyViewAs(session: Session): Promise<Session> {
         email: target.email,
         role: target.role,
         roles: target.roles,
-        featureFlags: target.featureFlags,
         // Keep original admin email in a separate field for the banner
         _viewingAsOf: session.user.email,
       },
