@@ -1,4 +1,4 @@
-'use client'
+fix'use client'
 
 import { useState, useEffect, useRef } from 'react'
 import { Phone, PhoneOff, Loader2, Volume2 } from 'lucide-react'
@@ -15,7 +15,9 @@ export function TelnyxCallButton({ phone, accountName }: Props) {
   const [state, setState] = useState<CallState>('idle')
   const [error, setError] = useState<string | null>(null)
   const [duration, setDuration] = useState(0)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const clientRef = useRef<any>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const callRef = useRef<any>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -23,7 +25,7 @@ export function TelnyxCallButton({ phone, accountName }: Props) {
   useEffect(() => {
     return () => {
       timerRef.current && clearInterval(timerRef.current)
-      clientRef.current?.disconnect()
+      try { clientRef.current?.disconnect() } catch {}
     }
   }, [])
 
@@ -35,8 +37,29 @@ export function TelnyxCallButton({ phone, accountName }: Props) {
       const { token } = await getTelnyxWebRtcToken()
       const { TelnyxRTC } = await import('@telnyx/webrtc')
 
-      const client = new TelnyxRTC({ login_token: token })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const client = new (TelnyxRTC as any)({ login_token: token })
       clientRef.current = client
+
+      // All call state changes come through the client notification event
+      client.on('telnyx.notification', (notification: { call?: { state?: string; remoteStream?: MediaStream } }) => {
+        const callState = notification?.call?.state
+        if (!callState) return
+
+        if (callState === 'ringing') {
+          setState('ringing')
+        } else if (callState === 'active') {
+          setState('active')
+          setDuration(0)
+          timerRef.current = setInterval(() => setDuration(d => d + 1), 1000)
+          if (audioRef.current && notification.call?.remoteStream) {
+            audioRef.current.srcObject = notification.call.remoteStream
+            audioRef.current.play().catch(() => null)
+          }
+        } else if (callState === 'hangup' || callState === 'destroy') {
+          cleanUp()
+        }
+      })
 
       client.on('telnyx.ready', () => {
         const destination = phone.replace(/\D/g, '')
@@ -45,30 +68,12 @@ export function TelnyxCallButton({ phone, accountName }: Props) {
           callerNumber: process.env.NEXT_PUBLIC_TELNYX_FROM_NUMBER ?? '',
         })
         callRef.current = call
-
-        call.on('telnyx.notification', (notification: any) => {
-          const callState = notification?.call?.state
-          if (callState === 'ringing') setState('ringing')
-          if (callState === 'active') {
-            setState('active')
-            setDuration(0)
-            timerRef.current = setInterval(() => setDuration(d => d + 1), 1000)
-            // Attach remote audio
-            if (audioRef.current) {
-              audioRef.current.srcObject = call.remoteStream
-              audioRef.current.play().catch(() => null)
-            }
-          }
-          if (callState === 'hangup' || callState === 'destroy') {
-            endCall()
-          }
-        })
       })
 
-      client.on('telnyx.error', (err: any) => {
+      client.on('telnyx.error', (err: { message?: string }) => {
         setError(err?.message ?? 'Call failed')
         setState('error')
-        clientRef.current?.disconnect()
+        cleanUp()
       })
 
       client.connect()
@@ -78,17 +83,21 @@ export function TelnyxCallButton({ phone, accountName }: Props) {
     }
   }
 
-  function endCall() {
-    setState('ending')
+  function cleanUp() {
     timerRef.current && clearInterval(timerRef.current)
-    try { callRef.current?.hangup() } catch {}
     try { clientRef.current?.disconnect() } catch {}
     callRef.current = null
     clientRef.current = null
-    setTimeout(() => { setState('idle'); setDuration(0) }, 800)
   }
 
-  function fmt(s: number) {
+  function endCall() {
+    setState('ending')
+    try { callRef.current?.hangup() } catch {}
+    cleanUp()
+    setTimeout(() => { setState('idle'); setDuration(0) }, 600)
+  }
+
+  function fmtDuration(s: number) {
     const m = Math.floor(s / 60).toString().padStart(2, '0')
     const sec = (s % 60).toString().padStart(2, '0')
     return `${m}:${sec}`
@@ -102,8 +111,7 @@ export function TelnyxCallButton({ phone, accountName }: Props) {
           onClick={startCall}
           className="flex w-full items-center justify-center gap-1.5 rounded-md bg-green-50 px-2 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100"
         >
-          <Phone className="h-3 w-3" />
-          Call
+          <Phone className="h-3 w-3" /> Call
         </button>
         {error && <p className="text-[10px] text-red-500 text-center">{error}</p>}
       </div>
@@ -113,15 +121,15 @@ export function TelnyxCallButton({ phone, accountName }: Props) {
   return (
     <div className="rounded-md border border-green-200 bg-green-50 p-2 space-y-1.5">
       <audio ref={audioRef} autoPlay hidden />
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 min-w-0">
           {state === 'active'
-            ? <Volume2 className="h-3 w-3 text-green-600 animate-pulse" />
-            : <Loader2 className="h-3 w-3 text-green-600 animate-spin" />}
-          <span className="text-xs font-medium text-green-800">
+            ? <Volume2 className="h-3 w-3 shrink-0 text-green-600 animate-pulse" />
+            : <Loader2 className="h-3 w-3 shrink-0 text-green-600 animate-spin" />}
+          <span className="text-xs font-medium text-green-800 truncate">
             {state === 'connecting' && 'Connecting…'}
-            {state === 'ringing' && `Calling ${accountName}…`}
-            {state === 'active' && fmt(duration)}
+            {state === 'ringing' && `Ringing ${accountName}…`}
+            {state === 'active' && fmtDuration(duration)}
             {state === 'ending' && 'Ending…'}
           </span>
         </div>
@@ -129,7 +137,7 @@ export function TelnyxCallButton({ phone, accountName }: Props) {
           type="button"
           onClick={endCall}
           disabled={state === 'ending'}
-          className="flex items-center gap-1 rounded-md bg-red-100 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-200 disabled:opacity-50"
+          className="shrink-0 flex items-center gap-1 rounded-md bg-red-100 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-200 disabled:opacity-50"
         >
           <PhoneOff className="h-3 w-3" /> End
         </button>
