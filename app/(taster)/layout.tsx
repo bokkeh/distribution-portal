@@ -1,11 +1,12 @@
 import Link from 'next/link'
 import Image from 'next/image'
-import { LogOut, UserCircle } from 'lucide-react'
+import { UserCircle } from 'lucide-react'
 import { requireFeature } from '@/lib/auth/session'
 import { SuperAdminViewSwitcher } from '@/components/layout/SuperAdminViewSwitcher'
 import { getBellNotificationsForUser } from '@/lib/notifications/in-app'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
 import { PortalTopBar } from '@/components/layout/PortalTopBar'
+import { TasterSignOutButton } from '@/components/layout/TasterSignOutButton'
 
 export default async function TasterLayout({ children }: { children: React.ReactNode }) {
   const session = await requireFeature('tastings', 'taster', 'admin')
@@ -39,11 +40,7 @@ export default async function TasterLayout({ children }: { children: React.React
             <Link href="/taster/tastings/reports" className="text-slate-300 hover:text-white">Reports</Link>
             <Link href="/taster/payouts" className="text-slate-300 hover:text-white">My Payouts</Link>
             {canViewProfile ? <Link href="/taster/profile" className="flex items-center gap-2 text-slate-300 hover:text-white"><UserCircle className="h-4 w-4" />Profile</Link> : null}
-            <form action="/api/auth/signout" method="post">
-              <button className="flex items-center gap-2 text-slate-400 hover:text-white">
-                <LogOut className="h-4 w-4" />Sign Out
-              </button>
-            </form>
+            <TasterSignOutButton />
           </div>
         </div>
       </nav>

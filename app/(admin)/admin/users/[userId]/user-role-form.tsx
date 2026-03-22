@@ -40,7 +40,11 @@ export function UserRoleForm({ user, accountId }: Props) {
         <CardTitle>Account Access</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <form action={action} className="space-y-4">
+        <form
+          key={`${user.role}|${user.roles.join(',')}|${effectiveFeatures.join(',')}`}
+          action={action}
+          className="space-y-4"
+        >
           <input type="hidden" name="userId" value={user.id} />
           <input type="hidden" name="phone" value={user.phone ?? ''} />
 

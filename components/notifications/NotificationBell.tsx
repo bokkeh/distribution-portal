@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { Bell } from 'lucide-react'
+import { toast } from 'sonner'
 import { markAllNotificationsRead, markNotificationKindsRead, markNotificationRead } from '@/actions/user-notifications'
 
 type NotificationItem = {
@@ -30,6 +31,7 @@ export function NotificationBell({
   const [panelStyle, setPanelStyle] = useState<{ top: number; left: number; width: number } | null>(null)
   const [isPending, startTransition] = useTransition()
   const buttonRef = useRef<HTMLButtonElement | null>(null)
+  const seenNotificationIdsRef = useRef(new Set(items.map(item => item.id)))
 
   const visibleItems = useMemo(() => {
     const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000
@@ -75,6 +77,62 @@ export function NotificationBell({
       empty: 'px-4 py-8 text-center text-sm text-slate-500',
     }
   }, [dark])
+
+  useEffect(() => {
+    setLocalItems(items)
+    setLocalUnreadCount(unreadCount)
+    for (const item of items) {
+      seenNotificationIdsRef.current.add(item.id)
+    }
+  }, [items, unreadCount])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function refreshNotifications() {
+      if (document.hidden) return
+
+      try {
+        const response = await fetch('/api/notifications/bell', { cache: 'no-store' })
+        if (!response.ok) return
+
+        const nextData = await response.json() as {
+          notifications: NotificationItem[]
+          unreadCount: number
+        }
+
+        if (cancelled) return
+
+        const newUnreadItems = nextData.notifications.filter(
+          item => !item.readAt && !seenNotificationIdsRef.current.has(item.id)
+        )
+
+        setLocalItems(nextData.notifications)
+        setLocalUnreadCount(nextData.unreadCount)
+
+        for (const item of nextData.notifications) {
+          seenNotificationIdsRef.current.add(item.id)
+        }
+
+        for (const item of newUnreadItems.slice(0, 3)) {
+          toast(item.title, {
+            description: item.body.length > 120 ? `${item.body.slice(0, 117)}...` : item.body,
+          })
+        }
+      } catch {
+        // Keep the bell quiet if polling fails.
+      }
+    }
+
+    const interval = window.setInterval(refreshNotifications, 30000)
+    window.addEventListener('focus', refreshNotifications)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+      window.removeEventListener('focus', refreshNotifications)
+    }
+  }, [])
 
   useEffect(() => {
     if (!open) return
