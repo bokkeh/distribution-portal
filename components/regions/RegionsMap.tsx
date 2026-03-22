@@ -16,6 +16,46 @@ function isOverdue(date: Date | null) {
   return new Date(date) < new Date()
 }
 
+function getAccountMarkerGlyph(account: RegionMapAccount) {
+  switch (account.businessType) {
+    case 'restaurant':
+    case 'restaurant_group':
+      return 'R'
+    case 'liquor_store':
+      return 'L'
+    case 'hotel_group':
+      return 'H'
+    default:
+      switch (account.accountType) {
+        case 'on_premise':
+          return 'R'
+        case 'off_premise':
+          return 'L'
+        case 'chain':
+          return 'C'
+        case 'independent':
+          return 'I'
+        default:
+          return 'A'
+      }
+  }
+}
+
+function getAccountMarkerTitle(account: RegionMapAccount) {
+  switch (account.businessType) {
+    case 'restaurant':
+      return 'Restaurant'
+    case 'restaurant_group':
+      return 'Restaurant Group'
+    case 'liquor_store':
+      return 'Liquor Store'
+    case 'hotel_group':
+      return 'Hotel Group'
+    default:
+      return account.accountType?.replaceAll('_', ' ') ?? 'Account'
+  }
+}
+
 export function RegionsMap({ data }: { data: RegionMapData }) {
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ?? '',
@@ -231,10 +271,12 @@ export function RegionsMap({ data }: { data: RegionMapData }) {
           {/* Account markers */}
           {mappedAccounts.map(account => {
             const colorIndex = data.regions.findIndex(r => r.id === account.regionId)
-            const color = colorIndex >= 0 ? getRegionColor(colorIndex) : '#94A3B8'
+            const color = colorIndex >= 0 ? getRegionColor(colorIndex) : '#64748B'
             const accountRegionId = account.regionId ?? '__unassigned__'
             const isActive = hoveredRegionId === null || hoveredRegionId === accountRegionId
             const isSelected = selectedAccount?.id === account.id
+            const glyph = getAccountMarkerGlyph(account)
+            const markerTitle = `${account.companyName} (${getAccountMarkerTitle(account)})`
 
             return (
               <Marker
@@ -243,12 +285,20 @@ export function RegionsMap({ data }: { data: RegionMapData }) {
                 icon={{
                   path: google.maps.SymbolPath.CIRCLE,
                   fillColor: color,
-                  fillOpacity: isActive ? 1 : 0.2,
-                  strokeColor: isSelected ? '#fff' : color,
-                  strokeWeight: isSelected ? 3 : 1.5,
-                  strokeOpacity: isActive ? 1 : 0.3,
-                  scale: isSelected ? 11 : 8,
+                  fillOpacity: isActive ? 1 : 0.45,
+                  strokeColor: '#FFFFFF',
+                  strokeOpacity: isActive ? 1 : 0.55,
+                  strokeWeight: isSelected ? 4 : 2.5,
+                  scale: isSelected ? 14 : 12,
                 }}
+                label={{
+                  text: glyph,
+                  color: '#FFFFFF',
+                  fontSize: '11px',
+                  fontWeight: '700',
+                }}
+                opacity={isSelected ? 1 : isActive ? 1 : 0.55}
+                title={markerTitle}
                 zIndex={isSelected ? 10 : isActive ? 2 : 1}
                 onClick={() => setSelectedAccount(account)}
               />

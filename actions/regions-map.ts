@@ -16,6 +16,7 @@ export type RegionMapAccount = {
   lat: number | null
   lng: number | null
   regionId: string | null
+  businessType: string | null
   accountType: string | null
   accountPriority: string | null
   lastVisitDate: Date | null
@@ -73,6 +74,7 @@ export async function getRegionMapData(): Promise<RegionMapData> {
       lat: customerAccounts.lat,
       lng: customerAccounts.lng,
       regionId: customerAccounts.assignedRegionId,
+      businessType: customerAccounts.businessType,
       accountType: customerAccounts.accountType,
       accountPriority: customerAccounts.accountPriority,
       lastVisitDate: customerAccounts.lastVisitDate,

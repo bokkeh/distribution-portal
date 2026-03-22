@@ -1,11 +1,14 @@
 import { requireRole } from '@/lib/auth/session'
 import { db } from '@/db'
-import { salesMembers, salesRoutes, salesRouteStops, customerAccounts } from '@/db/schema'
+import { salesMembers, salesRoutes, salesRouteStops, customerAccounts, salesRegions } from '@/db/schema'
 import { and, eq, asc, inArray } from 'drizzle-orm'
+import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Map, MapPin, Phone, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Map, MapPin, Phone, Plus, AlertCircle, CheckCircle2, Route } from 'lucide-react'
 import { RouteStopCheckIn } from './RouteStopCheckIn'
+import { createSalesRepRoute } from '@/actions/sales-routes'
 
 export default async function SalesRoutesPage() {
   const session = await requireRole('sales_rep', 'sales_manager', 'admin')
@@ -21,9 +24,17 @@ export default async function SalesRoutesPage() {
       <div className="text-center py-20 text-slate-500">
         <AlertCircle className="w-10 h-10 mx-auto mb-3 text-amber-400" />
         <p className="font-medium">No sales member profile found.</p>
+        <p className="text-sm mt-1 text-slate-400">Ask an admin to set up your sales profile.</p>
       </div>
     )
   }
+
+  // Rep's assigned region(s)
+  const [repRegion] = await db
+    .select({ id: salesRegions.id, name: salesRegions.name })
+    .from(salesRegions)
+    .where(eq(salesRegions.assignedManagerId, member.id))
+    .limit(1)
 
   const routes = await db
     .select()
@@ -36,7 +47,6 @@ export default async function SalesRoutesPage() {
     )
     .orderBy(asc(salesRoutes.name))
 
-  // Fetch stops for all routes
   const routeIds = routes.map(r => r.id)
   const allStops = routeIds.length
     ? await db
@@ -65,16 +75,71 @@ export default async function SalesRoutesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">My Routes</h1>
-        <p className="text-slate-500 mt-1">{routes.length} active route{routes.length !== 1 ? 's' : ''}</p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">My Routes</h1>
+          <p className="text-slate-500 mt-1">
+            {routes.length} active route{routes.length !== 1 ? 's' : ''}
+            {repRegion && (
+              <span className="ml-2 text-xs text-slate-400">· Region: {repRegion.name}</span>
+            )}
+          </p>
+        </div>
       </div>
 
+      {/* Create route form */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Plus className="h-4 w-4" />
+            Create New Route
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form action={createSalesRepRoute} className="flex flex-wrap items-end gap-3">
+            <div className="flex-1 min-w-48 space-y-1.5">
+              <label htmlFor="route-name" className="text-sm font-medium text-slate-900">
+                Route Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="route-name"
+                name="name"
+                required
+                placeholder={repRegion ? `e.g. ${repRegion.name} Monday Run` : 'e.g. Monday Morning Run'}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
+            </div>
+            <div className="flex-1 min-w-48 space-y-1.5">
+              <label htmlFor="route-description" className="text-sm font-medium text-slate-900">
+                Description <span className="text-muted-foreground font-normal">(optional)</span>
+              </label>
+              <input
+                id="route-description"
+                name="description"
+                placeholder="Optional notes about this route"
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
+            </div>
+            <Button type="submit" className="shrink-0">
+              <Route className="w-4 h-4 mr-2" />
+              Create Route
+            </Button>
+          </form>
+          {repRegion && (
+            <p className="text-xs text-slate-400 mt-2">
+              Route will be created for your region: <span className="font-medium text-slate-500">{repRegion.name}</span>.
+              You can add stops from your region's accounts.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Route list */}
       {routes.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-slate-400">
             <Map className="w-10 h-10 mx-auto mb-3 opacity-30" />
-            <p>No routes assigned yet.</p>
+            <p>No routes yet. Create your first route above.</p>
           </CardContent>
         </Card>
       ) : (
@@ -102,6 +167,12 @@ export default async function SalesRoutesPage() {
                           {visitedToday}/{stops.length} visited today
                         </Badge>
                       )}
+                      <Link href={`/sales/routes/${route.id}`}>
+                        <Button variant="outline" size="sm">
+                          <MapPin className="w-3.5 h-3.5 mr-1.5" />
+                          Open Route
+                        </Button>
+                      </Link>
                     </div>
                   </div>
                   {route.originAddress && (
@@ -114,7 +185,12 @@ export default async function SalesRoutesPage() {
 
                 <CardContent>
                   {stops.length === 0 ? (
-                    <p className="text-sm text-slate-400 text-center py-4">No stops on this route yet.</p>
+                    <div className="text-center py-4">
+                      <p className="text-sm text-slate-400">No stops yet.</p>
+                      <Link href={`/sales/routes/${route.id}?addStop=1`} className="text-sm text-blue-600 hover:underline mt-1 inline-block">
+                        Add your first stop →
+                      </Link>
+                    </div>
                   ) : (
                     <div className="space-y-0">
                       {stops.map(({ stop, account }) => {

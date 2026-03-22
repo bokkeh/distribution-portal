@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { db } from '@/db'
 import { salesRoutes, salesRouteStops, customerAccounts } from '@/db/schema'
-import { requireAdminOrStaff } from '@/lib/auth/session'
+import { requireAdminOrStaff, requireRole } from '@/lib/auth/session'
 import { geocodeAddress } from '@/lib/maps/geocode'
 import { logAccountNoteEvent } from '@/lib/crm/account-notes'
 
@@ -168,7 +168,7 @@ export async function updateSalesRouteStop(
   stopId: string,
   data: { address: string; contactName: string | null; contactPhone: string | null; notes: string | null }
 ) {
-  await requireAdminOrStaff()
+  await requireRole('admin', 'staff', 'sales_rep', 'sales_manager')
 
   let lat: string | null = null
   let lng: string | null = null
@@ -233,7 +233,7 @@ export async function updateSalesRouteStopVisit(routeId: string, stopId: string,
   visitPhotoUrl?: string | null
   notes?: string | null
 }) {
-  await requireAdminOrStaff()
+  await requireRole('admin', 'staff', 'sales_rep', 'sales_manager')
 
   const [existingStop] = await db
     .select({
@@ -318,7 +318,7 @@ export async function addManualSalesRouteStop(routeId: string, formData: FormDat
 }
 
 export async function removeSalesRouteStop(routeId: string, stopId: string) {
-  await requireAdminOrStaff()
+  await requireRole('admin', 'staff', 'sales_rep', 'sales_manager')
 
   await db
     .delete(salesRouteStops)
@@ -341,7 +341,7 @@ export async function removeSalesRouteStop(routeId: string, stopId: string) {
 }
 
 export async function reorderSalesRouteStops(routeId: string, orderedIds: string[]) {
-  await requireAdminOrStaff()
+  await requireRole('admin', 'staff', 'sales_rep', 'sales_manager')
 
   for (let i = 0; i < orderedIds.length; i++) {
     await db
@@ -354,7 +354,7 @@ export async function reorderSalesRouteStops(routeId: string, orderedIds: string
 }
 
 export async function setRouteOrigin(routeId: string, formData: FormData) {
-  await requireAdminOrStaff()
+  await requireRole('admin', 'staff', 'sales_rep', 'sales_manager')
 
   const address = (formData.get('originAddress') as string)?.trim()
   if (!address) {
@@ -380,7 +380,7 @@ export async function optimizeSalesRouteOrder(
   stops: Array<{ id: string; lat: number; lng: number }>,
   origin?: { lat: number; lng: number } | null
 ): Promise<{ orderedIds: string[] }> {
-  await requireAdminOrStaff()
+  await requireRole('admin', 'staff', 'sales_rep', 'sales_manager')
 
   const geocoded = stops.filter((s) => s.lat !== 0 && s.lng !== 0)
   const ungeocodable = stops.filter((s) => s.lat === 0 && s.lng === 0)
@@ -477,4 +477,151 @@ export async function optimizeSalesRouteOrder(
   }
 
   return { orderedIds }
+}
+
+// ── Sales Rep self-service route actions ──────────────────────────────────────
+
+import { salesMembers, salesRegions } from '@/db/schema'
+
+export async function createSalesRepRoute(formData: FormData) {
+  const session = await requireRole('sales_rep', 'sales_manager', 'admin')
+
+  const name = (formData.get('name') as string)?.trim()
+  if (!name) throw new Error('Route name is required')
+
+  const description = (formData.get('description') as string)?.trim() || null
+
+  // Find the calling user's sales member record
+  const [member] = await db
+    .select()
+    .from(salesMembers)
+    .where(eq(salesMembers.userId, session.user.id))
+    .limit(1)
+
+  if (!member) throw new Error('No sales member profile found for your account.')
+
+  // Find the first region this rep manages
+  const [region] = await db
+    .select({ id: salesRegions.id, name: salesRegions.name })
+    .from(salesRegions)
+    .where(eq(salesRegions.assignedManagerId, member.id))
+    .limit(1)
+
+  const [route] = await db
+    .insert(salesRoutes)
+    .values({
+      name,
+      description,
+      region: region?.name ?? null,
+      regionId: region?.id ?? null,
+      assignedRepUserId: session.user.id,
+      assignedSalesMemberId: member.id,
+    })
+    .returning({ id: salesRoutes.id })
+
+  redirect(`/sales/routes/${route.id}`)
+}
+
+export async function addRepRouteStop(routeId: string, formData: FormData) {
+  await requireRole('admin', 'staff', 'sales_rep', 'sales_manager')
+
+  const customerId = formData.get('customerId') as string
+  const notes = (formData.get('notes') as string)?.trim() || null
+  if (!customerId) throw new Error('Account is required')
+
+  const [account] = await db
+    .select({
+      id: customerAccounts.id,
+      companyName: customerAccounts.companyName,
+      address: customerAccounts.address,
+      city: customerAccounts.city,
+      state: customerAccounts.state,
+      zip: customerAccounts.zip,
+      contactName: customerAccounts.contactName,
+      pocPhone: customerAccounts.pocPhone,
+    })
+    .from(customerAccounts)
+    .where(eq(customerAccounts.id, customerId))
+
+  if (!account) throw new Error('Account not found')
+
+  const addressParts = [account.address, account.city, account.state, account.zip].filter(Boolean)
+  const address = addressParts.join(', ')
+  if (!address) redirect(`/sales/routes/${routeId}?error=Account+has+no+address+on+file`)
+
+  const existingStops = await db
+    .select({ sequenceNumber: salesRouteStops.sequenceNumber })
+    .from(salesRouteStops)
+    .where(eq(salesRouteStops.routeId, routeId))
+
+  const nextSeq =
+    existingStops.length > 0 ? Math.max(...existingStops.map((s) => s.sequenceNumber)) + 1 : 1
+
+  let lat: string | null = null
+  let lng: string | null = null
+  try {
+    const geo = await geocodeAddress(address)
+    if (geo) { lat = String(geo.lat); lng = String(geo.lng) }
+  } catch { /* non-fatal */ }
+
+  await db.insert(salesRouteStops).values({
+    routeId,
+    customerId,
+    sequenceNumber: nextSeq,
+    address,
+    contactName: account.contactName ?? null,
+    contactPhone: account.pocPhone ?? null,
+    lat,
+    lng,
+    notes,
+  })
+
+  await logAccountNoteEvent({
+    accountId: customerId,
+    title: 'Added to sales route',
+    note: notes,
+    source: 'sales_route_stop',
+  })
+
+  redirect(`/sales/routes/${routeId}`)
+}
+
+export async function addManualRepRouteStop(routeId: string, formData: FormData) {
+  await requireRole('admin', 'staff', 'sales_rep', 'sales_manager')
+
+  const address = (formData.get('address') as string)?.trim()
+  if (!address) redirect(`/sales/routes/${routeId}?error=Address+is+required`)
+
+  const contactName = (formData.get('contactName') as string)?.trim() || null
+  const contactPhone = (formData.get('contactPhone') as string)?.trim() || null
+  const notes = (formData.get('notes') as string)?.trim() || null
+
+  const existingStops = await db
+    .select({ sequenceNumber: salesRouteStops.sequenceNumber })
+    .from(salesRouteStops)
+    .where(eq(salesRouteStops.routeId, routeId))
+
+  const nextSeq =
+    existingStops.length > 0 ? Math.max(...existingStops.map((s) => s.sequenceNumber)) + 1 : 1
+
+  let lat: string | null = null
+  let lng: string | null = null
+  try {
+    const geo = await geocodeAddress(address)
+    if (geo) { lat = String(geo.lat); lng = String(geo.lng) }
+  } catch { /* non-fatal */ }
+
+  await db.insert(salesRouteStops).values({
+    routeId,
+    customerId: null,
+    sequenceNumber: nextSeq,
+    address,
+    contactName,
+    contactPhone,
+    lat,
+    lng,
+    notes,
+  })
+
+  redirect(`/sales/routes/${routeId}`)
 }
