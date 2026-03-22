@@ -1,4 +1,4 @@
-add a'use server'
+'use server'
 
 import { requireAuth } from '@/lib/auth/session'
 import { db } from '@/db'
