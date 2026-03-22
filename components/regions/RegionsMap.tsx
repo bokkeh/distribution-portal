@@ -2,10 +2,11 @@
 
 import { GoogleMap, InfoWindow, Marker, Polygon, useJsApiLoader } from '@react-google-maps/api'
 import { useState, useMemo } from 'react'
-import { MapPin, TrendingUp, Wine, Truck, User, ExternalLink } from 'lucide-react'
+import { MapPin, TrendingUp, Wine, Truck, User, ExternalLink, Building2 } from 'lucide-react'
 import type { RegionMapData, RegionMapAccount, RegionMapRegion } from '@/actions/regions-map'
 import { convexHull, expandHull, circlePolygon } from '@/lib/maps/convex-hull'
 import { getRegionColor } from '@/lib/maps/region-colors'
+import { RegionAccountsModal } from './RegionAccountsModal'
 
 function fmt(n: number) {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
@@ -63,6 +64,7 @@ export function RegionsMap({ data }: { data: RegionMapData }) {
 
   const [hoveredRegionId, setHoveredRegionId] = useState<string | null>(null)
   const [selectedAccount, setSelectedAccount] = useState<RegionMapAccount | null>(null)
+  const [managingRegion, setManagingRegion] = useState<RegionMapRegion | null>(null)
 
   // Color index per region
   const regionColorMap = useMemo(() => {
@@ -188,6 +190,15 @@ export function RegionsMap({ data }: { data: RegionMapData }) {
                     <span className="font-medium">Deliveries:</span>
                     <span>{region.stats.deliveryCount}</span>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setManagingRegion(region)}
+                    className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition-colors hover:bg-white"
+                    style={{ borderColor: color + '66', color }}
+                  >
+                    <Building2 className="h-3 w-3" />
+                    Manage Accounts
+                  </button>
                 </div>
               )}
             </div>
@@ -316,6 +327,16 @@ export function RegionsMap({ data }: { data: RegionMapData }) {
           )}
         </GoogleMap>
       </div>
+
+      {/* Account management modal */}
+      {managingRegion && (
+        <RegionAccountsModal
+          region={managingRegion}
+          allRegions={data.regions}
+          accounts={data.accounts}
+          onClose={() => setManagingRegion(null)}
+        />
+      )}
     </div>
   )
 }

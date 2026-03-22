@@ -264,10 +264,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.name = user.name ?? token.name
       }
 
-      if (token.id || (token.email && (!token.role || !token.roles || !token.featureFlags))) {
+      // Only hit the DB when required fields are genuinely missing (avoids pool exhaustion on every auth() call)
+      if (!token.role || !token.roles) {
         const dbUser = token.id
           ? await findUserById(token.id as string)
-          : await findUserByEmail(token.email as string)
+          : token.email ? await findUserByEmail(token.email as string) : null
 
         if (dbUser) {
           token.id = dbUser.id

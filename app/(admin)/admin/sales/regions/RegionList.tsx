@@ -48,6 +48,8 @@ export function RegionList({ regions: initialRegions, members, allAccounts: init
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [managingRegion, setManagingRegion] = useState<Region | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [assignPending, setAssignPending] = useState(false)
+  const [assignError, setAssignError] = useState<string | null>(null)
 
   // Edit state
   const [editName, setEditName] = useState('')
@@ -131,13 +133,14 @@ export function RegionList({ regions: initialRegions, members, allAccounts: init
     else setSelected(new Set(filteredAccounts.map(a => a.id)))
   }
 
-  function handleAssignToRegion() {
-    if (!managingRegion || selected.size === 0) return
+  async function handleAssignToRegion() {
+    if (!managingRegion || selected.size === 0 || assignPending) return
     const ids = Array.from(selected)
     const repId = (alsoAssignRep && managingRegion.assignedManagerId) ? managingRegion.assignedManagerId : null
     const newlyAdded = ids.filter(id => accounts.find(a => a.id === id)?.assignedRegionId !== managingRegion.id).length
-
-    startTransition(async () => {
+    setAssignError(null)
+    setAssignPending(true)
+    try {
       await assignAccountsToRegion(ids, managingRegion.id, repId)
       setAccounts(prev => prev.map(a =>
         ids.includes(a.id)
@@ -146,22 +149,33 @@ export function RegionList({ regions: initialRegions, members, allAccounts: init
       ))
       setStats(prev => ({ ...prev, [managingRegion.id]: (prev[managingRegion.id] ?? 0) + newlyAdded }))
       setSelected(new Set())
-    })
+    } catch (e) {
+      console.error('assignAccountsToRegion error:', e)
+      setAssignError(e instanceof Error ? e.message : 'Failed to update accounts. Please try again.')
+    } finally {
+      setAssignPending(false)
+    }
   }
 
-  function handleRemoveFromRegion() {
-    if (!managingRegion || selected.size === 0) return
+  async function handleRemoveFromRegion() {
+    if (!managingRegion || selected.size === 0 || assignPending) return
     const ids = Array.from(selected).filter(id => accounts.find(a => a.id === id)?.assignedRegionId === managingRegion.id)
     if (!ids.length) return
-
-    startTransition(async () => {
+    setAssignError(null)
+    setAssignPending(true)
+    try {
       await assignAccountsToRegion(ids, null, null)
       setAccounts(prev => prev.map(a =>
         ids.includes(a.id) ? { ...a, assignedRegionId: null, assignedSalesRepId: null } : a
       ))
       setStats(prev => ({ ...prev, [managingRegion.id]: Math.max(0, (prev[managingRegion.id] ?? 0) - ids.length) }))
       setSelected(new Set())
-    })
+    } catch (e) {
+      console.error('assignAccountsToRegion error:', e)
+      setAssignError(e instanceof Error ? e.message : 'Failed to update accounts. Please try again.')
+    } finally {
+      setAssignPending(false)
+    }
   }
 
   const inRegionSelectedCount = managingRegion
@@ -320,13 +334,13 @@ export function RegionList({ regions: initialRegions, members, allAccounts: init
                     </label>
                   )}
                   {inRegionSelectedCount > 0 && (
-                    <Button size="sm" variant="outline" className="h-7 text-xs text-red-600 border-red-200 hover:bg-red-50" onClick={handleRemoveFromRegion} disabled={isPending}>
-                      {isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
+                    <Button size="sm" variant="outline" className="h-7 text-xs text-red-600 border-red-200 hover:bg-red-50" onClick={handleRemoveFromRegion} disabled={assignPending}>
+                      {assignPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
                       Remove {inRegionSelectedCount}
                     </Button>
                   )}
-                  <Button size="sm" className="h-7 text-xs" onClick={handleAssignToRegion} disabled={isPending}>
-                    {isPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
+                  <Button size="sm" className="h-7 text-xs" onClick={handleAssignToRegion} disabled={assignPending}>
+                    {assignPending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
                     Add {selected.size} to region
                   </Button>
                 </div>
@@ -334,6 +348,13 @@ export function RegionList({ regions: initialRegions, members, allAccounts: init
                 <span className="ml-auto text-xs text-slate-400">{filteredAccounts.length} shown</span>
               )}
             </div>
+
+            {/* Error banner */}
+            {assignError && (
+              <div className="px-5 py-2 bg-red-50 border-b border-red-200 text-sm text-red-700">
+                {assignError}
+              </div>
+            )}
 
             {/* List */}
             <div className="flex-1 overflow-y-auto">

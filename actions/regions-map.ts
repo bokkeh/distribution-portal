@@ -30,6 +30,7 @@ export type RegionMapRegion = {
   id: string
   name: string
   description: string | null
+  assignedManagerId: string | null  // salesMembers.id — used for rep assignment
   assignedRep: { id: string; name: string; email: string } | null
   stats: {
     accountCount: number
@@ -53,6 +54,7 @@ export async function getRegionMapData(): Promise<RegionMapData> {
       id: salesRegions.id,
       name: salesRegions.name,
       description: salesRegions.description,
+      assignedManagerId: salesMembers.id,
       repUserId: users.id,
       repName: users.name,
       repEmail: users.email,
@@ -141,6 +143,7 @@ export async function getRegionMapData(): Promise<RegionMapData> {
     id: r.id,
     name: r.name,
     description: r.description,
+    assignedManagerId: r.assignedManagerId ?? null,
     assignedRep: r.repUserId
       ? { id: r.repUserId, name: r.repName!, email: r.repEmail! }
       : null,
