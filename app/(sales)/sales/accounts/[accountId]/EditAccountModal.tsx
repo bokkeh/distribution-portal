@@ -154,16 +154,19 @@ export function EditAccountModal({ account }: Props) {
 }
 
 const BUSINESS_TYPES = [
+  'Liquor Store',
   'Restaurant',
   'Restaurant Group',
-  'Bar',
-  'Catering',
-  'Liquor Store',
   'Hotel',
   'Hotel Group',
-  'Grocery / Specialty Food',
-  'Event Venue',
+  'Venue',
+  'Bar',
+  'Night Club',
+  'Grocery Store',
+  'Convenience Store',
   'Country Club',
+  'Casino',
+  'Wholesaler',
   'Other',
 ]
 

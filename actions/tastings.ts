@@ -429,6 +429,12 @@ export async function updateTastingStatus(formData: FormData) {
   revalidatePath('/staff/tastings')
   revalidatePath('/taster/tastings')
   revalidatePath('/taster/payouts')
+  revalidatePath(`/admin/tastings/${tastingId}`)
+
+  const redirectTo = formData.get('redirectTo') as string | null
+  if (redirectTo?.startsWith('/')) {
+    redirect(`${redirectTo}?success=${encodeURIComponent('Tasting updated.')}`)
+  }
   redirect(`/${mode}/tastings?success=${encodeURIComponent('Tasting updated.')}`)
 }
 
@@ -625,6 +631,12 @@ export async function reassignTasting(formData: FormData) {
   revalidatePath('/staff/tastings')
   revalidatePath('/taster/tastings')
   revalidatePath('/taster/payouts')
+  revalidatePath(`/admin/tastings/${tastingId}`)
+
+  const redirectTo = formData.get('redirectTo') as string | null
+  if (redirectTo?.startsWith('/')) {
+    redirect(`${redirectTo}?success=${encodeURIComponent('Tasting reassigned and tasters notified.')}`)
+  }
   redirect(`${tastingRedirectPath(mode)}?success=${encodeURIComponent('Tasting reassigned and tasters notified.')}`)
 }
 
@@ -1020,7 +1032,10 @@ export async function requestTastingFromRep({
     .where(eq(users.active, true))
 
   const availableTaster = tasterRows.find(u => u.roles?.includes('taster'))
-  const assignedUserId = availableTaster?.id ?? session.user.id
+  if (!availableTaster) {
+    return { error: 'No tasters are currently configured. Ask an admin to add a taster before requesting a tasting.' }
+  }
+  const assignedUserId = availableTaster.id
 
   const scheduledAt = new Date(`${preferredDate}T${preferredTime}:00`)
 

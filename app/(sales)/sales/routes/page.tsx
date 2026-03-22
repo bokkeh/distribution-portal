@@ -6,11 +6,12 @@ import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Map, MapPin, Phone, Plus, AlertCircle, CheckCircle2, Route } from 'lucide-react'
+import { Map, MapPin, Phone, Plus, AlertCircle, CheckCircle2, Route, LocateFixed } from 'lucide-react'
 import { RouteStopCheckIn } from './RouteStopCheckIn'
 import { createSalesRepRoute } from '@/actions/sales-routes'
 import { getSalesRepRegionMapData } from '@/actions/sales-rep-map'
 import { SalesRepRegionMap } from '@/components/sales/SalesRepRegionMap'
+import { GeocodeAccountButton } from './GeocodeAccountButton'
 
 export default async function SalesRoutesPage() {
   const session = await requireRole('sales_rep', 'sales_manager', 'admin')
@@ -117,6 +118,46 @@ export default async function SalesRoutesPage() {
         </div>
         <SalesRepRegionMap data={mapData} />
       </div>
+
+      {/* Accounts missing coordinates */}
+      {(() => {
+        const ungeocoded = mapData.accounts.filter(a => a.lat == null || a.lng == null)
+        if (ungeocoded.length === 0) return null
+        return (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                <LocateFixed className="w-4 h-4 text-amber-400" />
+                Accounts Not on Map
+                <span className="ml-auto text-xs font-normal text-slate-400">{ungeocoded.length} account{ungeocoded.length !== 1 ? 's' : ''} missing coordinates</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="divide-y divide-slate-50">
+                {ungeocoded.map(a => (
+                  <div key={a.id} className="flex items-center gap-3 px-4 py-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-900 truncate">{a.companyName}</p>
+                      {(a.address || a.city) && (
+                        <p className="text-xs text-slate-400 truncate">
+                          {[a.address, a.city, a.state].filter(Boolean).join(', ')}
+                        </p>
+                      )}
+                      {!a.address && !a.city && (
+                        <p className="text-xs text-amber-500 italic">No address on file</p>
+                      )}
+                    </div>
+                    <div className="shrink-0 flex items-center gap-2">
+                      <Link href={`/sales/accounts/${a.id}`} className="text-xs text-blue-600 hover:underline">View</Link>
+                      {(a.address || a.city) && <GeocodeAccountButton accountId={a.id} />}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )
+      })()}
 
       {/* Create route form */}
       <Card>

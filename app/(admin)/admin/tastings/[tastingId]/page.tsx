@@ -263,6 +263,7 @@ export default async function AdminTastingDetailPage({
                   <form action={reassignTasting} className="pt-2 border-t">
                     <input type="hidden" name="tastingId" value={tastingId} />
                     <input type="hidden" name="mode" value="admin" />
+                    <input type="hidden" name="redirectTo" value={`/admin/tastings/${tastingId}`} />
                     <label className="block text-xs text-slate-500 mb-1">Reassign to</label>
                     <div className="flex gap-2">
                       <select name="assignedUserId" defaultValue={tasting.assignedUserId} className="flex-1 rounded-md border border-input bg-transparent px-2 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
@@ -290,6 +291,7 @@ export default async function AdminTastingDetailPage({
                     <input type="hidden" name="tastingId" value={tastingId} />
                     <input type="hidden" name="status" value="confirmed" />
                     <input type="hidden" name="mode" value="admin" />
+                    <input type="hidden" name="redirectTo" value={`/admin/tastings/${tastingId}`} />
                     <Button type="submit" className="w-full" size="sm">Mark Confirmed</Button>
                   </form>
                 )}
@@ -298,6 +300,7 @@ export default async function AdminTastingDetailPage({
                     <input type="hidden" name="tastingId" value={tastingId} />
                     <input type="hidden" name="status" value="completed" />
                     <input type="hidden" name="mode" value="admin" />
+                    <input type="hidden" name="redirectTo" value={`/admin/tastings/${tastingId}`} />
                     <Button type="submit" className="w-full" size="sm">Mark Completed</Button>
                   </form>
                 )}
@@ -305,6 +308,7 @@ export default async function AdminTastingDetailPage({
                   <input type="hidden" name="tastingId" value={tastingId} />
                   <input type="hidden" name="status" value="cancelled" />
                   <input type="hidden" name="mode" value="admin" />
+                  <input type="hidden" name="redirectTo" value={`/admin/tastings/${tastingId}`} />
                   <Button type="submit" variant="destructive" className="w-full" size="sm">Cancel Tasting</Button>
                 </form>
                 <form action={deleteTasting}>
