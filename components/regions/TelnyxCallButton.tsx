@@ -46,16 +46,18 @@ export function TelnyxCallButton({ phone, accountName }: Props) {
         const callState = notification?.call?.state
         if (!callState) return
 
+        // Attach remote stream whenever it's available (ringback + active audio)
+        if (audioRef.current && notification.call?.remoteStream) {
+          audioRef.current.srcObject = notification.call.remoteStream
+          audioRef.current.play().catch(() => null)
+        }
+
         if (callState === 'ringing') {
           setState('ringing')
         } else if (callState === 'active') {
           setState('active')
           setDuration(0)
           timerRef.current = setInterval(() => setDuration(d => d + 1), 1000)
-          if (audioRef.current && notification.call?.remoteStream) {
-            audioRef.current.srcObject = notification.call.remoteStream
-            audioRef.current.play().catch(() => null)
-          }
         } else if (callState === 'hangup' || callState === 'destroy') {
           cleanUp()
         }
