@@ -5,6 +5,6 @@
 export function signedPhotoUrl(url: string | null | undefined): string | null {
   if (!url) return null
   // Already a proxy URL — don't double-wrap
-  if (url.startsWith('/api/photo')) return url
+  if (url.startsWith('/api/photo') || url.startsWith('/api/image')) return url
   return `/api/photo?url=${encodeURIComponent(url)}`
 }

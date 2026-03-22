@@ -33,6 +33,7 @@ export function EditAccountModal({ account }: Props) {
       <dialog
         ref={dialogRef}
         className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-0 shadow-2xl backdrop:bg-black/40"
+        style={{ margin: 'auto' }}
         onClick={e => { if (e.target === dialogRef.current) close() }}
       >
         <div className="flex items-center justify-between border-b px-6 py-4">
@@ -54,7 +55,7 @@ export function EditAccountModal({ account }: Props) {
                 <Field label="Contact Name" name="contactName" defaultValue={account.contactName ?? ''} />
                 <Field label="Phone" name="phone" defaultValue={account.phone ?? ''} type="tel" />
                 <Field label="Email" name="email" defaultValue={account.email ?? ''} type="email" />
-                <Field label="Business Type" name="businessType" defaultValue={account.businessType ?? ''} />
+                <SelectField label="Business Type" name="businessType" defaultValue={account.businessType ?? ''} options={BUSINESS_TYPES} />
                 <Field label="DC ABRA Number" name="dcAbraNumber" defaultValue={account.dcAbraNumber ?? ''} />
               </div>
             </section>
@@ -143,6 +144,20 @@ export function EditAccountModal({ account }: Props) {
   )
 }
 
+const BUSINESS_TYPES = [
+  'Restaurant',
+  'Restaurant Group',
+  'Bar',
+  'Catering',
+  'Liquor Store',
+  'Hotel',
+  'Hotel Group',
+  'Grocery / Specialty Food',
+  'Event Venue',
+  'Country Club',
+  'Other',
+]
+
 function Field({
   label, name, defaultValue, type = 'text', required = false, placeholder,
 }: {
@@ -159,6 +174,28 @@ function Field({
         placeholder={placeholder}
         className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition"
       />
+    </div>
+  )
+}
+
+function SelectField({
+  label, name, defaultValue, options,
+}: {
+  label: string; name: string; defaultValue: string; options: string[]
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
+      <select
+        name={name}
+        defaultValue={defaultValue}
+        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 transition"
+      >
+        <option value="">— Select —</option>
+        {options.map(o => (
+          <option key={o} value={o}>{o}</option>
+        ))}
+      </select>
     </div>
   )
 }
