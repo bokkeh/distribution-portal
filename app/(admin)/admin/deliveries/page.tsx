@@ -8,6 +8,7 @@ import { formatDate } from '@/lib/utils'
 import Link from 'next/link'
 import { Plus, Truck, MapPin } from 'lucide-react'
 import { deleteDelivery } from '@/actions/deliveries'
+import { PhoneActions } from '@/components/shared/PhoneActions'
 
 const statusVariant: Record<string, 'default' | 'success' | 'warning' | 'destructive' | 'info'> = {
   scheduled: 'info',
@@ -86,7 +87,10 @@ export default async function DeliveriesPage() {
                   <Badge variant={driver.active ? 'success' : 'secondary'}>{driver.active ? 'Active' : 'Inactive'}</Badge>
                 </div>
                 <div className="mt-3 space-y-1 text-sm text-slate-600">
-                  <p>{driver.phone ?? 'No phone on file'}</p>
+                  {driver.phone
+                    ? <PhoneActions phone={driver.phone} name={driver.name ?? 'Driver'} />
+                    : <p>No phone on file</p>
+                  }
                   {driver.vehicleMake ? <p>{driver.vehicleMake} {driver.vehicleModel}</p> : null}
                   {driver.licensePlate ? <p>{driver.licensePlate}</p> : null}
                 </div>

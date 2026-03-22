@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Phone, PhoneOff, Loader2, Volume2 } from 'lucide-react'
+import { Hash, Phone, PhoneOff, Loader2, Volume2, X } from 'lucide-react'
 import { getTelnyxWebRtcToken } from '@/actions/map-contact'
 
 interface Props {
@@ -10,11 +10,14 @@ interface Props {
 }
 
 type CallState = 'idle' | 'connecting' | 'ringing' | 'active' | 'ending' | 'error'
+const DIAL_PAD_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'] as const
 
 export function TelnyxCallButton({ phone, accountName }: Props) {
   const [state, setState] = useState<CallState>('idle')
   const [error, setError] = useState<string | null>(null)
   const [duration, setDuration] = useState(0)
+  const [showDialPad, setShowDialPad] = useState(false)
+  const [lastDigits, setLastDigits] = useState('')
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const clientRef = useRef<any>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -92,6 +95,8 @@ export function TelnyxCallButton({ phone, accountName }: Props) {
     try { clientRef.current?.disconnect() } catch {}
     callRef.current = null
     clientRef.current = null
+    setShowDialPad(false)
+    setLastDigits('')
   }
 
   function endCall() {
@@ -99,6 +104,15 @@ export function TelnyxCallButton({ phone, accountName }: Props) {
     try { callRef.current?.hangup() } catch {}
     cleanUp()
     setTimeout(() => { setState('idle'); setDuration(0) }, 600)
+  }
+
+  function sendDtmf(digit: string) {
+    try {
+      callRef.current?.dtmf?.(digit)
+      setLastDigits(prev => `${prev}${digit}`.slice(-12))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unable to send keypad tone')
+    }
   }
 
   function fmtDuration(s: number) {
@@ -123,7 +137,7 @@ export function TelnyxCallButton({ phone, accountName }: Props) {
   }
 
   return (
-    <div className="rounded-md border border-green-200 bg-green-50 p-2 space-y-1.5">
+    <div className="relative rounded-md border border-green-200 bg-green-50 p-2 space-y-1.5">
       <audio ref={audioRef} autoPlay hidden />
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
@@ -146,6 +160,47 @@ export function TelnyxCallButton({ phone, accountName }: Props) {
           <PhoneOff className="h-3 w-3" /> End
         </button>
       </div>
+      {(state === 'ringing' || state === 'active') ? (
+        <div className="flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => setShowDialPad(current => !current)}
+            className="inline-flex items-center gap-1 rounded-md bg-white/80 px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-white"
+          >
+            <Hash className="h-3 w-3" />
+            Dial Pad
+          </button>
+          {lastDigits ? <span className="text-[10px] text-slate-500">Sent: {lastDigits}</span> : null}
+        </div>
+      ) : null}
+      {showDialPad && (state === 'ringing' || state === 'active') ? (
+        <div className="absolute right-0 top-full z-20 mt-2 w-44 rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Keypad</p>
+            <button
+              type="button"
+              onClick={() => setShowDialPad(false)}
+              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              aria-label="Close dial pad"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {DIAL_PAD_KEYS.map((digit) => (
+              <button
+                key={digit}
+                type="button"
+                onClick={() => sendDtmf(digit)}
+                className="flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-800 hover:border-blue-300 hover:bg-blue-50"
+              >
+                {digit}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-[10px] text-slate-500">Send menu digits, star, or pound during the call.</p>
+        </div>
+      ) : null}
     </div>
   )
 }

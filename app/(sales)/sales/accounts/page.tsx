@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Building2, MapPin, Phone, AlertCircle, CheckCircle2 } from 'lucide-react'
 import Link from 'next/link'
+import { PhoneActions } from '@/components/shared/PhoneActions'
 
 export default async function SalesAccountsPage() {
   const session = await requireRole('sales_rep', 'sales_manager', 'admin')
@@ -88,9 +89,9 @@ export default async function SalesAccountsPage() {
                         </div>
                       )}
                       {account.phone && (
-                        <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                          <Phone className="w-3 h-3" />
-                          {account.phone}
+                        <div className="flex items-start gap-1.5 text-xs text-slate-500">
+                          <Phone className="w-3 h-3 mt-1.5 shrink-0" />
+                          <PhoneActions phone={account.phone} name={account.companyName} />
                         </div>
                       )}
                     </div>

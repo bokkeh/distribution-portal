@@ -1,10 +1,10 @@
 'use server'
 
-import { requireAdminOrStaff } from '@/lib/auth/session'
+import { requireAuth } from '@/lib/auth/session'
 import { sendSms } from '@/lib/telnyx/client'
 
 export async function getTelnyxWebRtcToken(): Promise<{ token: string }> {
-  await requireAdminOrStaff()
+  await requireAuth()
   const credentialId = process.env.TELNYX_WEBRTC_CREDENTIAL_ID
   const apiKey = process.env.TELNYX_API_KEY
   if (!credentialId || !apiKey) throw new Error('Telnyx WebRTC not configured')
@@ -23,7 +23,7 @@ export async function sendMapAccountSms(
   accountName: string,
   message: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const session = await requireAdminOrStaff()
+  const session = await requireAuth()
   if (!message.trim()) return { ok: false, error: 'Message is empty' }
 
   try {

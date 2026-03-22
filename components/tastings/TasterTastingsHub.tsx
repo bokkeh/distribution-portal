@@ -1,4 +1,4 @@
-pop 'use client'
+'use client'
 
 import Link from 'next/link'
 import { format, isBefore } from 'date-fns'

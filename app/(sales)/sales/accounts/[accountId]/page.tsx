@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Building2, MapPin, Phone, Mail, Clock, AlertCircle, CheckCircle2, ArrowLeft, Package } from 'lucide-react'
 import Link from 'next/link'
 import { LogVisitButton } from './LogVisitButton'
+import { PhoneActions } from '@/components/shared/PhoneActions'
 
 const PRIORITY_COLORS: Record<string, string> = {
   high: 'text-red-700 border-red-200 bg-red-50',
@@ -117,9 +118,9 @@ export default async function SalesAccountDetailPage({
                 </div>
               )}
               {account.phone && (
-                <div className="flex items-center gap-2 text-slate-600">
-                  <Phone className="w-3.5 h-3.5 text-slate-400" />
-                  <a href={`tel:${account.phone}`} className="hover:text-blue-600">{account.phone}</a>
+                <div className="flex items-start gap-2 text-slate-600">
+                  <Phone className="w-3.5 h-3.5 text-slate-400 mt-1.5 shrink-0" />
+                  <PhoneActions phone={account.phone} name={account.companyName} />
                 </div>
               )}
               {account.email && (
@@ -201,9 +202,9 @@ export default async function SalesAccountDetailPage({
               <CardContent className="space-y-2 text-sm">
                 {account.pocName && <p className="font-medium">{account.pocName}</p>}
                 {account.pocPhone && (
-                  <div className="flex items-center gap-2 text-slate-600">
-                    <Phone className="w-3.5 h-3.5 text-slate-400" />
-                    <a href={`tel:${account.pocPhone}`} className="hover:text-blue-600">{account.pocPhone}</a>
+                  <div className="flex items-start gap-2 text-slate-600">
+                    <Phone className="w-3.5 h-3.5 text-slate-400 mt-1.5 shrink-0" />
+                    <PhoneActions phone={account.pocPhone} name={account.pocName ?? account.companyName} />
                   </div>
                 )}
                 {account.pocEmail && (
