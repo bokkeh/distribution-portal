@@ -4,7 +4,7 @@ import Image from 'next/image'
 import { Wine, ClipboardList, DollarSign, CalendarCheck } from 'lucide-react'
 
 export const metadata = {
-  title: 'Join as a Taster — AHAWC',
+  title: 'Join as a Taster - AHAWC',
   description: 'Create your AHAWC taster account to receive tasting assignments, submit reports, and track your payouts.',
 }
 
@@ -27,14 +27,13 @@ const BENEFITS = [
   {
     icon: DollarSign,
     title: 'Payout tracking',
-    description: 'See completed events and track your earnings — all in one place.',
+    description: 'See completed events and track your earnings in one place.',
   },
 ]
 
 export default function TasterSignupPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-blue-950">
-      {/* Header */}
       <header className="border-b border-white/10 px-6 py-4">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
           <div className="flex items-center gap-2">
@@ -47,27 +46,25 @@ export default function TasterSignupPage() {
             />
             <span className="text-sm font-bold tracking-wide text-white">AHAWC</span>
           </div>
-          <Link href="/login" className="text-sm text-blue-300 hover:text-white transition-colors">
-            Already have an account?{' '}
+          <Link href="/login" className="text-sm text-blue-300 transition-colors hover:text-white">
+            Already have a taster account?{' '}
             <span className="font-medium underline underline-offset-2">Sign in</span>
           </Link>
         </div>
       </header>
 
-      {/* Main */}
       <main className="mx-auto max-w-6xl px-6 py-12 sm:py-20">
-        <div className="grid gap-12 lg:grid-cols-2 lg:gap-16 lg:items-start">
-          {/* Left: copy */}
+        <div className="grid gap-12 lg:grid-cols-2 lg:items-start lg:gap-16">
           <div className="space-y-8">
             <div className="space-y-4">
               <p className="text-sm font-semibold uppercase tracking-widest text-blue-400">
-                Taster Portal
+                Taster Sign Up
               </p>
               <h1 className="text-4xl font-bold leading-tight text-white sm:text-5xl">
-                Join the AHAWC<br />taster network
+                Create your AHAWC<br />taster account
               </h1>
-              <p className="text-lg text-slate-300 leading-relaxed">
-                AHAWC works with a network of brand ambassadors and tasters across the region. Create your free account to start accepting tasting assignments, submit reports, and get paid — all from one place.
+              <p className="text-lg leading-relaxed text-slate-300">
+                This page is for AHAWC tasters and brand ambassadors. Create your taster portal account to accept tasting assignments, submit reports, and track payouts in one place.
               </p>
             </div>
 
@@ -75,10 +72,10 @@ export default function TasterSignupPage() {
               {BENEFITS.map(({ icon: Icon, title, description }) => (
                 <div
                   key={title}
-                  className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-2"
+                  className="space-y-2 rounded-xl border border-white/10 bg-white/5 p-4"
                 >
                   <div className="flex items-center gap-2">
-                    <Icon className="h-4 w-4 text-blue-400 shrink-0" />
+                    <Icon className="h-4 w-4 shrink-0 text-blue-400" />
                     <p className="text-sm font-semibold text-white">{title}</p>
                   </div>
                   <p className="text-sm text-slate-400">{description}</p>
@@ -97,7 +94,6 @@ export default function TasterSignupPage() {
             </p>
           </div>
 
-          {/* Right: form */}
           <div className="lg:sticky lg:top-8">
             <TasterSignupForm />
           </div>

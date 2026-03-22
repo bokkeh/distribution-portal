@@ -20,7 +20,7 @@ function isMissingStripeConnectColumn(error: unknown) {
 export default async function TasterProfilePage({
   searchParams,
 }: {
-  searchParams: Promise<{ stripe?: string; error?: string }>
+  searchParams: Promise<{ stripe?: string; error?: string; onboarding?: string }>
 }) {
   const session = await requireFeature('profile', 'taster', 'admin')
   const query = await searchParams
@@ -100,6 +100,11 @@ export default async function TasterProfilePage({
 
   return (
     <div className="space-y-6">
+      {query.onboarding === '1' ? (
+        <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          Complete your profile and save your settings before entering the taster portal.
+        </div>
+      ) : null}
       <div>
         <h1 className="text-2xl font-bold text-slate-900">My Profile</h1>
         <p className="text-muted-foreground mt-1">Keep your phone number current so tasting assignments reach you by text.</p>

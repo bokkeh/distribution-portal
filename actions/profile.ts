@@ -207,6 +207,7 @@ export async function updateSimpleProfile(
   try {
     const session = await requireAuth()
     const userId = formData.get('userId') as string
+    const roles = session.user.roles ?? [session.user.role]
     if (session.user.id !== userId) throw new Error('Unauthorized')
 
     try {
@@ -232,6 +233,7 @@ export async function updateSimpleProfile(
     }
 
     try {
+      const now = new Date()
       await db.insert(userPreferences).values({
         userId,
         timeZone: (formData.get('timeZone') as string) || 'America/New_York',
@@ -241,6 +243,7 @@ export async function updateSimpleProfile(
         inAppNotificationsEnabled: formData.get('inAppNotificationsEnabled') === 'on',
         quietHoursStart: (formData.get('quietHoursStart') as string) || null,
         quietHoursEnd: (formData.get('quietHoursEnd') as string) || null,
+        tasterOnboardingCompletedAt: roles.includes('taster') ? now : null,
       }).onConflictDoUpdate({
         target: userPreferences.userId,
         set: {
@@ -251,7 +254,8 @@ export async function updateSimpleProfile(
           inAppNotificationsEnabled: formData.get('inAppNotificationsEnabled') === 'on',
           quietHoursStart: (formData.get('quietHoursStart') as string) || null,
           quietHoursEnd: (formData.get('quietHoursEnd') as string) || null,
-          updatedAt: new Date(),
+          tasterOnboardingCompletedAt: roles.includes('taster') ? now : userPreferences.tasterOnboardingCompletedAt,
+          updatedAt: now,
         },
       })
     } catch (error) {

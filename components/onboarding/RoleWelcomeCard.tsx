@@ -9,18 +9,22 @@ export function RoleWelcomeCard({
   description,
   bullets,
   formAction,
+  primaryHref,
   primaryLabel,
   secondaryHref,
   secondaryLabel,
+  guidanceText,
 }: {
   eyebrow: string
   title: string
   description: string
   bullets: ReactNode[]
-  formAction: () => Promise<void>
+  formAction?: () => Promise<void>
+  primaryHref?: string
   primaryLabel: string
-  secondaryHref: string
-  secondaryLabel: string
+  secondaryHref?: string
+  secondaryLabel?: string
+  guidanceText?: string
 }) {
   return (
     <div className="mx-auto max-w-3xl py-6 sm:py-10">
@@ -49,15 +53,23 @@ export function RoleWelcomeCard({
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white p-5">
               <p className="text-sm text-slate-600">
-                Review your profile and notification settings at any time before you continue.
+                {guidanceText ?? 'Review your profile and notification settings at any time before you continue.'}
               </p>
               <div className="mt-4 flex flex-col gap-3">
-                <form action={formAction}>
-                  <Button className="w-full">{primaryLabel}</Button>
-                </form>
-                <Link href={secondaryHref}>
-                  <Button variant="outline" className="w-full">{secondaryLabel}</Button>
-                </Link>
+                {primaryHref ? (
+                  <Link href={primaryHref}>
+                    <Button className="w-full">{primaryLabel}</Button>
+                  </Link>
+                ) : formAction ? (
+                  <form action={formAction}>
+                    <Button className="w-full">{primaryLabel}</Button>
+                  </form>
+                ) : null}
+                {secondaryHref && secondaryLabel ? (
+                  <Link href={secondaryHref}>
+                    <Button variant="outline" className="w-full">{secondaryLabel}</Button>
+                  </Link>
+                ) : null}
               </div>
             </div>
           </div>

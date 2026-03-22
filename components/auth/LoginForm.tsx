@@ -68,15 +68,16 @@ export function LoginForm({ onSuccess }: Props) {
 
     const res = await fetch('/api/auth/session')
     const session = await res.json()
-    const role = session?.user?.role
-    const map: Record<string, string> = {
-      admin: '/admin/dashboard',
-      staff: '/staff/dashboard',
-      driver: '/driver/deliveries',
-      taster: '/taster/welcome',
-      customer: '/customer/dashboard',
-    }
-    router.push(map[role] ?? '/admin/dashboard')
+    const role = session?.user?.role as string | undefined
+    const roles = ((session?.user?.roles as string[] | undefined) ?? (role ? [role] : []))
+    const destination =
+      roles.includes('admin') ? '/admin/dashboard'
+      : roles.includes('staff') ? '/staff/dashboard'
+      : roles.includes('driver') ? '/driver/deliveries'
+      : roles.includes('taster') ? '/taster/welcome'
+      : roles.includes('customer') ? '/customer/dashboard'
+      : '/admin/dashboard'
+    router.push(destination)
   }
 
   async function handleGoogle() {
@@ -98,8 +99,12 @@ export function LoginForm({ onSuccess }: Props) {
           className="h-14 w-14 rounded-xl bg-white p-1.5 shadow-sm object-contain"
           priority
         />
-        <h2 className="text-xl font-bold text-slate-900">AHAWC Portal</h2>
-        <p className="text-sm text-muted-foreground">Sign in to your account</p>
+        <h2 className="text-xl font-bold text-slate-900">
+          {fromTasterSignup ? 'AHAWC Taster Portal' : 'AHAWC Portal'}
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          {fromTasterSignup ? 'Sign in to your taster account' : 'Sign in to your account'}
+        </p>
       </div>
 
       {fromTasterSignup && (

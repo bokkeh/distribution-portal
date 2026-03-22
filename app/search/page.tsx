@@ -10,9 +10,9 @@ import { formatDate } from '@/lib/utils'
 function roleBasePath(roles: string[]) {
   if (roles.includes('admin')) return '/admin/dashboard'
   if (roles.includes('staff')) return '/staff/dashboard'
-  if (roles.includes('customer')) return '/customer/dashboard'
   if (roles.includes('driver')) return '/driver/deliveries'
   if (roles.includes('taster')) return '/taster/tastings'
+  if (roles.includes('customer')) return '/customer/dashboard'
   return ''
 }
 

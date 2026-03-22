@@ -1,4 +1,3 @@
-import { completeRoleOnboarding } from '@/actions/onboarding'
 import { requireFeature } from '@/lib/auth/session'
 import { getUserPreferences } from '@/lib/preferences/read'
 import { RoleWelcomeCard } from '@/components/onboarding/RoleWelcomeCard'
@@ -27,10 +26,9 @@ export default async function TasterWelcomePage() {
         <span key="report">Use the tasting detail page to check in, submit bottle counts, and send your final report.</span>,
         <span key="pay">Payouts and Stripe setup live in your profile and payout screens.</span>,
       ]}
-      formAction={completeRoleOnboarding.bind(null, 'taster')}
-      primaryLabel="Continue to My Tastings"
-      secondaryHref="/taster/profile"
-      secondaryLabel="Review Profile Settings"
+      primaryHref="/taster/profile?onboarding=1"
+      primaryLabel="Complete Profile First"
+      guidanceText="Complete your profile and notification settings before entering the taster portal."
     />
   )
 }
