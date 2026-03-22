@@ -985,3 +985,71 @@ export async function getTastingScheduleSuggestions(
 
   return { suggestions }
 }
+
+export async function requestTastingFromRep({
+  accountId,
+  preferredDate,
+  preferredTime,
+  notes,
+}: {
+  accountId: string
+  preferredDate: string
+  preferredTime: string
+  notes?: string
+}): Promise<{ success?: boolean; error?: string }> {
+  const session = await requireRole('sales_rep', 'sales_manager', 'admin')
+
+  if (!accountId || !preferredDate || !preferredTime) {
+    return { error: 'Account, date and time are required' }
+  }
+
+  // Verify this account belongs to the requesting rep (unless admin)
+  const [account] = await db
+    .select()
+    .from(customerAccounts)
+    .where(eq(customerAccounts.id, accountId))
+    .limit(1)
+
+  if (!account) return { error: 'Account not found' }
+
+  // Find any available taster to assign (required field — pick first available or fall back to requester)
+  const tasterRows = await db
+    .select({ id: users.id, name: users.name, roles: users.roles })
+    .from(users)
+    .where(eq(users.active, true))
+
+  const availableTaster = tasterRows.find(u => u.roles?.includes('taster'))
+  const assignedUserId = availableTaster?.id ?? session.user.id
+
+  const scheduledAt = new Date(`${preferredDate}T${preferredTime}:00`)
+
+  const [created] = await db
+    .insert(tastings)
+    .values({
+      customerId: accountId,
+      assignedUserId,
+      createdByUserId: session.user.id,
+      eventName: `Tasting Request — ${account.companyName}`,
+      scheduledAt,
+      status: 'scheduled',
+      storeAddress: account.address ?? null,
+      storeCity: account.city ?? null,
+      storeState: account.state ?? null,
+      storeZip: account.zip ?? null,
+      storePhone: account.phone ?? null,
+      notes: `Requested by sales rep${notes ? `: ${notes}` : ''}`,
+    })
+    .returning()
+
+  // Notify admins
+  await createNotificationsForRoles(
+    ['admin', 'staff'],
+    'tasting_request',
+    `Tasting request for ${account.companyName}`,
+    `${session.user.name} requested a tasting on ${new Date(scheduledAt).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}`,
+    `/admin/tastings/${created.id}`,
+  )
+
+  revalidatePath('/sales/tastings')
+  return { success: true }
+}

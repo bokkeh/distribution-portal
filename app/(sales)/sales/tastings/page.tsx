@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { AlertCircle, Wine, TrendingUp, DollarSign, BarChart3 } from 'lucide-react'
 import Link from 'next/link'
+import { RequestTastingModal } from './RequestTastingModal'
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
@@ -153,9 +154,12 @@ export default async function SalesTastingsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Tasting ROI</h1>
-        <p className="text-slate-500 mt-1">Revenue impact from in-store tastings (60-day window)</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Tasting ROI</h1>
+          <p className="text-slate-500 mt-1">Revenue impact from in-store tastings (60-day window)</p>
+        </div>
+        <RequestTastingModal accounts={myAccounts.map(a => ({ id: a.id, companyName: a.companyName }))} />
       </div>
 
       {/* KPI strip */}
