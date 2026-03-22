@@ -41,6 +41,7 @@
     "@react-pdf/renderer": "^4.3.2",
     "@stripe/react-stripe-js": "^5.6.1",
     "@stripe/stripe-js": "^8.9.0",
+    "@telnyx/webrtc": "^2.25.25",
     "@types/bcryptjs": "^2.4.6",
     "@types/react-pdf": "^6.2.0",
     "@types/uuid": "^10.0.0",

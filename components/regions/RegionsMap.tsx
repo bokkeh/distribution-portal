@@ -2,12 +2,13 @@
 
 import { GoogleMap, InfoWindow, Marker, Polygon, useJsApiLoader } from '@react-google-maps/api'
 import { useState, useMemo } from 'react'
-import { MapPin, TrendingUp, Wine, Truck, User, ExternalLink, Building2, Phone, Send, Loader2, CheckCircle2 } from 'lucide-react'
+import { MapPin, TrendingUp, Wine, Truck, User, ExternalLink, Building2, Send, Loader2, CheckCircle2 } from 'lucide-react'
 import type { RegionMapData, RegionMapAccount, RegionMapRegion } from '@/actions/regions-map'
 import { sendMapAccountSms } from '@/actions/map-contact'
 import { convexHull, expandHull, circlePolygon } from '@/lib/maps/convex-hull'
 import { getRegionColor } from '@/lib/maps/region-colors'
 import { RegionAccountsModal } from './RegionAccountsModal'
+import { TelnyxCallButton } from './TelnyxCallButton'
 
 function fmt(n: number) {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
@@ -427,12 +428,9 @@ function AccountInfoCard({ account }: { account: RegionMapAccount }) {
       {account.phone && (
         <div className="space-y-1.5">
           <div className="flex gap-2">
-            <a
-              href={`tel:${account.phone}`}
-              className="flex flex-1 items-center justify-center gap-1 rounded-md bg-green-50 px-2 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100"
-            >
-              <Phone className="h-3 w-3" /> Call
-            </a>
+            <div className="flex-1">
+              <TelnyxCallButton phone={account.phone} accountName={account.companyName} />
+            </div>
             <button
               type="button"
               onClick={() => { setComposing(c => !c); setSmsError(null) }}
