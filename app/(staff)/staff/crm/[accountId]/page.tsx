@@ -291,12 +291,20 @@ export default async function StaffAccountDetailPage({ params }: { params: Promi
 
           {/* Recent Orders */}
           <Card>
-            <CardHeader className="pb-3">
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
               <CardTitle>Recent Orders</CardTitle>
+              <Link href={`/staff/orders/new?customer=${accountId}`}>
+                <Button variant="ghost" size="sm">Create Order</Button>
+              </Link>
             </CardHeader>
             <CardContent>
               {recentOrders.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No orders yet.</p>
+                <div className="text-center py-4">
+                  <p className="text-sm text-muted-foreground">No orders yet.</p>
+                  <Link href={`/staff/orders/new?customer=${accountId}`}>
+                    <Button variant="ghost" size="sm" className="mt-2">Create Order</Button>
+                  </Link>
+                </div>
               ) : (
                 <div className="space-y-2">
                   {recentOrders.map(order => (

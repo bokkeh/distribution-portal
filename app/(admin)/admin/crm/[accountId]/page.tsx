@@ -382,12 +382,20 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
 
           {/* Recent Orders */}
           <Card>
-            <CardHeader className="pb-3">
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
               <CardTitle>Recent Orders</CardTitle>
+              <Link href={`/admin/orders/new?customer=${account.id}`}>
+                <Button variant="ghost" size="sm">Create Order</Button>
+              </Link>
             </CardHeader>
             <CardContent>
               {recentOrders.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No orders yet.</p>
+                <div className="text-center py-4">
+                  <p className="text-sm text-muted-foreground">No orders yet.</p>
+                  <Link href={`/admin/orders/new?customer=${account.id}`}>
+                    <Button variant="ghost" size="sm" className="mt-2">Create Order</Button>
+                  </Link>
+                </div>
               ) : (
                 <div className="space-y-2">
                   {recentOrders.map(order => (
@@ -410,15 +418,23 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
           </Card>
 
           <Card>
-            <CardHeader className="pb-3">
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
               <CardTitle className="flex items-center gap-2">
                 <Truck className="h-4 w-4" />
                 Deliveries
               </CardTitle>
+              <Link href="/admin/deliveries/new">
+                <Button variant="ghost" size="sm">Add Delivery</Button>
+              </Link>
             </CardHeader>
             <CardContent>
               {recentDeliveries.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No deliveries linked to this account yet.</p>
+                <div className="text-center py-4">
+                  <p className="text-sm text-muted-foreground">No deliveries linked to this account yet.</p>
+                  <Link href="/admin/deliveries/new">
+                    <Button variant="ghost" size="sm" className="mt-2">Add Delivery</Button>
+                  </Link>
+                </div>
               ) : (
                 <div className="space-y-2">
                   {recentDeliveries.map((delivery) => (
@@ -438,15 +454,23 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
           </Card>
 
           <Card>
-            <CardHeader className="pb-3">
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
               <CardTitle className="flex items-center gap-2">
                 <CalendarDays className="h-4 w-4" />
                 Tastings
               </CardTitle>
+              <Link href={`/admin/tastings?account=${account.id}`}>
+                <Button variant="ghost" size="sm">Add Tasting</Button>
+              </Link>
             </CardHeader>
             <CardContent>
               {recentTastings.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No tastings linked to this account yet.</p>
+                <div className="text-center py-4">
+                  <p className="text-sm text-muted-foreground">No tastings linked to this account yet.</p>
+                  <Link href={`/admin/tastings?account=${account.id}`}>
+                    <Button variant="ghost" size="sm" className="mt-2">Add Tasting</Button>
+                  </Link>
+                </div>
               ) : (
                 <div className="space-y-2">
                   {recentTastings.map((tasting) => (
