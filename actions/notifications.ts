@@ -7,7 +7,8 @@ import { requireAdminOrStaff } from '@/lib/auth/session'
 import { sendSms } from '@/lib/telnyx/client'
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY ?? 're_placeholder')
+if (!process.env.RESEND_API_KEY) throw new Error('Missing RESEND_API_KEY')
+const resend = new Resend(process.env.RESEND_API_KEY)
 
 export async function sendQuickEmail(
   to: string,

@@ -1,4 +1,4 @@
-'use server'
+ok'use server'
 
 import { db } from '@/db'
 import { invoices, customerAccounts, journalEntries, journalEntryLines, chartOfAccounts } from '@/db/schema'
@@ -11,7 +11,8 @@ import { logActivityEvent } from '@/lib/activity/log'
 import { sendInvoicePaidConfirmationEmail } from '@/lib/resend/client'
 import { getCustomerPaymentBreakdown, type CustomerPaymentMethod } from '@/lib/stripe/fees'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? 'sk_test_placeholder', { apiVersion: '2026-02-25.clover' })
+if (!process.env.STRIPE_SECRET_KEY) throw new Error('Missing STRIPE_SECRET_KEY')
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2026-02-25.clover' })
 
 function generateInvoiceNumber(seq: number) {
   return `INV-${new Date().getFullYear()}-${String(seq).padStart(5, '0')}`

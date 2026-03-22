@@ -10,7 +10,8 @@ import { requireAdminOrStaff } from '@/lib/auth/session'
 import { logActivityEvent } from '@/lib/activity/log'
 import { createUserNotification } from '@/lib/notifications/in-app'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? 'sk_test_placeholder', { apiVersion: '2026-02-25.clover' })
+if (!process.env.STRIPE_SECRET_KEY) throw new Error('Missing STRIPE_SECRET_KEY')
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2026-02-25.clover' })
 
 function isMissingStripeConnectColumn(error: unknown) {
   const dbError = error as { code?: string; message?: string; cause?: unknown } | null
@@ -32,10 +33,6 @@ export async function payoutTasterInvoiceViaStripe(formData: FormData) {
   const session = await requireAdminOrStaff()
   const invoiceId = (formData.get('invoiceId') as string) || ''
   const mode = (formData.get('mode') as string) || 'admin'
-
-  if (!process.env.STRIPE_SECRET_KEY) {
-    redirect(`/${mode}/invoicing?error=${encodeURIComponent('Stripe is not configured yet.')}`)
-  }
 
   let invoice: {
     id: string

@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { NextResponse } from 'next/server'
+import { auth } from '@/lib/auth/config'
 import { db } from '@/db'
 import { deliveries } from '@/db/schema'
 import { buildIcsFile } from '@/lib/calendar'
@@ -8,6 +9,9 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ deliveryId: string }> }
 ) {
+  const session = await auth()
+  if (!session) return new NextResponse('Unauthorized', { status: 401 })
+
   const { deliveryId } = await params
   const [delivery] = await db
     .select({ id: deliveries.id, weekStartDate: deliveries.weekStartDate, status: deliveries.status })

@@ -4,7 +4,8 @@ import { db } from '@/db'
 import { invoices, journalEntries, journalEntryLines, chartOfAccounts, users } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? 'sk_test_placeholder', { apiVersion: '2026-02-25.clover' })
+if (!process.env.STRIPE_SECRET_KEY) throw new Error('Missing STRIPE_SECRET_KEY')
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2026-02-25.clover' })
 
 export async function POST(req: NextRequest) {
   const body = await req.text()

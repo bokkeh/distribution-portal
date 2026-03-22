@@ -30,11 +30,19 @@ function getStorage() {
   return _storage
 }
 
+const ALLOWED_FOLDERS = new Set(['uploads', 'avatars', 'documents', 'tastings', 'products'])
+
+function validateFolder(folder: string): string {
+  if (!ALLOWED_FOLDERS.has(folder)) throw new Error(`Invalid upload folder: ${folder}`)
+  return folder
+}
+
 export async function generateSignedUploadUrl(
   filename: string,
   contentType: string,
   folder: string = 'uploads'
 ): Promise<{ uploadUrl: string; publicUrl: string }> {
+  validateFolder(folder)
   const storage = getStorage()
   const bucket = storage.bucket(process.env.GCS_BUCKET_NAME ?? '')
   const filePath = `${folder}/${filename}`
@@ -68,6 +76,7 @@ export async function uploadBuffer(
   buffer: Buffer,
   folder: string = 'uploads'
 ): Promise<{ publicUrl: string; filePath: string }> {
+  validateFolder(folder)
   const storage = getStorage()
   const bucket = storage.bucket(process.env.GCS_BUCKET_NAME ?? '')
   const filePath = `${folder}/${filename}`

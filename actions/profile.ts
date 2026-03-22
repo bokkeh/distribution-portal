@@ -13,7 +13,8 @@ import Stripe from 'stripe'
 import { redirect } from 'next/navigation'
 import { isRedirectError } from 'next/dist/client/components/redirect-error'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? 'sk_test_placeholder', { apiVersion: '2026-02-25.clover' })
+if (!process.env.STRIPE_SECRET_KEY) throw new Error('Missing STRIPE_SECRET_KEY')
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2026-02-25.clover' })
 
 function isMissingUserAddressColumn(error: unknown) {
   const dbError = error as { code?: string; message?: string; cause?: unknown } | null
@@ -275,10 +276,6 @@ export async function createTasterStripeOnboardingLink() {
   const session = await requireAuth()
   const roles = session.user.roles ?? [session.user.role]
   if (!roles.includes('taster') && !roles.includes('admin')) throw new Error('Unauthorized')
-
-  if (!process.env.STRIPE_SECRET_KEY) {
-    redirect('/taster/profile?error=' + encodeURIComponent('Stripe is not configured yet.'))
-  }
 
   let user:
     | {

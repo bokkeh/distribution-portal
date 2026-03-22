@@ -6,7 +6,7 @@ import { sendTastingSmsFromTemplate } from '@/lib/tastings/sms-series'
 
 function isAuthorized(request: NextRequest) {
   const secret = process.env.CRON_SECRET
-  if (!secret) return true
+  if (!secret) return false
   return request.headers.get('authorization') === `Bearer ${secret}`
 }
 

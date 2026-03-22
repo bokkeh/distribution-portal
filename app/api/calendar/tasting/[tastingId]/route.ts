@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { auth } from '@/lib/auth/config'
 import { getTastingById } from '@/lib/tastings/read'
 import { buildIcsFile } from '@/lib/calendar'
 
@@ -6,11 +7,20 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ tastingId: string }> }
 ) {
+  const session = await auth()
+  if (!session) return new NextResponse('Unauthorized', { status: 401 })
+
   const { tastingId } = await params
   const tasting = await getTastingById(tastingId)
 
   if (!tasting) {
     return new NextResponse('Not found', { status: 404 })
+  }
+
+  const roles = (session.user.roles ?? [session.user.role]) as string[]
+  const isAdminOrStaff = roles.some(r => ['admin', 'staff'].includes(r))
+  if (!isAdminOrStaff && tasting.assignedUserId !== session.user.id) {
+    return new NextResponse('Forbidden', { status: 403 })
   }
 
   const start = new Date(tasting.scheduledAt)
