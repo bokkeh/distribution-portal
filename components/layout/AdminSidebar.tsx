@@ -14,6 +14,17 @@ import { SuperAdminViewSwitcher } from './SuperAdminViewSwitcher'
 import type { FeatureKey } from '@/lib/users/features'
 import { hasFeature } from '@/lib/users/features'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
+import { DialpadButton, DialpadSidebar } from '@/components/admin/DialpadSidebar'
+
+const SECTION_COLORS: Record<string, { border: string; label: string; dot: string }> = {
+  'Overview':       { border: 'border-blue-400',   label: 'text-blue-600',   dot: 'bg-blue-400' },
+  'Sales & Orders': { border: 'border-emerald-400', label: 'text-emerald-600', dot: 'bg-emerald-400' },
+  'Operations':     { border: 'border-amber-400',   label: 'text-amber-600',  dot: 'bg-amber-400' },
+  'Customers':      { border: 'border-violet-400',  label: 'text-violet-600', dot: 'bg-violet-400' },
+  'Finance':        { border: 'border-rose-400',    label: 'text-rose-600',   dot: 'bg-rose-400' },
+  'Sales Team':     { border: 'border-cyan-400',    label: 'text-cyan-600',   dot: 'bg-cyan-400' },
+  'Admin':          { border: 'border-slate-400',   label: 'text-slate-500',  dot: 'bg-slate-400' },
+}
 
 const navSections = [
   {
@@ -92,18 +103,44 @@ function NavLinks({
   navCounts?: Partial<Record<string, number>>
   onNav?: () => void
 }) {
+  // Start all sections open; auto-collapse sections with no active item on first render
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+
+  function toggle(title: string) {
+    setCollapsed(prev => ({ ...prev, [title]: !prev[title] }))
+  }
+
   return (
-    <>
+    <div className="space-y-2">
       {navSections.map(section => {
         const items = section.items.filter(item => hasFeature(item.feature as FeatureKey, roles, featureFlags))
         if (items.length === 0) return null
 
+        const colors = SECTION_COLORS[section.title] ?? SECTION_COLORS['Admin']
+        const hasActive = items.some(({ href }) => pathname === href || pathname.startsWith(href + '/'))
+        const isCollapsed = collapsed[section.title] ?? false
+
         return (
-          <div key={section.title} className="space-y-1.5">
-            <p className="px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-              {section.title}
-            </p>
-            {items.map(({ href, label, icon: Icon }) => {
+          <div key={section.title} className="py-1">
+            <button
+              onClick={() => toggle(section.title)}
+              className="flex items-center gap-1.5 w-full px-1 pb-1 group"
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${colors.dot} shrink-0`} />
+              <p className={`text-[10px] font-bold uppercase tracking-[0.14em] ${colors.label} flex-1 text-left`}>
+                {section.title}
+              </p>
+              {hasActive && !isCollapsed && (
+                <span className={`w-1.5 h-1.5 rounded-full ${colors.dot} opacity-60 shrink-0`} />
+              )}
+              <ChevronRight className={cn(
+                'w-3 h-3 shrink-0 transition-transform duration-200',
+                colors.label,
+                'opacity-50 group-hover:opacity-100',
+                isCollapsed ? 'rotate-0' : 'rotate-90'
+              )} />
+            </button>
+            {!isCollapsed && items.map(({ href, label, icon: Icon }) => {
               const active = pathname === href || pathname.startsWith(href + '/')
               const count = navCounts?.[href] ?? 0
               return (
@@ -112,13 +149,13 @@ function NavLinks({
                   href={href}
                   onClick={onNav}
                   className={cn(
-                    'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                    'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
                     active
-                      ? 'bg-blue-600 text-white'
-                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                      ? 'bg-blue-50 text-blue-700'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                   )}
                 >
-                  <Icon className="w-4 h-4 flex-shrink-0" />
+                  <Icon className={cn('w-4 h-4 flex-shrink-0', active ? 'text-blue-600' : 'text-slate-400')} />
                   {label}
                   {(count > 0 || active) && (
                     <span className="ml-auto flex items-center gap-2">
@@ -126,13 +163,13 @@ function NavLinks({
                         <span
                           className={cn(
                             'inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] font-semibold',
-                            active ? 'bg-white/20 text-white' : 'bg-red-500 text-white'
+                            active ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-600'
                           )}
                         >
                           {count > 99 ? '99+' : count}
                         </span>
                       )}
-                      {active && <ChevronRight className="w-3.5 h-3.5" />}
+                      {active && <ChevronRight className="w-3 h-3 text-blue-500" />}
                     </span>
                   )}
                 </Link>
@@ -140,8 +177,9 @@ function NavLinks({
             })}
           </div>
         )
+
       })}
-    </>
+    </div>
   )
 }
 
@@ -162,11 +200,10 @@ export default function AdminSidebar({
 }) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
+  const [dialpadOpen, setDialpadOpen] = useState(false)
 
-  // Close drawer on route change
   useEffect(() => { setOpen(false) }, [pathname])
 
-  // Lock body scroll when drawer is open
   useEffect(() => {
     document.body.style.overflow = open ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
@@ -175,28 +212,33 @@ export default function AdminSidebar({
   return (
     <>
       {/* ── Desktop sidebar ─────────────────────────────────── */}
-      <aside className="hidden md:flex w-64 min-h-screen bg-slate-900 text-slate-100 flex-col flex-shrink-0">
-        <div className="p-6 border-b border-slate-700">
+      <aside className="hidden md:flex w-64 min-h-screen bg-white border-r border-slate-200 flex-col flex-shrink-0">
+        <div className="p-5 border-b border-slate-200">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <Image src="/brand/logo.png" alt="AHAWC" width={40} height={40}
-                className="h-10 w-10 rounded-lg bg-white p-1 object-contain" priority />
+                className="h-10 w-10 rounded-xl bg-slate-100 p-1 object-contain" priority />
               <div>
-                <p className="font-bold text-white">AHAWC</p>
+                <p className="font-bold text-slate-900">AHAWC</p>
                 <p className="text-xs text-slate-400">Admin Portal</p>
               </div>
             </div>
-            <NotificationBell items={notifications} unreadCount={unreadCount} dark />
+            <div className="flex items-center gap-1">
+              <DialpadButton onClick={() => setDialpadOpen(true)} />
+              <NotificationBell items={notifications} unreadCount={unreadCount} />
+            </div>
           </div>
         </div>
-        <nav className="flex-1 p-4 space-y-1">
+
+        <nav className="flex-1 px-3 py-2 overflow-y-auto space-y-2">
           <NavLinks pathname={pathname} featureFlags={featureFlags} roles={roles} navCounts={navCounts} />
         </nav>
-        <div className="p-4 border-t border-slate-700">
-          {showViewSwitcher && <div className="mb-4"><SuperAdminViewSwitcher compact /></div>}
+
+        <div className="p-4 border-t border-slate-200 space-y-3">
+          {showViewSwitcher && <SuperAdminViewSwitcher />}
           <button
             onClick={() => signOut({ callbackUrl: '/login' })}
-            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
+            className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors"
           >
             <LogOut className="w-4 h-4" /> Sign Out
           </button>
@@ -204,20 +246,21 @@ export default function AdminSidebar({
       </aside>
 
       {/* ── Mobile top bar ──────────────────────────────────── */}
-      <header className="md:hidden fixed top-0 inset-x-0 z-40 flex items-center justify-between bg-slate-900 px-4 h-14 shadow-lg">
+      <header className="md:hidden fixed top-0 inset-x-0 z-40 flex items-center justify-between bg-white border-b border-slate-200 px-4 h-14 shadow-sm">
         <div className="flex items-center gap-2.5">
           <Image src="/brand/logo.png" alt="AHAWC" width={32} height={32}
-            className="h-8 w-8 rounded-md bg-white p-0.5 object-contain" priority />
+            className="h-8 w-8 rounded-lg bg-slate-100 p-0.5 object-contain" priority />
           <div>
-            <p className="font-bold text-white text-sm leading-none">AHAWC</p>
+            <p className="font-bold text-slate-900 text-sm leading-none">AHAWC</p>
             <p className="text-xs text-slate-400 leading-none mt-0.5">Admin Portal</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <NotificationBell items={notifications} unreadCount={unreadCount} dark />
+          <DialpadButton onClick={() => setDialpadOpen(true)} />
+          <NotificationBell items={notifications} unreadCount={unreadCount} />
           <button
             onClick={() => setOpen(true)}
-            className="p-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
+            className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors"
             aria-label="Open menu"
           >
             <Menu className="w-5 h-5" />
@@ -225,52 +268,52 @@ export default function AdminSidebar({
         </div>
       </header>
 
-      {/* ── Mobile drawer overlay ───────────────────────────── */}
+      {/* ── Mobile drawer ───────────────────────────────────── */}
       {open && (
         <div className="md:hidden fixed inset-0 z-50 flex">
-          {/* Drawer panel */}
-          <aside className="w-72 max-w-[85vw] bg-slate-900 text-slate-100 flex flex-col shadow-2xl animate-in slide-in-from-left duration-200">
-            <div className="flex items-center justify-between p-5 border-b border-slate-700">
+          <aside className="w-72 max-w-[85vw] bg-white flex flex-col shadow-2xl animate-in slide-in-from-left duration-200">
+            <div className="flex items-center justify-between p-5 border-b border-slate-200">
               <div className="flex items-center gap-2.5">
                 <Image src="/brand/logo.png" alt="AHAWC" width={36} height={36}
-                  className="h-9 w-9 rounded-lg bg-white p-0.5 object-contain" />
+                  className="h-9 w-9 rounded-xl bg-slate-100 p-0.5 object-contain" />
                 <div>
-                  <p className="font-bold text-white text-sm">AHAWC</p>
+                  <p className="font-bold text-slate-900 text-sm">AHAWC</p>
                   <p className="text-xs text-slate-400">Admin Portal</p>
                 </div>
               </div>
               <button
                 onClick={() => setOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
+                className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-900 transition-colors"
                 aria-label="Close menu"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+            <nav className="flex-1 px-3 py-2 overflow-y-auto space-y-2">
               <NavLinks pathname={pathname} featureFlags={featureFlags} roles={roles} navCounts={navCounts} onNav={() => setOpen(false)} />
             </nav>
 
-            <div className="p-4 border-t border-slate-700">
-              {showViewSwitcher && <div className="mb-4"><SuperAdminViewSwitcher compact /></div>}
+            <div className="p-4 border-t border-slate-200 space-y-3">
+              {showViewSwitcher && <SuperAdminViewSwitcher />}
               <button
                 onClick={() => signOut({ callbackUrl: '/login' })}
-                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
+                className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors"
               >
                 <LogOut className="w-4 h-4" /> Sign Out
               </button>
             </div>
           </aside>
 
-          {/* Backdrop */}
           <div
-            className="flex-1 bg-black/60 backdrop-blur-sm"
+            className="flex-1 bg-black/40 backdrop-blur-sm"
             onClick={() => setOpen(false)}
             aria-hidden="true"
           />
         </div>
       )}
+
+      <DialpadSidebar open={dialpadOpen} onClose={() => setDialpadOpen(false)} />
     </>
   )
 }

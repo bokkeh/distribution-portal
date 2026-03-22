@@ -107,6 +107,65 @@ export async function updateHubSpotCompany(
   return res.ok
 }
 
+export interface HubSpotContactRecord {
+  id: string
+  email: string | null
+  firstname: string | null
+  lastname: string | null
+  phone: string | null
+  company: string | null
+  jobtitle: string | null
+  lastmodifieddate: string | null
+}
+
+export async function fetchHubSpotContactsUpdatedSince(sinceMs: number): Promise<HubSpotContactRecord[]> {
+  const apiKey = process.env.HUBSPOT_API_KEY
+  if (!apiKey) return []
+
+  const { headers, keyParam } = buildHubSpotHeaders(apiKey)
+  const kp = keyParam ? `?hapikey=${keyParam}` : ''
+
+  const sinceStr = new Date(sinceMs).toISOString()
+  const all: HubSpotContactRecord[] = []
+  let after: string | undefined
+
+  do {
+    const res = await fetch(`${HUBSPOT_API_URL}/crm/v3/objects/contacts/search${kp}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        filterGroups: [{
+          filters: [{ propertyName: 'lastmodifieddate', operator: 'GTE', value: sinceStr }]
+        }],
+        properties: ['email', 'firstname', 'lastname', 'phone', 'company', 'jobtitle', 'lastmodifieddate'],
+        limit: 100,
+        ...(after ? { after } : {}),
+      }),
+    })
+
+    if (!res.ok) break
+
+    const data = await res.json()
+    for (const r of data.results ?? []) {
+      const p = r.properties ?? {}
+      all.push({
+        id: r.id,
+        email: p.email ?? null,
+        firstname: p.firstname ?? null,
+        lastname: p.lastname ?? null,
+        phone: p.phone ?? null,
+        company: p.company ?? null,
+        jobtitle: p.jobtitle ?? null,
+        lastmodifieddate: p.lastmodifieddate ?? null,
+      })
+    }
+
+    after = data.paging?.next?.after
+  } while (after)
+
+  return all
+}
+
 interface HubSpotContactProps {
   email: string
   firstname: string

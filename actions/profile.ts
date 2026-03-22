@@ -72,9 +72,16 @@ export async function updateProfile(
       }).where(eq(users.id, userId))
     }
 
-    // Update customer account if it exists
+    // Update customer account if it exists — verify it belongs to this user
     const accountId = formData.get('accountId') as string | null
     if (accountId) {
+      const [ownedAccount] = await db
+        .select({ id: customerAccounts.id })
+        .from(customerAccounts)
+        .where(eq(customerAccounts.userId, userId))
+        .limit(1)
+      if (!ownedAccount || ownedAccount.id !== accountId) throw new Error('Unauthorized')
+
       const companyName = (formData.get('companyName') as string) || ''
       const address = (formData.get('address') as string) || null
       const city = (formData.get('city') as string) || null

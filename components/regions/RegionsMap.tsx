@@ -63,16 +63,32 @@ function getAccountMarkerTitle(account: RegionMapAccount): string {
   return account.businessType ?? account.accountType?.replaceAll('_', ' ') ?? 'Account'
 }
 
+/**
+ * Health color based on time-decay since last visit relative to the account's
+ * visit frequency. Staleness = daysSinceVisit / visitFrequency.
+ *
+ *  No rep assigned       → slate  (unmanaged)
+ *  Never visited         → red    (no relationship built)
+ *  staleness < 0.75      → green  (fresh — well within window)
+ *  staleness 0.75–1.0    → lime   (due soon, still in window)
+ *  staleness 1.0–1.5     → amber  (overdue up to 50%)
+ *  staleness 1.5–2.5     → orange (significantly overdue)
+ *  staleness > 2.5       → red    (relationship at risk)
+ */
 function getAccountHealthColor(account: RegionMapAccount): string {
-  if (!account.assignedSalesRepId) return '#3B82F6' // blue = no rep
-  const now = Date.now()
-  if (account.nextRequiredVisitDate && new Date(account.nextRequiredVisitDate).getTime() < now) return '#EF4444' // red = overdue
-  if (account.nextRequiredVisitDate) {
-    const days = (new Date(account.nextRequiredVisitDate).getTime() - now) / 86400000
-    if (days <= 7) return '#F59E0B' // amber = due soon
-  }
-  if (account.revenue === 0 || !account.lastVisitDate) return '#F59E0B' // amber = no revenue / never visited
-  return '#22C55E' // green = healthy
+  if (!account.assignedSalesRepId) return '#64748B' // slate = no rep
+
+  if (!account.lastVisitDate) return '#EF4444' // red = never visited
+
+  const daysSince = (Date.now() - new Date(account.lastVisitDate).getTime()) / 86400000
+  const freq = account.visitFrequency ?? 30 // default 30-day cadence
+  const staleness = daysSince / freq
+
+  if (staleness < 0.75) return '#22C55E' // green  — fresh
+  if (staleness < 1.0)  return '#84CC16' // lime   — due soon
+  if (staleness < 1.5)  return '#F59E0B' // amber  — overdue
+  if (staleness < 2.5)  return '#F97316' // orange — significantly overdue
+  return '#EF4444'                        // red    — relationship at risk
 }
 
 type MyRoute = { id: string; name: string; description: string | null }
@@ -263,7 +279,14 @@ export function RegionsMap({ data, routes = [] }: { data: RegionMapData; routes?
 
         <div className="mt-auto border-t pt-2 space-y-1">
           <p className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Dot Color — Health</p>
-          {[['#22C55E', 'Healthy (visit current)'], ['#F59E0B', 'Needs attention'], ['#EF4444', 'Visit overdue'], ['#3B82F6', 'No rep assigned']].map(([c, label]) => (
+          {([
+            ['#22C55E', 'Fresh — visited recently'],
+            ['#84CC16', 'Due soon'],
+            ['#F59E0B', 'Overdue'],
+            ['#F97316', 'Significantly overdue'],
+            ['#EF4444', 'At risk / never visited'],
+            ['#64748B', 'No rep assigned'],
+          ] as [string, string][]).map(([c, label]) => (
             <div key={label} className="flex items-center gap-1.5 px-1">
               <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: c }} />
               <span className="text-xs text-slate-500">{label}</span>
@@ -574,12 +597,58 @@ function AccountInfoCard({ account }: { account: RegionMapAccount }) {
         </div>
       </div>
 
-      {account.nextRequiredVisitDate && (
-        <p className={`text-xs font-medium ${overdue ? 'text-red-500' : 'text-slate-500'}`}>
-          {overdue ? '⚠ Visit overdue: ' : 'Next visit: '}
-          {new Date(account.nextRequiredVisitDate).toLocaleDateString()}
-        </p>
-      )}
+      {/* Visit health bar */}
+      {(() => {
+        const healthColor = getAccountHealthColor(account)
+        const daysSince = account.lastVisitDate
+          ? Math.floor((Date.now() - new Date(account.lastVisitDate).getTime()) / 86400000)
+          : null
+        const freq = account.visitFrequency ?? 30
+        const staleness = daysSince != null ? daysSince / freq : null
+        const daysUntilNext = account.nextRequiredVisitDate
+          ? Math.ceil((new Date(account.nextRequiredVisitDate).getTime() - Date.now()) / 86400000)
+          : null
+
+        return (
+          <div className="rounded-lg border border-slate-100 bg-slate-50 p-2 space-y-1.5">
+            <div className="flex items-center justify-between text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+              <span>Visit Health</span>
+              <span style={{ color: healthColor }} className="font-bold">
+                {!account.assignedSalesRepId ? 'No rep' :
+                 !account.lastVisitDate ? 'Never visited' :
+                 staleness! < 0.75 ? 'Healthy' :
+                 staleness! < 1.0 ? 'Due soon' :
+                 staleness! < 1.5 ? 'Overdue' :
+                 staleness! < 2.5 ? 'At risk' : 'Critical'}
+              </span>
+            </div>
+            {/* Staleness bar */}
+            {staleness != null && (
+              <div className="relative h-1.5 w-full rounded-full bg-slate-200 overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{
+                    width: `${Math.min(staleness * 50, 100)}%`,
+                    backgroundColor: healthColor,
+                  }}
+                />
+              </div>
+            )}
+            <div className="flex justify-between text-[10px] text-slate-500">
+              <span>
+                {account.lastVisitDate
+                  ? `Last visit: ${daysSince === 0 ? 'today' : `${daysSince}d ago`}`
+                  : 'Never visited'}
+              </span>
+              {daysUntilNext != null && (
+                <span className={daysUntilNext < 0 ? 'text-red-500 font-medium' : daysUntilNext <= 7 ? 'text-amber-600 font-medium' : ''}>
+                  {daysUntilNext < 0 ? `${Math.abs(daysUntilNext)}d overdue` : `Next: ${daysUntilNext}d`}
+                </span>
+              )}
+            </div>
+          </div>
+        )
+      })()}
 
       <a
         href={`/admin/crm/${account.id}`}

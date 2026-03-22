@@ -8,11 +8,16 @@ export async function POST(req: NextRequest) {
   try {
     await requireAdminOrStaff()
     const { id, amount } = await req.json() as { id: string; amount: string }
-    if (!id || !amount) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
+    if (!id || amount == null) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
+
+    const parsed = parseFloat(amount)
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      return NextResponse.json({ error: 'Invalid amount' }, { status: 400 })
+    }
 
     await db
       .update(commissions)
-      .set({ amount })
+      .set({ amount: parsed.toFixed(2) })
       .where(eq(commissions.id, id))
 
     return NextResponse.json({ success: true })

@@ -1,13 +1,13 @@
 import { requireRole } from '@/lib/auth/session'
 import { db } from '@/db'
-import { salesMembers, customerAccounts, orders } from '@/db/schema'
-import { eq, and, desc } from 'drizzle-orm'
+import { salesMembers, customerAccounts, orders, orderItems, invoices } from '@/db/schema'
+import { eq, and, desc, sql } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Building2, MapPin, Phone, Mail, Clock, AlertCircle, CheckCircle2, ArrowLeft, Package } from 'lucide-react'
+import { Building2, MapPin, Phone, Mail, Clock, AlertCircle, CheckCircle2, ArrowLeft, Package, FileText, ShoppingCart } from 'lucide-react'
 import Link from 'next/link'
-import { LogVisitButton } from './LogVisitButton'
+import { CheckInModal } from './CheckInModal'
 import { PhoneActions } from '@/components/shared/PhoneActions'
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -47,7 +47,31 @@ export default async function SalesAccountDetailPage({
     .from(orders)
     .where(eq(orders.customerId, accountId))
     .orderBy(desc(orders.createdAt))
-    .limit(10)
+    .limit(20)
+
+  // Item counts per order
+  const orderIds = recentOrders.map(o => o.id)
+  const itemCounts = orderIds.length > 0
+    ? await db
+        .select({
+          orderId: orderItems.orderId,
+          itemCount: sql<number>`sum(${orderItems.quantity}::numeric)::int`.as('item_count'),
+        })
+        .from(orderItems)
+        .where(sql`${orderItems.orderId} = ANY(ARRAY[${sql.raw(orderIds.map(id => `'${id}'`).join(','))}]::uuid[])`)
+        .groupBy(orderItems.orderId)
+    : []
+
+  // Invoice numbers per order
+  const invoicesByOrder = orderIds.length > 0
+    ? await db
+        .select({ orderId: invoices.orderId, invoiceNumber: invoices.invoiceNumber, id: invoices.id })
+        .from(invoices)
+        .where(sql`${invoices.orderId} = ANY(ARRAY[${sql.raw(orderIds.map(id => `'${id}'`).join(','))}]::uuid[])`)
+    : []
+
+  const itemCountByOrder = new Map(itemCounts.map(r => [r.orderId, r.itemCount]))
+  const invoiceByOrder = new Map(invoicesByOrder.map(r => [r.orderId!, { number: r.invoiceNumber, id: r.id }]))
 
   const now = new Date()
   const isOverdue = account.nextRequiredVisitDate && new Date(account.nextRequiredVisitDate) < now
@@ -187,7 +211,11 @@ export default async function SalesAccountDetailPage({
 
               {member && account.assignedSalesRepId === member.id && (
                 <div className="pt-2">
-                  <LogVisitButton customerId={account.id} salesMemberId={member.id} />
+                  <CheckInModal
+                    customerId={account.id}
+                    salesMemberId={member.id}
+                    companyName={account.companyName}
+                  />
                 </div>
               )}
             </CardContent>
@@ -236,45 +264,73 @@ export default async function SalesAccountDetailPage({
             </Card>
           </div>
 
-          {/* Orders list */}
+          {/* Order history timeline */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <Package className="w-4 h-4 text-slate-400" />
-                Recent Orders
+                Order History
+                <span className="ml-auto text-xs font-normal text-slate-400">{recentOrders.length} orders</span>
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-0">
               {recentOrders.length === 0 ? (
                 <p className="text-sm text-slate-400 py-6 text-center">No orders yet for this account.</p>
               ) : (
-                <div className="space-y-0">
-                  {recentOrders.map(order => (
-                    <div key={order.id} className="flex items-center justify-between py-3 border-b last:border-0 gap-4">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-medium text-slate-800">
-                            {new Date(order.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                          </p>
-                          <Badge
-                            variant="outline"
-                            className={`text-xs capitalize ${
-                              order.status === 'fulfilled' ? 'text-green-700 border-green-300' :
-                              order.status === 'cancelled' ? 'text-red-700 border-red-300' :
-                              'text-blue-700 border-blue-300'
-                            }`}
-                          >
-                            {order.status}
-                          </Badge>
-                          {order.orderType === 'sample' && (
-                            <Badge variant="outline" className="text-xs text-violet-700 border-violet-300">Sample</Badge>
-                          )}
+                <div className="relative">
+                  {/* Timeline vertical line */}
+                  <div className="absolute left-6 top-0 bottom-0 w-px bg-slate-100" />
+                  <div className="space-y-0">
+                    {recentOrders.map((order, idx) => {
+                      const inv = invoiceByOrder.get(order.id)
+                      const items = itemCountByOrder.get(order.id) ?? 0
+                      const dotColor =
+                        order.status === 'fulfilled' ? 'bg-green-500' :
+                        order.status === 'cancelled' ? 'bg-red-400' :
+                        order.status === 'confirmed' ? 'bg-blue-500' :
+                        'bg-amber-400'
+                      return (
+                        <div key={order.id} className={`flex items-start gap-4 px-4 py-3.5 ${idx < recentOrders.length - 1 ? 'border-b border-slate-50' : ''}`}>
+                          {/* Timeline dot */}
+                          <div className="relative z-10 shrink-0 mt-0.5">
+                            <div className={`w-4 h-4 rounded-full border-2 border-white ${dotColor} shadow-sm`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-medium text-slate-800">
+                                {new Date(order.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                              </span>
+                              <Badge
+                                variant="outline"
+                                className={`text-xs capitalize ${
+                                  order.status === 'fulfilled' ? 'text-green-700 border-green-300 bg-green-50' :
+                                  order.status === 'cancelled' ? 'text-red-600 border-red-300 bg-red-50' :
+                                  order.status === 'confirmed' ? 'text-blue-700 border-blue-300 bg-blue-50' :
+                                  'text-amber-700 border-amber-300 bg-amber-50'
+                                }`}
+                              >
+                                {order.status}
+                              </Badge>
+                              {order.orderType === 'sample' && (
+                                <Badge variant="outline" className="text-xs text-violet-700 border-violet-300 bg-violet-50">Sample</Badge>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-3 mt-0.5 text-xs text-slate-400 flex-wrap">
+                              {items > 0 && <span><ShoppingCart className="w-3 h-3 inline mr-0.5" />{items} items</span>}
+                              <span className="capitalize">{order.shippingStatus.replace(/_/g, ' ')}</span>
+                              {inv && (
+                                <span className="flex items-center gap-0.5">
+                                  <FileText className="w-3 h-3" />
+                                  Inv #{inv.number}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <p className="font-semibold text-slate-900 shrink-0 text-sm">{fmt(parseFloat(order.total ?? '0'))}</p>
                         </div>
-                        <p className="text-xs text-slate-400 mt-0.5 capitalize">{order.shippingStatus.replace('_', ' ')}</p>
-                      </div>
-                      <p className="font-semibold text-slate-900 shrink-0">{fmt(parseFloat(order.total ?? '0'))}</p>
-                    </div>
-                  ))}
+                      )
+                    })}
+                  </div>
                 </div>
               )}
             </CardContent>

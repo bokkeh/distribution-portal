@@ -23,6 +23,7 @@ export type RegionMapAccount = {
   phone: string | null
   lastVisitDate: Date | null
   nextRequiredVisitDate: Date | null
+  visitFrequency: number | null
   revenue: number
   tastingCount: number
   deliveryCount: number
@@ -85,6 +86,7 @@ export async function getRegionMapData(): Promise<RegionMapData> {
       phone: customerAccounts.phone,
       lastVisitDate: customerAccounts.lastVisitDate,
       nextRequiredVisitDate: customerAccounts.nextRequiredVisitDate,
+      visitFrequency: customerAccounts.visitFrequency,
     })
     .from(customerAccounts)
 

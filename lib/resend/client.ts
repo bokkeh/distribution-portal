@@ -683,6 +683,55 @@ export async function sendTasterInvoiceNotification({
   })
 }
 
+export async function sendSalesRepDigestEmail({
+  to,
+  repName,
+  overdueAccounts,
+  dueSoonAccounts,
+  reorderFollowUps,
+  pendingCommissions,
+}: {
+  to: string
+  repName: string
+  overdueAccounts: string[]
+  dueSoonAccounts: string[]
+  reorderFollowUps: string[]
+  pendingCommissions: number
+}) {
+  const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
+  const listHtml = (items: string[], emptyMsg: string) =>
+    items.length > 0
+      ? `<ul style="margin: 0; padding-left: 18px;">${items.map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul>`
+      : `<p style="margin: 0; color: #64748b;">${emptyMsg}</p>`
+
+  const html = renderEmailCard({
+    eyebrow: 'Daily Briefing',
+    title: `Good morning, ${escapeHtml(repName)}`,
+    intro: "Here's your sales recap for today.",
+    body: `
+      <p style="margin: 0 0 6px; font-weight: 600; color: #ef4444;">⚠ Overdue Visits (${overdueAccounts.length})</p>
+      ${listHtml(overdueAccounts, 'No overdue visits — great work!')}
+
+      <p style="margin: 14px 0 6px; font-weight: 600; color: #f59e0b;">📅 Due This Week (${dueSoonAccounts.length})</p>
+      ${listHtml(dueSoonAccounts, 'No visits due this week.')}
+
+      <p style="margin: 14px 0 6px; font-weight: 600; color: #3b82f6;">🔁 Reorder Follow-ups (${reorderFollowUps.length})</p>
+      ${listHtml(reorderFollowUps, 'No reorder follow-ups right now.')}
+
+      <p style="margin: 14px 0 6px; font-weight: 600; color: #10b981;">💰 Pending Commissions</p>
+      <p style="margin: 0; font-size: 18px; font-weight: 700; color: #1e293b;">${fmt(pendingCommissions)}</p>
+    `,
+    ctaLabel: 'Open Sales Portal',
+    ctaHref: portalUrl('/sales/dashboard'),
+  })
+
+  await sendEmail({
+    to,
+    subject: `Your daily briefing — ${new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}`,
+    html,
+  })
+}
+
 export async function sendNewOrderStaffNotification({
   companyName,
   orderId,

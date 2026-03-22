@@ -899,3 +899,89 @@ export async function getTastingsForView({
 }) {
   return getTastingsForViewWithFallback({ assignedUserId })
 }
+
+// ─── Scheduling Assistant ─────────────────────────────────────────────────────
+
+export type TastingSuggestion = {
+  date: string           // ISO date string (YYYY-MM-DD)
+  dayLabel: string       // e.g. "Tuesday, Jan 14"
+  availableTasters: Array<{ id: string; name: string }>
+  conflictCount: number  // existing tastings that day across all accounts
+}
+
+/**
+ * Suggests up to 5 optimal tasting slots for a given account over the next 45 days.
+ * Prefers weekdays with fewer existing tastings and available tasters.
+ */
+export async function getTastingScheduleSuggestions(
+  accountId: string,
+): Promise<{ suggestions: TastingSuggestion[]; error?: string }> {
+  await requireFeature('tastings', 'admin')
+
+  // All tastings in next 45 days (to detect conflicts)
+  const now = new Date()
+  const end45 = new Date(now)
+  end45.setDate(end45.getDate() + 45)
+
+  const upcoming = await db
+    .select({ scheduledAt: tastings.scheduledAt, assignedUserId: tastings.assignedUserId, customerId: tastings.customerId })
+    .from(tastings)
+    .where(
+      eq(tastings.status, 'scheduled'),
+    )
+
+  // Busiest days (count of tastings per day)
+  const tastingsByDay = new Map<string, number>()
+  const accountTastingDays = new Set<string>()
+  for (const t of upcoming) {
+    const d = new Date(t.scheduledAt)
+    if (d < now || d > end45) continue
+    const key = d.toISOString().slice(0, 10)
+    tastingsByDay.set(key, (tastingsByDay.get(key) ?? 0) + 1)
+    if (t.customerId === accountId) accountTastingDays.add(key)
+  }
+
+  // Active tasters
+  const tasterRows = await db
+    .select({ id: users.id, name: users.name, roles: users.roles, active: users.active })
+    .from(users)
+    .where(eq(users.active, true))
+
+  const tasters = tasterRows.filter(u => u.roles?.includes('taster'))
+
+  // Tasters already booked per day
+  const tasterBookedByDay = new Map<string, Set<string>>()
+  for (const t of upcoming) {
+    const d = new Date(t.scheduledAt)
+    if (d < now || d > end45) continue
+    const key = d.toISOString().slice(0, 10)
+    if (!tasterBookedByDay.has(key)) tasterBookedByDay.set(key, new Set())
+    if (t.assignedUserId) tasterBookedByDay.get(key)!.add(t.assignedUserId)
+  }
+
+  const suggestions: TastingSuggestion[] = []
+
+  for (let daysOut = 3; daysOut <= 45 && suggestions.length < 5; daysOut++) {
+    const d = new Date(now)
+    d.setDate(d.getDate() + daysOut)
+    const dayOfWeek = d.getDay()
+    if (dayOfWeek === 0 || dayOfWeek === 6) continue // skip weekends
+
+    const dateKey = d.toISOString().slice(0, 10)
+    if (accountTastingDays.has(dateKey)) continue // already has tasting this day
+
+    const bookedTasters = tasterBookedByDay.get(dateKey) ?? new Set<string>()
+    const availableTasters = tasters.filter(t => !bookedTasters.has(t.id))
+
+    if (availableTasters.length === 0) continue
+
+    suggestions.push({
+      date: dateKey,
+      dayLabel: d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }),
+      availableTasters: availableTasters.map(t => ({ id: t.id, name: t.name ?? 'Unknown' })),
+      conflictCount: tastingsByDay.get(dateKey) ?? 0,
+    })
+  }
+
+  return { suggestions }
+}

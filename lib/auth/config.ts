@@ -8,8 +8,9 @@ import { customerAccounts, userFeatureSettings, users } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { recordUserAccessEvent } from '@/lib/auth/activity'
 import { resolveFeatureFlags } from '@/lib/users/features'
+import { isLoginRateLimited } from '@/lib/auth/rate-limit'
 
-const SUPER_ADMIN_EMAIL = 'alex@ahawc.com'
+const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL ?? ''
 const ADMIN_ROLE = 'admin'
 
 function normalizeRoles(primaryRole: string, roles?: string[] | null) {
@@ -121,8 +122,16 @@ const providers: Provider[] = [
       email: { label: 'Email', type: 'email' },
       password: { label: 'Password', type: 'password' },
     },
-    async authorize(credentials) {
+    async authorize(credentials, request) {
       if (!credentials?.email || !credentials?.password) return null
+
+      // Rate limit by IP — 5 attempts per 15 minutes
+      const ip =
+        (request as Request | undefined)?.headers?.get('x-forwarded-for')?.split(',')[0].trim()
+        ?? 'unknown'
+      if (await isLoginRateLimited(`${ip}:${(credentials.email as string).toLowerCase()}`)) {
+        throw new Error('Too many login attempts. Please try again later.')
+      }
 
       const user = await findUserByEmail(credentials.email as string)
 
@@ -309,6 +318,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   session: {
     strategy: 'jwt',
-    maxAge: 8 * 60 * 60, // 8 hours
+    maxAge: 4 * 60 * 60, // 4 hours
   },
 })

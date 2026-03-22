@@ -13,8 +13,9 @@ import {
   salesRouteStops,
   commissions,
   users,
+  activityEvents,
 } from '@/db/schema'
-import { requireAdminOrStaff } from '@/lib/auth/session'
+import { requireAdminOrStaff, requireRole } from '@/lib/auth/session'
 import { hash } from 'bcryptjs'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -48,7 +49,9 @@ export type SalesMemberWithUser = {
 // ─── Reads ─────────────────────────────────────────────────────────────────────
 
 export async function getSalesMembers(): Promise<SalesMemberWithUser[]> {
-  await requireAdminOrStaff()
+  const session = await requireRole('admin', 'staff', 'sales_rep', 'sales_manager')
+  const roles = session.user.roles ?? [session.user.role as string]
+  const isSalesRepOnly = roles.includes('sales_rep') && !roles.some(r => ['admin', 'staff', 'sales_manager'].includes(r))
 
   const rows = await db
     .select({
@@ -64,6 +67,7 @@ export async function getSalesMembers(): Promise<SalesMemberWithUser[]> {
     })
     .from(salesMembers)
     .innerJoin(users, eq(salesMembers.userId, users.id))
+    .where(isSalesRepOnly ? eq(users.id, session.user.id) : undefined)
     .orderBy(asc(users.name))
 
   return rows.map(r => ({ ...r.member, user: r.user }))
@@ -94,8 +98,28 @@ export async function getSalesMemberById(id: string): Promise<SalesMemberWithUse
 }
 
 export async function getSalesRegions() {
-  await requireAdminOrStaff()
-  return db.select().from(salesRegions).orderBy(asc(salesRegions.name))
+  const session = await requireRole('admin', 'staff', 'sales_rep', 'sales_manager')
+  const roles = session.user.roles ?? [session.user.role as string]
+  const isSalesRepOnly = roles.includes('sales_rep') && !roles.some(r => ['admin', 'staff', 'sales_manager'].includes(r))
+
+  if (!isSalesRepOnly) {
+    return db.select().from(salesRegions).orderBy(asc(salesRegions.name))
+  }
+
+  // Sales rep: only regions they are assigned to manage
+  const [member] = await db
+    .select({ id: salesMembers.id })
+    .from(salesMembers)
+    .where(eq(salesMembers.userId, session.user.id))
+    .limit(1)
+
+  if (!member) return []
+
+  return db
+    .select()
+    .from(salesRegions)
+    .where(eq(salesRegions.assignedManagerId, member.id))
+    .orderBy(asc(salesRegions.name))
 }
 
 export async function getCommissionPlans() {
@@ -283,23 +307,41 @@ export async function getAccountsForRep(salesRepId: string) {
 }
 
 export async function getAllCustomerAccountsForAssignment() {
-  await requireAdminOrStaff()
+  const session = await requireRole('admin', 'staff', 'sales_rep', 'sales_manager')
+  const roles = session.user.roles ?? [session.user.role as string]
+  const isSalesRepOnly = roles.includes('sales_rep') && !roles.some(r => ['admin', 'staff', 'sales_manager'].includes(r))
+
+  const cols = {
+    id: customerAccounts.id,
+    companyName: customerAccounts.companyName,
+    city: customerAccounts.city,
+    state: customerAccounts.state,
+    businessType: customerAccounts.businessType,
+    accountType: customerAccounts.accountType,
+    accountPriority: customerAccounts.accountPriority,
+    dealStage: customerAccounts.dealStage,
+    assignedSalesRepId: customerAccounts.assignedSalesRepId,
+    assignedRegionId: customerAccounts.assignedRegionId,
+    visitFrequency: customerAccounts.visitFrequency,
+  }
+
+  if (!isSalesRepOnly) {
+    return db.select(cols).from(customerAccounts).orderBy(asc(customerAccounts.companyName))
+  }
+
+  // Sales rep: only accounts assigned to them
+  const [member] = await db
+    .select({ id: salesMembers.id })
+    .from(salesMembers)
+    .where(eq(salesMembers.userId, session.user.id))
+    .limit(1)
+
+  if (!member) return []
 
   return db
-    .select({
-      id: customerAccounts.id,
-      companyName: customerAccounts.companyName,
-      city: customerAccounts.city,
-      state: customerAccounts.state,
-      businessType: customerAccounts.businessType,
-      accountType: customerAccounts.accountType,
-      accountPriority: customerAccounts.accountPriority,
-      dealStage: customerAccounts.dealStage,
-      assignedSalesRepId: customerAccounts.assignedSalesRepId,
-      assignedRegionId: customerAccounts.assignedRegionId,
-      visitFrequency: customerAccounts.visitFrequency,
-    })
+    .select(cols)
     .from(customerAccounts)
+    .where(eq(customerAccounts.assignedSalesRepId, member.id))
     .orderBy(asc(customerAccounts.companyName))
 }
 
@@ -659,11 +701,20 @@ export async function markCommissionPaid(
 
 // ─── Visit Tracking ────────────────────────────────────────────────────────────
 
-export async function logVisit(customerId: string, salesMemberId: string): Promise<{ success: boolean }> {
+export async function logVisit(
+  customerId: string,
+  salesMemberId: string,
+  notes?: string,
+): Promise<{ success: boolean }> {
+  const session = await requireRole('sales_rep', 'sales_manager', 'admin')
   const now = new Date()
 
   const [account] = await db
-    .select({ visitFrequency: customerAccounts.visitFrequency, assignedSalesRepId: customerAccounts.assignedSalesRepId })
+    .select({
+      visitFrequency: customerAccounts.visitFrequency,
+      assignedSalesRepId: customerAccounts.assignedSalesRepId,
+      companyName: customerAccounts.companyName,
+    })
     .from(customerAccounts)
     .where(eq(customerAccounts.id, customerId))
     .limit(1)
@@ -680,6 +731,17 @@ export async function logVisit(customerId: string, salesMemberId: string): Promi
     .update(customerAccounts)
     .set({ lastVisitDate: now, nextRequiredVisitDate: nextVisit })
     .where(eq(customerAccounts.id, customerId))
+
+  // Log activity event for visit
+  await db.insert(activityEvents).values({
+    entityType: 'customer_account',
+    entityId: customerId,
+    actorUserId: session.user.id,
+    kind: 'visit_logged',
+    title: `Visit logged at ${account.companyName}`,
+    body: notes?.trim() || null,
+    metadata: { salesMemberId, nextVisit: nextVisit.toISOString() },
+  })
 
   return { success: true }
 }

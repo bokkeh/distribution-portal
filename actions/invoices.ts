@@ -1,4 +1,4 @@
-ok'use server'
+'use server'
 
 import { db } from '@/db'
 import { invoices, customerAccounts, journalEntries, journalEntryLines, chartOfAccounts } from '@/db/schema'

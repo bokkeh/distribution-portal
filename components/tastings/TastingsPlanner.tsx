@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { formatEasternDate, formatEasternTimeRange } from '@/lib/tastings/time'
 import { cn } from '@/lib/utils'
+import { TastingScheduleAssistant } from './TastingScheduleAssistant'
 
 type TastingRow = {
   id: string
@@ -59,6 +60,8 @@ function formatTastingTimeRange(start: Date, end: Date | null) {
 export function TastingsPlanner({ mode, tastings, accounts, tasters, success, error }: Props) {
   const [visibleMonth, setVisibleMonth] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState(new Date())
+  const [selectedAccountId, setSelectedAccountId] = useState('')
+  const [dateInput, setDateInput] = useState(format(new Date(), 'yyyy-MM-dd'))
 
   const calendarDays = useMemo(() => {
     const start = startOfWeek(startOfMonth(visibleMonth), { weekStartsOn: 0 })
@@ -140,7 +143,14 @@ export function TastingsPlanner({ mode, tastings, accounts, tasters, success, er
                 <input type="hidden" name="mode" value={mode} />
                 <div className="space-y-2">
                   <Label htmlFor="customerId">Store Account</Label>
-                  <select id="customerId" name="customerId" className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm" required>
+                  <select
+                    id="customerId"
+                    name="customerId"
+                    className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+                    required
+                    onChange={e => setSelectedAccountId(e.target.value)}
+                    value={selectedAccountId}
+                  >
                     <option value="">Select store</option>
                     {accounts.map(account => (
                       <option key={account.id} value={account.id}>
@@ -149,6 +159,14 @@ export function TastingsPlanner({ mode, tastings, accounts, tasters, success, er
                     ))}
                   </select>
                 </div>
+
+                {selectedAccountId && (
+                  <TastingScheduleAssistant
+                    accountId={selectedAccountId}
+                    accountName={accounts.find(a => a.id === selectedAccountId)?.companyName ?? ''}
+                    onSelectSlot={(date) => setDateInput(date)}
+                  />
+                )}
 
                 <div className="space-y-2">
                   <Label htmlFor="assignedUserId">Assign Taster</Label>
@@ -165,7 +183,7 @@ export function TastingsPlanner({ mode, tastings, accounts, tasters, success, er
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="date">Date</Label>
-                    <Input id="date" name="date" type="date" defaultValue={format(selectedDate, 'yyyy-MM-dd')} required />
+                    <Input id="date" name="date" type="date" value={dateInput} onChange={e => setDateInput(e.target.value)} required />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="time">Start Time (ET)</Label>

@@ -1,15 +1,16 @@
 import { requireRole } from '@/lib/auth/session'
 import { db } from '@/db'
-import { salesMembers, customerAccounts } from '@/db/schema'
-import { eq } from 'drizzle-orm'
+import { salesMembers, customerAccounts, orders } from '@/db/schema'
+import { eq, desc, sql } from 'drizzle-orm'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Building2, MapPin, Phone, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { Building2, MapPin, Phone, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import { PhoneActions } from '@/components/shared/PhoneActions'
 
 export default async function SalesAccountsPage() {
   const session = await requireRole('sales_rep', 'sales_manager', 'admin')
+  const isAdmin = session.user.roles?.includes('admin')
 
   const [member] = await db
     .select()
@@ -17,7 +18,14 @@ export default async function SalesAccountsPage() {
     .where(eq(salesMembers.userId, session.user.id))
     .limit(1)
 
-  if (!member) {
+  // Admins without a sales member profile see all accounts
+  const accounts = member
+    ? await db.select().from(customerAccounts).where(eq(customerAccounts.assignedSalesRepId, member.id))
+    : isAdmin
+      ? await db.select().from(customerAccounts)
+      : []
+
+  if (!member && !isAdmin) {
     return (
       <div className="text-center py-20 text-slate-500">
         <AlertCircle className="w-10 h-10 mx-auto mb-3 text-amber-400" />
@@ -26,21 +34,72 @@ export default async function SalesAccountsPage() {
     )
   }
 
-  const accounts = await db
-    .select()
-    .from(customerAccounts)
-    .where(eq(customerAccounts.assignedSalesRepId, member.id))
+  // Last order date per account for reorder suggestions
+  const accountIds = accounts.map(a => a.id)
+  const lastOrderRows = accountIds.length > 0
+    ? await db
+        .select({
+          customerId: orders.customerId,
+          lastOrderAt: sql<string>`max(${orders.createdAt})`.as('last_order_at'),
+        })
+        .from(orders)
+        .where(sql`${orders.customerId} = ANY(ARRAY[${sql.raw(accountIds.map(id => `'${id}'`).join(','))}]::uuid[])`)
+        .groupBy(orders.customerId)
+    : []
+
+  const lastOrderByAccount = new Map(lastOrderRows.map(r => [r.customerId, new Date(r.lastOrderAt)]))
 
   const now = new Date()
+  const REORDER_THRESHOLD_DAYS = 30
+  const reorderSuggestions = accounts.filter(a => {
+    const last = lastOrderByAccount.get(a.id)
+    if (!last) return true // never ordered
+    const daysSince = (now.getTime() - last.getTime()) / 86400000
+    return daysSince >= REORDER_THRESHOLD_DAYS
+  }).slice(0, 5)
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">My Accounts</h1>
-          <p className="text-slate-500 mt-1">{accounts.length} accounts assigned to you</p>
+          <h1 className="text-2xl font-bold text-slate-900">{member ? 'My Accounts' : 'All Accounts'}</h1>
+          <p className="text-slate-500 mt-1">{accounts.length} {member ? 'accounts assigned to you' : 'total accounts'}</p>
         </div>
       </div>
+
+      {/* Reorder suggestions */}
+      {reorderSuggestions.length > 0 && (
+        <Card className="border-amber-200 bg-amber-50">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold text-amber-800 flex items-center gap-2">
+              <RefreshCw className="w-4 h-4" />
+              Reorder Follow-ups ({reorderSuggestions.length})
+            </CardTitle>
+            <p className="text-xs text-amber-700">These accounts haven&apos;t ordered in {REORDER_THRESHOLD_DAYS}+ days</p>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="space-y-2">
+              {reorderSuggestions.map(account => {
+                const last = lastOrderByAccount.get(account.id)
+                const daysSince = last ? Math.floor((now.getTime() - last.getTime()) / 86400000) : null
+                return (
+                  <Link key={account.id} href={`/sales/accounts/${account.id}`}>
+                    <div className="flex items-center justify-between gap-3 rounded-lg bg-white border border-amber-100 px-3 py-2.5 hover:bg-amber-50 transition-colors">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-900 truncate">{account.companyName}</p>
+                        {account.city && <p className="text-xs text-slate-500">{account.city}</p>}
+                      </div>
+                      <span className="text-xs text-amber-700 font-medium shrink-0">
+                        {daysSince == null ? 'Never ordered' : `${daysSince}d ago`}
+                      </span>
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {accounts.length === 0 ? (
         <Card>

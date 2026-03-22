@@ -72,6 +72,48 @@ export async function sendDirectSms(to: string, recipientName: string, body: str
   }
 }
 
+export async function initiateCall(to: string, recipientName: string) {
+  await requireAdminOrStaff()
+
+  if (!to) return { error: 'Phone number is required' }
+
+  const apiKey = process.env.TELNYX_API_KEY
+  const from = process.env.TELNYX_FROM_NUMBER
+  const connectionId = process.env.TELNYX_CALL_CONTROL_ID
+
+  if (!apiKey || !from || !connectionId) {
+    return { error: 'Voice calling is not configured (missing TELNYX_CALL_CONTROL_ID)' }
+  }
+
+  const normalized = to.replace(/[\s\-().]/g, '').replace(/^(\d{10})$/, '+1$1').replace(/^1(\d{10})$/, '+1$1')
+
+  try {
+    const res = await fetch('https://api.telnyx.com/v2/calls', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        connection_id: connectionId,
+        to: normalized,
+        from,
+        client_state: Buffer.from(JSON.stringify({ recipientName })).toString('base64'),
+      }),
+    })
+
+    if (!res.ok) {
+      const err = await res.text()
+      return { error: `Call failed: ${err}` }
+    }
+
+    const data = await res.json()
+    return { success: true, callControlId: data?.data?.call_control_id ?? null }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Failed to initiate call' }
+  }
+}
+
 export async function replyToSmsThread(
   _prev: { error?: string; success?: boolean } | null,
   formData: FormData

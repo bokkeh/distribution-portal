@@ -1,6 +1,5 @@
 import { requireAdmin } from '@/lib/auth/session'
 import AdminSidebar from '@/components/layout/AdminSidebar'
-import TestSmsBar from '@/components/layout/TestSmsBar'
 import { getBellNotificationsForUser } from '@/lib/notifications/in-app'
 import { PortalTopBar } from '@/components/layout/PortalTopBar'
 import { db } from '@/db'
@@ -53,7 +52,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         navCounts={{ '/admin/wholesale-requests': wholesalerRequestCount }}
       />
       <main className="flex-1 overflow-auto pt-14 md:pt-0">
-        <TestSmsBar />
         <div className="p-4 sm:p-8">
           <PortalTopBar />
           {children}

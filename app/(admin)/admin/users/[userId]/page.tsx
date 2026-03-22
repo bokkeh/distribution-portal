@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, LogIn, LogOut } from 'lucide-react'
+import { ArrowLeft, LogIn, LogOut, Eye } from 'lucide-react'
 import { db } from '@/db'
 import { customerAccounts, drivers, userFeatureSettings, users } from '@/db/schema'
 import { Badge } from '@/components/ui/badge'
@@ -11,6 +11,8 @@ import { getRecentUserAccessEvents, getUserAccessSummaryMap } from '@/lib/auth/a
 import { UserRoleForm } from './user-role-form'
 import { UserProfileCard } from '@/components/admin/UserProfileCard'
 import { TasterRateCard } from '@/components/admin/TasterRateCard'
+import { ViewAsButton } from '@/components/admin/ViewAsButton'
+import { auth } from '@/lib/auth/config'
 
 function isMissingUserFeatureTable(error: unknown) {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
@@ -19,6 +21,9 @@ function isMissingUserFeatureTable(error: unknown) {
 
 export default async function UserDetailPage({ params }: { params: Promise<{ userId: string }> }) {
   const { userId } = await params
+  const session = await auth()
+  const isSuperAdmin = session?.user.email?.toLowerCase() === (process.env.SUPER_ADMIN_EMAIL ?? '').toLowerCase()
+
   const [user] = await db.select({
     id: users.id,
     name: users.name,
@@ -59,7 +64,10 @@ export default async function UserDetailPage({ params }: { params: Promise<{ use
           <h1 className="text-2xl font-bold text-slate-900">{user.name}</h1>
           <p className="text-muted-foreground mt-1">{user.email}</p>
         </div>
-        <Badge variant={user.active ? 'success' : 'secondary'}>{user.active ? 'Active' : 'Inactive'}</Badge>
+        <div className="flex items-center gap-2">
+          <Badge variant={user.active ? 'success' : 'secondary'}>{user.active ? 'Active' : 'Inactive'}</Badge>
+          {isSuperAdmin && <ViewAsButton userId={user.id} userName={user.name} />}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

@@ -18,12 +18,26 @@ export default async function SalesDashboardPage() {
     .where(eq(salesMembers.userId, userId))
     .limit(1)
 
-  if (!member) {
+  const isAdmin = session.user.roles?.includes('admin')
+
+  if (!member && !isAdmin) {
     return (
       <div className="text-center py-20 text-slate-500">
         <AlertCircle className="w-10 h-10 mx-auto mb-3 text-amber-400" />
         <p className="font-medium">No sales member profile found.</p>
         <p className="text-sm mt-1">Ask an admin to set up your sales member account.</p>
+      </div>
+    )
+  }
+
+  if (!member && isAdmin) {
+    return (
+      <div className="text-center py-20 text-slate-500">
+        <AlertCircle className="w-10 h-10 mx-auto mb-3 text-blue-400" />
+        <p className="font-medium text-slate-700">No sales member profile linked to your account.</p>
+        <p className="text-sm mt-1">
+          To view a rep&apos;s dashboard, use <strong>View as User</strong> on their profile page, or create a sales member record for your user in <a href="/admin/sales" className="text-blue-600 underline">Admin → Sales</a>.
+        </p>
       </div>
     )
   }
