@@ -40,7 +40,7 @@ interface Props {
   mode: 'admin' | 'staff' | 'taster'
   tastings: TastingRow[]
   accounts: Array<{ id: string; companyName: string; address: string | null; city: string | null; state: string | null; zip: string | null }>
-  tasters: Array<{ id: string; name: string; phone: string | null }>
+  tasters: Array<{ id: string; name: string; phone: string | null; avatarUrl?: string | null }>
   success?: string
   error?: string
 }

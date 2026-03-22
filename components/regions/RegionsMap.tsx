@@ -2,9 +2,10 @@
 
 import { GoogleMap, InfoWindow, Marker, Polygon, useJsApiLoader } from '@react-google-maps/api'
 import { useState, useMemo } from 'react'
-import { MapPin, TrendingUp, Wine, Truck, User, ExternalLink, Building2, Send, Loader2, CheckCircle2 } from 'lucide-react'
+import { MapPin, TrendingUp, Wine, Truck, User, ExternalLink, Building2, Send, Loader2, CheckCircle2, Route, X, Plus } from 'lucide-react'
 import type { RegionMapData, RegionMapAccount, RegionMapRegion } from '@/actions/regions-map'
 import { sendMapAccountSms } from '@/actions/map-contact'
+import { addAccountToRoute } from '@/actions/sales-routes'
 import { convexHull, expandHull, circlePolygon } from '@/lib/maps/convex-hull'
 import { getRegionColor } from '@/lib/maps/region-colors'
 import { RegionAccountsModal } from './RegionAccountsModal'
@@ -62,7 +63,21 @@ function getAccountMarkerTitle(account: RegionMapAccount): string {
   return account.businessType ?? account.accountType?.replaceAll('_', ' ') ?? 'Account'
 }
 
-export function RegionsMap({ data }: { data: RegionMapData }) {
+function getAccountHealthColor(account: RegionMapAccount): string {
+  if (!account.assignedSalesRepId) return '#3B82F6' // blue = no rep
+  const now = Date.now()
+  if (account.nextRequiredVisitDate && new Date(account.nextRequiredVisitDate).getTime() < now) return '#EF4444' // red = overdue
+  if (account.nextRequiredVisitDate) {
+    const days = (new Date(account.nextRequiredVisitDate).getTime() - now) / 86400000
+    if (days <= 7) return '#F59E0B' // amber = due soon
+  }
+  if (account.revenue === 0 || !account.lastVisitDate) return '#F59E0B' // amber = no revenue / never visited
+  return '#22C55E' // green = healthy
+}
+
+type MyRoute = { id: string; name: string; description: string | null }
+
+export function RegionsMap({ data, routes = [] }: { data: RegionMapData; routes?: MyRoute[] }) {
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ?? '',
   })
@@ -70,6 +85,9 @@ export function RegionsMap({ data }: { data: RegionMapData }) {
   const [hoveredRegionId, setHoveredRegionId] = useState<string | null>(null)
   const [selectedAccount, setSelectedAccount] = useState<RegionMapAccount | null>(null)
   const [managingRegion, setManagingRegion] = useState<RegionMapRegion | null>(null)
+  const [routePickerAccount, setRoutePickerAccount] = useState<RegionMapAccount | null>(null)
+  const [addingToRoute, setAddingToRoute] = useState<string | null>(null) // routeId being added
+  const [routeAddResult, setRouteAddResult] = useState<{ routeId: string; ok: boolean } | null>(null)
 
   // Color index per region
   const regionColorMap = useMemo(() => {
@@ -131,8 +149,17 @@ export function RegionsMap({ data }: { data: RegionMapData }) {
     )
   }
 
+  async function handleAddToRoute(routeId: string) {
+    if (!routePickerAccount) return
+    setAddingToRoute(routeId)
+    const result = await addAccountToRoute(routeId, routePickerAccount.id)
+    setAddingToRoute(null)
+    setRouteAddResult({ routeId, ok: result.ok })
+    if (result.ok) setTimeout(() => { setRoutePickerAccount(null); setRouteAddResult(null) }, 1500)
+  }
+
   return (
-    <div className="flex gap-4" style={{ height: '72vh' }}>
+    <div className="relative flex gap-4" style={{ height: '72vh' }}>
       {/* ── Sidebar ── */}
       <div className="flex w-64 shrink-0 flex-col gap-2 overflow-y-auto rounded-xl border bg-white p-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 px-1">
@@ -235,8 +262,8 @@ export function RegionsMap({ data }: { data: RegionMapData }) {
         })()}
 
         <div className="mt-auto border-t pt-2 space-y-1">
-          <p className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Dot Color — Priority</p>
-          {[['#3B82F6', 'No rep assigned'], ['#EF4444', 'High'], ['#F59E0B', 'Medium'], ['#94A3B8', 'Low']].map(([c, label]) => (
+          <p className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Dot Color — Health</p>
+          {[['#22C55E', 'Healthy (visit current)'], ['#F59E0B', 'Needs attention'], ['#EF4444', 'Visit overdue'], ['#3B82F6', 'No rep assigned']].map(([c, label]) => (
             <div key={label} className="flex items-center gap-1.5 px-1">
               <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: c }} />
               <span className="text-xs text-slate-500">{label}</span>
@@ -272,7 +299,7 @@ export function RegionsMap({ data }: { data: RegionMapData }) {
             streetViewControl: false,
             mapTypeControl: false,
           }}
-          onClick={() => setSelectedAccount(null)}
+          onClick={() => { setSelectedAccount(null); setRoutePickerAccount(null) }}
         >
           {/* Region polygons */}
           {data.regions.map((region, i) => {
@@ -300,15 +327,12 @@ export function RegionsMap({ data }: { data: RegionMapData }) {
 
           {/* Account markers */}
           {mappedAccounts.map(account => {
-            const priorityColor: Record<string, string> = { high: '#EF4444', medium: '#F59E0B', low: '#94A3B8' }
-            const color = !account.assignedSalesRepId
-              ? '#3B82F6'
-              : priorityColor[account.accountPriority ?? ''] ?? '#64748B'
+            const color = getAccountHealthColor(account)
             const accountRegionId = account.regionId ?? '__unassigned__'
             const isActive = hoveredRegionId === null || hoveredRegionId === accountRegionId
-            const isSelected = selectedAccount?.id === account.id
+            const isSelected = selectedAccount?.id === account.id || routePickerAccount?.id === account.id
             const glyph = getAccountMarkerGlyph(account)
-            const markerTitle = `${account.companyName} (${getAccountMarkerTitle(account)})`
+            const markerTitle = `${account.companyName} (${getAccountMarkerTitle(account)}) — Ctrl+click to add to route`
 
             return (
               <Marker
@@ -332,7 +356,16 @@ export function RegionsMap({ data }: { data: RegionMapData }) {
                 opacity={isSelected ? 1 : isActive ? 1 : 0.55}
                 title={markerTitle}
                 zIndex={isSelected ? 10 : isActive ? 2 : 1}
-                onClick={() => setSelectedAccount(account)}
+                onClick={(e) => {
+                  if ((e.domEvent as MouseEvent)?.ctrlKey || (e.domEvent as MouseEvent)?.metaKey) {
+                    setSelectedAccount(null)
+                    setRoutePickerAccount(account)
+                    setRouteAddResult(null)
+                  } else {
+                    setRoutePickerAccount(null)
+                    setSelectedAccount(account)
+                  }
+                }}
               />
             )
           })}
@@ -348,6 +381,53 @@ export function RegionsMap({ data }: { data: RegionMapData }) {
           )}
         </GoogleMap>
       </div>
+
+      {/* Route picker panel — Ctrl+click */}
+      {routePickerAccount && (
+        <div className="absolute top-4 right-4 z-30 w-72 rounded-xl border border-slate-200 bg-white shadow-2xl overflow-hidden">
+          <div className="flex items-center justify-between gap-2 bg-slate-900 px-4 py-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <Route className="h-4 w-4 text-slate-300 shrink-0" />
+              <p className="text-sm font-semibold text-white truncate">Add to Route</p>
+            </div>
+            <button type="button" onClick={() => { setRoutePickerAccount(null); setRouteAddResult(null) }} className="text-slate-400 hover:text-white">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="p-4 space-y-3">
+            <p className="text-xs text-slate-500 truncate font-medium">{routePickerAccount.companyName}</p>
+            {routes.length === 0 ? (
+              <p className="text-xs text-slate-400 py-2 text-center">No active routes available.</p>
+            ) : (
+              <div className="space-y-1 max-h-56 overflow-y-auto">
+                {routes.map(route => {
+                  const result = routeAddResult?.routeId === route.id ? routeAddResult : null
+                  return (
+                    <button
+                      key={route.id}
+                      type="button"
+                      onClick={() => handleAddToRoute(route.id)}
+                      disabled={addingToRoute === route.id || result?.ok === true}
+                      className={`w-full flex items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left text-sm transition-colors disabled:opacity-60 ${
+                        result?.ok ? 'bg-green-50 text-green-700' : 'hover:bg-slate-50 text-slate-800'
+                      }`}
+                    >
+                      <span className="truncate font-medium">{route.name}</span>
+                      {result?.ok
+                        ? <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
+                        : addingToRoute === route.id
+                          ? <Loader2 className="h-4 w-4 animate-spin text-slate-400 shrink-0" />
+                          : <Plus className="h-4 w-4 text-slate-400 shrink-0" />
+                      }
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+            <p className="text-[10px] text-slate-400">Ctrl+click any account to add it to a route.</p>
+          </div>
+        </div>
+      )}
 
       {/* Account management modal */}
       {managingRegion && (
@@ -439,7 +519,7 @@ function AccountInfoCard({ account }: { account: RegionMapAccount }) {
         <div className="space-y-1.5">
           <div className="flex gap-2">
             <div className="flex-1">
-              <TelnyxCallButton phone={account.phone} accountName={account.companyName} />
+              <TelnyxCallButton phone={account.phone} accountName={account.companyName} accountId={account.id} />
             </div>
             <button
               type="button"

@@ -177,3 +177,19 @@ export async function updateUserProfile(
     return { error: err instanceof Error ? err.message : String(err) }
   }
 }
+
+export async function setTasterHourlyRate(
+  _prev: { error?: string; success?: boolean } | null,
+  formData: FormData
+): Promise<{ error?: string; success?: boolean }> {
+  try {
+    await requireAdmin()
+    const userId = formData.get('userId') as string
+    const rate = (formData.get('tasterHourlyRate') as string) || '0'
+    await db.update(users).set({ tasterHourlyRate: rate }).where(eq(users.id, userId))
+    revalidatePath(`/admin/users/${userId}`)
+    return { success: true }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) }
+  }
+}

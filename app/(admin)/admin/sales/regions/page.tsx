@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { requireAdmin } from '@/lib/auth/session'
 import { getSalesRegions, getSalesMembers, getAllCustomerAccountsForAssignment, getRegionAccountStats } from '@/actions/sales-members'
 import { getRegionMapData } from '@/actions/regions-map'
+import { getMyRoutes } from '@/actions/sales-routes'
 import { NewRegionForm } from './NewRegionForm'
 import { RegionList } from './RegionList'
 import { RegionsViewToggle } from './RegionsViewToggle'
@@ -14,14 +15,16 @@ export default async function SalesRegionsPage() {
   let members: Awaited<ReturnType<typeof getSalesMembers>> = []
   let allAccounts: Awaited<ReturnType<typeof getAllCustomerAccountsForAssignment>> = []
   let mapData: Awaited<ReturnType<typeof getRegionMapData>> = { regions: [], accounts: [] }
+  let routes: Awaited<ReturnType<typeof getMyRoutes>> = []
   let loadError: string | null = null
 
   try {
-    ;[regions, members, allAccounts, mapData] = await Promise.all([
+    ;[regions, members, allAccounts, mapData, routes] = await Promise.all([
       getSalesRegions(),
       getSalesMembers(),
       getAllCustomerAccountsForAssignment(),
       getRegionMapData(),
+      getMyRoutes(),
     ])
   } catch (e) {
     console.error('[SalesRegionsPage] data load error:', e)
@@ -47,6 +50,7 @@ export default async function SalesRegionsPage() {
 
       <RegionsViewToggle
         mapData={mapData}
+        routes={routes}
         listContent={
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2">

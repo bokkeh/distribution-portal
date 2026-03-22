@@ -6,12 +6,15 @@ import type { RegionMapData } from '@/actions/regions-map'
 import { RegionsMapWrapper } from '@/components/regions/RegionsMapWrapper'
 import { GeocodeButton } from '@/components/regions/GeocodeButton'
 
+type MyRoute = { id: string; name: string; description: string | null }
+
 interface Props {
   mapData: RegionMapData
   listContent: React.ReactNode
+  routes?: MyRoute[]
 }
 
-export function RegionsViewToggle({ mapData, listContent }: Props) {
+export function RegionsViewToggle({ mapData, listContent, routes }: Props) {
   const [view, setView] = useState<'list' | 'map'>('list')
   const missingCount = mapData.accounts.filter(a => a.lat == null || a.lng == null).length
 
@@ -50,7 +53,7 @@ export function RegionsViewToggle({ mapData, listContent }: Props) {
       </div>
 
       {/* Content */}
-      {view === 'list' ? listContent : <RegionsMapWrapper data={mapData} />}
+      {view === 'list' ? listContent : <RegionsMapWrapper data={mapData} routes={routes} />}
     </div>
   )
 }

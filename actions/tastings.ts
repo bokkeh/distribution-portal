@@ -778,10 +778,17 @@ export async function submitTasterInvoice(formData: FormData) {
     redirect('/unauthorized')
   }
 
-  const hourlyRate = (formData.get('hourlyRate') as string) || '0'
   const hoursWorked = (formData.get('hoursWorked') as string) || '0'
   const expenseAmount = (formData.get('expenseAmount') as string) || '0'
-  const totalAmount = (formData.get('totalAmount') as string) || '0'
+
+  // Fetch admin-set hourly rate from user record
+  const [tasterUser] = await db
+    .select({ tasterHourlyRate: users.tasterHourlyRate })
+    .from(users)
+    .where(eq(users.id, tasting.assignedUserId ?? session.user.id))
+    .limit(1)
+  const hourlyRate = tasterUser?.tasterHourlyRate ?? '25'
+  const totalAmount = (Number(hourlyRate) * Number(hoursWorked) + Number(expenseAmount)).toFixed(2)
 
   const payload = {
     submittedByUserId: session.user.id,

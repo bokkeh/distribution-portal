@@ -1,6 +1,6 @@
 'use server'
 
-import { and, asc, eq } from 'drizzle-orm'
+import { and, asc, desc, eq } from 'drizzle-orm'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { db } from '@/db'
@@ -624,4 +624,56 @@ export async function addManualRepRouteStop(routeId: string, formData: FormData)
   })
 
   redirect(`/sales/routes/${routeId}`)
+}
+
+
+export async function getMyRoutes(): Promise<Array<{ id: string; name: string; description: string | null }>> {
+  const session = await requireRole('admin', 'staff', 'sales_rep', 'sales_manager')
+  const userRoles = session.user.roles ?? [session.user.role as string]
+  const isPrivileged = userRoles.some(r => ['admin', 'staff', 'sales_manager'].includes(r))
+
+  if (isPrivileged) {
+    return db.select({ id: salesRoutes.id, name: salesRoutes.name, description: salesRoutes.description })
+      .from(salesRoutes)
+      .where(eq(salesRoutes.status, 'active'))
+      .orderBy(asc(salesRoutes.name))
+  }
+
+  return db.select({ id: salesRoutes.id, name: salesRoutes.name, description: salesRoutes.description })
+    .from(salesRoutes)
+    .where(and(eq(salesRoutes.status, 'active'), eq(salesRoutes.assignedRepUserId, session.user.id)))
+    .orderBy(asc(salesRoutes.name))
+}
+
+export async function addAccountToRoute(
+  routeId: string,
+  accountId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  await requireRole('admin', 'staff', 'sales_rep', 'sales_manager')
+
+  const [account] = await db.select().from(customerAccounts).where(eq(customerAccounts.id, accountId)).limit(1)
+  if (!account) return { ok: false, error: 'Account not found' }
+
+  const lastStop = await db.select({ seq: salesRouteStops.sequenceNumber })
+    .from(salesRouteStops)
+    .where(eq(salesRouteStops.routeId, routeId))
+    .orderBy(desc(salesRouteStops.sequenceNumber))
+    .limit(1)
+
+  const nextSeq = lastStop.length > 0 ? lastStop[0].seq + 1 : 1
+  const address = [account.address, account.city, account.state, account.zip].filter(Boolean).join(', ')
+
+  await db.insert(salesRouteStops).values({
+    routeId,
+    customerId: accountId,
+    sequenceNumber: nextSeq,
+    address: address || account.companyName,
+    contactName: account.pocName ?? account.contactName,
+    contactPhone: account.pocPhone ?? account.phone,
+    lat: account.lat != null ? String(account.lat) : null,
+    lng: account.lng != null ? String(account.lng) : null,
+  })
+
+  revalidatePath('/admin/crm/sales-routes')
+  return { ok: true }
 }

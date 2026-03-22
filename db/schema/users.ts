@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm'
-import { pgTable, uuid, text, boolean, timestamp } from 'drizzle-orm/pg-core'
+import { numeric, pgTable, uuid, text, boolean, timestamp } from 'drizzle-orm/pg-core'
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -15,6 +15,7 @@ export const users = pgTable('users', {
   zip: text('zip'),
   avatarUrl: text('avatar_url'),
   stripeConnectAccountId: text('stripe_connect_account_id'),
+  tasterHourlyRate: numeric('taster_hourly_rate', { precision: 10, scale: 2 }),
   active: boolean('active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })

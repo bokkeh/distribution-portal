@@ -15,6 +15,9 @@ interface CallContextType {
   isMuted: boolean
   notes: string
   error: string | null
+  drawerOpen: boolean
+  openDrawer: () => void
+  closeDrawer: () => void
   startCall: (phone: string, accountName: string, accountId?: string) => void
   endCall: () => void
   toggleMute: () => void
@@ -39,6 +42,10 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const [isMuted, setIsMuted] = useState(false)
   const [notes, setNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+
+  const openDrawer = useCallback(() => setDrawerOpen(true), [])
+  const closeDrawer = useCallback(() => setDrawerOpen(false), [])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const clientRef = useRef<any>(null)
@@ -81,6 +88,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     setAccountId(aId ?? null)
     setNotes('')
     setCallState('connecting')
+    setDrawerOpen(true)
 
     try {
       const { token } = await getTelnyxWebRtcToken()
@@ -184,6 +192,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   return (
     <CallContext.Provider value={{
       callState, phone, accountName, accountId, duration, isMuted, notes, error,
+      drawerOpen, openDrawer, closeDrawer,
       startCall, endCall, toggleMute, sendDtmf, setNotes,
     }}>
       {children}

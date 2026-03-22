@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { getRecentUserAccessEvents, getUserAccessSummaryMap } from '@/lib/auth/activity'
 import { UserRoleForm } from './user-role-form'
 import { UserProfileCard } from '@/components/admin/UserProfileCard'
+import { TasterRateCard } from '@/components/admin/TasterRateCard'
 
 function isMissingUserFeatureTable(error: unknown) {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
@@ -27,6 +28,7 @@ export default async function UserDetailPage({ params }: { params: Promise<{ use
     roles: users.roles,
     avatarUrl: users.avatarUrl,
     active: users.active,
+    tasterHourlyRate: users.tasterHourlyRate,
   }).from(users).where(eq(users.id, userId))
   if (!user) notFound()
 
@@ -159,6 +161,10 @@ export default async function UserDetailPage({ params }: { params: Promise<{ use
             </CardContent>
           </Card>
         ) : null}
+
+        {user.roles.includes('taster') && (
+          <TasterRateCard userId={user.id} currentRate={user.tasterHourlyRate} />
+        )}
       </div>
     </div>
   )

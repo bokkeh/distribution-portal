@@ -204,6 +204,13 @@
       "when": 1774094400000,
       "tag": "0029_delivery_stop_extra_photos",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1774177200000,
+      "tag": "0030_taster_availability",
+      "breakpoints": true
     }
   ]
 }

@@ -1,8 +1,10 @@
 import { customerAccounts, users } from '@/db/schema'
 import { db } from '@/db'
 import { TastingsPlanner } from '@/components/tastings/TastingsPlanner'
+import { TasterTeamPanel } from '@/components/tastings/TasterTeamPanel'
 import { requireFeature } from '@/lib/auth/session'
 import { getTastingsForView } from '@/actions/tastings'
+import { getAvailabilityForUsers } from '@/actions/taster-availability'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 
@@ -11,7 +13,8 @@ function isMissingTastingsTable(error: unknown) {
   return (
     (message.includes('tastings') && message.includes('does not exist')) ||
     (message.includes('tasting_reports') && message.includes('does not exist')) ||
-    (message.includes('taster_invoices') && message.includes('does not exist'))
+    (message.includes('taster_invoices') && message.includes('does not exist')) ||
+    (message.includes('taster_availability') && message.includes('does not exist'))
   )
 }
 
@@ -37,11 +40,14 @@ export default async function AdminTastingsPage({
         id: users.id,
         name: users.name,
         phone: users.phone,
+        avatarUrl: users.avatarUrl,
         roles: users.roles,
         active: users.active,
       }).from(users).orderBy(users.name),
       getTastingsForView({}),
     ])
+    const activeTasters = tasters.filter(user => user.active && user.roles.includes('taster'))
+    const availability = await getAvailabilityForUsers(activeTasters.map((user) => user.id))
 
     return (
       <div className="p-4 sm:p-8 space-y-6">
@@ -59,11 +65,22 @@ export default async function AdminTastingsPage({
             </Link>
           </div>
         </div>
+        <TasterTeamPanel
+          mode="admin"
+          tastings={tastings}
+          tasters={activeTasters.map(user => ({
+            id: user.id,
+            name: user.name,
+            phone: user.phone,
+            avatarUrl: user.avatarUrl,
+          }))}
+          availability={availability}
+        />
         <TastingsPlanner
           mode="admin"
           tastings={tastings}
           accounts={accounts}
-          tasters={tasters.filter(user => user.active && user.roles.includes('taster')).map(user => ({ id: user.id, name: user.name, phone: user.phone }))}
+          tasters={activeTasters.map(user => ({ id: user.id, name: user.name, phone: user.phone, avatarUrl: user.avatarUrl }))}
           success={params.success}
           error={params.error}
         />

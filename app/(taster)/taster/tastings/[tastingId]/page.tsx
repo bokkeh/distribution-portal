@@ -53,7 +53,7 @@ export default async function TasterTastingDetailPage({
     const [report, invoice, assignedUser] = await Promise.all([
       db.select().from(tastingReports).where(eq(tastingReports.tastingId, tastingId)).then(r => r[0] ?? null),
       db.select().from(tasterInvoices).where(eq(tasterInvoices.tastingId, tastingId)).then(rows => rows[0] ?? null),
-      db.select({ phone: users.phone }).from(users).where(eq(users.id, tasting.assignedUserId)).then(rows => rows[0] ?? null),
+      db.select({ phone: users.phone, tasterHourlyRate: users.tasterHourlyRate }).from(users).where(eq(users.id, tasting.assignedUserId)).then(rows => rows[0] ?? null),
     ])
 
     const timeline = await getActivityTimeline('tasting', tasting.id, [
@@ -123,6 +123,7 @@ export default async function TasterTastingDetailPage({
             submittedAt: invoice.submittedAt,
           } : null}
           user={{ name: session.user.name, email: session.user.email, phone: assignedUser?.phone ?? null }}
+          adminHourlyRate={assignedUser?.tasterHourlyRate ?? null}
           success={query.success}
           error={query.error}
         />

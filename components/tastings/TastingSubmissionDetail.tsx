@@ -46,6 +46,7 @@ export function TastingSubmissionDetail({
   report,
   invoice,
   user,
+  adminHourlyRate,
   success,
   error,
 }: {
@@ -68,15 +69,16 @@ export function TastingSubmissionDetail({
     email: string | null | undefined
     phone: string | null | undefined
   }
+  adminHourlyRate?: string | null
   success?: string
   error?: string
 }) {
   const totalEstimate = useMemo(() => {
-    const rate = Number(invoice?.hourlyRate ?? '25')
+    const rate = Number(adminHourlyRate ?? invoice?.hourlyRate ?? '25')
     const hours = Number(invoice?.hoursWorked ?? '2')
     const expenses = Number(invoice?.expenseAmount ?? '0')
     return (rate * hours) + expenses
-  }, [invoice?.expenseAmount, invoice?.hourlyRate, invoice?.hoursWorked])
+  }, [adminHourlyRate, invoice?.expenseAmount, invoice?.hourlyRate, invoice?.hoursWorked])
 
   const invoiceFormRef = useRef<HTMLFormElement | null>(null)
   const invoiceDraft = useFormDraftAutosave(invoiceFormRef, `tasting-invoice:${tasting.id}`)
@@ -145,25 +147,22 @@ export function TastingSubmissionDetail({
                 <Input id="payeePhone" name="payeePhone" type="tel" defaultValue={invoice?.payeePhone ?? user.phone ?? ''} />
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="hourlyRate">Hourly Rate</Label>
-                  <Input id="hourlyRate" name="hourlyRate" type="number" step="0.01" min="0" defaultValue={invoice?.hourlyRate ?? '25.00'} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="hoursWorked">Hours Worked</Label>
-                  <Input id="hoursWorked" name="hoursWorked" type="number" step="0.25" min="0" defaultValue={invoice?.hoursWorked ?? '2.00'} />
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="hoursWorked">Hours Worked</Label>
+                <Input id="hoursWorked" name="hoursWorked" type="number" step="0.25" min="0" defaultValue={invoice?.hoursWorked ?? '2.00'} required />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="expenseAmount">Other Expenses</Label>
+                <Label htmlFor="expenseAmount">Other Expenses ($)</Label>
                 <Input id="expenseAmount" name="expenseAmount" type="number" step="0.01" min="0" defaultValue={invoice?.expenseAmount ?? '0.00'} />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="totalAmount">Total Invoice Amount</Label>
-                <Input id="totalAmount" name="totalAmount" type="number" step="0.01" min="0" defaultValue={invoice?.totalAmount ?? totalEstimate.toFixed(2)} />
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                <span className="text-slate-500">Estimated total: </span>
+                <span className="font-semibold text-slate-900">
+                  ${invoice?.totalAmount ?? totalEstimate.toFixed(2)}
+                </span>
+                <span className="ml-2 text-xs text-slate-400">(calculated by accounting)</span>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="notes">Invoice Notes</Label>

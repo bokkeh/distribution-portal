@@ -1,6 +1,8 @@
 import dynamic from 'next/dynamic'
 import type { RegionMapData } from '@/actions/regions-map'
 
+type MyRoute = { id: string; name: string; description: string | null }
+
 const RegionsMapDynamic = dynamic(
   () => import('./RegionsMap').then(m => ({ default: m.RegionsMap })),
   {
@@ -13,6 +15,6 @@ const RegionsMapDynamic = dynamic(
   },
 )
 
-export function RegionsMapWrapper({ data }: { data: RegionMapData }) {
-  return <RegionsMapDynamic data={data} />
+export function RegionsMapWrapper({ data, routes }: { data: RegionMapData; routes?: MyRoute[] }) {
+  return <RegionsMapDynamic data={data} routes={routes} />
 }
