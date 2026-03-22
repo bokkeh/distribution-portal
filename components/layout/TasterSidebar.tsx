@@ -108,30 +108,65 @@ export function TasterSidebar({
 
   return (
     <>
-      <nav className="hidden bg-slate-900 px-6 py-4 text-white md:block">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+      <nav className="hidden bg-slate-900 px-6 py-3 text-white md:block">
+        <div className="mx-auto flex max-w-6xl items-center gap-6">
+          {/* Logo */}
+          <div className="flex items-center gap-2.5 shrink-0">
             <Image
               src="/brand/logo.png"
               alt="AHAWC"
-              width={36}
-              height={36}
-              className="h-9 w-9 rounded-xl bg-white object-contain p-0.5"
+              width={32}
+              height={32}
+              className="h-8 w-8 rounded-lg bg-white object-contain p-0.5"
             />
-            <div>
-              <p className="font-bold">AHAWC Taster Portal</p>
-              <p className="text-xs text-slate-400">Assignments and event details</p>
-            </div>
+            <p className="font-bold text-sm leading-none">AHAWC Taster</p>
           </div>
-          <div className="flex items-center gap-4 text-sm">
+
+          {/* Nav links */}
+          <div className="flex items-center gap-1 flex-1">
+            {navItems.map(({ href, label, icon: Icon }) => {
+              const active = pathname === href || pathname.startsWith(`${href}/`)
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className={cn(
+                    'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors whitespace-nowrap',
+                    active
+                      ? 'bg-blue-600 text-white'
+                      : 'text-slate-300 hover:bg-slate-800 hover:text-white',
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5 shrink-0" />
+                  {label}
+                </Link>
+              )
+            })}
+          </div>
+
+          {/* Right: bell + profile + sign out */}
+          <div className="flex items-center gap-1 shrink-0">
             <NotificationBell items={notifications} unreadCount={unreadCount} dark />
-            <NavLinks pathname={pathname} showProfile={showProfile} />
+            {showProfile && (
+              <Link
+                href="/taster/profile"
+                className={cn(
+                  'rounded-md p-1.5 transition-colors',
+                  pathname.startsWith('/taster/profile')
+                    ? 'bg-blue-600 text-white'
+                    : 'text-slate-300 hover:bg-slate-800 hover:text-white',
+                )}
+                title="Profile"
+              >
+                <UserCircle className="h-5 w-5" />
+              </Link>
+            )}
             <button
               onClick={() => signOut({ callbackUrl: '/login' })}
-              className="flex items-center gap-2 text-slate-400 hover:text-white"
+              className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+              title="Sign Out"
             >
               <LogOut className="h-4 w-4" />
-              Sign Out
             </button>
           </div>
         </div>
@@ -197,11 +232,6 @@ export function TasterSidebar({
             </nav>
 
             <div className="border-t border-slate-700 p-4">
-              {showViewSwitcher ? (
-                <div className="mb-4">
-                  <SuperAdminViewSwitcher compact />
-                </div>
-              ) : null}
               <button
                 onClick={() => signOut({ callbackUrl: '/login' })}
                 className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
@@ -219,6 +249,13 @@ export function TasterSidebar({
           />
         </div>
       ) : null}
+
+      {/* Floating view switcher for super-admins */}
+      {showViewSwitcher && (
+        <div className="fixed bottom-4 left-4 z-50 w-52">
+          <SuperAdminViewSwitcher compact />
+        </div>
+      )}
     </>
   )
 }
