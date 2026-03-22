@@ -26,6 +26,7 @@ type Account = {
   pocEmail?: string | null
   hoursOfOperation?: string | null
   dcAbraNumber: string | null
+  businessType?: string | null
   creditLimit: string | null
   paymentTerms: string | null
   hubspotCompanyId?: string | null
@@ -138,11 +139,39 @@ export function AccountEditForm({ account, mode }: { account: Account; mode: 'ad
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor={`${mode}-businessType`}>Business Type</Label>
+          <select
+            id={`${mode}-businessType`}
+            name="businessType"
+            defaultValue={account.businessType ?? ''}
+            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            <option value="">— Select type —</option>
+            <option value="Liquor Store">Liquor Store</option>
+            <option value="Restaurant">Restaurant</option>
+            <option value="Restaurant Group">Restaurant Group</option>
+            <option value="Hotel">Hotel</option>
+            <option value="Hotel Group">Hotel Group</option>
+            <option value="Venue">Venue</option>
+            <option value="Bar">Bar</option>
+            <option value="Night Club">Night Club</option>
+            <option value="Grocery Store">Grocery Store</option>
+            <option value="Convenience Store">Convenience Store</option>
+            <option value="Country Club">Country Club</option>
+            <option value="Casino">Casino</option>
+            <option value="Wholesaler">Wholesaler</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
         <div className="space-y-2">
           <Label htmlFor={`${mode}-dcAbraNumber`}>DC ABRA Number</Label>
           <Input id={`${mode}-dcAbraNumber`} name="dcAbraNumber" defaultValue={account.dcAbraNumber ?? ''} />
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor={`${mode}-creditLimit`}>Credit Limit</Label>
           <Input id={`${mode}-creditLimit`} name="creditLimit" type="number" step="0.01" min="0" defaultValue={account.creditLimit ?? '0'} />

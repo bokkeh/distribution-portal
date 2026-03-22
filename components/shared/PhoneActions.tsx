@@ -8,10 +8,11 @@ import { sendMapAccountSms } from '@/actions/map-contact'
 interface Props {
   phone: string
   name: string
+  accountId?: string
   showNumber?: boolean
 }
 
-export function PhoneActions({ phone, name, showNumber = true }: Props) {
+export function PhoneActions({ phone, name, accountId, showNumber = true }: Props) {
   const [composing, setComposing] = useState(false)
   const [message, setMessage] = useState('')
   const [sending, setSending] = useState(false)
@@ -36,7 +37,7 @@ export function PhoneActions({ phone, name, showNumber = true }: Props) {
     <div className="space-y-2">
       <div className="flex items-center gap-2 flex-wrap">
         {showNumber && <span className="text-sm text-slate-700">{phone}</span>}
-        <TelnyxCallButton phone={phone} accountName={name} />
+        <TelnyxCallButton phone={phone} accountName={name} accountId={accountId} />
         <button
           type="button"
           onClick={() => setComposing(c => !c)}

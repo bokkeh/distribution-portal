@@ -189,7 +189,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
               {account.phone && (
                 <div className="flex gap-2 items-center">
                   <Phone className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <PhoneSmsButton phone={account.phone} recipientName={account.companyName} showIcon={false} className="text-sm" />
+                  <PhoneSmsButton phone={account.phone} recipientName={account.companyName} accountId={account.id} showIcon={false} className="text-sm" />
                 </div>
               )}
               {account.email && (
@@ -330,7 +330,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
                       {contact.title && <p className="text-xs text-muted-foreground">{contact.title}</p>}
                       {contact.email && <p className="text-xs text-muted-foreground">{contact.email}</p>}
                       {contact.phone && (
-                        <PhoneSmsButton phone={contact.phone} recipientName={contact.name} className="text-xs" />
+                        <PhoneSmsButton phone={contact.phone} recipientName={contact.name} accountId={account.id} className="text-xs" />
                       )}
                     </div>
                   ))}

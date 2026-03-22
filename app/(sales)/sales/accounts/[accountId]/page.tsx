@@ -120,7 +120,7 @@ export default async function SalesAccountDetailPage({
               {account.phone && (
                 <div className="flex items-start gap-2 text-slate-600">
                   <Phone className="w-3.5 h-3.5 text-slate-400 mt-1.5 shrink-0" />
-                  <PhoneActions phone={account.phone} name={account.companyName} />
+                  <PhoneActions phone={account.phone} name={account.companyName} accountId={account.id} />
                 </div>
               )}
               {account.email && (
@@ -204,7 +204,7 @@ export default async function SalesAccountDetailPage({
                 {account.pocPhone && (
                   <div className="flex items-start gap-2 text-slate-600">
                     <Phone className="w-3.5 h-3.5 text-slate-400 mt-1.5 shrink-0" />
-                    <PhoneActions phone={account.pocPhone} name={account.pocName ?? account.companyName} />
+                    <PhoneActions phone={account.pocPhone} name={account.pocName ?? account.companyName} accountId={account.id} />
                   </div>
                 )}
                 {account.pocEmail && (

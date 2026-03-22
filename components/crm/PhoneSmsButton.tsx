@@ -9,6 +9,7 @@ import { TelnyxCallButton } from '@/components/regions/TelnyxCallButton'
 interface Props {
   phone: string
   recipientName: string
+  accountId?: string
   className?: string
   title?: string
   showIcon?: boolean
@@ -17,6 +18,7 @@ interface Props {
 export function PhoneSmsButton({
   phone,
   recipientName,
+  accountId,
   className,
   title = 'Send SMS',
   showIcon = true,
@@ -26,7 +28,7 @@ export function PhoneSmsButton({
   return (
     <>
       <div className="flex items-center gap-2 flex-wrap">
-        <TelnyxCallButton phone={phone} accountName={recipientName} />
+        <TelnyxCallButton phone={phone} accountName={recipientName} accountId={accountId} />
         <button
           type="button"
           onClick={() => setOpen(true)}

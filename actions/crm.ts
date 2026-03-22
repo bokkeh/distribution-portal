@@ -375,6 +375,7 @@ export async function updateCustomerAccount(
     const contactName = (formData.get('contactName') as string) || null
     const hoursOfOperation = (formData.get('hoursOfOperation') as string) || null
     const dcAbraNumber = (formData.get('dcAbraNumber') as string) || null
+    const businessType = (formData.get('businessType') as string) || null
     const creditLimit = formData.get('creditLimit') as string
     const paymentTerms = formData.get('paymentTerms') as string
 
@@ -399,6 +400,7 @@ export async function updateCustomerAccount(
       ['pocEmail', existingAccount.pocEmail, pocEmail],
       ['hoursOfOperation', existingAccount.hoursOfOperation, hoursOfOperation],
       ['dcAbraNumber', existingAccount.dcAbraNumber, dcAbraNumber],
+      ['businessType', existingAccount.businessType, businessType],
       ['creditLimit', existingAccount.creditLimit, creditLimit],
       ['paymentTerms', existingAccount.paymentTerms, paymentTerms],
     ].filter(([, previousValue, nextValue]) => (previousValue ?? null) !== (nextValue ?? null)).map(([field]) => field as string)
@@ -419,6 +421,7 @@ export async function updateCustomerAccount(
       pocEmail,
       hoursOfOperation,
       dcAbraNumber,
+      businessType,
       creditLimit,
       paymentTerms,
     }).where(eq(customerAccounts.id, id))
