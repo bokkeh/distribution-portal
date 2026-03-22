@@ -40,8 +40,8 @@ async function applyViewAs(session: Session): Promise<Session> {
         roles: target.roles,
         // Keep original admin email in a separate field for the banner
         _viewingAsOf: session.user.email,
-      },
-    }
+      } as Session['user'],
+    } as Session
   } catch {
     return session
   }
