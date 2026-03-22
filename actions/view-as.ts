@@ -69,3 +69,46 @@ export async function getViewAsUserId(): Promise<string | null> {
   const jar = await cookies()
   return jar.get(COOKIE_NAME)?.value ?? null
 }
+
+export async function searchAccountsForViewAs(query: string) {
+  await requireSuperAdmin()
+  const { db } = await import('@/db')
+  const { customerAccounts } = await import('@/db/schema')
+  const { ilike, isNotNull } = await import('drizzle-orm')
+
+  if (!query.trim()) return []
+
+  return db
+    .select({ id: customerAccounts.id, companyName: customerAccounts.companyName, userId: customerAccounts.userId })
+    .from(customerAccounts)
+    .where(ilike(customerAccounts.companyName, `%${query}%`))
+    .limit(6)
+}
+
+export async function startViewAsAccount(accountId: string): Promise<{ error?: string }> {
+  await requireSuperAdmin()
+
+  const { db } = await import('@/db')
+  const { customerAccounts } = await import('@/db/schema')
+  const { eq } = await import('drizzle-orm')
+
+  const [account] = await db
+    .select({ userId: customerAccounts.userId, companyName: customerAccounts.companyName })
+    .from(customerAccounts)
+    .where(eq(customerAccounts.id, accountId))
+    .limit(1)
+
+  if (!account) return { error: 'Account not found' }
+  if (!account.userId) return { error: `${account.companyName} has no linked portal user. Ask the customer to register first.` }
+
+  const jar = await cookies()
+  jar.set(COOKIE_NAME, account.userId, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 60 * 60,
+  })
+
+  redirect('/customer/dashboard')
+}

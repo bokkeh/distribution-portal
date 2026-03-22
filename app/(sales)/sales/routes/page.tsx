@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button'
 import { Map, MapPin, Phone, Plus, AlertCircle, CheckCircle2, Route } from 'lucide-react'
 import { RouteStopCheckIn } from './RouteStopCheckIn'
 import { createSalesRepRoute } from '@/actions/sales-routes'
+import { getSalesRepRegionMapData } from '@/actions/sales-rep-map'
+import { SalesRepRegionMap } from '@/components/sales/SalesRepRegionMap'
 
 export default async function SalesRoutesPage() {
   const session = await requireRole('sales_rep', 'sales_manager', 'admin')
@@ -35,6 +37,8 @@ export default async function SalesRoutesPage() {
     .from(salesRegions)
     .where(eq(salesRegions.assignedManagerId, member.id))
     .limit(1)
+
+  const mapData = await getSalesRepRegionMapData()
 
   const routes = await db
     .select()
@@ -85,6 +89,33 @@ export default async function SalesRoutesPage() {
             )}
           </p>
         </div>
+      </div>
+
+      {/* Region map */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">
+              {mapData.regionName ? `${mapData.regionName} Region` : 'My Region'}
+            </h2>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {mapData.accounts.length} account{mapData.accounts.length !== 1 ? 's' : ''} · markers coloured by visit health
+            </p>
+          </div>
+          <div className="hidden sm:flex items-center gap-3 text-[11px] text-slate-500">
+            {[
+              { color: '#22C55E', label: 'Healthy' },
+              { color: '#F59E0B', label: 'Overdue' },
+              { color: '#EF4444', label: 'Critical' },
+            ].map(({ color, label }) => (
+              <span key={label} className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: color }} />
+                {label}
+              </span>
+            ))}
+          </div>
+        </div>
+        <SalesRepRegionMap data={mapData} />
       </div>
 
       {/* Create route form */}

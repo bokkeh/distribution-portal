@@ -17,9 +17,14 @@ import {
 } from 'lucide-react'
 import { getActivityTimeline } from '@/lib/activity/read'
 import { ActivityTimeline } from '@/components/activity/ActivityTimeline'
+import { auth } from '@/lib/auth/config'
+import { ViewAsAccountButton } from '@/components/admin/ViewAsAccountButton'
 
 export default async function AccountDetailPage({ params }: { params: Promise<{ accountId: string }> }) {
   const { accountId } = await params
+
+  const session = await auth()
+  const isSuperAdmin = session?.user?.email?.toLowerCase() === (process.env.SUPER_ADMIN_EMAIL ?? '').toLowerCase()
 
   const account = await getCRMAccountDetail(accountId)
   if (!account) notFound()
@@ -129,11 +134,16 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
             </p>
           )}
         </div>
-        <form action={syncToHubSpot.bind(null, account.id)}>
-          <Button variant="outline" size="sm" type="submit">
-            <RefreshCw className="w-4 h-4 mr-2" />Sync HubSpot
-          </Button>
-        </form>
+        <div className="flex items-center gap-2 flex-wrap">
+          {isSuperAdmin && (
+            <ViewAsAccountButton accountId={account.id} companyName={account.companyName} />
+          )}
+          <form action={syncToHubSpot.bind(null, account.id)}>
+            <Button variant="outline" size="sm" type="submit">
+              <RefreshCw className="w-4 h-4 mr-2" />Sync HubSpot
+            </Button>
+          </form>
+        </div>
       </div>
 
       {/* Stat Cards */}

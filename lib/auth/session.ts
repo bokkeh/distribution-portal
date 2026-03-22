@@ -58,15 +58,20 @@ export async function requireAuth() {
   return session
 }
 
+function mergeRoles(role: string | null | undefined, rolesArr: string[] | null | undefined): string[] {
+  const combined = [...(rolesArr ?? []), ...(role ? [role] : [])]
+  return [...new Set(combined.filter(Boolean))]
+}
+
 export async function requireRole(...roles: string[]) {
   const session = await auth()
   if (!session) redirect('/login')
-  const realRoles = session.user.roles ?? [session.user.role as string]
+  const realRoles = mergeRoles(session.user.role as string, session.user.roles)
   if (realRoles.includes('admin')) {
     // Superadmin: apply view-as overlay if active
     const effective = await applyViewAs(session)
     // Still check that the effective user has the requested role (or they're really admin)
-    const effectiveRoles = effective?.user.roles ?? [effective?.user.role as string]
+    const effectiveRoles = mergeRoles(effective?.user.role as string, effective?.user.roles)
     if (effectiveRoles.includes('admin') || roles.some(r => effectiveRoles.includes(r))) {
       return effective!
     }
