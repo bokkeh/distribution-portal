@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { updateOrderShippingStatus, updateOrderStatus } from '@/actions/orders'
 import { formatStatusLabel, orderStatusVariant, shippingStatusVariant } from '@/lib/orders/status'
+import { formatPaymentTerms } from '@/lib/orders/payment-terms'
 import { isMissingShippingStatusColumn } from '@/lib/orders/shipping-fallback'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
@@ -26,6 +27,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
         status: 'pending' | 'confirmed' | 'fulfilled' | 'cancelled'
         shippingStatus: 'not_scheduled' | 'scheduled' | 'out_for_delivery' | 'delivered' | 'issue'
         orderType: 'paid' | 'sample'
+        paymentTerms: string | null
         notes: string | null
         createdAt: Date
         companyName: string | null
@@ -42,6 +44,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
         status: orders.status,
         shippingStatus: orders.shippingStatus,
         orderType: orders.orderType,
+        paymentTerms: orders.paymentTerms,
         notes: orders.notes,
         createdAt: orders.createdAt,
         companyName: customerAccounts.companyName,
@@ -60,6 +63,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
         tax: orders.tax,
         status: orders.status,
         orderType: orders.orderType,
+        paymentTerms: customerAccounts.paymentTerms,
         notes: orders.notes,
         createdAt: orders.createdAt,
         companyName: customerAccounts.companyName,
@@ -148,6 +152,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
               <div className="flex justify-between"><span className="text-muted-foreground">Type</span><Badge variant="outline">{order.orderType}</Badge></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Order Status</span><Badge variant={orderStatusVariant[order.status]}>{formatStatusLabel(order.status)}</Badge></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Shipping</span><Badge variant={shippingStatusVariant[order.shippingStatus]}>{formatStatusLabel(order.shippingStatus)}</Badge></div>
+              <div className="flex justify-between gap-3"><span className="text-muted-foreground">Payment Terms</span><span className="text-right font-medium">{formatPaymentTerms(order.paymentTerms)}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Total</span><span className="font-bold">{formatCurrency(order.total)}</span></div>
             </div>
             <form action={updateOrderShippingStatus.bind(null, order.id)} className="space-y-2">

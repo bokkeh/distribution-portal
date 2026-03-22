@@ -480,3 +480,87 @@ export async function updateCustomerAccount(
     return { error: error instanceof Error ? error.message : 'Failed to update account.' }
   }
 }
+
+export async function createCustomerAccount(
+  _prev: { success?: boolean; accountId?: string; error?: string } | null,
+  formData: FormData
+): Promise<{ success?: boolean; accountId?: string; error?: string }> {
+  try {
+    const session = await requireAdminOrStaff()
+
+    const companyName = (formData.get('companyName') as string | null)?.trim()
+    const phone = ((formData.get('phone') as string) || '').trim() || null
+    const email = ((formData.get('email') as string) || '').trim() || null
+    const address = ((formData.get('address') as string) || '').trim() || null
+    const city = ((formData.get('city') as string) || '').trim() || null
+    const state = ((formData.get('state') as string) || '').trim() || null
+    const zip = ((formData.get('zip') as string) || '').trim() || null
+    const businessEmail = ((formData.get('businessEmail') as string) || '').trim() || null
+    const businessPhone = ((formData.get('businessPhone') as string) || '').trim() || null
+    const pocName = ((formData.get('pocName') as string) || '').trim() || null
+    const pocPhone = ((formData.get('pocPhone') as string) || '').trim() || null
+    const pocEmail = ((formData.get('pocEmail') as string) || '').trim() || null
+    const contactName = ((formData.get('contactName') as string) || '').trim() || null
+    const hoursOfOperation = ((formData.get('hoursOfOperation') as string) || '').trim() || null
+    const dcAbraNumber = ((formData.get('dcAbraNumber') as string) || '').trim() || null
+    const creditLimit = ((formData.get('creditLimit') as string) || '0').trim() || '0'
+    const paymentTerms = ((formData.get('paymentTerms') as string) || 'NET30').trim() || 'NET30'
+
+    if (!companyName) {
+      return { error: 'Company name is required.' }
+    }
+
+    const [account] = await db.insert(customerAccounts).values({
+      companyName,
+      contactName,
+      address,
+      city,
+      state,
+      zip,
+      phone,
+      email,
+      businessEmail,
+      businessPhone,
+      pocName,
+      pocPhone,
+      pocEmail,
+      hoursOfOperation,
+      dcAbraNumber,
+      creditLimit,
+      paymentTerms,
+    }).returning({ id: customerAccounts.id })
+
+    await logActivityEvent({
+      entityType: 'account',
+      entityId: account.id,
+      actorUserId: session.user.id,
+      kind: 'account_created',
+      title: 'Account created',
+      body: `${companyName} was added to the CRM.`,
+    })
+
+    const hubspotContactId = await upsertHubSpotContact({
+      email: pocEmail || businessEmail || email || '',
+      firstname: (pocName || contactName || companyName).split(' ')[0] ?? companyName,
+      lastname: (pocName || contactName || '').split(' ').slice(1).join(' '),
+      company: companyName,
+      phone: pocPhone || businessPhone || phone || '',
+      city: city ?? '',
+      state: state ?? '',
+      credit_limit: creditLimit,
+      payment_terms: paymentTerms,
+      account_balance: '0',
+    }).catch(() => null)
+
+    if (hubspotContactId) {
+      await db.update(customerAccounts).set({ hubspotContactId }).where(eq(customerAccounts.id, account.id))
+    }
+
+    revalidatePath('/admin/crm')
+    revalidatePath('/staff/crm')
+
+    return { success: true, accountId: account.id }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to create account.' }
+  }
+}

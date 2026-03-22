@@ -161,7 +161,7 @@ export default async function CRMPage() {
           <Link href="/admin/crm/sales-routes">
             <Button variant="outline"><Plus className="w-4 h-4 mr-2" />Sales Routes</Button>
           </Link>
-          <Link href="/admin/users/new">
+          <Link href="/admin/crm/new">
             <Button><Plus className="w-4 h-4 mr-2" />Add Account</Button>
           </Link>
         </div>

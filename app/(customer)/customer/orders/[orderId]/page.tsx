@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { formatStatusLabel, orderStatusVariant, shippingStatusVariant } from '@/lib/orders/status'
+import { formatPaymentTerms } from '@/lib/orders/payment-terms'
 import { isMissingShippingStatusColumn } from '@/lib/orders/shipping-fallback'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
@@ -24,6 +25,7 @@ export default async function CustomerOrderDetailPage({ params }: { params: Prom
         status: 'pending' | 'confirmed' | 'fulfilled' | 'cancelled'
         orderType: 'paid' | 'sample'
         shippingStatus: 'not_scheduled' | 'scheduled' | 'out_for_delivery' | 'delivered' | 'issue'
+        paymentTerms: string | null
         notes: string | null
         createdAt: Date
         customerId: string
@@ -34,7 +36,7 @@ export default async function CustomerOrderDetailPage({ params }: { params: Prom
     ;[order] = await db
       .select({
         id: orders.id, total: orders.total, status: orders.status, orderType: orders.orderType,
-        shippingStatus: orders.shippingStatus, notes: orders.notes, createdAt: orders.createdAt, customerId: orders.customerId,
+        shippingStatus: orders.shippingStatus, paymentTerms: orders.paymentTerms, notes: orders.notes, createdAt: orders.createdAt, customerId: orders.customerId,
       })
       .from(orders)
       .where(eq(orders.id, orderId))
@@ -44,9 +46,10 @@ export default async function CustomerOrderDetailPage({ params }: { params: Prom
     ;[order] = await db
       .select({
         id: orders.id, total: orders.total, status: orders.status, orderType: orders.orderType,
-        notes: orders.notes, createdAt: orders.createdAt, customerId: orders.customerId,
+        paymentTerms: customerAccounts.paymentTerms, notes: orders.notes, createdAt: orders.createdAt, customerId: orders.customerId,
       })
       .from(orders)
+      .leftJoin(customerAccounts, eq(orders.customerId, customerAccounts.id))
       .where(eq(orders.id, orderId))
       .then(rows => rows.map(row => ({ ...row, shippingStatus: 'not_scheduled' as const })))
   }
@@ -151,6 +154,10 @@ export default async function CustomerOrderDetailPage({ params }: { params: Prom
             <div className="rounded-lg border bg-slate-50 p-4">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Shipping Status</p>
               <div className="mt-2"><Badge variant={shippingStatusVariant[order.shippingStatus]}>{formatStatusLabel(order.shippingStatus)}</Badge></div>
+            </div>
+            <div className="rounded-lg border bg-slate-50 p-4 sm:col-span-2">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Payment Terms</p>
+              <p className="mt-2 text-sm font-semibold text-slate-900">{formatPaymentTerms(order.paymentTerms)}</p>
             </div>
           </div>
           <div className="space-y-3">

@@ -9,6 +9,7 @@ export const orders = pgTable('orders', {
   customerId: uuid('customer_id').notNull().references(() => customerAccounts.id),
   createdBy: uuid('created_by').notNull().references(() => users.id),
   orderType: text('order_type', { enum: ['paid', 'sample'] }).notNull(),
+  paymentTerms: text('payment_terms').default('NET30'),
   status: text('status', { enum: ['pending', 'confirmed', 'fulfilled', 'cancelled'] }).notNull().default('pending'),
   shippingStatus: text('shipping_status', { enum: ['not_scheduled', 'scheduled', 'out_for_delivery', 'delivered', 'issue'] }).notNull().default('not_scheduled'),
   subtotal: numeric('subtotal', { precision: 12, scale: 2 }).notNull().default('0'),

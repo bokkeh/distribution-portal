@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import OrderFormClient from '@/components/orders/OrderFormClient'
 
-export default async function NewOrderPage() {
+export default async function NewAdminOrderPage() {
   const [customers, productList] = await Promise.all([
     db
       .select({
@@ -30,13 +30,13 @@ export default async function NewOrderPage() {
   return (
     <div className="p-4 sm:p-8 space-y-6">
       <div className="flex items-center gap-4">
-        <Link href="/staff/orders"><Button variant="ghost" size="icon"><ArrowLeft className="w-4 h-4" /></Button></Link>
+        <Link href="/admin/orders"><Button variant="ghost" size="icon"><ArrowLeft className="w-4 h-4" /></Button></Link>
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Create Order</h1>
-          <p className="text-muted-foreground mt-1">Place a case or bottle order</p>
+          <p className="text-muted-foreground mt-1">Place an order on behalf of a customer and set payment terms</p>
         </div>
       </div>
-      <OrderFormClient customers={customers} products={productList} mode="staff" />
+      <OrderFormClient customers={customers} products={productList} mode="admin" />
     </div>
   )
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Minus, Plus, Trash2 } from 'lucide-react'
 import { createOrder } from '@/actions/orders'
 import { toast } from 'sonner'
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { PAYMENT_TERM_OPTIONS, formatPaymentTerms } from '@/lib/orders/payment-terms'
 import { formatCurrency } from '@/lib/utils'
 
 interface Product {
@@ -27,6 +28,7 @@ interface Product {
 interface Customer {
   id: string
   companyName: string
+  paymentTerms: string | null
 }
 
 type PurchaseUnit = 'case' | 'bottle'
@@ -50,12 +52,31 @@ function getBottleStock(product: Product) {
   return (product.quantityPaid ?? 0) * bottlesPerCase - (product.looseBottlePaid ?? 0)
 }
 
-export default function OrderFormClient({ customers, products }: { customers: Customer[]; products: Product[] }) {
+export default function OrderFormClient({
+  customers,
+  products,
+  mode = 'staff',
+}: {
+  customers: Customer[]
+  products: Product[]
+  mode?: 'admin' | 'staff'
+}) {
   const [customerId, setCustomerId] = useState('')
   const [purchaseUnit, setPurchaseUnit] = useState<PurchaseUnit>('case')
   const [lineItems, setLineItems] = useState<LineItem[]>([])
   const [notes, setNotes] = useState('')
   const [search, setSearch] = useState('')
+  const [paymentTerms, setPaymentTerms] = useState('NET30')
+
+  const selectedCustomer = customers.find((customer) => customer.id === customerId) ?? null
+
+  useEffect(() => {
+    if (!selectedCustomer) {
+      setPaymentTerms('NET30')
+      return
+    }
+    setPaymentTerms(selectedCustomer.paymentTerms ?? 'NET30')
+  }, [selectedCustomer])
 
   const filteredProducts = products.filter(product =>
     product.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -104,6 +125,9 @@ export default function OrderFormClient({ customers, products }: { customers: Cu
     formData.append('customerId', customerId)
     formData.append('purchaseUnit', purchaseUnit)
     formData.append('notes', notes)
+    if (mode === 'admin') {
+      formData.append('paymentTerms', paymentTerms)
+    }
     formData.append('items', JSON.stringify(lineItems.map(item => ({ productId: item.productId, quantity: item.quantity }))))
     const result = await createOrder(formData)
     if (result?.error) {
@@ -134,6 +158,11 @@ export default function OrderFormClient({ customers, products }: { customers: Cu
                   <option value="">Select customer...</option>
                   {customers.map(customer => <option key={customer.id} value={customer.id}>{customer.companyName}</option>)}
                 </select>
+                {selectedCustomer ? (
+                  <p className="text-xs text-muted-foreground">
+                    Account default: {formatPaymentTerms(selectedCustomer.paymentTerms)}
+                  </p>
+                ) : null}
               </div>
 
               <div className="space-y-2">
@@ -147,6 +176,24 @@ export default function OrderFormClient({ customers, products }: { customers: Cu
                   </Button>
                 </div>
               </div>
+
+              {mode === 'admin' ? (
+                <div className="space-y-2">
+                  <Label htmlFor="paymentTerms">Payment Terms</Label>
+                  <select
+                    id="paymentTerms"
+                    value={paymentTerms}
+                    onChange={e => setPaymentTerms(e.target.value)}
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  >
+                    {PAYMENT_TERM_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
 
               <div className="space-y-2">
                 <Label>Notes</Label>

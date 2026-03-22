@@ -12,6 +12,7 @@ import { logInventoryTransaction } from '@/lib/inventory/history'
 import { getMinimumCaseQuantity, isWisherVodkaProduct } from '@/lib/orders/minimums'
 import { createUserNotification } from '@/lib/notifications/in-app'
 import { logActivityEvent } from '@/lib/activity/log'
+import { formatPaymentTerms } from '@/lib/orders/payment-terms'
 import {
   sendNewOrderStaffNotification,
   sendOrderReceivedEmail,
@@ -42,15 +43,21 @@ export async function createOrder(formData: FormData) {
     const preferredDeliveryDay = (formData.get('preferredDeliveryDay') as string | null)?.trim() || null
     const preferredDeliveryTime = (formData.get('preferredDeliveryTime') as string | null)?.trim() || null
     const deliveryRequirements = (formData.get('deliveryRequirements') as string | null)?.trim() || null
+    const requestedPaymentTerms = (formData.get('paymentTerms') as string | null)?.trim() || null
     const paymentMethod = (formData.get('paymentMethod') as string | null) ?? null
     const processingFee = Number((formData.get('processingFee') as string | null) ?? '0')
     const itemsJson = formData.get('items') as string
     const items: { productId: string; quantity: number }[] = JSON.parse(itemsJson)
 
     let customerBusinessType: string | null = null
+    let defaultPaymentTerms = 'NET30'
     if (userRoles.includes('customer')) {
       const [account] = await db
-        .select({ id: customerAccounts.id, businessType: customerAccounts.businessType })
+        .select({
+          id: customerAccounts.id,
+          businessType: customerAccounts.businessType,
+          paymentTerms: customerAccounts.paymentTerms,
+        })
         .from(customerAccounts)
         .where(eq(customerAccounts.userId, session.user.id))
         .limit(1)
@@ -59,14 +66,23 @@ export async function createOrder(formData: FormData) {
         throw new Error('Unauthorized customer order')
       }
       customerBusinessType = account.businessType
+      defaultPaymentTerms = account.paymentTerms ?? 'NET30'
     } else {
       const [account] = await db
-        .select({ businessType: customerAccounts.businessType })
+        .select({
+          businessType: customerAccounts.businessType,
+          paymentTerms: customerAccounts.paymentTerms,
+        })
         .from(customerAccounts)
         .where(eq(customerAccounts.id, customerId))
         .limit(1)
       customerBusinessType = account?.businessType ?? null
+      defaultPaymentTerms = account?.paymentTerms ?? 'NET30'
     }
+
+    const paymentTerms = userRoles.includes('customer')
+      ? defaultPaymentTerms
+      : (requestedPaymentTerms || defaultPaymentTerms)
 
     const productIds = items.map(item => item.productId)
     const [productList, inventoryRows] = await Promise.all([
@@ -135,6 +151,7 @@ export async function createOrder(formData: FormData) {
     ].filter(Boolean).join('\n')
     const normalizedNotes = [
       notes?.trim() || null,
+      `Payment terms: ${formatPaymentTerms(paymentTerms)}.`,
       deliverySummary,
       paymentMethod === 'card' && sanitizedProcessingFee > 0
         ? `Card processing fee paid by customer: $${sanitizedProcessingFee.toFixed(2)}.`
@@ -145,6 +162,7 @@ export async function createOrder(formData: FormData) {
       customerId,
       createdBy: session.user.id,
       orderType: 'paid',
+      paymentTerms,
       status: 'pending',
       shippingStatus: 'not_scheduled',
       subtotal: subtotal.toFixed(2),
@@ -299,7 +317,11 @@ export async function createOrder(formData: FormData) {
 
     return {
       success: true as const,
-      redirectTo: userRoles.includes('customer') ? `/customer/orders/${order.id}` : `/staff/orders/${order.id}`,
+      redirectTo: userRoles.includes('customer')
+        ? `/customer/orders/${order.id}`
+        : userRoles.includes('admin')
+          ? `/admin/orders/${order.id}`
+          : `/staff/orders/${order.id}`,
     }
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Failed to create order' }

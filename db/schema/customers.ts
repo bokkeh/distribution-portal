@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, numeric, timestamp, boolean, integer } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, numeric, timestamp, boolean, integer, doublePrecision } from 'drizzle-orm/pg-core'
 import { users } from './users'
 import { salesMembers } from './salesMembers'
 import { salesRegions } from './salesRegions'
@@ -46,6 +46,9 @@ export const customerAccounts = pgTable('customer_accounts', {
   visitFrequency: integer('visit_frequency').default(30), // days between required visits
   lastVisitDate: timestamp('last_visit_date', { withTimezone: true }),
   nextRequiredVisitDate: timestamp('next_required_visit_date', { withTimezone: true }),
+  // Geocoded coordinates (cached from address)
+  lat: doublePrecision('lat'),
+  lng: doublePrecision('lng'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

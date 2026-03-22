@@ -61,7 +61,7 @@ export default async function AdminOrdersPage() {
           <h1 className="text-2xl font-bold text-slate-900">Orders</h1>
           <p className="text-muted-foreground mt-1">{allOrders.length} total orders</p>
         </div>
-        <Link href="/staff/orders/new"><Button><Plus className="w-4 h-4 mr-2" />New Order</Button></Link>
+        <Link href="/admin/orders/new"><Button><Plus className="w-4 h-4 mr-2" />New Order</Button></Link>
       </div>
       <BulkOrderStatusForm
         mode="admin"
