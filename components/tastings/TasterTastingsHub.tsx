@@ -1,4 +1,4 @@
-'use client'
+pop 'use client'
 
 import Link from 'next/link'
 import { format, isBefore } from 'date-fns'
@@ -56,15 +56,16 @@ function TastingCard({ tasting, compact = false }: { tasting: TastingRow; compac
             <span className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-500">
               {format(tastingDate, 'EEE')}
             </span>
+            <span className="mt-3 rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-blue-700 shadow-sm">
+              {formatTimeRange(tastingDate, tasting.endAt ? new Date(tasting.endAt) : null)}
+            </span>
           </div>
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <p className="font-semibold text-slate-900">{tasting.eventName}</p>
               <Badge variant={statusVariant[tasting.status] ?? 'secondary'}>{tasting.status}</Badge>
             </div>
-            <p className="text-sm text-slate-500">
-              {formatEasternDate(tastingDate)} • {formatTimeRange(tastingDate, tasting.endAt ? new Date(tasting.endAt) : null)}
-            </p>
+            <p className="text-sm text-slate-500">{formatEasternDate(tastingDate)}</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
