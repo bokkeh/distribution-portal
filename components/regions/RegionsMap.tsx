@@ -19,44 +19,47 @@ function isOverdue(date: Date | null) {
   return new Date(date) < new Date()
 }
 
-function getAccountMarkerGlyph(account: RegionMapAccount) {
-  switch (account.businessType) {
-    case 'restaurant':
-    case 'restaurant_group':
-      return 'R'
-    case 'liquor_store':
-      return 'L'
-    case 'hotel_group':
-      return 'H'
-    default:
-      switch (account.accountType) {
-        case 'on_premise':
-          return 'R'
-        case 'off_premise':
-          return 'L'
-        case 'chain':
-          return 'C'
-        case 'independent':
-          return 'I'
-        default:
-          return 'A'
-      }
+const BUSINESS_TYPE_GLYPH: Record<string, string> = {
+  // Display values (new dropdown)
+  'Liquor Store': 'L',
+  'Restaurant': 'R',
+  'Restaurant Group': 'R',
+  'Hotel': 'H',
+  'Hotel Group': 'H',
+  'Venue': 'V',
+  'Bar': 'B',
+  'Night Club': 'N',
+  'Grocery Store': 'G',
+  'Convenience Store': 'C',
+  'Country Club': 'K',
+  'Casino': '$',
+  'Wholesaler': 'W',
+  // Legacy underscore values
+  'restaurant': 'R',
+  'restaurant_group': 'R',
+  'liquor_store': 'L',
+  'hotel': 'H',
+  'hotel_group': 'H',
+  'venue': 'V',
+  'bar': 'B',
+}
+
+function getAccountMarkerGlyph(account: RegionMapAccount): string {
+  if (account.businessType && BUSINESS_TYPE_GLYPH[account.businessType]) {
+    return BUSINESS_TYPE_GLYPH[account.businessType]
+  }
+  // Fall back to account type
+  switch (account.accountType) {
+    case 'on_premise': return 'R'
+    case 'off_premise': return 'L'
+    case 'chain': return 'C'
+    case 'independent': return 'I'
+    default: return 'A'
   }
 }
 
-function getAccountMarkerTitle(account: RegionMapAccount) {
-  switch (account.businessType) {
-    case 'restaurant':
-      return 'Restaurant'
-    case 'restaurant_group':
-      return 'Restaurant Group'
-    case 'liquor_store':
-      return 'Liquor Store'
-    case 'hotel_group':
-      return 'Hotel Group'
-    default:
-      return account.accountType?.replaceAll('_', ' ') ?? 'Account'
-  }
+function getAccountMarkerTitle(account: RegionMapAccount): string {
+  return account.businessType ?? account.accountType?.replaceAll('_', ' ') ?? 'Account'
 }
 
 export function RegionsMap({ data }: { data: RegionMapData }) {
@@ -232,10 +235,17 @@ export function RegionsMap({ data }: { data: RegionMapData }) {
         })()}
 
         <div className="mt-auto border-t pt-2 space-y-1">
-          <p className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Priority</p>
-          {[['#3B82F6', 'No rep assigned'], ['#EF4444', 'High priority'], ['#F59E0B', 'Medium priority'], ['#94A3B8', 'Low priority']].map(([c, label]) => (
+          <p className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Dot Color — Priority</p>
+          {[['#3B82F6', 'No rep assigned'], ['#EF4444', 'High'], ['#F59E0B', 'Medium'], ['#94A3B8', 'Low']].map(([c, label]) => (
             <div key={label} className="flex items-center gap-1.5 px-1">
               <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: c }} />
+              <span className="text-xs text-slate-500">{label}</span>
+            </div>
+          ))}
+          <p className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400 pt-2">Dot Label — Type</p>
+          {[['L','Liquor Store'],['R','Restaurant / Group'],['H','Hotel / Group'],['V','Venue'],['B','Bar'],['N','Night Club'],['G','Grocery'],['C','Convenience'],['K','Country Club'],['$','Casino'],['W','Wholesaler'],['A','Other / Unknown']].map(([glyph, label]) => (
+            <div key={glyph} className="flex items-center gap-1.5 px-1">
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-slate-400 text-[9px] font-bold text-white shrink-0">{glyph}</span>
               <span className="text-xs text-slate-500">{label}</span>
             </div>
           ))}
