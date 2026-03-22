@@ -2,8 +2,9 @@
 
 import { GoogleMap, InfoWindow, Marker, Polygon, useJsApiLoader } from '@react-google-maps/api'
 import { useState, useMemo } from 'react'
-import { MapPin, TrendingUp, Wine, Truck, User, ExternalLink, Building2, Phone } from 'lucide-react'
+import { MapPin, TrendingUp, Wine, Truck, User, ExternalLink, Building2, Phone, Send, Loader2, CheckCircle2 } from 'lucide-react'
 import type { RegionMapData, RegionMapAccount, RegionMapRegion } from '@/actions/regions-map'
+import { sendMapAccountSms } from '@/actions/map-contact'
 import { convexHull, expandHull, circlePolygon } from '@/lib/maps/convex-hull'
 import { getRegionColor } from '@/lib/maps/region-colors'
 import { RegionAccountsModal } from './RegionAccountsModal'
@@ -352,6 +353,12 @@ export function RegionsMap({ data }: { data: RegionMapData }) {
 
 function AccountInfoCard({ account }: { account: RegionMapAccount }) {
   const overdue = isOverdue(account.nextRequiredVisitDate)
+  const [composing, setComposing] = useState(false)
+  const [smsText, setSmsText] = useState('')
+  const [sending, setSending] = useState(false)
+  const [sent, setSent] = useState(false)
+  const [smsError, setSmsError] = useState<string | null>(null)
+
   const typeLabel: Record<string, string> = {
     on_premise: 'On-Premise',
     off_premise: 'Off-Premise',
@@ -370,8 +377,23 @@ function AccountInfoCard({ account }: { account: RegionMapAccount }) {
     low: '#94A3B8',
   }
 
+  async function handleSend() {
+    if (!account.phone || !smsText.trim() || sending) return
+    setSending(true)
+    setSmsError(null)
+    const result = await sendMapAccountSms(account.phone, account.companyName, smsText)
+    setSending(false)
+    if (result.ok) {
+      setSent(true)
+      setSmsText('')
+      setTimeout(() => { setSent(false); setComposing(false) }, 2500)
+    } else {
+      setSmsError(result.error ?? 'Failed to send')
+    }
+  }
+
   return (
-    <div className="min-w-[200px] max-w-[240px] space-y-2 p-1 text-sm">
+    <div className="min-w-[220px] max-w-[260px] space-y-2 p-1 text-sm">
       <div>
         <p className="font-bold text-slate-900">{account.companyName}</p>
         {account.address && (
@@ -403,19 +425,49 @@ function AccountInfoCard({ account }: { account: RegionMapAccount }) {
       </div>
 
       {account.phone && (
-        <div className="flex gap-2">
-          <a
-            href={`tel:${account.phone}`}
-            className="flex flex-1 items-center justify-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200"
-          >
-            <Phone className="h-3 w-3" /> Call
-          </a>
-          <a
-            href={`sms:${account.phone}`}
-            className="flex flex-1 items-center justify-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200"
-          >
-            <Phone className="h-3 w-3" /> Text
-          </a>
+        <div className="space-y-1.5">
+          <div className="flex gap-2">
+            <a
+              href={`tel:${account.phone}`}
+              className="flex flex-1 items-center justify-center gap-1 rounded-md bg-green-50 px-2 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100"
+            >
+              <Phone className="h-3 w-3" /> Call
+            </a>
+            <button
+              type="button"
+              onClick={() => { setComposing(c => !c); setSmsError(null) }}
+              className="flex flex-1 items-center justify-center gap-1 rounded-md bg-blue-50 px-2 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
+            >
+              <Send className="h-3 w-3" /> Text
+            </button>
+          </div>
+          <p className="text-[10px] text-slate-400 text-center">{account.phone}</p>
+
+          {composing && (
+            <div className="space-y-1.5">
+              <textarea
+                value={smsText}
+                onChange={e => setSmsText(e.target.value)}
+                placeholder="Type your message…"
+                rows={3}
+                className="w-full resize-none rounded-md border border-slate-200 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+              />
+              {smsError && <p className="text-[10px] text-red-500">{smsError}</p>}
+              <button
+                type="button"
+                onClick={handleSend}
+                disabled={sending || !smsText.trim() || sent}
+                className="flex w-full items-center justify-center gap-1.5 rounded-md bg-blue-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {sent
+                  ? <><CheckCircle2 className="h-3 w-3" /> Sent!</>
+                  : sending
+                    ? <><Loader2 className="h-3 w-3 animate-spin" /> Sending…</>
+                    : <><Send className="h-3 w-3" /> Send via Telnyx</>
+                }
+              </button>
+            </div>
+          )}
         </div>
       )}
 
