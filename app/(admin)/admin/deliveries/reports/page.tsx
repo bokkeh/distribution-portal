@@ -11,6 +11,7 @@ import Link from 'next/link'
 import { ArrowLeft, Clock, MapPin, Camera, User, Truck } from 'lucide-react'
 import { ShelfInsightsCard } from '@/components/deliveries/ShelfInsightsCard'
 import type { SerializedShelfAnalysis } from '@/components/deliveries/ShelfInsightsCard'
+import { getDeliveryStopAdditionalPhotos } from '@/lib/deliveries/photos'
 
 function haversineMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 3958.8 // Earth radius in miles
@@ -83,6 +84,10 @@ export default async function DeliveryReportsPage() {
     proofOfDeliveryUrl: string | null
     shelfPhotoUrl: string | null
     additionalPhotoUrl: string | null
+    additionalPhotoUrl2: string | null
+    additionalPhotoUrl3: string | null
+    additionalPhotoUrl4: string | null
+    additionalPhotoUrl5: string | null
   }
 
   let allStops: StopRow[]
@@ -101,6 +106,10 @@ export default async function DeliveryReportsPage() {
         proofOfDeliveryUrl: deliveryStops.proofOfDeliveryUrl,
         shelfPhotoUrl: deliveryStops.shelfPhotoUrl,
         additionalPhotoUrl: deliveryStops.additionalPhotoUrl,
+        additionalPhotoUrl2: deliveryStops.additionalPhotoUrl2,
+        additionalPhotoUrl3: deliveryStops.additionalPhotoUrl3,
+        additionalPhotoUrl4: deliveryStops.additionalPhotoUrl4,
+        additionalPhotoUrl5: deliveryStops.additionalPhotoUrl5,
       })
       .from(deliveryStops)
       .leftJoin(customerAccounts, eq(deliveryStops.customerId, customerAccounts.id))
@@ -125,7 +134,14 @@ export default async function DeliveryReportsPage() {
       .leftJoin(customerAccounts, eq(deliveryStops.customerId, customerAccounts.id))
       .where(inArray(deliveryStops.deliveryId, deliveryIds))
       .orderBy(deliveryStops.deliveryId, deliveryStops.sequenceNumber)
-      .then(rows => rows.map(row => ({ ...row, additionalPhotoUrl: null })))
+      .then(rows => rows.map(row => ({
+        ...row,
+        additionalPhotoUrl: null,
+        additionalPhotoUrl2: null,
+        additionalPhotoUrl3: null,
+        additionalPhotoUrl4: null,
+        additionalPhotoUrl5: null,
+      })))
   }
 
   const stopsByDelivery = new Map<string, typeof allStops>()
@@ -209,7 +225,9 @@ export default async function DeliveryReportsPage() {
             const name = stop.companyName ?? stop.address
             if (stop.proofOfDeliveryUrl) photos.push({ url: stop.proofOfDeliveryUrl, label: 'Proof', stopLabel: name })
             if (stop.shelfPhotoUrl) photos.push({ url: stop.shelfPhotoUrl, label: 'Shelf', stopLabel: name })
-            if (stop.additionalPhotoUrl) photos.push({ url: stop.additionalPhotoUrl, label: 'Extra', stopLabel: name })
+            getDeliveryStopAdditionalPhotos(stop).forEach((url, index) => {
+              photos.push({ url, label: `Extra ${index + 1}`, stopLabel: name })
+            })
           }
 
           const deliveredCount = stops.filter(s => s.status === 'delivered').length
@@ -338,7 +356,7 @@ export default async function DeliveryReportsPage() {
                         >
                           {stop.status}
                         </Badge>
-                        {(stop.proofOfDeliveryUrl || stop.shelfPhotoUrl || stop.additionalPhotoUrl) && (
+                        {(stop.proofOfDeliveryUrl || stop.shelfPhotoUrl || getDeliveryStopAdditionalPhotos(stop).length > 0) && (
                           <Camera className="w-3.5 h-3.5 text-blue-500 shrink-0" />
                         )}
                       </div>

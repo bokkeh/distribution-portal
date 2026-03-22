@@ -197,6 +197,13 @@
       "when": 1774090800000,
       "tag": "0028_order_payment_terms",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1774094400000,
+      "tag": "0029_delivery_stop_extra_photos",
+      "breakpoints": true
     }
   ]
 }

@@ -88,6 +88,10 @@ export default async function DeliveryDetailPage({
     proofOfDeliveryUrl: string | null
     shelfPhotoUrl: string | null
     additionalPhotoUrl: string | null
+    additionalPhotoUrl2: string | null
+    additionalPhotoUrl3: string | null
+    additionalPhotoUrl4: string | null
+    additionalPhotoUrl5: string | null
     companyName: string | null
   }> = []
 
@@ -108,6 +112,10 @@ export default async function DeliveryDetailPage({
         proofOfDeliveryUrl: deliveryStops.proofOfDeliveryUrl,
         shelfPhotoUrl: deliveryStops.shelfPhotoUrl,
         additionalPhotoUrl: deliveryStops.additionalPhotoUrl,
+        additionalPhotoUrl2: deliveryStops.additionalPhotoUrl2,
+        additionalPhotoUrl3: deliveryStops.additionalPhotoUrl3,
+        additionalPhotoUrl4: deliveryStops.additionalPhotoUrl4,
+        additionalPhotoUrl5: deliveryStops.additionalPhotoUrl5,
         companyName: customerAccounts.companyName,
       })
       .from(deliveryStops)
@@ -147,6 +155,10 @@ export default async function DeliveryDetailPage({
         proofOfDeliveryUrl: null,
         shelfPhotoUrl: null,
         additionalPhotoUrl: null,
+        additionalPhotoUrl2: null,
+        additionalPhotoUrl3: null,
+        additionalPhotoUrl4: null,
+        additionalPhotoUrl5: null,
       })))
   }
 

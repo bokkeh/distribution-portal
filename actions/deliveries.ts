@@ -334,7 +334,9 @@ export async function completeDeliveryStop(stopId: string, formData: FormData) {
 
   const proofOfDeliveryUrl = ((formData.get('proofOfDeliveryUrl') as string) || '').trim() || null
   const shelfPhotoUrl = ((formData.get('shelfPhotoUrl') as string) || '').trim() || null
-  const additionalPhotoUrl = ((formData.get('additionalPhotoUrl') as string) || '').trim() || null
+  const additionalPhotoUrls = Array.from({ length: 5 }, (_, index) => (
+    ((formData.get(`additionalPhotoUrl${index + 1}`) as string) || '').trim() || null
+  ))
   const notes = ((formData.get('notes') as string) || '').trim() || null
 
   const [stop] = await db
@@ -369,7 +371,11 @@ export async function completeDeliveryStop(stopId: string, formData: FormData) {
         notes,
         proofOfDeliveryUrl,
         shelfPhotoUrl,
-        additionalPhotoUrl,
+        additionalPhotoUrl: additionalPhotoUrls[0],
+        additionalPhotoUrl2: additionalPhotoUrls[1],
+        additionalPhotoUrl3: additionalPhotoUrls[2],
+        additionalPhotoUrl4: additionalPhotoUrls[3],
+        additionalPhotoUrl5: additionalPhotoUrls[4],
       })
       .where(eq(deliveryStops.id, stopId))
   } catch (error) {
@@ -386,6 +392,9 @@ export async function completeDeliveryStop(stopId: string, formData: FormData) {
         status: 'delivered',
         completedAt: new Date(),
         notes,
+        proofOfDeliveryUrl,
+        shelfPhotoUrl,
+        additionalPhotoUrl: additionalPhotoUrls[0],
       })
       .where(eq(deliveryStops.id, stopId))
   }

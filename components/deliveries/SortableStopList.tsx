@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { DriverStopActions } from '@/components/deliveries/DriverStopCard'
+import { getDeliveryStopAdditionalPhotos } from '@/lib/deliveries/photos'
 import { formatDate } from '@/lib/utils'
 import Image from 'next/image'
 import { CheckCircle, Check, Clock, GripVertical, Home, ImageIcon, MapPin, Pencil, X, XCircle } from 'lucide-react'
@@ -28,6 +29,10 @@ type Stop = {
   proofOfDeliveryUrl?: string | null
   shelfPhotoUrl?: string | null
   additionalPhotoUrl?: string | null
+  additionalPhotoUrl2?: string | null
+  additionalPhotoUrl3?: string | null
+  additionalPhotoUrl4?: string | null
+  additionalPhotoUrl5?: string | null
   completedAt?: Date | null
   companyName: string | null
 }
@@ -163,12 +168,16 @@ function SortableStopCard({
             {mode === 'admin' && stop.completedAt && (
               <p className="mt-1 text-xs text-muted-foreground">Completed {formatDate(stop.completedAt)}</p>
             )}
-            {mode === 'admin' && (stop.proofOfDeliveryUrl || stop.shelfPhotoUrl || stop.additionalPhotoUrl) && (
+            {mode === 'admin' && (stop.proofOfDeliveryUrl || stop.shelfPhotoUrl || getDeliveryStopAdditionalPhotos(stop).length > 0) && (
               <div className="mt-2 flex gap-2">
                 {([
                   { url: stop.proofOfDeliveryUrl, label: 'POD', title: 'Proof of delivery' },
                   { url: stop.shelfPhotoUrl, label: 'Shelf', title: 'Shelf photo' },
-                  { url: stop.additionalPhotoUrl, label: 'Extra', title: 'Additional photo' },
+                  ...getDeliveryStopAdditionalPhotos(stop).map((url, index) => ({
+                    url,
+                    label: `Extra ${index + 1}`,
+                    title: `Additional photo ${index + 1}`,
+                  })),
                 ] as { url: string | null | undefined; label: string; title: string }[]).filter(p => p.url).map(({ url, label, title }) => (
                   <a
                     key={label}
@@ -213,7 +222,18 @@ function SortableStopCard({
 
       {mode === 'driver' && !editing && (
         <div className="mt-4 border-t pt-4">
-          <DriverStopActions stop={{ id: stop.id, status: stop.status, notes: stop.notes, proofOfDeliveryUrl: stop.proofOfDeliveryUrl, shelfPhotoUrl: stop.shelfPhotoUrl, additionalPhotoUrl: stop.additionalPhotoUrl }} />
+          <DriverStopActions stop={{
+            id: stop.id,
+            status: stop.status,
+            notes: stop.notes,
+            proofOfDeliveryUrl: stop.proofOfDeliveryUrl,
+            shelfPhotoUrl: stop.shelfPhotoUrl,
+            additionalPhotoUrl: stop.additionalPhotoUrl,
+            additionalPhotoUrl2: stop.additionalPhotoUrl2,
+            additionalPhotoUrl3: stop.additionalPhotoUrl3,
+            additionalPhotoUrl4: stop.additionalPhotoUrl4,
+            additionalPhotoUrl5: stop.additionalPhotoUrl5,
+          }} />
         </div>
       )}
     </div>

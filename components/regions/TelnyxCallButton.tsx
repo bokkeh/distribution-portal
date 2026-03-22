@@ -62,7 +62,9 @@ export function TelnyxCallButton({ phone, accountName }: Props) {
       })
 
       client.on('telnyx.ready', () => {
-        const destination = phone.replace(/\D/g, '')
+        const digits = phone.replace(/\D/g, '')
+        // Ensure E.164 format — prepend +1 for 10-digit US numbers
+        const destination = digits.startsWith('1') ? `+${digits}` : `+1${digits}`
         const call = client.newCall({
           destinationNumber: destination,
           callerNumber: process.env.NEXT_PUBLIC_TELNYX_FROM_NUMBER ?? '',
