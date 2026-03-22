@@ -1,4 +1,4 @@
-fix'use client'
+'use client'
 
 import { useState, useEffect, useRef } from 'react'
 import { Phone, PhoneOff, Loader2, Volume2 } from 'lucide-react'
