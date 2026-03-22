@@ -96,3 +96,13 @@ export async function uploadBuffer(
 export function getPublicUrl(filePath: string): string {
   return `https://storage.googleapis.com/${process.env.GCS_BUCKET_NAME}/${filePath}`
 }
+
+/**
+ * Convert a stored GCS public URL to a signed-URL proxy path.
+ * Use this wherever photos are rendered — it handles the case where
+ * the bucket is not publicly accessible.
+ */
+export function signedPhotoUrl(url: string | null | undefined): string | null {
+  if (!url) return null
+  return `/api/photo?url=${encodeURIComponent(url)}`
+}

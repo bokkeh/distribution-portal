@@ -12,6 +12,7 @@ import { ArrowLeft, Clock, MapPin, Camera, User, Truck } from 'lucide-react'
 import { ShelfInsightsCard } from '@/components/deliveries/ShelfInsightsCard'
 import type { SerializedShelfAnalysis } from '@/components/deliveries/ShelfInsightsCard'
 import { getDeliveryStopAdditionalPhotos } from '@/lib/deliveries/photos'
+import { signedPhotoUrl } from '@/lib/gcs/photo-url'
 
 function haversineMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 3958.8 // Earth radius in miles
@@ -223,10 +224,10 @@ export default async function DeliveryReportsPage() {
           const photos: { url: string; label: string; stopLabel: string }[] = []
           for (const stop of stops) {
             const name = stop.companyName ?? stop.address
-            if (stop.proofOfDeliveryUrl) photos.push({ url: stop.proofOfDeliveryUrl, label: 'Proof', stopLabel: name })
-            if (stop.shelfPhotoUrl) photos.push({ url: stop.shelfPhotoUrl, label: 'Shelf', stopLabel: name })
+            if (stop.proofOfDeliveryUrl) photos.push({ url: signedPhotoUrl(stop.proofOfDeliveryUrl)!, label: 'Proof', stopLabel: name })
+            if (stop.shelfPhotoUrl) photos.push({ url: signedPhotoUrl(stop.shelfPhotoUrl)!, label: 'Shelf', stopLabel: name })
             getDeliveryStopAdditionalPhotos(stop).forEach((url, index) => {
-              photos.push({ url, label: `Extra ${index + 1}`, stopLabel: name })
+              photos.push({ url: signedPhotoUrl(url)!, label: `Extra ${index + 1}`, stopLabel: name })
             })
           }
 

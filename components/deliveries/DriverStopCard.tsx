@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { completeDeliveryStop, updateStopStatus } from '@/actions/deliveries'
 import { getDeliveryStopAdditionalPhotos } from '@/lib/deliveries/photos'
+import { signedPhotoUrl } from '@/lib/gcs/photo-url'
 import { BottleWine, Camera, CheckCircle, Loader2, PackageCheck, XCircle } from 'lucide-react'
 
 type Stop = {
@@ -100,10 +101,10 @@ export function DriverStopActions({ stop }: { stop: Stop }) {
     const savedAdditionalPhotos = additionalPhotoUrls.filter(Boolean)
     return (
       <div className="space-y-1">
-        {proofOfDeliveryUrl && <a href={proofOfDeliveryUrl} target="_blank" rel="noreferrer" className="block text-xs text-blue-600 underline">View proof of delivery</a>}
-        {shelfPhotoUrl && <a href={shelfPhotoUrl} target="_blank" rel="noreferrer" className="block text-xs text-blue-600 underline">View shelf photo</a>}
+        {proofOfDeliveryUrl && <a href={signedPhotoUrl(proofOfDeliveryUrl) ?? proofOfDeliveryUrl} target="_blank" rel="noreferrer" className="block text-xs text-blue-600 underline">View proof of delivery</a>}
+        {shelfPhotoUrl && <a href={signedPhotoUrl(shelfPhotoUrl) ?? shelfPhotoUrl} target="_blank" rel="noreferrer" className="block text-xs text-blue-600 underline">View shelf photo</a>}
         {savedAdditionalPhotos.map((url, index) => (
-          <a key={url} href={url} target="_blank" rel="noreferrer" className="block text-xs text-blue-600 underline">
+          <a key={url} href={signedPhotoUrl(url) ?? url} target="_blank" rel="noreferrer" className="block text-xs text-blue-600 underline">
             View additional photo {index + 1}
           </a>
         ))}

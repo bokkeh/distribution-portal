@@ -4,6 +4,7 @@ import { formatEasternDateTime } from '@/lib/tastings/time'
 import { formatCurrency } from '@/lib/utils'
 import { TastingInsightsCard } from './TastingInsightsCard'
 import type { SerializedTastingAnalysis } from './TastingInsightsCard'
+import { signedPhotoUrl } from '@/lib/gcs/photo-url'
 
 export type TastingReportRow = {
   tastingId: string
@@ -173,15 +174,15 @@ export function TastingReportsView({
                         <p className="text-xs uppercase tracking-wide text-muted-foreground">Captured Photos</p>
                         <div className="flex flex-wrap gap-2">
                           {row.setupPhotoUrl && (
-                            <a href={row.setupPhotoUrl} target="_blank" rel="noreferrer"
+                            <a href={signedPhotoUrl(row.setupPhotoUrl) ?? row.setupPhotoUrl} target="_blank" rel="noreferrer"
                               className="block h-14 w-14 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
-                              <img src={row.setupPhotoUrl} alt="Setup" className="h-full w-full object-cover" />
+                              <img src={signedPhotoUrl(row.setupPhotoUrl) ?? row.setupPhotoUrl} alt="Setup" className="h-full w-full object-cover" />
                             </a>
                           )}
                           {(row.shelfPhotoUrls ?? []).map((url, i) => (
-                            <a key={i} href={url} target="_blank" rel="noreferrer"
+                            <a key={i} href={signedPhotoUrl(url) ?? url} target="_blank" rel="noreferrer"
                               className="block h-14 w-14 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
-                              <img src={url} alt={`Shelf ${i + 1}`} className="h-full w-full object-cover" />
+                              <img src={signedPhotoUrl(url) ?? url} alt={`Shelf ${i + 1}`} className="h-full w-full object-cover" />
                             </a>
                           ))}
                         </div>

@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { useFormDraftAutosave } from '@/hooks/useFormDraftAutosave'
 import { formatEasternTimeInput } from '@/lib/tastings/time'
 import { Camera, Loader2, LayoutGrid } from 'lucide-react'
+import { signedPhotoUrl } from '@/lib/gcs/photo-url'
 
 type ReportRecord = {
   actualStartTime: string | null
@@ -138,7 +139,7 @@ export function TastingReportFormCard({
                 </span>
                 <span className="mt-0.5 text-[10px] leading-tight text-muted-foreground">Table setup</span>
                 {setupPhotoUrl && (
-                  <a href={setupPhotoUrl} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+                  <a href={signedPhotoUrl(setupPhotoUrl) ?? setupPhotoUrl} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
                     className="mt-1 text-[10px] font-medium text-violet-600 underline">Preview</a>
                 )}
               </span>
@@ -160,7 +161,7 @@ export function TastingReportFormCard({
                   </span>
                   <span className="mt-0.5 text-[10px] leading-tight text-muted-foreground">Shelf photo</span>
                   {shelfPhotoUrls[i] && (
-                    <a href={shelfPhotoUrls[i]} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+                    <a href={signedPhotoUrl(shelfPhotoUrls[i]) ?? shelfPhotoUrls[i]} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
                       className="mt-1 text-[10px] font-medium text-violet-600 underline">Preview</a>
                   )}
                 </span>

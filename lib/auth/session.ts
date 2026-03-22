@@ -68,13 +68,9 @@ export async function requireRole(...roles: string[]): Promise<Session> {
   const session = rawSession as Session
   const realRoles = mergeRoles(session.user.role as string, session.user.roles)
   if (realRoles.includes('admin')) {
-    // Superadmin: apply view-as overlay if active
+    // Admin always passes — apply view-as overlay if active so pages see the target user's data
     const effective = await applyViewAs(session)
-    // Still check that the effective user has the requested role (or they're really admin)
-    const effectiveRoles = mergeRoles(effective.user.role as string, effective.user.roles)
-    if (effectiveRoles.includes('admin') || roles.some(r => effectiveRoles.includes(r))) {
-      return effective
-    }
+    return effective
   }
   if (!realRoles.some(role => roles.includes(role))) redirect('/unauthorized')
   return session

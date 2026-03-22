@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { DriverStopActions } from '@/components/deliveries/DriverStopCard'
 import { getDeliveryStopAdditionalPhotos } from '@/lib/deliveries/photos'
+import { signedPhotoUrl } from '@/lib/gcs/photo-url'
 import { formatDate } from '@/lib/utils'
 import Image from 'next/image'
 import { CheckCircle, Check, Clock, GripVertical, Home, ImageIcon, MapPin, Pencil, X, XCircle } from 'lucide-react'
@@ -181,14 +182,14 @@ function SortableStopCard({
                 ] as { url: string | null | undefined; label: string; title: string }[]).filter(p => p.url).map(({ url, label, title }) => (
                   <a
                     key={label}
-                    href={url!}
+                    href={signedPhotoUrl(url) ?? url!}
                     target="_blank"
                     rel="noreferrer"
                     className="group relative block h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
                     title={title}
                   >
                     <Image
-                      src={url!}
+                      src={signedPhotoUrl(url) ?? url!}
                       alt={title}
                       fill
                       className="object-cover transition-opacity group-hover:opacity-80"
