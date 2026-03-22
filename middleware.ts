@@ -4,8 +4,9 @@ import { NextResponse } from 'next/server'
 export default auth((req) => {
   const { pathname } = req.nextUrl
   const session = req.auth
-  const role = session?.user?.role
-  const roles = session?.user?.roles ?? (role ? [role] : [])
+  const role = session?.user?.role as string | undefined
+  const rolesArr = session?.user?.roles as string[] | undefined
+  const roles = [...new Set([...(rolesArr ?? []), ...(role ? [role] : [])].filter(Boolean))]
 
   // Always-public routes (no redirect even when logged in)
   if (pathname.startsWith('/share') || pathname === '/join' || pathname.startsWith('/pay') || pathname === '/taster-signup') {

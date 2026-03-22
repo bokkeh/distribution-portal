@@ -6,12 +6,12 @@ import { cookies } from 'next/headers'
 import { db } from '@/db'
 import { users } from '@/db/schema'
 import { eq } from 'drizzle-orm'
+import type { Session } from 'next-auth'
 
 const VIEW_AS_COOKIE = '__portal_view_as'
 const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL ?? ''
 
-async function applyViewAs(session: Awaited<ReturnType<typeof auth>>) {
-  if (!session) return session
+async function applyViewAs(session: Session): Promise<Session> {
   // Only superadmin can use view-as
   if (session.user.email?.toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase()) return session
 
@@ -52,10 +52,10 @@ export async function getSession() {
   return await auth()
 }
 
-export async function requireAuth() {
-  const session = await auth()
-  if (!session) redirect('/login')
-  return session
+export async function requireAuth(): Promise<Session> {
+  const rawSession = await auth()
+  if (!rawSession) redirect('/login')
+  return rawSession as Session
 }
 
 function mergeRoles(role: string | null | undefined, rolesArr: string[] | null | undefined): string[] {
@@ -63,17 +63,18 @@ function mergeRoles(role: string | null | undefined, rolesArr: string[] | null |
   return [...new Set(combined.filter(Boolean))]
 }
 
-export async function requireRole(...roles: string[]) {
-  const session = await auth()
-  if (!session) redirect('/login')
+export async function requireRole(...roles: string[]): Promise<Session> {
+  const rawSession = await auth()
+  if (!rawSession) redirect('/login')
+  const session = rawSession as Session
   const realRoles = mergeRoles(session.user.role as string, session.user.roles)
   if (realRoles.includes('admin')) {
     // Superadmin: apply view-as overlay if active
     const effective = await applyViewAs(session)
     // Still check that the effective user has the requested role (or they're really admin)
-    const effectiveRoles = mergeRoles(effective?.user.role as string, effective?.user.roles)
+    const effectiveRoles = mergeRoles(effective.user.role as string, effective.user.roles)
     if (effectiveRoles.includes('admin') || roles.some(r => effectiveRoles.includes(r))) {
-      return effective!
+      return effective
     }
   }
   if (!realRoles.some(role => roles.includes(role))) redirect('/unauthorized')
