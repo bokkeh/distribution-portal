@@ -229,14 +229,21 @@ export function RegionsMap({ data }: { data: RegionMapData }) {
           )
         })()}
 
-        {unmappedAccounts.length > 0 && (
-          <div className="mt-auto border-t pt-2">
-            <p className="px-1 text-xs text-slate-400">
+        <div className="mt-auto border-t pt-2 space-y-1">
+          <p className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Priority</p>
+          {[['#EF4444', 'High'], ['#F59E0B', 'Medium'], ['#94A3B8', 'Low'], ['#64748B', 'Unknown']].map(([c, label]) => (
+            <div key={label} className="flex items-center gap-1.5 px-1">
+              <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: c }} />
+              <span className="text-xs text-slate-500">{label}</span>
+            </div>
+          ))}
+          {unmappedAccounts.length > 0 && (
+            <p className="px-1 text-xs text-slate-400 pt-1">
               <MapPin className="inline h-3 w-3 mr-0.5" />
-              {unmappedAccounts.length} account{unmappedAccounts.length !== 1 ? 's' : ''} not yet geocoded
+              {unmappedAccounts.length} account{unmappedAccounts.length !== 1 ? 's' : ''} not geocoded
             </p>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* ── Map ── */}
@@ -281,8 +288,8 @@ export function RegionsMap({ data }: { data: RegionMapData }) {
 
           {/* Account markers */}
           {mappedAccounts.map(account => {
-            const colorIndex = data.regions.findIndex(r => r.id === account.regionId)
-            const color = colorIndex >= 0 ? getRegionColor(colorIndex) : '#64748B'
+            const priorityColor: Record<string, string> = { high: '#EF4444', medium: '#F59E0B', low: '#94A3B8' }
+            const color = priorityColor[account.accountPriority ?? ''] ?? '#64748B'
             const accountRegionId = account.regionId ?? '__unassigned__'
             const isActive = hoveredRegionId === null || hoveredRegionId === accountRegionId
             const isSelected = selectedAccount?.id === account.id

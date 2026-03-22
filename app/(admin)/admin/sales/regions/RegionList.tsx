@@ -149,6 +149,7 @@ export function RegionList({ regions: initialRegions, members, allAccounts: init
       ))
       setStats(prev => ({ ...prev, [managingRegion.id]: (prev[managingRegion.id] ?? 0) + newlyAdded }))
       setSelected(new Set())
+      window.location.reload()
     } catch (e) {
       console.error('assignAccountsToRegion error:', e)
       setAssignError(e instanceof Error ? e.message : 'Failed to update accounts. Please try again.')
@@ -170,6 +171,7 @@ export function RegionList({ regions: initialRegions, members, allAccounts: init
       ))
       setStats(prev => ({ ...prev, [managingRegion.id]: Math.max(0, (prev[managingRegion.id] ?? 0) - ids.length) }))
       setSelected(new Set())
+      window.location.reload()
     } catch (e) {
       console.error('assignAccountsToRegion error:', e)
       setAssignError(e instanceof Error ? e.message : 'Failed to update accounts. Please try again.')

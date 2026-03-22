@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
 import { assignAccountsToRegion } from '@/actions/sales-members'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,7 +18,6 @@ interface Props {
 }
 
 export function RegionAccountsModal({ region, allRegions, accounts, onClose }: Props) {
-  const router = useRouter()
   const [isPending, setIsPending] = useState(false)
 
   const [search, setSearch] = useState('')
@@ -69,7 +67,7 @@ export function RegionAccountsModal({ region, allRegions, accounts, onClose }: P
         prev.map(a => ids.includes(a.id) ? { ...a, regionId: region.id } : a),
       )
       setSelected(new Set())
-      router.refresh()
+      window.location.reload()
     } catch (e) {
       console.error('assignAccountsToRegion error:', e)
       setError(e instanceof Error ? e.message : 'Failed to update accounts. Please try again.')
@@ -91,7 +89,7 @@ export function RegionAccountsModal({ region, allRegions, accounts, onClose }: P
         prev.map(a => ids.includes(a.id) ? { ...a, regionId: null } : a),
       )
       setSelected(new Set())
-      router.refresh()
+      window.location.reload()
     } catch (e) {
       console.error('assignAccountsToRegion error:', e)
       setError(e instanceof Error ? e.message : 'Failed to update accounts. Please try again.')
