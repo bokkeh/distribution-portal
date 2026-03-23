@@ -8,7 +8,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import Stripe from 'stripe'
 import { logActivityEvent } from '@/lib/activity/log'
-import { sendInvoicePaidConfirmationEmail } from '@/lib/resend/client'
+import { notify } from '@/lib/notifications/dispatch'
 import { getCustomerPaymentBreakdown, type CustomerPaymentMethod } from '@/lib/stripe/fees'
 
 if (!process.env.STRIPE_SECRET_KEY) throw new Error('Missing STRIPE_SECRET_KEY')
@@ -107,10 +107,8 @@ export async function sendInvoiceEmail(invoiceId: string) {
 
   if (!invoice) return
 
-  // Send email via Resend
-  const { sendInvoiceEmailNotification } = await import('@/lib/resend/client')
-  await sendInvoiceEmailNotification({
-    to: invoice.customerEmail ?? '',
+  await notify('invoice.created', {
+    customerEmail: invoice.customerEmail ?? '',
     invoiceNumber: invoice.invoiceNumber,
     companyName: invoice.companyName ?? '',
     total: invoice.total,
@@ -175,14 +173,12 @@ export async function markInvoicePaid(invoiceId: string) {
       .filter(Boolean) as string[],
   ))
 
-  if (invoice.companyName && invoiceEmails.length) {
-    await sendInvoicePaidConfirmationEmail({
-      to: invoiceEmails,
-      companyName: invoice.companyName,
-      invoiceNumber: invoice.invoiceNumber,
-      total: invoice.total,
-    })
-  }
+  await notify('invoice.paid', {
+    companyName: invoice.companyName ?? '',
+    invoiceNumber: invoice.invoiceNumber,
+    total: invoice.total,
+    notifyEmails: invoiceEmails,
+  })
 
   revalidatePath(`/admin/invoicing/${invoiceId}`)
   revalidatePath('/admin/accounts/journal')

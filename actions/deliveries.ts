@@ -10,10 +10,8 @@ import { sendSms } from '@/lib/telnyx/client'
 import { postGoogleChat } from '@/lib/google-chat/webhook'
 import { geocodeAddress } from '@/lib/maps/geocode'
 import { generateSignedUploadUrl } from '@/lib/gcs/client'
-import {
-  sendDeliveryCompletedEmail,
-  sendDriverDeliveryAssignmentEmail,
-} from '@/lib/resend/client'
+import { sendDeliveryCompletedEmail } from '@/lib/resend/client'
+import { notify } from '@/lib/notifications/dispatch'
 import { v4 as uuidv4 } from 'uuid'
 import { createNotificationsForRoles, createUserNotification } from '@/lib/notifications/in-app'
 import { logActivityEvent } from '@/lib/activity/log'
@@ -216,39 +214,14 @@ export async function createDelivery(formData: FormData) {
 
   const driverPrefs = driver ? await getUserPreferences(driver.userId).catch(() => null) : null
 
-  if (driver?.phone && (driverPrefs?.smsNotificationsEnabled ?? true)) {
-    await sendSms({
-      to: driver.phone,
-      body: `AHAWC Delivery Assigned: You have ${orderIds.length} stop(s) scheduled for ${weekStartDate}. Log in to view your route: ${process.env.NEXTAUTH_URL}/driver/deliveries`,
-    })
-  }
-
-  if (driver?.email && (driverPrefs?.emailNotificationsEnabled ?? true)) {
-    await sendDriverDeliveryAssignmentEmail({
-      to: driver.email,
-      driverName: driver.name,
-      weekStartDate,
-      stopCount: orderIds.length,
-    })
-  }
-
-  const [driverUser] = await db
-    .select({ userId: drivers.userId })
-    .from(drivers)
-    .where(eq(drivers.id, driverId))
-    .limit(1)
-
-  if (driverUser?.userId) {
-    await createUserNotification({
-      userId: driverUser.userId,
-      kind: 'delivery_assigned',
-      title: 'New delivery assigned',
-      body: `You have a new delivery run scheduled for ${weekStartDate}.`,
-      href: '/driver/deliveries',
-    })
-  }
-
-  await postGoogleChat(`Delivery Scheduled for ${weekStartDate}\nDriver: ${driver?.name}\nStops: ${orderIds.length}`)
+  await notify('delivery.driver_assigned', {
+    driverName: driver?.name ?? 'Driver',
+    driverEmail: (driverPrefs?.emailNotificationsEnabled ?? true) ? (driver?.email ?? '') : '',
+    driverPhone: (driverPrefs?.smsNotificationsEnabled ?? true) ? (driver?.phone ?? null) : null,
+    weekStartDate,
+    stopCount: orderIds.length,
+    userId: driver?.userId ?? null,
+  })
 
   revalidatePath('/admin/deliveries')
   redirect(`/admin/deliveries/${delivery.id}`)

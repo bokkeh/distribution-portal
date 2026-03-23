@@ -7,19 +7,12 @@ import { eq, inArray } from 'drizzle-orm'
 import { calculateCommissionForOrder, recordCommission } from '@/actions/sales-members'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { postGoogleChat } from '@/lib/google-chat/webhook'
 import { logInventoryTransaction } from '@/lib/inventory/history'
 import { getMinimumCaseQuantity, isWisherVodkaProduct } from '@/lib/orders/minimums'
 import { createUserNotification } from '@/lib/notifications/in-app'
+import { notify } from '@/lib/notifications/dispatch'
 import { logActivityEvent } from '@/lib/activity/log'
 import { formatPaymentTerms } from '@/lib/orders/payment-terms'
-import {
-  sendNewOrderStaffNotification,
-  sendOrderReceivedEmail,
-  sendOrderShippingStatusEmail,
-  sendOrderStatusEmail,
-} from '@/lib/resend/client'
-import { sendSms } from '@/lib/telnyx/client'
 
 type PurchaseUnit = 'case' | 'bottle'
 
@@ -221,20 +214,6 @@ export async function createOrder(formData: FormData) {
       })
     }
 
-    const customerEmails = uniqueEmails(
-      customerAccount?.pocEmail,
-      customerAccount?.businessEmail,
-      customerAccount?.email,
-    )
-
-    if (customerAccount?.companyName && customerEmails.length) {
-      await sendOrderReceivedEmail({
-        to: customerEmails,
-        companyName: customerAccount.companyName,
-        orderId: order.id,
-        total: total.toFixed(2),
-      })
-    }
 
     for (const item of items) {
     const product = productMap[item.productId]
@@ -289,27 +268,16 @@ export async function createOrder(formData: FormData) {
     })
     }
 
-    await postGoogleChat(
-      `New Order created by ${session.user.name}\nCustomer ID: ${customerId}\nUnit: ${purchaseUnit.toUpperCase()}\nTotal: $${total.toFixed(2)}`
-    )
-
-    // Staff order notifications — Kim and Kristen
-    const smsBody = `New AHAWC order: ${customerAccount?.companyName ?? 'Unknown'} placed a ${purchaseUnit} order for $${total.toFixed(2)}. Order #${order.id.slice(-8).toUpperCase()}`
-    const smsRecipients: string[] = [
-      '+12489339350', // Kim
-      process.env.ORDER_NOTIFY_KRISTEN_PHONE ?? '',
-    ].filter(Boolean)
-
-    await Promise.allSettled([
-      ...smsRecipients.map(phone => sendSms({ to: phone, body: smsBody, bypassOptOut: true })),
-      sendNewOrderStaffNotification({
-        companyName: customerAccount?.companyName ?? 'Unknown account',
-        orderId: order.id,
-        total: total.toFixed(2),
-        purchaseUnit,
-        placedBy: session.user.name ?? 'A customer',
-      }),
-    ])
+    await notify('order.received', {
+      companyName: customerAccount?.companyName ?? 'Unknown account',
+      orderId: order.id,
+      total: total.toFixed(2),
+      purchaseUnit,
+      placedBy: session.user.name ?? 'A customer',
+      customerEmails: uniqueEmails(customerAccount?.pocEmail, customerAccount?.businessEmail, customerAccount?.email),
+      staffPhones: ['+12489339350', process.env.ORDER_NOTIFY_KRISTEN_PHONE].filter(Boolean) as string[],
+      userId: session.user.id,
+    })
 
     revalidatePath('/admin/invoicing')
     revalidatePath('/staff/orders')
@@ -358,44 +326,13 @@ export async function updateOrderStatus(orderId: string, status: 'pending' | 'co
     .where(eq(orders.id, orderId))
     .limit(1)
 
-  if (order?.customerUserId) {
-    const details = {
-      pending: {
-        title: 'Order update',
-        body: `Your order for ${order.companyName ?? 'your account'} is pending review.`,
-      },
-      confirmed: {
-        title: 'Order processed',
-        body: `Your order for ${order.companyName ?? 'your account'} has been processed and confirmed.`,
-      },
-      fulfilled: {
-        title: 'Order complete',
-        body: `Your order for ${order.companyName ?? 'your account'} has been completed.`,
-      },
-      cancelled: {
-        title: 'Order cancelled',
-        body: `Your order for ${order.companyName ?? 'your account'} has been cancelled.`,
-      },
-    }[status]
-
-    await createUserNotification({
-      userId: order.customerUserId,
-      kind: 'order_status',
-      title: details.title,
-      body: details.body,
-      href: `/customer/orders/${orderId}`,
-    })
-  }
-
-  const customerEmails = uniqueEmails(order?.pocEmail, order?.businessEmail, order?.email)
-  if (order?.companyName && customerEmails.length) {
-    await sendOrderStatusEmail({
-      to: customerEmails,
-      companyName: order.companyName,
-      orderId,
-      status,
-    })
-  }
+  await notify('order.status_changed', {
+    companyName: order?.companyName ?? '',
+    orderId,
+    status,
+    customerEmails: uniqueEmails(order?.pocEmail, order?.businessEmail, order?.email),
+    userId: order?.customerUserId,
+  })
 
   revalidatePath('/admin/dashboard')
   revalidatePath('/admin/orders')
@@ -565,61 +502,15 @@ export async function updateOrderShippingStatus(orderId: string, formData: FormD
     .where(eq(orders.id, orderId))
     .limit(1)
 
-  if (order?.customerUserId) {
-    const details = {
-      not_scheduled: {
-        title: 'Shipping update',
-        body: `Your order for ${order.companyName ?? 'your account'} is awaiting delivery scheduling.`,
-      },
-      scheduled: {
-        title: 'Delivery scheduled',
-        body: `Your order for ${order.companyName ?? 'your account'} has been scheduled for delivery.`,
-      },
-      out_for_delivery: {
-        title: 'Order out for delivery',
-        body: `Your order for ${order.companyName ?? 'your account'} is currently being delivered.`,
-      },
-      delivered: {
-        title: 'Order delivered',
-        body: `Your order for ${order.companyName ?? 'your account'} has been delivered.`,
-      },
-      issue: {
-        title: 'Delivery issue',
-        body: `There is a delivery issue with your order for ${order.companyName ?? 'your account'}.`,
-      },
-    }[shippingStatus]
-
-    await createUserNotification({
-      userId: order.customerUserId,
-      kind: 'shipping_status',
-      title: details.title,
-      body: details.body,
-      href: `/customer/orders/${orderId}`,
-    })
-  }
-
-  const customerEmails = uniqueEmails(order?.pocEmail, order?.businessEmail, order?.email)
-  if (order?.companyName && customerEmails.length) {
-    await sendOrderShippingStatusEmail({
-      to: customerEmails,
-      companyName: order.companyName,
-      orderId,
-      status: shippingStatus,
-    })
-  }
-
-  // SMS notification — send for actionable statuses, respect preference
-  const smsMessages: Partial<Record<typeof shippingStatus, string>> = {
-    scheduled:        `AHAWC: Your order for ${order?.companyName ?? 'your account'} has been scheduled for delivery.`,
-    out_for_delivery: `AHAWC: Your order for ${order?.companyName ?? 'your account'} is out for delivery today.`,
-    delivered:        `AHAWC: Your order for ${order?.companyName ?? 'your account'} has been delivered. Thank you!`,
-    issue:            `AHAWC: There is a delivery issue with your order for ${order?.companyName ?? 'your account'}. We will be in touch shortly.`,
-  }
-  const smsBody = smsMessages[shippingStatus]
   const prefersNoSms = order?.notificationPreference === 'email'
-  if (smsBody && order?.phone && !prefersNoSms) {
-    await sendSms({ to: order.phone, body: smsBody }).catch(() => {})
-  }
+  await notify('order.shipping_status_changed', {
+    companyName: order?.companyName ?? '',
+    orderId,
+    status: shippingStatus,
+    customerEmails: uniqueEmails(order?.pocEmail, order?.businessEmail, order?.email),
+    customerPhone: prefersNoSms ? null : (order?.phone ?? null),
+    userId: order?.customerUserId,
+  })
 
   revalidatePath('/admin/orders')
   revalidatePath('/staff/orders')
