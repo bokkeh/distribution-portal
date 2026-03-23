@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import Link from 'next/link'
-import { Plus } from 'lucide-react'
+import { Plus, Receipt } from 'lucide-react'
+import { EmptyState } from '@/components/ui/empty-state'
 import { markInvoicePaid } from '@/actions/invoices'
 import { approveTasterInvoice, payoutTasterInvoiceViaStripe } from '@/actions/taster-payouts'
 
@@ -143,11 +144,11 @@ export default async function InvoicingPage({
         </div>
       </div>
 
-      <Card>
+      <Card className="overflow-hidden">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="border-b bg-slate-50">
+              <thead className="border-b bg-slate-50 sticky top-0 z-10">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Invoice #</th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Customer</th>
@@ -161,8 +162,8 @@ export default async function InvoicingPage({
               <tbody className="divide-y">
                 {allInvoices.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-muted-foreground">
-                      No invoices yet. Create your first invoice.
+                    <td colSpan={7}>
+                      <EmptyState icon={Receipt} title="No invoices yet" description="Create your first invoice to get started." action={<Link href="/admin/invoicing/new"><Button size="sm">New Invoice</Button></Link>} />
                     </td>
                   </tr>
                 ) : allInvoices.map((inv) => (

@@ -8,8 +8,9 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { formatStatusLabel, orderStatusVariant, shippingStatusVariant } from '@/lib/orders/status'
 import { isMissingShippingStatusColumn } from '@/lib/orders/shipping-fallback'
 import Link from 'next/link'
-import { Plus } from 'lucide-react'
+import { Plus, FileText } from 'lucide-react'
 import { BulkOrderStatusForm } from '@/components/orders/BulkOrderStatusForm'
+import { EmptyState } from '@/components/ui/empty-state'
 
 export default async function AdminOrdersPage() {
   let allOrders: Array<{
@@ -70,10 +71,11 @@ export default async function AdminOrdersPage() {
           label: `#${order.id.slice(-8).toUpperCase()} ${order.companyName ?? 'Unknown customer'}`,
         }))}
       />
-      <Card>
-        <CardContent className="p-0 overflow-x-auto">
+      <Card className="overflow-hidden">
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
           <table className="w-full min-w-[860px]">
-            <thead className="border-b bg-slate-50">
+            <thead className="border-b bg-slate-50 sticky top-0 z-10">
               <tr>
                 <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Order #</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Customer</th>
@@ -86,7 +88,9 @@ export default async function AdminOrdersPage() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {allOrders.map(order => (
+              {allOrders.length === 0 ? (
+                <tr><td colSpan={8}><EmptyState icon={FileText} title="No orders yet" description="New orders will appear here." /></td></tr>
+              ) : allOrders.map(order => (
                 <tr key={order.id} className="hover:bg-slate-50">
                   <td className="px-6 py-4 text-sm font-mono">#{order.id.slice(-8).toUpperCase()}</td>
                   <td className="px-6 py-4 text-sm font-medium">{order.companyName ?? '-'}</td>
@@ -100,6 +104,7 @@ export default async function AdminOrdersPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </CardContent>
       </Card>
     </div>

@@ -1,3 +1,22 @@
+/**
+ * repair-platform-ops.ts
+ *
+ * ONE-TIME repair script. DO NOT run this routinely.
+ *
+ * Background: Migration 0021_platform_ops.sql creates activity_events,
+ * sms_threads, and reply_templates, and adds media_urls to sms_messages.
+ * On certain environments the migration applied to Drizzle's history but the
+ * DDL didn't fully execute. This script re-applies those statements safely
+ * using IF NOT EXISTS / ADD COLUMN IF NOT EXISTS so it can be run without
+ * risk of data loss.
+ *
+ * When to run:
+ *   - A fresh environment reports missing tables for inbox, activity, or
+ *     reply templates after `npm run db:push` completes without error.
+ *   - You see "relation does not exist" errors referencing these tables.
+ *
+ * Run with: npx tsx db/repair-platform-ops.ts
+ */
 import { sql } from 'drizzle-orm'
 import { db } from './index'
 

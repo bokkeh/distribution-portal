@@ -1,3 +1,26 @@
+/**
+ * repair-migration-history.ts
+ *
+ * ONE-TIME repair script. DO NOT run this routinely.
+ *
+ * Background: Drizzle tracks applied migrations in drizzle.__drizzle_migrations.
+ * If that table gets cleared (e.g. a DB restore, a botched migrate command, or
+ * a fresh Neon branch), Drizzle will attempt to re-run every migration on the
+ * next `db:migrate` — which will fail because the tables already exist.
+ *
+ * This script rebuilds the migration history table by reading _journal.json
+ * and inserting the hash + timestamp for every entry. It skips entries that
+ * are already registered, so it is safe to run multiple times.
+ *
+ * When to run:
+ *   - `npm run db:migrate` reports "migration already applied" errors or
+ *     tries to recreate tables that exist.
+ *   - You restored a DB snapshot and the migration history was lost.
+ *   - You created a new Neon branch and need to seed its migration history
+ *     without re-running all migrations.
+ *
+ * Run with: npx tsx db/repair-migration-history.ts
+ */
 import crypto from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'

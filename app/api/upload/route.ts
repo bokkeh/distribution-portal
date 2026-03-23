@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth/config'
 import { generateSignedUploadUrl, uploadBuffer } from '@/lib/gcs/client'
 import { v4 as uuidv4 } from 'uuid'
+import { isUploadRateLimited, rateLimitResponse } from '@/lib/auth/rate-limit'
 
 function getExtension(filename: string, contentType: string) {
   const existing = filename.split('.').pop()
@@ -15,6 +16,8 @@ export async function POST(req: NextRequest) {
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    if (await isUploadRateLimited(session.user.id)) return rateLimitResponse()
 
     const contentType = req.headers.get('content-type') ?? ''
 

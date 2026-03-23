@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { ConfirmSubmitButton } from '@/components/ui/confirm-submit-button'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { updateOrderShippingStatus, updateOrderStatus } from '@/actions/orders'
 import { formatStatusLabel, orderStatusVariant, shippingStatusVariant } from '@/lib/orders/status'
@@ -179,7 +180,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
             )}
             {order.status === 'pending' && (
               <form action={updateOrderStatus.bind(null, order.id, 'cancelled')}>
-                <Button variant="destructive" className="w-full" type="submit">Cancel Order</Button>
+                <ConfirmSubmitButton variant="destructive" className="w-full" title="Cancel this order?" description="The order status will be set to cancelled." confirmLabel="Cancel Order">Cancel Order</ConfirmSubmitButton>
               </form>
             )}
           </CardContent>

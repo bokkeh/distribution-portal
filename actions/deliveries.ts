@@ -6,14 +6,10 @@ import { requireAdmin, requireAdminOrStaff, requireRole } from '@/lib/auth/sessi
 import { and, count, desc, eq, inArray, ne } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import { sendSms } from '@/lib/telnyx/client'
-import { postGoogleChat } from '@/lib/google-chat/webhook'
 import { geocodeAddress } from '@/lib/maps/geocode'
 import { generateSignedUploadUrl } from '@/lib/gcs/client'
-import { sendDeliveryCompletedEmail } from '@/lib/resend/client'
 import { notify } from '@/lib/notifications/dispatch'
 import { v4 as uuidv4 } from 'uuid'
-import { createNotificationsForRoles, createUserNotification } from '@/lib/notifications/in-app'
 import { logActivityEvent } from '@/lib/activity/log'
 import { getAccountPreferences, getUserPreferences } from '@/lib/preferences/read'
 import { formatDateInTimeZone, getShortTimeZoneLabel } from '@/lib/timezones'
@@ -74,67 +70,6 @@ async function requireDeliveryReorderAccess(deliveryId: string) {
   }
 }
 
-function isMissingDeliveryStopContactColumn(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false
-
-  const dbError = error as {
-    code?: string
-    message?: string
-    column?: string
-    cause?: unknown
-  }
-
-  if (dbError.code === '42703') return true
-  if (dbError.column === 'contact_name' || dbError.column === 'contact_phone' || dbError.column === 'contact_email') {
-    return true
-  }
-
-  const message = dbError.message?.toLowerCase() ?? ''
-  if (
-    message.includes('contact_name') ||
-    message.includes('contact_phone') ||
-    message.includes('contact_email')
-  ) {
-    return true
-  }
-
-  return isMissingDeliveryStopContactColumn(dbError.cause)
-}
-
-async function insertDeliveryStopWithFallback(
-  values: {
-    deliveryId: string
-    orderId: string | null
-    customerId: string | null
-    sequenceNumber: number
-    address: string
-    contactName: string | null
-    contactPhone: string | null
-    contactEmail: string | null
-    lat: string | null
-    lng: string | null
-    status: 'pending'
-  }
-) {
-  try {
-    await db.insert(deliveryStops).values(values)
-  } catch (error) {
-    if (!isMissingDeliveryStopContactColumn(error)) {
-      throw error
-    }
-
-    await db.insert(deliveryStops).values({
-      deliveryId: values.deliveryId,
-      orderId: values.orderId,
-      customerId: values.customerId,
-      sequenceNumber: values.sequenceNumber,
-      address: values.address,
-      lat: values.lat,
-      lng: values.lng,
-      status: values.status,
-    })
-  }
-}
 
 export async function createDelivery(formData: FormData) {
   await requireAdmin()
@@ -181,7 +116,7 @@ export async function createDelivery(formData: FormData) {
         lng = coords?.lng ?? null
       } catch {}
 
-      await insertDeliveryStopWithFallback({
+      await db.insert(deliveryStops).values({
         deliveryId: delivery.id,
         orderId: order.id,
         customerId: order.customerId,
@@ -261,26 +196,10 @@ export async function updateStopStatus(stopId: string, status: 'delivered' | 'fa
         .set({ status: 'completed' })
         .where(eq(deliveries.id, stop.deliveryId))
 
-      const deliveryUrl = `${process.env.NEXTAUTH_URL}/admin/deliveries/${stop.deliveryId}`
-      const staffPhones = [
-        process.env.ADMIN_NOTIFICATION_PHONE,
-        '+12489339350',
-        process.env.ORDER_NOTIFY_KRISTEN_PHONE,
-      ].filter(Boolean) as string[]
-
-      await Promise.allSettled([
-        postGoogleChat(`✅ Delivery Run Completed\nAll stops finished.\n${deliveryUrl}`),
-        ...staffPhones.map(phone =>
-          sendSms({ to: phone, body: `AHAWC: All stops on a delivery run are now complete. View: ${deliveryUrl}`, bypassOptOut: true })
-        ),
-        createNotificationsForRoles({
-          roles: ['admin', 'staff'],
-          kind: 'delivery_completed',
-          title: 'Delivery run completed',
-          body: 'All stops on a delivery run have been completed.',
-          href: `/admin/deliveries/${stop.deliveryId}`,
-        }),
-      ])
+      await notify('delivery.run_completed', {
+        deliveryId: stop.deliveryId,
+        deliveryUrl: `${process.env.NEXTAUTH_URL}/admin/deliveries/${stop.deliveryId}`,
+      })
     }
   }
 
@@ -336,41 +255,20 @@ export async function completeDeliveryStop(stopId: string, formData: FormData) {
     throw new Error('Stop not found')
   }
 
-  try {
-    await db.update(deliveryStops)
-      .set({
-        status: 'delivered',
-        completedAt: new Date(),
-        notes,
-        proofOfDeliveryUrl,
-        shelfPhotoUrl,
-        additionalPhotoUrl: additionalPhotoUrls[0],
-        additionalPhotoUrl2: additionalPhotoUrls[1],
-        additionalPhotoUrl3: additionalPhotoUrls[2],
-        additionalPhotoUrl4: additionalPhotoUrls[3],
-        additionalPhotoUrl5: additionalPhotoUrls[4],
-      })
-      .where(eq(deliveryStops.id, stopId))
-  } catch (error) {
-    const code = (error as { code?: string; cause?: { code?: string } } | null)?.code
-      ?? (error as { cause?: { code?: string } } | null)?.cause?.code
-    const message = error instanceof Error ? error.message.toLowerCase() : ''
-
-    if (code !== '42703' && !message.includes('proof_of_delivery_url') && !message.includes('shelf_photo_url') && !message.includes('additional_photo_url')) {
-      throw error
-    }
-
-    await db.update(deliveryStops)
-      .set({
-        status: 'delivered',
-        completedAt: new Date(),
-        notes,
-        proofOfDeliveryUrl,
-        shelfPhotoUrl,
-        additionalPhotoUrl: additionalPhotoUrls[0],
-      })
-      .where(eq(deliveryStops.id, stopId))
-  }
+  await db.update(deliveryStops)
+    .set({
+      status: 'delivered',
+      completedAt: new Date(),
+      notes,
+      proofOfDeliveryUrl,
+      shelfPhotoUrl,
+      additionalPhotoUrl: additionalPhotoUrls[0],
+      additionalPhotoUrl2: additionalPhotoUrls[1],
+      additionalPhotoUrl3: additionalPhotoUrls[2],
+      additionalPhotoUrl4: additionalPhotoUrls[3],
+      additionalPhotoUrl5: additionalPhotoUrls[4],
+    })
+    .where(eq(deliveryStops.id, stopId))
 
   // Update linked order shipping status to 'delivered'
   if (stop.orderId) {
@@ -395,29 +293,10 @@ export async function completeDeliveryStop(stopId: string, formData: FormData) {
       .set({ status: 'completed' })
       .where(eq(deliveries.id, stop.deliveryId))
 
-    const adminPhone = process.env.ADMIN_NOTIFICATION_PHONE
-    const kimPhone = '+12489339350'
-    const kristenPhone = process.env.ORDER_NOTIFY_KRISTEN_PHONE
-    const staffPhones = [adminPhone, kimPhone, kristenPhone].filter(Boolean) as string[]
-    const deliveryUrl = `${process.env.NEXTAUTH_URL}/admin/deliveries/${stop.deliveryId}`
-
-    await Promise.allSettled([
-      postGoogleChat(`✅ Delivery Run Completed\nAll stops finished for delivery ${stop.deliveryId}.\n${deliveryUrl}`),
-      ...staffPhones.map(phone =>
-        sendSms({
-          to: phone,
-          body: `AHAWC: All stops on a delivery run are now complete. View: ${deliveryUrl}`,
-          bypassOptOut: true,
-        })
-      ),
-      createNotificationsForRoles({
-        roles: ['admin', 'staff'],
-        kind: 'delivery_completed',
-        title: 'Delivery run completed',
-        body: 'All stops on a delivery run have been completed.',
-        href: `/admin/deliveries/${stop.deliveryId}`,
-      }),
-    ])
+    await notify('delivery.run_completed', {
+      deliveryId: stop.deliveryId,
+      deliveryUrl: `${process.env.NEXTAUTH_URL}/admin/deliveries/${stop.deliveryId}`,
+    })
   }
 
   const notificationPhone = stop.contactPhone || stop.accountPhone
@@ -428,56 +307,15 @@ export async function completeDeliveryStop(stopId: string, formData: FormData) {
   const prefersNoSms = stop.notificationPreference === 'email'
   const prefersEmail = !stop.notificationPreference || stop.notificationPreference === 'email' || stop.notificationPreference === 'both'
 
-  const stopLabel = stop.companyName ?? stop.address
-  const staffPhones = [
-    process.env.ADMIN_NOTIFICATION_PHONE,
-    '+12489339350',
-    process.env.ORDER_NOTIFY_KRISTEN_PHONE,
-  ].filter(Boolean) as string[]
-
-  await Promise.allSettled(
-    staffPhones.map(phone =>
-      sendSms({
-        to: phone,
-        body: `AHAWC: Stop delivered — ${stopLabel}. View: ${process.env.NEXTAUTH_URL}/admin/deliveries/${stop.deliveryId}`,
-        bypassOptOut: true,
-      })
-    )
-  )
-
-  if (notificationPhone && !prefersNoSms) {
-    await sendSms({
-      to: notificationPhone,
-      body: `AHAWC: Your order for ${stop.companyName ?? 'your account'} has been delivered. Thank you!`,
-    }).catch(() => {})
-  }
-
-  if (notificationEmail && prefersEmail) {
-    await sendDeliveryCompletedEmail({
-      to: notificationEmail,
-      companyName: stop.companyName ?? stop.address,
-      deliveryDate,
-      proofOfDeliveryUrl,
-      shelfPhotoUrl,
-    })
-  }
-
-  await Promise.all([
-    createNotificationsForRoles({
-      roles: ['admin'],
-      kind: 'delivery_completed',
-      title: 'Delivery completed',
-      body: `${stop.companyName ?? 'A delivery stop'} was marked delivered.`,
-      href: `/admin/deliveries/${stop.deliveryId}`,
-    }),
-    createNotificationsForRoles({
-      roles: ['staff'],
-      kind: 'delivery_completed',
-      title: 'Delivery completed',
-      body: `${stop.companyName ?? 'A delivery stop'} was marked delivered.`,
-      href: null,
-    }),
-  ])
+  await notify('delivery.completed', {
+    companyName: stop.companyName ?? stop.address,
+    deliveryDate,
+    deliveryId: stop.deliveryId,
+    customerEmail: notificationEmail && prefersEmail ? notificationEmail : null,
+    customerPhone: notificationPhone && !prefersNoSms ? notificationPhone : null,
+    proofOfDeliveryUrl,
+    shelfPhotoUrl,
+  })
 
   await logActivityEvent({
     entityType: 'delivery',
@@ -679,38 +517,18 @@ export async function reassignDeliveryDriver(deliveryId: string, formData: FormD
     .where(eq(deliveries.id, deliveryId))
 
   const [driver] = await db
-    .select({ phone: drivers.phone, name: users.name, email: users.email })
+    .select({ phone: drivers.phone, name: users.name, email: users.email, userId: users.id })
     .from(drivers)
     .innerJoin(users, eq(drivers.userId, users.id))
     .where(eq(drivers.id, driverId))
     .limit(1)
 
-  if (driver?.phone) {
-    await sendSms({
-      to: driver.phone,
-      body: `AHAWC Delivery Reassigned: You have been assigned a delivery scheduled for ${delivery.weekStartDate}. Log in to view your route: ${process.env.NEXTAUTH_URL}/driver/deliveries`,
-    }).catch(() => {})
-  }
+  const stopRows = await db
+    .select({ id: deliveryStops.id })
+    .from(deliveryStops)
+    .where(eq(deliveryStops.deliveryId, deliveryId))
 
-  if (driver?.email) {
-    const stopCount = await db
-      .select({ id: deliveryStops.id })
-      .from(deliveryStops)
-      .where(eq(deliveryStops.deliveryId, deliveryId))
-
-    await sendDriverDeliveryAssignmentEmail({
-      to: driver.email,
-      driverName: driver.name,
-      weekStartDate: delivery.weekStartDate,
-      stopCount: stopCount.length,
-    })
-  }
-
-  const [driverUser] = await db
-    .select({ userId: drivers.userId })
-    .from(drivers)
-    .where(eq(drivers.id, driverId))
-    .limit(1)
+  const driverPrefs = driver ? await getUserPreferences(driver.userId).catch(() => null) : null
 
   await logActivityEvent({
     entityType: 'delivery',
@@ -720,17 +538,14 @@ export async function reassignDeliveryDriver(deliveryId: string, formData: FormD
     body: driver ? `Delivery reassigned to ${driver.name}.` : 'Delivery driver was reassigned.',
   })
 
-  if (driverUser?.userId) {
-    await createUserNotification({
-      userId: driverUser.userId,
-      kind: 'delivery_reassigned',
-      title: 'Delivery reassigned',
-      body: `A delivery run scheduled for ${delivery.weekStartDate} has been assigned to you.`,
-      href: '/driver/deliveries',
-    })
-  }
-
-  await postGoogleChat(`Delivery Reassigned for ${delivery.weekStartDate}\nDriver: ${driver?.name ?? 'Unknown'}`)
+  await notify('delivery.driver_assigned', {
+    driverName: driver?.name ?? 'Driver',
+    driverEmail: (driverPrefs?.emailNotificationsEnabled ?? true) ? (driver?.email ?? '') : '',
+    driverPhone: (driverPrefs?.smsNotificationsEnabled ?? true) ? (driver?.phone ?? null) : null,
+    weekStartDate: delivery.weekStartDate,
+    stopCount: stopRows.length,
+    userId: driver?.userId ?? null,
+  })
 
   revalidatePath(`/admin/deliveries/${deliveryId}`)
   revalidatePath('/admin/deliveries')
@@ -810,7 +625,7 @@ export async function addDeliveryStop(deliveryId: string, formData: FormData) {
       lng = coords?.lng ?? null
     } catch {}
 
-    await insertDeliveryStopWithFallback({
+    await db.insert(deliveryStops).values({
       deliveryId,
       orderId: openOrder?.id ?? null,
       customerId: account.id,
@@ -881,7 +696,7 @@ export async function addManualDeliveryStop(deliveryId: string, formData: FormDa
       lng = coords?.lng ?? null
     } catch {}
 
-    await insertDeliveryStopWithFallback({
+    await db.insert(deliveryStops).values({
       deliveryId,
       orderId: null,
       customerId: null,

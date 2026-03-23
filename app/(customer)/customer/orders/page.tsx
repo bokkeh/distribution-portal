@@ -11,6 +11,7 @@ import { isMissingShippingStatusColumn } from '@/lib/orders/shipping-fallback'
 import Link from 'next/link'
 import { ShoppingCart } from 'lucide-react'
 import { reorderCustomerOrder } from '@/actions/orders'
+import { EmptyState } from '@/components/ui/empty-state'
 
 export default async function CustomerOrdersPage() {
   const session = await requireRole('customer')
@@ -60,12 +61,12 @@ export default async function CustomerOrdersPage() {
       </div>
 
       {myOrders.length === 0 ? (
-        <div className="text-center py-16">
-          <ShoppingCart className="w-16 h-16 mx-auto text-slate-300 mb-4" />
-          <h2 className="text-lg font-semibold">No orders yet</h2>
-          <p className="text-muted-foreground mt-1">Start by browsing our product catalog.</p>
-          <Link href="/customer/products"><Button className="mt-4">Order Products</Button></Link>
-        </div>
+        <EmptyState
+          icon={ShoppingCart}
+          title="No orders yet"
+          description="Start by browsing our product catalog."
+          action={<Link href="/customer/products"><Button>Browse Products</Button></Link>}
+        />
       ) : (
         <div className="space-y-3">
           {myOrders.map(order => (

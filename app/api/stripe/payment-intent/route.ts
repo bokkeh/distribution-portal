@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { auth } from '@/lib/auth/config'
 import { getCustomerPaymentBreakdown, type CustomerPaymentMethod } from '@/lib/stripe/fees'
+import { isPaymentIntentRateLimited, rateLimitResponse } from '@/lib/auth/rate-limit'
 
 if (!process.env.STRIPE_SECRET_KEY) throw new Error('Missing STRIPE_SECRET_KEY')
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2026-02-25.clover' })
@@ -9,6 +10,8 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2026-02-
 export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  if (await isPaymentIntentRateLimited(session.user.id)) return rateLimitResponse()
 
   const { amount, customerId, invoiceId, paymentMethod } = await req.json()
   const method: CustomerPaymentMethod = paymentMethod === 'card' ? 'card' : 'us_bank_account'

@@ -1,35 +1,65 @@
-import { Ratelimit } from '@upstash/ratelimit'
+import { type Duration, Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
+import { NextResponse } from 'next/server'
 
-// Lazily initialised — only created if env vars are present.
-let _limiter: Ratelimit | null = null
+// ---------------------------------------------------------------------------
+// Factory — one Redis client, multiple named limiters
+// ---------------------------------------------------------------------------
 
-function getLimiter(): Ratelimit | null {
-  if (_limiter) return _limiter
+function makeRedis(): Redis | null {
   const url = process.env.UPSTASH_REDIS_REST_URL
   const token = process.env.UPSTASH_REDIS_REST_TOKEN
   if (!url || !token) return null
-  _limiter = new Ratelimit({
-    redis: new Redis({ url, token }),
-    // 5 attempts per 15-minute sliding window per identifier
-    limiter: Ratelimit.slidingWindow(5, '15 m'),
-    prefix: 'login',
-  })
-  return _limiter
+  return new Redis({ url, token })
 }
 
-/**
- * Returns true if the request should be blocked.
- * Silently allows through if Upstash is not configured.
- */
-export async function isLoginRateLimited(identifier: string): Promise<boolean> {
-  const limiter = getLimiter()
-  if (!limiter) {
-    if (process.env.NODE_ENV === 'production') {
-      console.warn('[rate-limit] UPSTASH_REDIS_REST_URL / TOKEN not set — login rate limiting disabled')
-    }
-    return false
+let _redis: Redis | null | undefined = undefined // undefined = not yet checked
+
+function getRedis(): Redis | null {
+  if (_redis !== undefined) return _redis
+  _redis = makeRedis()
+  if (!_redis && process.env.NODE_ENV === 'production') {
+    console.warn('[rate-limit] UPSTASH_REDIS_REST_URL / TOKEN not set — rate limiting disabled')
   }
-  const { success } = await limiter.limit(identifier)
-  return !success
+  return _redis
+}
+
+function makeLimiter(prefix: string, requests: number, window: Duration) {
+  let instance: Ratelimit | null = null
+  return async function isLimited(identifier: string): Promise<boolean> {
+    if (!instance) {
+      const redis = getRedis()
+      if (!redis) return false
+      instance = new Ratelimit({ redis, limiter: Ratelimit.slidingWindow(requests, window), prefix })
+    }
+    const { success } = await instance.limit(identifier)
+    return !success
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Named limiters
+// ---------------------------------------------------------------------------
+
+/** Login: 5 attempts / 15 min per IP+email */
+export const isLoginRateLimited = makeLimiter('login', 5, '15 m')
+
+/** Payment intent creation: 10 / hour per user */
+export const isPaymentIntentRateLimited = makeLimiter('payment-intent', 10, '1 h')
+
+/** File upload: 30 / hour per user */
+export const isUploadRateLimited = makeLimiter('upload', 30, '1 h')
+
+/** Geocode: 60 / minute per user */
+export const isGeocodeRateLimited = makeLimiter('geocode', 60, '1 m')
+
+// ---------------------------------------------------------------------------
+// Shared 429 response
+// ---------------------------------------------------------------------------
+
+export function rateLimitResponse() {
+  return NextResponse.json(
+    { error: 'Too many requests. Please try again later.' },
+    { status: 429 },
+  )
 }

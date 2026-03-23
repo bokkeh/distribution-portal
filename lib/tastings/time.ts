@@ -95,7 +95,22 @@ export function formatEasternTimeRange(start: Date | string, end: Date | string 
   const parsedStart = typeof start === 'string' ? new Date(start) : start
   if (!end) return formatEasternTime(parsedStart)
   const parsedEnd = typeof end === 'string' ? new Date(end) : end
-  return `${getFormatter({ timeStyle: 'short' }).format(parsedStart)} - ${getFormatter({ timeStyle: 'short' }).format(parsedEnd)} ET`
+
+  const fmt = (h: number, m: number) => {
+    const period = h >= 12 ? 'PM' : 'AM'
+    const hour = h % 12 || 12
+    const mins = m === 0 ? '' : `:${String(m).padStart(2, '0')}`
+    return { label: `${hour}${mins}`, period }
+  }
+
+  const sp = getTimeZoneParts(parsedStart)
+  const ep = getTimeZoneParts(parsedEnd)
+  const s = fmt(sp.hour, sp.minute)
+  const e = fmt(ep.hour, ep.minute)
+
+  return s.period === e.period
+    ? `${s.label}–${e.label} ${s.period} ET`
+    : `${s.label} ${s.period}–${e.label} ${e.period} ET`
 }
 
 export function getEasternDateKey(date: Date | string) {

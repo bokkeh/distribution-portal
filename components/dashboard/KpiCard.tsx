@@ -1,6 +1,7 @@
 import { Card, CardContent } from '@/components/ui/card'
 import { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Sparkline } from './Sparkline'
 
 interface KpiCardProps {
   title: string
@@ -9,9 +10,12 @@ interface KpiCardProps {
   changeType?: 'positive' | 'negative' | 'neutral'
   icon: LucideIcon
   iconColor?: string
+  /** Array of numeric values to render as a sparkline trend */
+  sparklineData?: number[]
+  sparklineColor?: string
 }
 
-export default function KpiCard({ title, value, change, changeType = 'neutral', icon: Icon, iconColor = 'text-blue-600' }: KpiCardProps) {
+export default function KpiCard({ title, value, change, changeType = 'neutral', icon: Icon, iconColor = 'text-blue-600', sparklineData, sparklineColor }: KpiCardProps) {
   return (
     <Card className="border-0 bg-white shadow-sm">
       <CardContent className="p-5">
@@ -33,6 +37,11 @@ export default function KpiCard({ title, value, change, changeType = 'neutral', 
             <Icon className="h-4 w-4" />
           </div>
         </div>
+        {sparklineData && sparklineData.length >= 2 && (
+          <div className="mt-3 -mx-1 opacity-70">
+            <Sparkline data={sparklineData} color={sparklineColor} showTooltip />
+          </div>
+        )}
       </CardContent>
     </Card>
   )

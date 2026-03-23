@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { CalendarDays, ChevronRight, FileText, LayoutDashboard, LogOut, Menu, UserCircle, Wallet, X } from 'lucide-react'
+import { CalendarDays, CalendarCheck, ChevronRight, FileText, LayoutDashboard, LogOut, Menu, UserCircle, Wallet, X } from 'lucide-react'
 import { signOut } from 'next-auth/react'
 import { cn } from '@/lib/utils'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
@@ -23,7 +23,7 @@ type NotificationItem = {
 const navItems = [
   { href: '/taster/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/taster/tastings', label: 'My Tastings', icon: CalendarDays },
-  { href: '/taster/availability', label: 'My Availability', icon: CalendarDays },
+  { href: '/taster/availability', label: 'My Availability', icon: CalendarCheck },
   { href: '/taster/tastings/reports', label: 'Reports', icon: FileText },
   { href: '/taster/payouts', label: 'My Payouts', icon: Wallet },
 ] as const

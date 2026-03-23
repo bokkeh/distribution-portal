@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import Link from 'next/link'
 import { FileText } from 'lucide-react'
+import { EmptyState } from '@/components/ui/empty-state'
 
 export default async function CustomerInvoicesPage() {
   const session = await requireRole('customer')
@@ -32,16 +33,17 @@ export default async function CustomerInvoicesPage() {
       </div>
 
       {myInvoices.length === 0 ? (
-        <div className="text-center py-16">
-          <FileText className="w-16 h-16 mx-auto text-slate-300 mb-4" />
-          <h2 className="text-lg font-semibold">No invoices yet</h2>
-          <p className="text-muted-foreground mt-1">Invoices will appear here once created by AHAWC.</p>
-        </div>
+        <EmptyState
+          icon={FileText}
+          title="No invoices yet"
+          description="Invoices will appear here once created by AHAWC."
+        />
       ) : (
-        <Card>
+        <Card className="overflow-hidden">
           <CardContent className="p-0">
+            <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="border-b bg-slate-50">
+              <thead className="border-b bg-slate-50 sticky top-0 z-10">
                 <tr>
                   <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Invoice #</th>
                   <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Amount</th>
@@ -70,6 +72,7 @@ export default async function CustomerInvoicesPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </CardContent>
         </Card>
       )}

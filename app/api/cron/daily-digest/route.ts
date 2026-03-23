@@ -3,6 +3,7 @@ import { db } from '@/db'
 import { salesMembers, customerAccounts, commissions, orders, users } from '@/db/schema'
 import { eq, and, lt, sql } from 'drizzle-orm'
 import { sendSalesRepDigestEmail } from '@/lib/resend/client'
+import { postGoogleChatCard } from '@/lib/google-chat/webhook'
 
 function isAuthorized(request: NextRequest) {
   const secret = process.env.CRON_SECRET
@@ -113,6 +114,13 @@ export async function GET(request: NextRequest) {
       console.error(`Digest email failed for ${member.userEmail}:`, err)
       failed++
     }
+  }
+
+  if (failed > 0) {
+    await postGoogleChatCard(
+      '⚠️ Cron Failure — daily-digest',
+      `${failed} of ${members.length} digest email(s) failed to send. Check Vercel logs for details.`,
+    ).catch(() => {})
   }
 
   return NextResponse.json({ sent, failed, total: members.length })

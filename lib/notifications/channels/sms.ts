@@ -1,4 +1,5 @@
 import { sendSms } from '@/lib/telnyx/client'
+import { formatTastingSmsPayload, sendTastingSmsFromTemplate } from '@/lib/tastings/sms-series'
 import type { NotificationEvent, NotificationEventPayloads } from '../events'
 
 export async function handleSmsChannel<E extends NotificationEvent>(
@@ -55,20 +56,95 @@ export async function handleSmsChannel<E extends NotificationEvent>(
       break
     }
 
+    case 'delivery.completed': {
+      const p = payload as NotificationEventPayloads['delivery.completed']
+      const staffPhones = [
+        process.env.ADMIN_NOTIFICATION_PHONE,
+        '+12489339350',
+        process.env.ORDER_NOTIFY_KRISTEN_PHONE,
+      ].filter(Boolean) as string[]
+
+      await Promise.allSettled([
+        ...staffPhones.map((phone) =>
+          sendSms({
+            to: phone,
+            body: `AHAWC: Stop delivered — ${p.companyName}. View: ${process.env.NEXTAUTH_URL}/admin/deliveries/${p.deliveryId}`,
+            bypassOptOut: true,
+          }),
+        ),
+        p.customerPhone
+          ? sendSms({
+              to: p.customerPhone,
+              body: `AHAWC: Your order for ${p.companyName} has been delivered. Thank you!`,
+            })
+          : Promise.resolve(),
+      ])
+      break
+    }
+
+    case 'delivery.run_completed': {
+      const p = payload as NotificationEventPayloads['delivery.run_completed']
+      const staffPhones = [
+        process.env.ADMIN_NOTIFICATION_PHONE,
+        '+12489339350',
+        process.env.ORDER_NOTIFY_KRISTEN_PHONE,
+      ].filter(Boolean) as string[]
+      await Promise.allSettled(
+        staffPhones.map((phone) =>
+          sendSms({
+            to: phone,
+            body: `AHAWC: All stops on a delivery run are now complete. View: ${p.deliveryUrl}`,
+            bypassOptOut: true,
+          }),
+        ),
+      )
+      break
+    }
+
     case 'tasting.taster_assigned': {
       const p = payload as NotificationEventPayloads['tasting.taster_assigned']
       if (!p.tasterPhone) break
-      const date = p.scheduledAt.toLocaleDateString('en-US', {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
+      await sendTastingSmsFromTemplate({
+        templateKey: 'assignment',
+        payload: formatTastingSmsPayload({
+          tastingId: p.tastingId,
+          userId: p.userId ?? p.tastingId,
+          phoneNumber: p.tasterPhone,
+          storeName: p.storeName,
+          storeAddress: p.storeAddress,
+          scheduledAt: p.scheduledAt,
+          endAt: p.endAt ?? null,
+        }),
       })
-      await sendSms({
-        to: p.tasterPhone,
-        body: `Hi ${p.tasterName}, you've been assigned a tasting at ${p.storeName} on ${date}. Check the taster portal for details.`,
-        userId: p.userId,
-        contactName: p.tasterName,
+      break
+    }
+
+    case 'tasting.status_changed': {
+      const p = payload as NotificationEventPayloads['tasting.status_changed']
+      if (p.status !== 'confirmed' || !p.tasterPhone) break
+      await sendTastingSmsFromTemplate({
+        templateKey: 'confirmation_received',
+        payload: formatTastingSmsPayload({
+          tastingId: p.tastingId,
+          userId: p.userId ?? p.tastingId,
+          phoneNumber: p.tasterPhone,
+          storeName: p.storeName,
+          storeAddress: p.storeAddress ?? '',
+          scheduledAt: p.scheduledAt,
+          endAt: p.endAt ?? null,
+        }),
       })
+      break
+    }
+
+    case 'tasting.taster_declined': {
+      const p = payload as NotificationEventPayloads['tasting.taster_declined']
+      const teamMessage = `AHAWC Tasting Declined: ${p.declinedByName} declined ${p.eventName} on ${p.scheduledAt.toLocaleString('en-US', { timeZone: 'America/New_York' })}. Review it in the portal.`
+      await Promise.allSettled(
+        p.teamPhones.map(({ phone, userId }) =>
+          sendSms({ to: phone, body: teamMessage, userId, contactName: 'AHAWC team' }),
+        ),
+      )
       break
     }
   }

@@ -206,23 +206,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (existingUser) {
         if (!existingUser.active) return false
 
-        const effectiveUser = isSuperAdmin && !existingUser.roles.includes(ADMIN_ROLE)
-          ? (await db.update(users)
-              .set({
-                role: ADMIN_ROLE,
-                roles: normalizeRoles(ADMIN_ROLE, existingUser.roles),
-                active: true,
-              })
-              .where(eq(users.id, existingUser.id))
-              .returning())[0]
-          : existingUser
+        const googleAvatar = user.image ?? (profile?.picture as string | undefined) ?? null
+        const needsRoleUpdate = isSuperAdmin && !existingUser.roles.includes(ADMIN_ROLE)
+        const needsAvatarUpdate = !existingUser.avatarUrl && googleAvatar !== null
+
+        let effectiveUser = existingUser
+        if (needsRoleUpdate || needsAvatarUpdate) {
+          ;[effectiveUser] = await db.update(users)
+            .set({
+              ...(needsRoleUpdate ? { role: ADMIN_ROLE, roles: normalizeRoles(ADMIN_ROLE, existingUser.roles), active: true } : {}),
+              ...(needsAvatarUpdate ? { avatarUrl: googleAvatar } : {}),
+            })
+            .where(eq(users.id, existingUser.id))
+            .returning()
+        }
 
         user.id = effectiveUser.id
         ;(user as typeof user & { role: string }).role = effectiveUser.role
         ;(user as typeof user & { roles: string[] }).roles = effectiveUser.roles
         ;(user as typeof user & { featureFlags: string[] }).featureFlags = await getFeatureFlags(effectiveUser.id, effectiveUser.roles)
         user.name = effectiveUser.name
-        user.image = effectiveUser.avatarUrl ?? user.image
+        user.image = effectiveUser.avatarUrl ?? googleAvatar
         return true
       }
 

@@ -52,10 +52,26 @@ export interface InvoicePaidPayload {
 export interface DeliveryCompletedPayload {
   companyName: string
   deliveryDate: string
-  customerEmail: string
+  deliveryId: string
+  customerEmail: string | null
+  customerPhone?: string | null
   proofOfDeliveryUrl?: string | null
   shelfPhotoUrl?: string | null
   userId?: string | null
+}
+
+export interface DeliveryRunCompletedPayload {
+  deliveryId: string
+  deliveryUrl: string
+}
+
+export interface TastingTasterDeclinedPayload {
+  tastingId: string
+  eventName: string
+  scheduledAt: Date
+  declinedByName: string
+  teamPhones: Array<{ phone: string; userId: string }>
+  teamEmails: string[]
 }
 
 export interface DeliveryDriverAssignedPayload {
@@ -82,6 +98,7 @@ export interface TastingTasterAssignedPayload {
   tasterEmail: string
   tasterPhone?: string | null
   storeName: string
+  storeAddress: string
   scheduledAt: Date
   endAt?: Date | null
   notes?: string | null
@@ -91,9 +108,13 @@ export interface TastingTasterAssignedPayload {
 
 export interface TastingStatusChangedPayload {
   tasterEmail: string
+  tasterPhone?: string | null
   storeName: string
+  storeAddress?: string
   status: 'confirmed' | 'cancelled' | 'declined'
   scheduledAt: Date
+  endAt?: Date | null
+  tastingId: string
   userId?: string | null
 }
 
@@ -101,7 +122,7 @@ export interface TastingReportReceivedPayload {
   tasterName: string
   tasterEmail: string
   storeName: string
-  adminEmail: string
+  tastingId: string
   userId?: string | null
 }
 
@@ -123,11 +144,13 @@ export interface NotificationEventPayloads {
   'invoice.created': InvoiceCreatedPayload
   'invoice.paid': InvoicePaidPayload
   'delivery.completed': DeliveryCompletedPayload
+  'delivery.run_completed': DeliveryRunCompletedPayload
   'delivery.driver_assigned': DeliveryDriverAssignedPayload
   'wholesale_request.received': WholesaleRequestReceivedPayload
   'tasting.taster_assigned': TastingTasterAssignedPayload
   'tasting.status_changed': TastingStatusChangedPayload
   'tasting.report_received': TastingReportReceivedPayload
+  'tasting.taster_declined': TastingTasterDeclinedPayload
   'user.welcomed': UserWelcomedPayload
 }
 
@@ -143,11 +166,13 @@ export const EVENT_CHANNELS: Record<NotificationEvent, NotificationChannel[]> = 
   'order.shipping_status_changed': ['email', 'sms', 'in-app'],
   'invoice.created':               ['email'],
   'invoice.paid':                  ['email', 'in-app'],
-  'delivery.completed':            ['email'],
+  'delivery.completed':            ['email', 'sms', 'in-app'],
+  'delivery.run_completed':        ['sms', 'chat', 'in-app'],
   'delivery.driver_assigned':      ['email', 'sms', 'in-app'],
   'wholesale_request.received':    ['email', 'chat', 'in-app'],
   'tasting.taster_assigned':       ['email', 'sms', 'in-app'],
-  'tasting.status_changed':        ['email'],
+  'tasting.status_changed':        ['email', 'sms'],
   'tasting.report_received':       ['email'],
+  'tasting.taster_declined':       ['email', 'sms', 'in-app'],
   'user.welcomed':                 ['email'],
 }

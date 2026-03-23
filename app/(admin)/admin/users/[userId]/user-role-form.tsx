@@ -7,6 +7,7 @@ import { activateUser, deactivateUser, updateUserRole } from '@/actions/users'
 import { ALL_FEATURES, getDefaultFeaturesForRoles } from '@/lib/users/features'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { ConfirmSubmitButton } from '@/components/ui/confirm-submit-button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 
@@ -114,7 +115,7 @@ export function UserRoleForm({ user, accountId }: Props) {
 
         {user.active ? (
           <form action={deactivateUser.bind(null, user.id)}>
-            <Button variant="destructive" className="w-full" type="submit">Deactivate Account</Button>
+            <ConfirmSubmitButton variant="destructive" className="w-full" title="Deactivate this account?" description="The user will immediately lose access to the portal." confirmLabel="Deactivate">Deactivate Account</ConfirmSubmitButton>
           </form>
         ) : (
           <form action={activateUser.bind(null, user.id)}>

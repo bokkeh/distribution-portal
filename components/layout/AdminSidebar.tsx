@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, FileText, BookOpen, Users, Package,
-  Truck, Map, Building2, LogOut, ChevronRight, Menu, X, UserCircle, CalendarDays, MessageSquare, HeartPulse, ListChecks, ClipboardList, Workflow, BarChart3, TrendingUp, UserCheck, DollarSign, Globe,
+  Truck, Building2, LogOut, ChevronRight, Menu, X, UserCircle, CalendarDays, MessageSquare, HeartPulse, ClipboardList, Workflow, BarChart3, TrendingUp, UserCheck, DollarSign, Globe, Receipt, ShoppingCart, Star, Cpu, Activity,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { signOut } from 'next-auth/react'
@@ -15,6 +15,7 @@ import type { FeatureKey } from '@/lib/users/features'
 import { hasFeature } from '@/lib/users/features'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
 import { DialpadButton, DialpadSidebar } from '@/components/admin/DialpadSidebar'
+import { CommandPalette } from '@/components/ui/command-palette'
 
 const SECTION_COLORS: Record<string, { border: string; label: string; dot: string }> = {
   'Overview':       { border: 'border-blue-400',   label: 'text-blue-600',   dot: 'bg-blue-400' },
@@ -31,26 +32,24 @@ const navSections = [
     title: 'Overview',
     items: [
       { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard, feature: 'dashboard' },
-      { href: '/admin/attention', label: 'Needs Attention', icon: ClipboardList, feature: 'dashboard' },
+      { href: '/admin/attention', label: 'Needs Attention', icon: Activity, feature: 'dashboard' },
     ],
   },
   {
     title: 'Sales & Orders',
     items: [
-      { href: '/admin/orders', label: 'Orders', icon: FileText, feature: 'orders' },
+      { href: '/admin/orders', label: 'Orders', icon: ShoppingCart, feature: 'orders' },
       { href: '/admin/deliveries', label: 'Deliveries', icon: Truck, feature: 'deliveries' },
-      { href: '/admin/deliveries/reports', label: 'Delivery Reports', icon: BarChart3, feature: 'deliveries' },
       { href: '/admin/deliveries/performance', label: 'Driver Performance', icon: TrendingUp, feature: 'deliveries' },
-      { href: '/admin/invoicing', label: 'Invoicing', icon: FileText, feature: 'invoicing' },
-      { href: '/admin/invoicing/aging', label: 'AR Aging', icon: BarChart3, feature: 'invoicing' },
-      { href: '/admin/wholesale-requests', label: 'Wholesaler Requests', icon: FileText, feature: 'wholesale_requests' },
+      { href: '/admin/invoicing', label: 'Invoicing', icon: Receipt, feature: 'invoicing' },
+      { href: '/admin/wholesale-requests', label: 'Wholesaler Requests', icon: Star, feature: 'wholesale_requests' },
     ],
   },
   {
     title: 'Operations',
     items: [
       { href: '/admin/inventory', label: 'Inventory', icon: Package, feature: 'inventory' },
-      { href: '/admin/jobs', label: 'Jobs / Logs', icon: ListChecks, feature: 'dashboard' },
+      { href: '/admin/jobs', label: 'Background Jobs', icon: Cpu, feature: 'dashboard' },
       { href: '/admin/tastings', label: 'Tastings', icon: CalendarDays, feature: 'tastings' },
       { href: '/admin/tastings/roi', label: 'Tasting ROI', icon: TrendingUp, feature: 'tastings' },
     ],
@@ -66,6 +65,7 @@ const navSections = [
     title: 'Finance',
     items: [
       { href: '/admin/finance/ledger', label: 'Payments Ledger', icon: BookOpen, feature: 'accounting' },
+      { href: '/admin/invoicing/aging', label: 'AR Aging', icon: BarChart3, feature: 'invoicing' },
       { href: '/admin/finance/reconciliation', label: 'Reconciliation', icon: ClipboardList, feature: 'accounting' },
       { href: '/admin/finance/statements', label: 'Statements', icon: FileText, feature: 'accounting' },
       { href: '/admin/accounts', label: 'Chart of Accounts', icon: BookOpen, feature: 'accounting' },
@@ -228,6 +228,10 @@ export default function AdminSidebar({
               <NotificationBell items={notifications} unreadCount={unreadCount} />
             </div>
           </div>
+        </div>
+
+        <div className="px-3 py-2 border-b border-slate-100">
+          <CommandPalette />
         </div>
 
         <nav className="flex-1 px-3 py-2 overflow-y-auto space-y-2">

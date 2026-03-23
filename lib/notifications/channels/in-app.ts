@@ -97,6 +97,39 @@ export async function handleInAppChannel<E extends NotificationEvent>(
       break
     }
 
+    case 'delivery.completed': {
+      const p = payload as NotificationEventPayloads['delivery.completed']
+      await Promise.all([
+        createNotificationsForRoles({
+          roles: ['admin'],
+          kind: 'delivery_completed',
+          title: 'Delivery completed',
+          body: `${p.companyName} was marked delivered.`,
+          href: `/admin/deliveries/${p.deliveryId}`,
+        }),
+        createNotificationsForRoles({
+          roles: ['staff'],
+          kind: 'delivery_completed',
+          title: 'Delivery completed',
+          body: `${p.companyName} was marked delivered.`,
+          href: null,
+        }),
+      ])
+      break
+    }
+
+    case 'delivery.run_completed': {
+      const p = payload as NotificationEventPayloads['delivery.run_completed']
+      await createNotificationsForRoles({
+        roles: ['admin', 'staff'],
+        kind: 'delivery_completed',
+        title: 'Delivery run completed',
+        body: 'All stops on a delivery run have been completed.',
+        href: `/admin/deliveries/${p.deliveryId}`,
+      })
+      break
+    }
+
     case 'tasting.taster_assigned': {
       const p = payload as NotificationEventPayloads['tasting.taster_assigned']
       if (!p.userId) break
@@ -105,12 +138,34 @@ export async function handleInAppChannel<E extends NotificationEvent>(
         month: 'short',
         day: 'numeric',
       })
-      await createUserNotification({
-        userId: p.userId,
-        kind: 'tasting.taster_assigned',
-        title: `Tasting assigned — ${p.storeName}`,
-        body: date,
-        href: `/taster/tastings/${p.tastingId}`,
+      await Promise.all([
+        createUserNotification({
+          userId: p.userId,
+          kind: 'tasting_assigned',
+          title: `Tasting assigned — ${p.storeName}`,
+          body: date,
+          href: `/taster/tastings/${p.tastingId}`,
+        }),
+        createUserNotification({
+          userId: p.userId,
+          kind: 'tasting_report_reminder',
+          title: 'Complete your tasting report',
+          body: `Submit your tasting report for ${p.storeName}.`,
+          href: `/taster/tastings/${p.tastingId}`,
+          availableAt: new Date(p.scheduledAt.getTime() + 24 * 60 * 60 * 1000),
+        }),
+      ])
+      break
+    }
+
+    case 'tasting.taster_declined': {
+      const p = payload as NotificationEventPayloads['tasting.taster_declined']
+      await createNotificationsForRoles({
+        roles: ['admin', 'staff'],
+        kind: 'tasting_declined',
+        title: 'Tasting declined',
+        body: `${p.declinedByName} declined ${p.eventName}.`,
+        href: '/admin/tastings',
       })
       break
     }

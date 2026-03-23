@@ -12,6 +12,14 @@
     {
       "path": "/api/cron/tasting-sms",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/daily-digest",
+      "schedule": "0 13 * * 1-5"
+    },
+    {
+      "path": "/api/cron/hubspot-sync",
+      "schedule": "0 15 * * *"
     }
   ],
   "headers": [

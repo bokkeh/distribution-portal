@@ -88,6 +88,7 @@ export async function handleEmailChannel<E extends NotificationEvent>(
 
     case 'delivery.completed': {
       const p = payload as NotificationEventPayloads['delivery.completed']
+      if (!p.customerEmail) break
       await sendDeliveryCompletedEmail({
         to: p.customerEmail,
         companyName: p.companyName,
@@ -137,6 +138,7 @@ export async function handleEmailChannel<E extends NotificationEvent>(
 
     case 'tasting.status_changed': {
       const p = payload as NotificationEventPayloads['tasting.status_changed']
+      if (!p.tasterEmail) break
       await sendTastingStatusEmail({
         to: p.tasterEmail,
         storeName: p.storeName,
@@ -149,9 +151,22 @@ export async function handleEmailChannel<E extends NotificationEvent>(
     case 'tasting.report_received': {
       const p = payload as NotificationEventPayloads['tasting.report_received']
       await sendTastingReportReceivedEmail({
-        to: p.adminEmail,
+        to: p.tasterEmail,
         tasterName: p.tasterName,
         storeName: p.storeName,
+      })
+      break
+    }
+
+    case 'tasting.taster_declined': {
+      const p = payload as NotificationEventPayloads['tasting.taster_declined']
+      if (!p.teamEmails.length) break
+      await sendInternalAlertEmail({
+        to: p.teamEmails,
+        subject: `Tasting declined - ${p.eventName}`,
+        title: 'Tasting declined',
+        body: `${p.declinedByName} declined ${p.eventName} scheduled for ${p.scheduledAt.toLocaleString('en-US', { timeZone: 'America/New_York' })}.`,
+        href: '/admin/tastings',
       })
       break
     }

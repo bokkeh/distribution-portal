@@ -1,7 +1,7 @@
 import { db } from '@/db'
 import { deliveries, deliveryStops, drivers, users } from '@/db/schema'
 import { requireAdmin } from '@/lib/auth/session'
-import { eq } from 'drizzle-orm'
+import { and, eq, gte, lte } from 'drizzle-orm'
 import { formatDate } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -9,9 +9,21 @@ import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import Image from 'next/image'
 import { ArrowLeft, User, TrendingUp, CheckCircle2, Camera, Truck } from 'lucide-react'
+import { Suspense } from 'react'
+import { DateRangeFilter } from '@/components/ui/date-range-filter'
 
-export default async function DriverPerformancePage() {
+export default async function DriverPerformancePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string; to?: string }>
+}) {
   await requireAdmin()
+  const { from, to } = await searchParams
+
+  const dateFilters = [
+    from ? gte(deliveries.weekStartDate, from) : undefined,
+    to ? lte(deliveries.weekStartDate, to) : undefined,
+  ].filter(Boolean) as Parameters<typeof and>
 
   const allDeliveries = await db
     .select({
@@ -29,6 +41,7 @@ export default async function DriverPerformancePage() {
     .from(deliveries)
     .leftJoin(drivers, eq(deliveries.driverId, drivers.id))
     .leftJoin(users, eq(drivers.userId, users.id))
+    .where(dateFilters.length ? and(...dateFilters) : undefined)
 
   const allStops = await db
     .select({
@@ -135,14 +148,19 @@ export default async function DriverPerformancePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Link href="/admin/deliveries">
-          <Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Driver Performance</h1>
-          <p className="mt-1 text-muted-foreground">Completion rates, photo compliance, and activity across all drivers.</p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <Link href="/admin/deliveries">
+            <Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Driver Performance</h1>
+            <p className="mt-1 text-muted-foreground">Completion rates, photo compliance, and activity across all drivers.</p>
+          </div>
         </div>
+        <Suspense>
+          <DateRangeFilter />
+        </Suspense>
       </div>
 
       {/* Summary KPIs */}

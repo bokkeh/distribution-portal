@@ -7,10 +7,11 @@ import { CalendarDays, Clock3, MapPin, Store } from 'lucide-react'
 import { createTasting, deleteTasting, reassignTasting, updateTastingStatus } from '@/actions/tastings'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { ConfirmSubmitButton } from '@/components/ui/confirm-submit-button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { formatEasternDate, formatEasternTimeRange } from '@/lib/tastings/time'
+import { formatEasternTimeRange } from '@/lib/tastings/time'
 import { cn } from '@/lib/utils'
 import { TastingScheduleAssistant } from './TastingScheduleAssistant'
 
@@ -282,7 +283,7 @@ export function TastingsPlanner({ mode, tastings, accounts, tasters, success, er
                         <form action={deleteTasting}>
                           <input type="hidden" name="tastingId" value={tasting.id} />
                           <input type="hidden" name="mode" value={mode} />
-                          <Button type="submit" variant="destructive" className="w-full sm:w-auto">Remove Tasting</Button>
+                          <ConfirmSubmitButton variant="destructive" className="w-full sm:w-auto" title="Remove this tasting?" description="This will permanently delete the tasting and notify the assigned taster." confirmLabel="Remove Tasting">Remove Tasting</ConfirmSubmitButton>
                         </form>
                       </div>
                     ) : null}
@@ -323,7 +324,7 @@ export function TastingsPlanner({ mode, tastings, accounts, tasters, success, er
                     <p className="font-semibold text-slate-900">{tasting.eventName}</p>
                     <Badge variant={statusVariant[tasting.status] ?? 'secondary'}>{tasting.status}</Badge>
                   </div>
-                  <p className="text-sm text-slate-500">{formatEasternDate(new Date(tasting.scheduledAt))} with {tasting.tasterName}</p>
+                  <p className="text-sm text-slate-500">with {tasting.tasterName}</p>
                   <p className="text-sm text-slate-500">{[tasting.storeAddress, tasting.storeCity, tasting.storeState, tasting.storeZip].filter(Boolean).join(', ') || 'Store address not provided'}</p>
                   <div className="flex flex-wrap gap-2 pt-1">
                     {tasting.reportSubmittedAt ? <Badge variant="success">Report Submitted</Badge> : null}

@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { completeDeliveryStop, updateStopStatus } from '@/actions/deliveries'
 import { getDeliveryStopAdditionalPhotos } from '@/lib/deliveries/photos'
 import { signedPhotoUrl } from '@/lib/gcs/photo-url'
@@ -119,13 +120,13 @@ export function DriverStopActions({ stop }: { stop: Stop }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         {tiles.map(({ kind, label, url, uploading, icon, hint }) => (
           <label key={kind} className="block cursor-pointer">
             <span className="mb-1 block truncate text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
-            <span className="flex aspect-square w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-1.5 py-2 text-center text-slate-600 transition-colors hover:border-blue-400 hover:bg-blue-50">
-              {uploading ? <Loader2 className="mb-2 h-6 w-6 animate-spin" /> : icon}
-              <span className="text-[11px] font-semibold leading-tight text-slate-900">
+            <span className="flex min-h-[100px] w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 px-2 py-3 text-center text-slate-600 transition-colors active:bg-blue-50 hover:border-blue-400 hover:bg-blue-50">
+              {uploading ? <Loader2 className="mb-2 h-7 w-7 animate-spin" /> : icon}
+              <span className="text-xs font-semibold leading-tight text-slate-900">
                 {url ? 'Replace' : 'Upload'}
               </span>
               <span className="mt-1 text-[10px] leading-tight text-muted-foreground">{hint}</span>
@@ -158,12 +159,12 @@ export function DriverStopActions({ stop }: { stop: Stop }) {
             <span className="mb-1 block truncate text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               Extra Photo {index + 1}
             </span>
-            <span className="flex aspect-square w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-1.5 py-2 text-center text-slate-600 transition-colors hover:border-blue-400 hover:bg-blue-50">
-              {uploadingAdditional[index] ? <Loader2 className="mb-2 h-6 w-6 animate-spin" /> : <Camera className="mb-2 h-6 w-6" />}
-              <span className="text-[11px] font-semibold leading-tight text-slate-900">
+            <span className="flex min-h-[100px] w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 px-2 py-3 text-center text-slate-600 transition-colors active:bg-blue-50 hover:border-blue-400 hover:bg-blue-50">
+              {uploadingAdditional[index] ? <Loader2 className="mb-2 h-7 w-7 animate-spin" /> : <Camera className="mb-2 h-7 w-7" />}
+              <span className="text-xs font-semibold leading-tight text-slate-900">
                 {url ? 'Replace' : 'Upload'}
               </span>
-              <span className="mt-1 text-[10px] leading-tight text-muted-foreground">Any additional delivery photo</span>
+              <span className="mt-1 text-[10px] leading-tight text-muted-foreground">Additional photo</span>
               {url && (
                 <a
                   href={url}
@@ -197,24 +198,37 @@ export function DriverStopActions({ stop }: { stop: Stop }) {
           value={notes}
           onChange={event => setNotes(event.target.value)}
           placeholder="Add delivery updates, owner requests, or shelf notes."
-          className="min-h-20 w-full max-w-xl rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className="min-h-24 w-full rounded-xl border border-input bg-white px-3 py-2.5 text-base shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
       </div>
 
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <Button
+      <div className="grid grid-cols-2 gap-3">
+        <button
           type="button"
           onClick={handleDelivered}
           disabled={isPending || uploadingProof || uploadingShelf || uploadingAdditional.some(Boolean)}
-          className="gap-2 bg-green-600 text-white hover:bg-green-700"
+          className="flex h-14 items-center justify-center gap-2 rounded-2xl bg-green-600 text-base font-semibold text-white shadow-sm active:scale-[0.98] transition-transform disabled:opacity-50"
         >
-          {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
-          Mark Delivered
-        </Button>
-        <Button type="button" variant="destructive" onClick={handleFailed} disabled={isPending}>
-          <XCircle className="mr-2 h-4 w-4" />
-          Mark Failed
-        </Button>
+          {isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle className="h-5 w-5" />}
+          Delivered
+        </button>
+        <ConfirmDialog
+          trigger={
+            <button
+              type="button"
+              disabled={isPending}
+              className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-red-50 border border-red-200 text-base font-semibold text-red-600 shadow-sm active:scale-[0.98] transition-transform disabled:opacity-50"
+            >
+              <XCircle className="h-5 w-5" />
+              Failed
+            </button>
+          }
+          title="Mark stop as failed?"
+          description="This will flag the stop and notify the dispatch team."
+          confirmLabel="Mark Failed"
+          variant="destructive"
+          onConfirm={handleFailed}
+        />
       </div>
     </div>
   )

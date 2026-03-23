@@ -50,6 +50,7 @@ export default async function AdminDashboard() {
       month: sql<string>`TO_CHAR(DATE_TRUNC('month', ${orders.createdAt}), 'Mon YYYY')`,
       monthOrder: sql<string>`DATE_TRUNC('month', ${orders.createdAt})`,
       revenue: sql<string>`COALESCE(SUM(${orders.total}), 0)`,
+      orderCount: sql<number>`COUNT(*)`,
     })
       .from(orders)
       .where(and(
@@ -97,6 +98,9 @@ export default async function AdminDashboard() {
     revenue: Number(r.revenue),
   }))
 
+  const revenueSparkline = monthlyRevenue.map(r => Number(r.revenue))
+  const ordersSparkline = monthlyRevenue.map(r => Number(r.orderCount))
+
   const tastingConversion = tastingConvStats[0]
   const convRate = tastingConversion && Number(tastingConversion.totalInteractions) > 0
     ? ((Number(tastingConversion.totalBottles) / Number(tastingConversion.totalInteractions)) * 100).toFixed(1)
@@ -127,12 +131,16 @@ export default async function AdminDashboard() {
           value={formatCurrency(totalRevenue[0]?.total ?? '0')}
           icon={DollarSign}
           iconColor="text-green-600"
+          sparklineData={revenueSparkline}
+          sparklineColor="#16a34a"
         />
         <KpiCard
           title="Total Orders"
           value={String(totalOrders[0]?.count ?? 0)}
           icon={ShoppingCart}
           iconColor="text-blue-600"
+          sparklineData={ordersSparkline}
+          sparklineColor="#2563eb"
         />
         <KpiCard
           title="Active Customers"

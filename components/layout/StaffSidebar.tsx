@@ -97,7 +97,7 @@ export default function StaffSidebar({
                 className="h-10 w-10 rounded-lg bg-white p-1 object-contain" priority />
               <div>
                 <p className="font-bold text-white">AHAWC</p>
-                <p className="text-xs text-slate-400">Sales Portal</p>
+                <p className="text-xs text-slate-400">Staff Portal</p>
               </div>
             </div>
             <NotificationBell items={notifications} unreadCount={unreadCount} dark />
@@ -124,7 +124,7 @@ export default function StaffSidebar({
             className="h-8 w-8 rounded-md bg-white p-0.5 object-contain" priority />
           <div>
             <p className="font-bold text-white text-sm leading-none">AHAWC</p>
-            <p className="text-xs text-slate-400 leading-none mt-0.5">Sales Portal</p>
+            <p className="text-xs text-slate-400 leading-none mt-0.5">Staff Portal</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -149,7 +149,7 @@ export default function StaffSidebar({
                   className="h-9 w-9 rounded-lg bg-white p-0.5 object-contain" />
                 <div>
                   <p className="font-bold text-white text-sm">AHAWC</p>
-                  <p className="text-xs text-slate-400">Sales Portal</p>
+                  <p className="text-xs text-slate-400">Staff Portal</p>
                 </div>
               </div>
               <button

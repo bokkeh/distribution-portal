@@ -14,7 +14,7 @@ import { NotificationBell } from '@/components/notifications/NotificationBell'
 
 const navItems = [
   { href: '/customer/dashboard', label: 'Dashboard', icon: LayoutDashboard, feature: 'dashboard' },
-  { href: '/customer/products', label: 'Order Products', icon: Package, feature: 'products' },
+  { href: '/customer/products', label: 'Products', icon: Package, feature: 'products' },
   { href: '/customer/orders', label: 'My Orders', icon: ShoppingCart, feature: 'orders' },
   { href: '/customer/invoices', label: 'Invoices', icon: FileText, feature: 'invoices' },
   { href: '/customer/profile', label: 'Profile', icon: User, feature: 'profile' },

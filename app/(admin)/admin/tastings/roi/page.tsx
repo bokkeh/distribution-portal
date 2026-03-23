@@ -1,16 +1,29 @@
 import { db } from '@/db'
 import { tastings, tastingReports, tasterInvoices, users } from '@/db/schema'
 import { requireFeature } from '@/lib/auth/session'
-import { desc, eq, sql } from 'drizzle-orm'
+import { and, desc, eq, gte, lte } from 'drizzle-orm'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { ArrowLeft, TrendingUp, DollarSign, Wine, Users } from 'lucide-react'
+import { Suspense } from 'react'
+import { DateRangeFilter } from '@/components/ui/date-range-filter'
 
-export default async function TastingROIPage() {
+export default async function TastingROIPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string; to?: string }>
+}) {
   await requireFeature('tastings', 'admin')
+  const { from, to } = await searchParams
+
+  const dateFilters = [
+    eq(tastings.status, 'completed'),
+    from ? gte(tastings.scheduledAt, new Date(from)) : undefined,
+    to ? lte(tastings.scheduledAt, new Date(to + 'T23:59:59')) : undefined,
+  ].filter(Boolean) as Parameters<typeof and>
 
   const rows = await db
     .select({
@@ -34,7 +47,7 @@ export default async function TastingROIPage() {
     .leftJoin(users, eq(tastings.assignedUserId, users.id))
     .leftJoin(tastingReports, eq(tastingReports.tastingId, tastings.id))
     .leftJoin(tasterInvoices, eq(tasterInvoices.tastingId, tastings.id))
-    .where(eq(tastings.status, 'completed'))
+    .where(and(...dateFilters))
     .orderBy(desc(tastings.scheduledAt))
 
   // Aggregate stats
@@ -60,14 +73,19 @@ export default async function TastingROIPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Link href="/admin/tastings">
-          <Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Tasting ROI Report</h1>
-          <p className="mt-1 text-muted-foreground">Performance and return on investment across all completed tastings.</p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <Link href="/admin/tastings">
+            <Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Tasting ROI Report</h1>
+            <p className="mt-1 text-muted-foreground">Performance and return on investment across all completed tastings.</p>
+          </div>
         </div>
+        <Suspense>
+          <DateRangeFilter />
+        </Suspense>
       </div>
 
       {/* KPI summary */}

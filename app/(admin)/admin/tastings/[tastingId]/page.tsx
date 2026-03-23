@@ -8,6 +8,7 @@ import { formatEasternDateTime } from '@/lib/tastings/time'
 import { updateTastingStatus, deleteTasting, reassignTasting } from '@/actions/tastings'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { ConfirmSubmitButton } from '@/components/ui/confirm-submit-button'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { ArrowLeft, Calendar, MapPin, Phone, User, FileText, Receipt, StickyNote } from 'lucide-react'
@@ -309,12 +310,12 @@ export default async function AdminTastingDetailPage({
                   <input type="hidden" name="status" value="cancelled" />
                   <input type="hidden" name="mode" value="admin" />
                   <input type="hidden" name="redirectTo" value={`/admin/tastings/${tastingId}`} />
-                  <Button type="submit" variant="destructive" className="w-full" size="sm">Cancel Tasting</Button>
+                  <ConfirmSubmitButton variant="destructive" className="w-full" size="sm" title="Cancel this tasting?" description="The assigned taster will be notified." confirmLabel="Cancel Tasting">Cancel Tasting</ConfirmSubmitButton>
                 </form>
                 <form action={deleteTasting}>
                   <input type="hidden" name="tastingId" value={tastingId} />
                   <input type="hidden" name="mode" value="admin" />
-                  <Button type="submit" variant="outline" className="w-full text-red-600 border-red-200 hover:bg-red-50" size="sm">Delete</Button>
+                  <ConfirmSubmitButton variant="outline" className="w-full text-red-600 border-red-200 hover:bg-red-50" size="sm" title="Permanently delete tasting?" description="This cannot be undone." confirmLabel="Delete">Delete</ConfirmSubmitButton>
                 </form>
               </CardContent>
             </Card>

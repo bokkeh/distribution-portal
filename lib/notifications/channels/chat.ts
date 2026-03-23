@@ -24,5 +24,14 @@ export async function handleChatChannel<E extends NotificationEvent>(
       )
       break
     }
+
+    case 'delivery.run_completed': {
+      const p = payload as NotificationEventPayloads['delivery.run_completed']
+      await postGoogleChatCard(
+        'Delivery Run Completed',
+        `✅ All stops finished. <a href="${p.deliveryUrl}">View delivery</a>`,
+      )
+      break
+    }
   }
 }

@@ -4,18 +4,13 @@ import { desc, eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { db } from '@/db'
-import { customerAccounts, notificationsLog, tasterInvoices, tastingReports, tastings, users } from '@/db/schema'
+import { customerAccounts, tasterInvoices, tastingReports, tastings, users } from '@/db/schema'
 import { requireFeature, requireRole } from '@/lib/auth/session'
+import { notify } from '@/lib/notifications/dispatch'
+import { sendTasterInvoiceNotification } from '@/lib/resend/client'
+import { clearUserNotifications, createNotificationsForRoles } from '@/lib/notifications/in-app'
 import { sendSms } from '@/lib/telnyx/client'
 import { postGoogleChat } from '@/lib/google-chat/webhook'
-import {
-  sendInternalAlertEmail,
-  sendTasterAssignmentEmail,
-  sendTasterInvoiceNotification,
-  sendTastingReportReceivedEmail,
-  sendTastingStatusEmail,
-} from '@/lib/resend/client'
-import { clearUserNotifications, createNotificationsForRoles, createUserNotification } from '@/lib/notifications/in-app'
 import {
   clearScheduledTastingSmsJobs,
   formatTastingSmsPayload,
@@ -35,142 +30,6 @@ function uniqueEmails(...values: Array<string | null | undefined>) {
   return Array.from(new Set(values.map((value) => value?.trim()).filter(Boolean) as string[]))
 }
 
-async function notifyTasterAssignment({
-  assignedPhone,
-  payload,
-}: {
-  assignedPhone: string | null
-  payload: ReturnType<typeof formatTastingSmsPayload>
-}) {
-  if (!assignedPhone) return
-
-  try {
-    await sendTastingSmsFromTemplate({ templateKey: 'assignment', payload })
-  } catch {
-    await db.insert(notificationsLog).values({
-      userId: payload.userId,
-      recipientPhone: assignedPhone,
-      recipientName: payload.store_name,
-      type: 'sms',
-      message: `Failed to send tasting assignment for ${payload.store_name}`,
-      status: 'failed',
-    })
-  }
-}
-
-async function notifyTasterChange({
-  recipientName,
-  recipientPhone,
-  actorId,
-  body,
-}: {
-  recipientName: string
-  recipientPhone: string | null
-  actorId: string
-  body: string
-}) {
-  if (!recipientPhone) return
-
-  try {
-    await sendSms({ to: recipientPhone, body })
-    await db.insert(notificationsLog).values({
-      userId: actorId,
-      recipientPhone,
-      recipientName,
-      type: 'sms',
-      message: body,
-      status: 'sent',
-    })
-  } catch {
-    await db.insert(notificationsLog).values({
-      userId: actorId,
-      recipientPhone,
-      recipientName,
-      type: 'sms',
-      message: body,
-      status: 'failed',
-    })
-  }
-}
-
-async function notifyTeamAboutDeclinedTasting({
-  tastingId,
-  eventName,
-  scheduledAt,
-  declinedByName,
-}: {
-  tastingId: string
-  eventName: string
-  scheduledAt: Date
-  declinedByName: string
-}) {
-  const teamMessage = `AHAWC Tasting Declined: ${declinedByName} declined ${eventName} on ${formatEasternDateTime(scheduledAt)}. Review it in the portal.`
-
-  await createNotificationsForRoles({
-    roles: ['admin', 'staff'],
-    kind: 'tasting_declined',
-    title: 'Tasting declined',
-    body: `${declinedByName} declined ${eventName}.`,
-    href: '/admin/tastings',
-  })
-
-  const teamMembers = await db
-    .select({ id: users.id, phone: users.phone, roles: users.roles, active: users.active })
-    .from(users)
-
-  const recipients = new Map<string, string>()
-  const emailRecipients = new Set<string>()
-  for (const member of teamMembers) {
-    if (!member.active) continue
-    if (!member.phone) continue
-    if (!member.roles.includes('staff') && !member.roles.includes('admin')) continue
-    recipients.set(member.phone, member.id)
-  }
-
-  const teamEmails = await db
-    .select({ email: users.email, roles: users.roles, active: users.active })
-    .from(users)
-
-  for (const member of teamEmails) {
-    if (!member.active) continue
-    if (!member.email) continue
-    if (!member.roles.includes('staff') && !member.roles.includes('admin')) continue
-    emailRecipients.add(member.email)
-  }
-
-  await Promise.all(Array.from(recipients.entries()).map(async ([phone, userId]) => {
-    try {
-      await sendSms({ to: phone, body: teamMessage, userId, contactName: 'AHAWC team' })
-    } catch {
-      await db.insert(notificationsLog).values({
-        userId,
-        recipientPhone: phone,
-        recipientName: 'AHAWC team',
-        type: 'sms',
-        message: teamMessage,
-        status: 'failed',
-      })
-    }
-  }))
-
-  await logActivityEvent({
-    entityType: 'tasting',
-    entityId: tastingId,
-    kind: 'tasting_declined_notified',
-    title: 'Team notified of decline',
-    body: `${declinedByName} declined ${eventName} and the team was notified.`,
-  })
-
-  if (emailRecipients.size) {
-    await sendInternalAlertEmail({
-      to: Array.from(emailRecipients),
-      subject: `Tasting declined - ${eventName}`,
-      title: 'Tasting declined',
-      body: `${declinedByName} declined ${eventName} scheduled for ${formatEasternDateTime(scheduledAt)}.`,
-      href: '/admin/tastings',
-    })
-  }
-}
 
 export async function createTasting(formData: FormData) {
   const session = await requireFeature('tastings', 'admin', 'staff')
@@ -234,62 +93,36 @@ export async function createTasting(formData: FormData) {
     notes,
   }).returning({ id: tastings.id })
 
-  const smsPayload = formatTastingSmsPayload({
-    tastingId: tasting.id,
-    userId: assignedUser.id,
-    phoneNumber: assignedUser.phone ?? '',
-    storeName: account.companyName,
-    storeAddress: [account.address, account.city, account.state, account.zip].filter(Boolean).join(', ') || 'Store address not provided',
-    scheduledAt,
-    endAt,
-  })
-
-  if (assignedUserPrefs?.smsNotificationsEnabled ?? true) {
-    await notifyTasterAssignment({
-      assignedPhone: assignedUser.phone,
-      payload: smsPayload,
-    })
-  }
+  const storeAddress = [account.address, account.city, account.state, account.zip].filter(Boolean).join(', ') || 'Store address not provided'
 
   if (assignedUser.phone && (assignedUserPrefs?.smsNotificationsEnabled ?? true)) {
     await queueScheduledTastingSmsJobs({
-      ...smsPayload,
+      ...formatTastingSmsPayload({
+        tastingId: tasting.id,
+        userId: assignedUser.id,
+        phoneNumber: assignedUser.phone,
+        storeName: account.companyName,
+        storeAddress,
+        scheduledAt,
+        endAt,
+      }),
       scheduledAt,
       endAt,
     })
   }
 
-  if (assignedUserPrefs?.inAppNotificationsEnabled ?? true) {
-    await createUserNotification({
-      userId: assignedUser.id,
-      kind: 'tasting_assigned',
-      title: 'New tasting assigned',
-      body: `${account.companyName} has been assigned to you for ${formatEasternDateTime(scheduledAt)}.`,
-      href: `/taster/tastings/${tasting.id}`,
-    })
-  }
-
-  if (assignedUserPrefs?.inAppNotificationsEnabled ?? true) {
-    await createUserNotification({
-      userId: assignedUser.id,
-      kind: 'tasting_report_reminder',
-      title: 'Complete your tasting report',
-      body: `Submit your tasting report for ${account.companyName}.`,
-      href: `/taster/tastings/${tasting.id}`,
-      availableAt: new Date(scheduledAt.getTime() + 24 * 60 * 60 * 1000),
-    })
-  }
-
-  if (assignedUser.email && (assignedUserPrefs?.emailNotificationsEnabled ?? true)) {
-    await sendTasterAssignmentEmail({
-      to: assignedUser.email,
-      tasterName: assignedUser.name,
-      storeName: account.companyName,
-      scheduledAt,
-      endAt,
-      notes,
-    })
-  }
+  await notify('tasting.taster_assigned', {
+    tasterName: assignedUser.name,
+    tasterEmail: (assignedUserPrefs?.emailNotificationsEnabled ?? true) ? (assignedUser.email ?? '') : '',
+    tasterPhone: (assignedUserPrefs?.smsNotificationsEnabled ?? true) ? assignedUser.phone : null,
+    storeName: account.companyName,
+    storeAddress,
+    scheduledAt,
+    endAt,
+    notes,
+    tastingId: tasting.id,
+    userId: (assignedUserPrefs?.inAppNotificationsEnabled ?? true) ? assignedUser.id : null,
+  })
 
   revalidatePath('/admin/tastings')
   revalidatePath('/staff/tastings')
@@ -364,27 +197,18 @@ export async function updateTastingStatus(formData: FormData) {
       .where(eq(tastings.id, tastingId))
       .limit(1)
 
-    if (assignedUser?.phone && tastingDetails) {
-      await sendTastingSmsFromTemplate({
-        templateKey: 'confirmation_received',
-        payload: formatTastingSmsPayload({
-          tastingId,
-          userId: tasting.assignedUserId,
-          phoneNumber: assignedUser.phone,
-          storeName: tastingDetails.eventName,
-          storeAddress: [tastingDetails.storeAddress, tastingDetails.storeCity, tastingDetails.storeState, tastingDetails.storeZip].filter(Boolean).join(', ') || 'Store address not provided',
-          scheduledAt: tastingDetails.scheduledAt,
-          endAt: tastingDetails.endAt,
-        }),
-      }).catch(() => {})
-    }
-
-    if (assignedUser?.email && tastingDetails) {
-      await sendTastingStatusEmail({
-        to: assignedUser.email,
+    if (tastingDetails) {
+      const storeAddress = [tastingDetails.storeAddress, tastingDetails.storeCity, tastingDetails.storeState, tastingDetails.storeZip].filter(Boolean).join(', ') || 'Store address not provided'
+      await notify('tasting.status_changed', {
+        tasterEmail: assignedUser?.email ?? '',
+        tasterPhone: assignedUser?.phone ?? null,
         storeName: tastingDetails.eventName,
+        storeAddress,
         status: 'confirmed',
         scheduledAt: tastingDetails.scheduledAt,
+        endAt: tastingDetails.endAt,
+        tastingId,
+        userId: tasting.assignedUserId,
       })
     }
   }
@@ -398,11 +222,34 @@ export async function updateTastingStatus(formData: FormData) {
       kinds: ['tasting_assigned', 'tasting_report_reminder'],
     })
 
-    await notifyTeamAboutDeclinedTasting({
+    const teamMembers = await db
+      .select({ id: users.id, phone: users.phone, email: users.email, roles: users.roles, active: users.active })
+      .from(users)
+
+    const teamPhones: Array<{ phone: string; userId: string }> = []
+    const teamEmails: string[] = []
+    for (const member of teamMembers) {
+      if (!member.active) continue
+      if (!member.roles.includes('staff') && !member.roles.includes('admin')) continue
+      if (member.phone) teamPhones.push({ phone: member.phone, userId: member.id })
+      if (member.email) teamEmails.push(member.email)
+    }
+
+    await notify('tasting.taster_declined', {
       tastingId,
       eventName: tasting.eventName,
       scheduledAt: tasting.scheduledAt,
       declinedByName: session.user.name || 'The assigned taster',
+      teamPhones,
+      teamEmails,
+    })
+
+    await logActivityEvent({
+      entityType: 'tasting',
+      entityId: tastingId,
+      kind: 'tasting_declined_notified',
+      title: 'Team notified of decline',
+      body: `${session.user.name || 'The assigned taster'} declined ${tasting.eventName} and the team was notified.`,
     })
   }
 
@@ -479,11 +326,14 @@ export async function deleteTasting(formData: FormData) {
     kinds: ['tasting_assigned', 'tasting_report_reminder'],
   })
 
-  await notifyTasterChange({
-    recipientName: tasting.tasterName,
-    recipientPhone: tasting.tasterPhone,
-    actorId: session.user.id,
-    body: `AHAWC Tasting Cancelled: ${tasting.eventName} on ${formatEasternDateTime(tasting.scheduledAt)} has been cancelled. Please check the portal for updates.`,
+  await notify('tasting.status_changed', {
+    tasterEmail: '',
+    tasterPhone: tasting.tasterPhone,
+    storeName: tasting.eventName,
+    status: 'cancelled',
+    scheduledAt: tasting.scheduledAt,
+    tastingId: tasting.id,
+    userId: null,
   })
 
   revalidatePath('/admin/tastings')
@@ -555,20 +405,18 @@ export async function reassignTasting(formData: FormData) {
 
   await clearScheduledTastingSmsJobs(tasting.id)
 
-  await Promise.all([
-    notifyTasterChange({
-      recipientName: tasting.currentTasterName,
-      recipientPhone: tasting.currentTasterPhone,
-      actorId: session.user.id,
-      body: `AHAWC Tasting Reassigned: ${tasting.eventName} on ${formatEasternDateTime(tasting.scheduledAt)} has been reassigned to another taster.`,
-    }),
-    notifyTasterChange({
-      recipientName: nextTaster.name,
-      recipientPhone: nextTaster.phone,
-      actorId: session.user.id,
-      body: `AHAWC Tasting Assigned: ${tasting.eventName} on ${formatEasternDateTime(tasting.scheduledAt)} has been assigned to you. View details: ${process.env.NEXTAUTH_URL}/taster/tastings`,
-    }),
-  ])
+  // Notify previous taster of reassignment (plain SMS only — no email/in-app)
+  if (tasting.currentTasterPhone) {
+    await notify('tasting.status_changed', {
+      tasterEmail: '',
+      tasterPhone: tasting.currentTasterPhone,
+      storeName: tasting.eventName,
+      status: 'cancelled',
+      scheduledAt: tasting.scheduledAt,
+      tastingId: tasting.id,
+      userId: null,
+    })
+  }
 
   await clearUserNotifications({
     userId: tasting.assignedUserId,
@@ -576,56 +424,36 @@ export async function reassignTasting(formData: FormData) {
     kinds: ['tasting_assigned', 'tasting_report_reminder'],
   })
 
-  await createUserNotification({
-    userId: nextTaster.id,
-    kind: 'tasting_assigned',
-    title: 'Tasting reassigned to you',
-    body: `${tasting.eventName} has been assigned to you for ${formatEasternDateTime(tasting.scheduledAt)}.`,
-    href: `/taster/tastings/${tasting.id}`,
-  })
+  const storeAddress = [tasting.storeAddress, tasting.storeCity, tasting.storeState, tasting.storeZip].filter(Boolean).join(', ') || 'Store address not provided'
 
   if (nextTaster.phone) {
-    const payload = formatTastingSmsPayload({
-      tastingId: tasting.id,
-      userId: nextTaster.id,
-      phoneNumber: nextTaster.phone,
-      storeName: tasting.eventName,
-      storeAddress: [tasting.storeAddress, tasting.storeCity, tasting.storeState, tasting.storeZip].filter(Boolean).join(', ') || 'Store address not provided',
-      scheduledAt: tasting.scheduledAt,
-      endAt: tasting.endAt,
-    })
-
-    await sendTastingSmsFromTemplate({
-      templateKey: 'assignment',
-      payload,
-    }).catch(() => {})
-
     await queueScheduledTastingSmsJobs({
-      ...payload,
+      ...formatTastingSmsPayload({
+        tastingId: tasting.id,
+        userId: nextTaster.id,
+        phoneNumber: nextTaster.phone,
+        storeName: tasting.eventName,
+        storeAddress,
+        scheduledAt: tasting.scheduledAt,
+        endAt: tasting.endAt,
+      }),
       scheduledAt: tasting.scheduledAt,
       endAt: tasting.endAt,
     })
   }
 
-  await createUserNotification({
+  await notify('tasting.taster_assigned', {
+    tasterName: nextTaster.name,
+    tasterEmail: nextTaster.email ?? '',
+    tasterPhone: nextTaster.phone,
+    storeName: tasting.eventName,
+    storeAddress,
+    scheduledAt: tasting.scheduledAt,
+    endAt: tasting.endAt,
+    notes: null,
+    tastingId: tasting.id,
     userId: nextTaster.id,
-    kind: 'tasting_report_reminder',
-    title: 'Complete your tasting report',
-    body: `Submit your tasting report for ${tasting.eventName}.`,
-    href: `/taster/tastings/${tasting.id}`,
-    availableAt: new Date(tasting.scheduledAt.getTime() + 24 * 60 * 60 * 1000),
   })
-
-  if (nextTaster.email) {
-    await sendTasterAssignmentEmail({
-      to: nextTaster.email,
-      tasterName: nextTaster.name,
-      storeName: tasting.eventName,
-      scheduledAt: tasting.scheduledAt,
-      endAt: tasting.endAt,
-      notes: null,
-    })
-  }
 
   revalidatePath('/admin/tastings')
   revalidatePath('/staff/tastings')
@@ -749,11 +577,13 @@ export async function submitTastingReport(formData: FormData) {
     }).catch(() => {})
   }
 
-  if (assignedUser?.email && tastingInfo) {
-    await sendTastingReportReceivedEmail({
-      to: assignedUser.email,
-      tasterName: assignedUser.name,
+  if (tastingInfo) {
+    await notify('tasting.report_received', {
+      tasterName: assignedUser?.name ?? '',
+      tasterEmail: assignedUser?.email ?? '',
       storeName: tastingInfo.eventName,
+      tastingId,
+      userId: tasting.assignedUserId,
     })
   }
 
