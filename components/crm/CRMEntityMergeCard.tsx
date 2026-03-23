@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useRef, useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { ChevronDown, ChevronUp, GitMerge } from 'lucide-react'
 
 type MergeOption = {
@@ -41,6 +42,7 @@ export function CRMEntityMergeCard({
   const [expanded, setExpanded] = useState(false)
   const [sourceId, setSourceId] = useState('')
   const [targetId, setTargetId] = useState('')
+  const submitRef = useRef<HTMLButtonElement>(null)
 
   const sourceRecord = options.find(o => o.id === sourceId)
   const targetRecord = options.find(o => o.id === targetId)
@@ -166,14 +168,24 @@ export function CRMEntityMergeCard({
               </div>
             )}
 
-            <Button
-              type="submit"
-              variant="outline"
-              disabled={isPending || !sourceId || !targetId || sourceId === targetId}
-              className="text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300 disabled:opacity-40"
-            >
-              {isPending ? 'Merging…' : `Confirm ${title}`}
-            </Button>
+            <button ref={submitRef} type="submit" className="hidden" aria-hidden tabIndex={-1} />
+            <ConfirmDialog
+              trigger={
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isPending || !sourceId || !targetId || sourceId === targetId}
+                  className="text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300 disabled:opacity-40"
+                >
+                  {isPending ? 'Merging…' : `Confirm ${title}`}
+                </Button>
+              }
+              title={`${title}?`}
+              description="This action cannot be undone. All data from the source record will be moved to the target and the source will be permanently deleted."
+              confirmLabel="Merge"
+              variant="destructive"
+              onConfirm={() => submitRef.current?.click()}
+            />
           </form>
         </div>
       )}

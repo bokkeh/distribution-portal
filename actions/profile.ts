@@ -272,6 +272,7 @@ export async function updateSimpleProfile(
 
     revalidatePath('/admin/profile')
     revalidatePath('/staff/profile')
+    revalidatePath('/sales/profile')
     revalidatePath('/taster/profile')
     return {}
   } catch (err) {

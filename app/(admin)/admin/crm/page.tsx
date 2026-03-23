@@ -8,15 +8,22 @@ import { LocalAccountsTable } from '@/components/crm/LocalAccountsTable'
 import { LocalPeopleTable } from '@/components/crm/LocalPeopleTable'
 import { CRMEntityMergeCard } from '@/components/crm/CRMEntityMergeCard'
 import { CRMTabs } from '@/components/crm/CRMTabs'
+import { PipelineBoard } from '@/components/crm/PipelineBoard'
 import { sql, eq, and, inArray, max } from 'drizzle-orm'
 import Link from 'next/link'
-import { Plus } from 'lucide-react'
+import { Kanban, LayoutList, Plus } from 'lucide-react'
 import { requireFeature } from '@/lib/auth/session'
 import { mergeContacts, mergeCustomerAccounts } from '@/actions/crm'
 import { formatCurrency } from '@/lib/utils'
 
-export default async function CRMPage() {
+export default async function CRMPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string }>
+}) {
   const session = await requireFeature('crm', 'admin')
+  const { view } = await searchParams
+  const isPipeline = view === 'pipeline'
   async function submitAccountMerge(formData: FormData) {
     'use server'
     await mergeCustomerAccounts(formData)
@@ -158,6 +165,20 @@ export default async function CRMPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 border rounded-lg p-1 bg-slate-50">
+            <Link href="/admin/crm">
+              <Button variant={!isPipeline ? 'default' : 'ghost'} size="sm" className="gap-1.5">
+                <LayoutList className="w-4 h-4" />
+                List
+              </Button>
+            </Link>
+            <Link href="/admin/crm?view=pipeline">
+              <Button variant={isPipeline ? 'default' : 'ghost'} size="sm" className="gap-1.5">
+                <Kanban className="w-4 h-4" />
+                Pipeline
+              </Button>
+            </Link>
+          </div>
           <Link href="/admin/crm/sales-routes">
             <Button variant="outline"><Plus className="w-4 h-4 mr-2" />Sales Routes</Button>
           </Link>
@@ -167,6 +188,9 @@ export default async function CRMPage() {
         </div>
       </div>
 
+      {isPipeline ? (
+        <PipelineBoard accounts={accounts} basePath="/admin/crm" />
+      ) : (
       <Card>
         <CardContent className="grid gap-4 border-b p-4 lg:grid-cols-2">
           <CRMEntityMergeCard
@@ -263,6 +287,7 @@ export default async function CRMPage() {
           </CRMTabs>
         </CardContent>
       </Card>
+      )}
     </div>
   )
 }

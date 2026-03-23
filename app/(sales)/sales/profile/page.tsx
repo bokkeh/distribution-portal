@@ -1,10 +1,13 @@
+import { eq } from 'drizzle-orm'
+import { Calendar, DollarSign, User } from 'lucide-react'
 import { requireRole } from '@/lib/auth/session'
 import { db } from '@/db'
-import { salesMembers, commissionPlans, users } from '@/db/schema'
-import { eq } from 'drizzle-orm'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { commissionPlans, salesMembers, users } from '@/db/schema'
+import { getUserPreferences } from '@/lib/preferences/read'
 import { Badge } from '@/components/ui/badge'
-import { User, DollarSign, Calendar } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { SimpleProfileForm } from '@/components/profile/SimpleProfileForm'
+import { notFound } from 'next/navigation'
 
 export default async function SalesProfilePage() {
   const session = await requireRole('sales_rep', 'sales_manager', 'admin')
@@ -12,7 +15,17 @@ export default async function SalesProfilePage() {
   const [member] = await db
     .select({
       member: salesMembers,
-      user: { id: users.id, name: users.name, email: users.email, phone: users.phone },
+      user: {
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        phone: users.phone,
+        avatarUrl: users.avatarUrl,
+        address: users.address,
+        city: users.city,
+        state: users.state,
+        zip: users.zip,
+      },
     })
     .from(salesMembers)
     .innerJoin(users, eq(salesMembers.userId, users.id))
@@ -21,12 +34,16 @@ export default async function SalesProfilePage() {
 
   if (!member) {
     return (
-      <div className="text-center py-20 text-slate-500">
-        <User className="w-10 h-10 mx-auto mb-3 opacity-30" />
+      <div className="py-20 text-center text-slate-500">
+        <User className="mx-auto mb-3 h-10 w-10 opacity-30" />
         <p>No sales member profile found.</p>
       </div>
     )
   }
+
+  if (!member.user) notFound()
+
+  const preferences = await getUserPreferences(session.user.id)
 
   let planName: string | null = null
   if (member.member.commissionPlanId) {
@@ -39,89 +56,97 @@ export default async function SalesProfilePage() {
   }
 
   return (
-    <div className="max-w-lg space-y-6">
-      <h1 className="text-2xl font-bold text-slate-900">My Profile</h1>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900">My Profile</h1>
+        <p className="mt-1 text-muted-foreground">Update your contact details and notification settings for the sales portal.</p>
+      </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <User className="w-4 h-4 text-slate-400" />
-            Account Info
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex justify-between text-sm">
-            <span className="text-slate-500">Name</span>
-            <span className="font-medium">{member.user.name}</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-slate-500">Email</span>
-            <span className="font-medium">{member.user.email}</span>
-          </div>
-          {member.user.phone && (
-            <div className="flex justify-between text-sm">
-              <span className="text-slate-500">Phone</span>
-              <span className="font-medium">{member.user.phone}</span>
-            </div>
-          )}
-          <div className="flex justify-between text-sm">
-            <span className="text-slate-500">Status</span>
-            <Badge
-              variant="outline"
-              className={`text-xs ${member.member.status === 'active' ? 'text-green-700 border-green-300' : 'text-slate-500'}`}
-            >
-              {member.member.status}
-            </Badge>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-slate-500">Onboarding</span>
-            <Badge variant="outline" className="text-xs capitalize">
-              {member.member.onboardingStatus.replace('_', ' ')}
-            </Badge>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_360px]">
+        <SimpleProfileForm
+          user={{
+            id: member.user.id,
+            name: member.user.name,
+            email: member.user.email,
+            phone: member.user.phone,
+            avatarUrl: member.user.avatarUrl,
+            address: member.user.address,
+            city: member.user.city,
+            state: member.user.state,
+            zip: member.user.zip,
+          }}
+          preferences={preferences}
+        />
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <DollarSign className="w-4 h-4 text-slate-400" />
-            Commission Plan
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {planName ? (
-            <p className="text-sm font-medium text-slate-800">{planName}</p>
-          ) : (
-            <p className="text-sm text-slate-400">No commission plan assigned. Contact your manager.</p>
-          )}
-        </CardContent>
-      </Card>
-
-      {(member.member.hireDate || member.member.homeRegion) && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-slate-400" />
-              Details
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {member.member.hireDate && (
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-500">Hire Date</span>
-                <span className="font-medium">{member.member.hireDate}</span>
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <User className="h-4 w-4 text-slate-400" />
+                Sales Status
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex justify-between gap-4 text-sm">
+                <span className="text-slate-500">Role status</span>
+                <Badge
+                  variant="outline"
+                  className={`text-xs ${member.member.status === 'active' ? 'border-green-300 text-green-700' : 'text-slate-500'}`}
+                >
+                  {member.member.status}
+                </Badge>
               </div>
-            )}
-            {member.member.homeRegion && (
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-500">Home Region</span>
-                <span className="font-medium">{member.member.homeRegion}</span>
+              <div className="flex justify-between gap-4 text-sm">
+                <span className="text-slate-500">Onboarding</span>
+                <Badge variant="outline" className="text-xs capitalize">
+                  {member.member.onboardingStatus.replace('_', ' ')}
+                </Badge>
               </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+              {member.member.homeRegion ? (
+                <div className="flex justify-between gap-4 text-sm">
+                  <span className="text-slate-500">Home region</span>
+                  <span className="font-medium text-slate-900">{member.member.homeRegion}</span>
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <DollarSign className="h-4 w-4 text-slate-400" />
+                Commission Plan
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {planName ? (
+                <p className="text-sm font-medium text-slate-800">{planName}</p>
+              ) : (
+                <p className="text-sm text-slate-400">No commission plan assigned. Contact your manager.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {member.member.hireDate ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Calendar className="h-4 w-4 text-slate-400" />
+                  Employment Details
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {member.member.hireDate ? (
+                  <div className="flex justify-between gap-4 text-sm">
+                    <span className="text-slate-500">Hire date</span>
+                    <span className="font-medium text-slate-900">{member.member.hireDate}</span>
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
+          ) : null}
+        </div>
+      </div>
     </div>
   )
 }

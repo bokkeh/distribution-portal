@@ -1,11 +1,24 @@
+import Link from 'next/link'
+import { and, desc, eq, inArray, sum } from 'drizzle-orm'
+import { AlertCircle, ArrowRight, Building2, CalendarClock, DollarSign, Map as MapIcon, Target, Users, Wine } from 'lucide-react'
 import { requireRole } from '@/lib/auth/session'
 import { db } from '@/db'
-import { salesMembers, customerAccounts, orders, commissions, users } from '@/db/schema'
-import { eq, and, desc, sum, count } from 'drizzle-orm'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { commissions, customerAccounts, orders, salesMembers, salesRoutes, tastings, users } from '@/db/schema'
 import { Badge } from '@/components/ui/badge'
-import { Building2, DollarSign, TrendingUp, Clock, CheckCircle2, AlertCircle, Users } from 'lucide-react'
-import Link from 'next/link'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(value)
+}
+
+function daysBetween(from: Date, to: Date) {
+  return Math.ceil((to.getTime() - from.getTime()) / 86400000)
+}
 
 export default async function SalesDashboardPage() {
   const session = await requireRole('sales_rep', 'sales_manager', 'admin')
@@ -22,41 +35,50 @@ export default async function SalesDashboardPage() {
 
   if (!member && !isAdmin) {
     return (
-      <div className="text-center py-20 text-slate-500">
-        <AlertCircle className="w-10 h-10 mx-auto mb-3 text-amber-400" />
+      <div className="py-20 text-center text-slate-500">
+        <AlertCircle className="mx-auto mb-3 h-10 w-10 text-amber-400" />
         <p className="font-medium">No sales member profile found.</p>
-        <p className="text-sm mt-1">Ask an admin to set up your sales member account.</p>
+        <p className="mt-1 text-sm">Ask an admin to set up your sales member account.</p>
       </div>
     )
   }
 
   if (!member && isAdmin) {
     return (
-      <div className="text-center py-20 text-slate-500">
-        <AlertCircle className="w-10 h-10 mx-auto mb-3 text-blue-400" />
+      <div className="py-20 text-center text-slate-500">
+        <AlertCircle className="mx-auto mb-3 h-10 w-10 text-blue-400" />
         <p className="font-medium text-slate-700">No sales member profile linked to your account.</p>
-        <p className="text-sm mt-1">
+        <p className="mt-1 text-sm">
           To view a rep&apos;s dashboard, use <strong>View as User</strong> on their profile page, or create a sales member record for your user in <a href="/admin/sales" className="text-blue-600 underline">Admin → Sales</a>.
         </p>
       </div>
     )
   }
 
-  // Accounts assigned to this rep
   const accounts = await db
     .select()
     .from(customerAccounts)
     .where(eq(customerAccounts.assignedSalesRepId, member.id))
 
-  // Recent orders attributed to this rep
+  const routes = await db
+    .select({
+      id: salesRoutes.id,
+      name: salesRoutes.name,
+      status: salesRoutes.status,
+      frequency: salesRoutes.frequency,
+      createdAt: salesRoutes.createdAt,
+    })
+    .from(salesRoutes)
+    .where(eq(salesRoutes.assignedSalesMemberId, member.id))
+    .orderBy(desc(salesRoutes.createdAt))
+
   const recentOrders = await db
     .select()
     .from(orders)
     .where(eq(orders.attributedSalesMemberId, member.id))
     .orderBy(desc(orders.createdAt))
-    .limit(10)
+    .limit(12)
 
-  // Commission summary
   const [commissionSum] = await db
     .select({ total: sum(commissions.amount) })
     .from(commissions)
@@ -67,22 +89,60 @@ export default async function SalesDashboardPage() {
     .from(commissions)
     .where(and(eq(commissions.salesMemberId, member.id), eq(commissions.status, 'pending')))
 
+  const accountIds = accounts.map(account => account.id)
+  const upcomingTastings = accountIds.length > 0
+    ? await db
+        .select({
+          id: tastings.id,
+          eventName: tastings.eventName,
+          scheduledAt: tastings.scheduledAt,
+          customerId: tastings.customerId,
+          status: tastings.status,
+        })
+        .from(tastings)
+        .where(inArray(tastings.customerId, accountIds))
+        .orderBy(desc(tastings.scheduledAt))
+        .limit(10)
+    : []
+
   const now = new Date()
-  const overdueAccounts = accounts.filter(a => {
-    if (!a.nextRequiredVisitDate) return false
-    return new Date(a.nextRequiredVisitDate) < now
+  const overdueAccounts = accounts.filter(account => account.nextRequiredVisitDate && new Date(account.nextRequiredVisitDate) < now)
+  const dueSoonAccounts = accounts.filter(account => {
+    if (!account.nextRequiredVisitDate) return false
+    const nextDate = new Date(account.nextRequiredVisitDate)
+    return nextDate >= now && daysBetween(now, nextDate) <= 7
   })
+  const highPriorityAccounts = accounts.filter(account => account.accountPriority === 'high')
+  const mappedAccounts = accounts.filter(account => account.lat != null && account.lng != null)
+  const openBalanceAccounts = accounts.filter(account => Number(account.balance ?? '0') > 0)
+  const activeRoutes = routes.filter(route => route.status === 'active')
+  const nextTastings = upcomingTastings.filter(tasting => new Date(tasting.scheduledAt) >= now).slice(0, 4)
+  const totalRevenue = recentOrders.reduce((sumValue, order) => sumValue + Number(order.total ?? '0'), 0)
 
-  const totalRevenue = recentOrders.reduce((s, o) => s + parseFloat(o.total ?? '0'), 0)
-  const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
+  const lastOrderByAccount = new Map<string, Date>()
+  for (const order of recentOrders) {
+    if (!lastOrderByAccount.has(order.customerId)) {
+      lastOrderByAccount.set(order.customerId, new Date(order.createdAt))
+    }
+  }
 
-  // Manager: fetch team overview
+  const reorderTargets = accounts
+    .map(account => {
+      const lastOrderAt = lastOrderByAccount.get(account.id)
+      const daysSinceLastOrder = lastOrderAt ? daysBetween(lastOrderAt, now) : null
+      return { account, lastOrderAt, daysSinceLastOrder }
+    })
+    .filter(entry => entry.daysSinceLastOrder == null || entry.daysSinceLastOrder >= 30)
+    .sort((left, right) => (right.daysSinceLastOrder ?? 9999) - (left.daysSinceLastOrder ?? 9999))
+    .slice(0, 5)
+
   let teamStats: Array<{
     member: typeof salesMembers.$inferSelect
     user: { id: string; name: string; email: string }
     accountCount: number
     pendingCommissions: number
     recentRevenue: number
+    overdueVisits: number
   }> = []
 
   if (isManager) {
@@ -93,227 +153,380 @@ export default async function SalesDashboardPage() {
       .where(eq(salesMembers.managerId, member.id))
 
     teamStats = await Promise.all(
-      teamMembers.map(async ({ member: tm, user }) => {
-        const [acctCount] = await db
-          .select({ count: count() })
-          .from(customerAccounts)
-          .where(eq(customerAccounts.assignedSalesRepId, tm.id))
+      teamMembers.map(async ({ member: teamMember, user }) => {
+        const repAccounts = await db.select().from(customerAccounts).where(eq(customerAccounts.assignedSalesRepId, teamMember.id))
 
         const [pending] = await db
           .select({ total: sum(commissions.amount) })
           .from(commissions)
-          .where(and(eq(commissions.salesMemberId, tm.id), eq(commissions.status, 'pending')))
+          .where(and(eq(commissions.salesMemberId, teamMember.id), eq(commissions.status, 'pending')))
 
         const repOrders = await db
           .select({ total: orders.total })
           .from(orders)
-          .where(eq(orders.attributedSalesMemberId, tm.id))
+          .where(eq(orders.attributedSalesMemberId, teamMember.id))
           .orderBy(desc(orders.createdAt))
           .limit(20)
 
-        const recentRevenue = repOrders.reduce((s, o) => s + parseFloat(o.total ?? '0'), 0)
-
         return {
-          member: tm,
+          member: teamMember,
           user,
-          accountCount: acctCount?.count ?? 0,
-          pendingCommissions: parseFloat(pending?.total ?? '0'),
-          recentRevenue,
+          accountCount: repAccounts.length,
+          pendingCommissions: Number(pending?.total ?? '0'),
+          recentRevenue: repOrders.reduce((sumValue, order) => sumValue + Number(order.total ?? '0'), 0),
+          overdueVisits: repAccounts.filter(account => account.nextRequiredVisitDate && new Date(account.nextRequiredVisitDate) < now).length,
         }
-      })
+      }),
     )
   }
 
+  const actionQueue = [
+    {
+      label: 'Overdue account visits',
+      count: overdueAccounts.length,
+      href: '/sales/accounts',
+      description: 'Accounts already past their next required visit date.',
+      tone: overdueAccounts.length > 0 ? 'warning' : 'success',
+    },
+    {
+      label: 'Due this week',
+      count: dueSoonAccounts.length,
+      href: '/sales/accounts',
+      description: 'Accounts that need attention in the next seven days.',
+      tone: dueSoonAccounts.length > 0 ? 'info' : 'success',
+    },
+    {
+      label: 'Reorder follow-ups',
+      count: reorderTargets.length,
+      href: '/sales/accounts',
+      description: 'Assigned accounts that have gone 30+ days without an order.',
+      tone: reorderTargets.length > 0 ? 'warning' : 'success',
+    },
+    {
+      label: 'Upcoming tastings',
+      count: nextTastings.length,
+      href: '/sales/tastings',
+      description: 'Tastings associated with your book of business.',
+      tone: nextTastings.length > 0 ? 'info' : 'secondary',
+    },
+  ]
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Sales Dashboard</h1>
-        <p className="text-slate-500 mt-1">Welcome back, {session.user.name}</p>
-      </div>
-
-      {/* KPI cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="pt-5">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-blue-50">
-                <Building2 className="w-5 h-5 text-blue-600" />
+      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-blue-50">
+        <div className="grid gap-6 px-6 py-6 lg:grid-cols-[1.15fr_0.85fr] lg:px-8">
+          <div className="space-y-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="info">Sales Command Center</Badge>
+              {isManager ? <Badge variant="outline" className="border-slate-300 text-slate-700">Manager view</Badge> : null}
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight text-slate-900">Sales Dashboard</h1>
+              <p className="mt-2 max-w-2xl text-sm text-slate-600">
+                Prioritize visits, monitor revenue movement, and keep your routes, tastings, and commissions in one operating view.
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-4">
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Accounts</p>
+                <p className="mt-2 text-3xl font-bold text-slate-900">{accounts.length}</p>
+                <p className="mt-1 text-xs text-slate-500">{highPriorityAccounts.length} high priority</p>
               </div>
-              <div>
-                <p className="text-xs text-slate-500">My Accounts</p>
-                <p className="text-2xl font-bold text-slate-900">{accounts.length}</p>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Recent revenue</p>
+                <p className="mt-2 text-3xl font-bold text-slate-900">{formatCurrency(totalRevenue)}</p>
+                <p className="mt-1 text-xs text-slate-500">Across your latest {recentOrders.length} orders</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Pending commissions</p>
+                <p className="mt-2 text-3xl font-bold text-amber-600">{formatCurrency(Number(pendingCommissionSum?.total ?? '0'))}</p>
+                <p className="mt-1 text-xs text-slate-500">Approved: {formatCurrency(Number(commissionSum?.total ?? '0'))}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Active routes</p>
+                <p className="mt-2 text-3xl font-bold text-slate-900">{activeRoutes.length}</p>
+                <p className="mt-1 text-xs text-slate-500">{mappedAccounts.length}/{accounts.length} accounts mapped</p>
               </div>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-5">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-green-50">
-                <TrendingUp className="w-5 h-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-xs text-slate-500">Recent Revenue</p>
-                <p className="text-2xl font-bold text-slate-900">{fmt(totalRevenue)}</p>
-              </div>
+            <div className="flex flex-wrap gap-2">
+              <Link href="/sales/accounts">
+                <Button>Open My Accounts</Button>
+              </Link>
+              <Link href="/sales/routes">
+                <Button variant="outline">Manage Routes</Button>
+              </Link>
+              <Link href="/sales/tastings">
+                <Button variant="outline">Coordinate Tastings</Button>
+              </Link>
             </div>
-          </CardContent>
-        </Card>
+          </div>
 
-        <Card>
-          <CardContent className="pt-5">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-emerald-50">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-              </div>
-              <div>
-                <p className="text-xs text-slate-500">Approved Commissions</p>
-                <p className="text-2xl font-bold text-slate-900">{fmt(parseFloat(commissionSum?.total ?? '0'))}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-5">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-amber-50">
-                <Clock className="w-5 h-5 text-amber-600" />
-              </div>
-              <div>
-                <p className="text-xs text-slate-500">Pending Commissions</p>
-                <p className="text-2xl font-bold text-slate-900">{fmt(parseFloat(pendingCommissionSum?.total ?? '0'))}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Overdue visits */}
-        {overdueAccounts.length > 0 && (
-          <Card className="border-amber-200 bg-amber-50/30">
+          <Card className="border-slate-200 bg-white/90 shadow-sm">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-amber-500" />
-                Overdue Visits ({overdueAccounts.length})
+              <CardTitle className="text-base">Today&apos;s Action Queue</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {actionQueue.map(item => (
+                <Link key={item.label} href={item.href} className="block rounded-2xl border border-slate-200 px-4 py-3 transition-colors hover:bg-slate-50">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-slate-900">{item.label}</p>
+                      <p className="mt-1 text-xs text-slate-500">{item.description}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        variant={item.tone === 'warning' ? 'warning' : item.tone === 'success' ? 'success' : item.tone === 'info' ? 'info' : 'secondary'}
+                        className="min-w-10 justify-center"
+                      >
+                        {item.count}
+                      </Badge>
+                      <ArrowRight className="h-4 w-4 text-slate-400" />
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
+      <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+        <div className="space-y-6">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Target className="h-4 w-4 text-slate-400" />
+                Portfolio Health
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
-              {overdueAccounts.slice(0, 5).map(a => (
-                <div key={a.id} className="flex items-center justify-between text-sm">
-                  <Link href={`/sales/accounts/${a.id}`} className="font-medium text-slate-800 hover:text-blue-600">
-                    {a.companyName}
-                  </Link>
-                  <Badge variant="outline" className="text-amber-700 border-amber-300 bg-amber-50 text-xs">
-                    Overdue
-                  </Badge>
-                </div>
-              ))}
-              {overdueAccounts.length > 5 && (
-                <Link href="/sales/accounts" className="text-xs text-blue-600 hover:underline">
-                  +{overdueAccounts.length - 5} more →
-                </Link>
+            <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Visit pressure</p>
+                <p className="mt-2 text-2xl font-bold text-amber-600">{overdueAccounts.length}</p>
+                <p className="mt-1 text-xs text-slate-500">Accounts already overdue</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Due this week</p>
+                <p className="mt-2 text-2xl font-bold text-slate-900">{dueSoonAccounts.length}</p>
+                <p className="mt-1 text-xs text-slate-500">Plan route coverage now</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Open balances</p>
+                <p className="mt-2 text-2xl font-bold text-slate-900">{openBalanceAccounts.length}</p>
+                <p className="mt-1 text-xs text-slate-500">Accounts carrying receivables</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Mapped coverage</p>
+                <p className="mt-2 text-2xl font-bold text-slate-900">{accounts.length > 0 ? `${Math.round((mappedAccounts.length / accounts.length) * 100)}%` : '0%'}</p>
+                <p className="mt-1 text-xs text-slate-500">Accounts ready for route planning</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Building2 className="h-4 w-4 text-slate-400" />
+                Accounts Requiring Attention
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {overdueAccounts.length === 0 && dueSoonAccounts.length === 0 && reorderTargets.length === 0 ? (
+                <p className="text-sm text-slate-500">Your portfolio is current. Use routes and tastings to create the next round of activity.</p>
+              ) : (
+                <>
+                  {overdueAccounts.slice(0, 4).map(account => (
+                    <Link key={account.id} href={`/sales/accounts/${account.id}`} className="flex items-start justify-between gap-4 rounded-2xl border border-amber-200 bg-amber-50/60 px-4 py-3 transition-colors hover:bg-amber-50">
+                      <div>
+                        <p className="font-medium text-slate-900">{account.companyName}</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Visit overdue since {new Date(account.nextRequiredVisitDate!).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <Badge variant="warning">Overdue</Badge>
+                    </Link>
+                  ))}
+                  {reorderTargets.slice(0, 3).map(({ account, daysSinceLastOrder }) => (
+                    <Link key={account.id} href={`/sales/accounts/${account.id}`} className="flex items-start justify-between gap-4 rounded-2xl border border-slate-200 px-4 py-3 transition-colors hover:bg-slate-50">
+                      <div>
+                        <p className="font-medium text-slate-900">{account.companyName}</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {daysSinceLastOrder == null ? 'No attributed orders yet' : `${daysSinceLastOrder} days since the last attributed order`}
+                        </p>
+                      </div>
+                      <Badge variant="outline">Reorder</Badge>
+                    </Link>
+                  ))}
+                </>
               )}
             </CardContent>
           </Card>
-        )}
 
-        {/* Recent orders */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <DollarSign className="w-4 h-4 text-slate-400" />
-              Recent Orders
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {recentOrders.length === 0 ? (
-              <p className="text-sm text-slate-400 py-2">No orders attributed to you yet.</p>
-            ) : (
-              recentOrders.slice(0, 6).map(o => {
-                const account = accounts.find(a => a.id === o.customerId)
-                return (
-                  <div key={o.id} className="flex items-center justify-between text-sm">
-                    <div>
-                      <p className="font-medium text-slate-800">{account?.companyName ?? 'Unknown Account'}</p>
-                      <p className="text-xs text-slate-400">{new Date(o.createdAt).toLocaleDateString()}</p>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <DollarSign className="h-4 w-4 text-slate-400" />
+                Recent Orders
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {recentOrders.length === 0 ? (
+                <p className="text-sm text-slate-500">No orders attributed to you yet.</p>
+              ) : (
+                recentOrders.slice(0, 8).map(order => {
+                  const account = accounts.find(candidate => candidate.id === order.customerId)
+                  return (
+                    <div key={order.id} className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 px-4 py-3">
+                      <div>
+                        <p className="font-medium text-slate-900">{account?.companyName ?? 'Unknown Account'}</p>
+                        <p className="mt-1 text-xs text-slate-500">{new Date(order.createdAt).toLocaleDateString()}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-semibold text-slate-900">{formatCurrency(Number(order.total ?? '0'))}</p>
+                        <Badge variant={order.status === 'fulfilled' ? 'success' : 'outline'} className="mt-1 capitalize">
+                          {order.status}
+                        </Badge>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-semibold text-slate-900">{fmt(parseFloat(o.total ?? '0'))}</p>
-                      <Badge
-                        variant="outline"
-                        className={`text-xs ${o.status === 'fulfilled' ? 'text-green-700 border-green-300' : 'text-blue-700 border-blue-300'}`}
-                      >
-                        {o.status}
-                      </Badge>
+                  )
+                })
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="space-y-6">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <MapIcon className="h-4 w-4 text-slate-400" />
+                Route Coverage
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {activeRoutes.length === 0 ? (
+                <p className="text-sm text-slate-500">No active routes yet. Build a route to structure visit days and stop sequencing.</p>
+              ) : (
+                activeRoutes.slice(0, 5).map(route => (
+                  <Link key={route.id} href={`/sales/routes/${route.id}`} className="block rounded-2xl border border-slate-200 px-4 py-3 transition-colors hover:bg-slate-50">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-slate-900">{route.name}</p>
+                        <p className="mt-1 text-xs text-slate-500">Created {new Date(route.createdAt).toLocaleDateString()}</p>
+                      </div>
+                      <Badge variant="outline" className="capitalize">{route.frequency ?? 'custom'}</Badge>
                     </div>
-                  </div>
-                )
-              })
-            )}
-          </CardContent>
-        </Card>
+                  </Link>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Wine className="h-4 w-4 text-slate-400" />
+                Upcoming Tastings
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {nextTastings.length === 0 ? (
+                <p className="text-sm text-slate-500">No tastings are on the calendar for your accounts right now.</p>
+              ) : (
+                nextTastings.map(tasting => {
+                  const account = accounts.find(candidate => candidate.id === tasting.customerId)
+                  return (
+                    <Link key={tasting.id} href="/sales/tastings" className="block rounded-2xl border border-slate-200 px-4 py-3 transition-colors hover:bg-slate-50">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-medium text-slate-900">{account?.companyName ?? tasting.eventName}</p>
+                          <p className="mt-1 text-xs text-slate-500">{new Date(tasting.scheduledAt).toLocaleString()}</p>
+                        </div>
+                        <Badge variant={tasting.status === 'confirmed' ? 'success' : 'info'} className="capitalize">
+                          {tasting.status}
+                        </Badge>
+                      </div>
+                    </Link>
+                  )
+                })
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <CalendarClock className="h-4 w-4 text-slate-400" />
+                Quick Links
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-3">
+              <Link href="/sales/accounts" className="rounded-2xl border border-slate-200 px-4 py-3 transition-colors hover:bg-slate-50">
+                <p className="font-medium text-slate-900">Account Book</p>
+                <p className="mt-1 text-xs text-slate-500">Call notes, balances, and visit scheduling for your portfolio.</p>
+              </Link>
+              <Link href="/sales/forecast" className="rounded-2xl border border-slate-200 px-4 py-3 transition-colors hover:bg-slate-50">
+                <p className="font-medium text-slate-900">Forecast</p>
+                <p className="mt-1 text-xs text-slate-500">Revenue trendlines and pacing for the pipeline.</p>
+              </Link>
+              <Link href="/sales/commissions" className="rounded-2xl border border-slate-200 px-4 py-3 transition-colors hover:bg-slate-50">
+                <p className="font-medium text-slate-900">Commission Tracking</p>
+                <p className="mt-1 text-xs text-slate-500">See what is approved, pending, and ready to reconcile.</p>
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
-      {/* Manager: Team Overview */}
-      {isManager && teamStats.length > 0 && (
-        <div>
-          <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-            <Users className="w-5 h-5 text-slate-400" />
-            My Team ({teamStats.length})
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {teamStats.map(({ member: tm, user, accountCount, pendingCommissions, recentRevenue }) => (
-              <Card key={tm.id}>
-                <CardContent className="pt-5">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                      <span className="text-sm font-bold text-blue-700">
-                        {user.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
-                      </span>
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-semibold text-slate-900 truncate">{user.name}</p>
+      {isManager && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Users className="h-4 w-4 text-slate-400" />
+              Team Overview
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {teamStats.length === 0 ? (
+              <p className="text-sm text-slate-500">No reps assigned to you yet. Admins can set manager assignments on each sales member profile.</p>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {teamStats.map(({ member: teamMember, user, accountCount, pendingCommissions, recentRevenue, overdueVisits }) => (
+                  <div key={teamMember.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-slate-900">{user.name}</p>
+                        <p className="mt-1 text-xs text-slate-500">{user.email}</p>
+                      </div>
                       <Badge
-                        variant="outline"
-                        className={`text-xs mt-0.5 ${
-                          tm.status === 'active' ? 'text-green-700 border-green-300' :
-                          tm.status === 'inactive' ? 'text-amber-700 border-amber-300' :
-                          'text-red-700 border-red-300'
-                        }`}
+                        variant={teamMember.status === 'active' ? 'success' : teamMember.status === 'inactive' ? 'warning' : 'destructive'}
+                        className="capitalize"
                       >
-                        {tm.status}
+                        {teamMember.status}
                       </Badge>
                     </div>
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                      <div className="rounded-xl bg-slate-50 p-3">
+                        <p className="text-xs uppercase tracking-wide text-slate-500">Accounts</p>
+                        <p className="mt-1 text-xl font-bold text-slate-900">{accountCount}</p>
+                      </div>
+                      <div className="rounded-xl bg-slate-50 p-3">
+                        <p className="text-xs uppercase tracking-wide text-slate-500">Revenue</p>
+                        <p className="mt-1 text-xl font-bold text-slate-900">{formatCurrency(recentRevenue)}</p>
+                      </div>
+                      <div className="rounded-xl bg-slate-50 p-3">
+                        <p className="text-xs uppercase tracking-wide text-slate-500">Pending</p>
+                        <p className="mt-1 text-xl font-bold text-amber-600">{formatCurrency(pendingCommissions)}</p>
+                      </div>
+                      <div className="rounded-xl bg-slate-50 p-3">
+                        <p className="text-xs uppercase tracking-wide text-slate-500">Overdue visits</p>
+                        <p className="mt-1 text-xl font-bold text-slate-900">{overdueVisits}</p>
+                      </div>
+                    </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-3 text-center">
-                    <div>
-                      <p className="text-xs text-slate-400">Accounts</p>
-                      <p className="font-bold text-slate-900 text-lg">{accountCount}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-400">Revenue</p>
-                      <p className="font-bold text-slate-900 text-lg">{fmt(recentRevenue)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-400">Pending</p>
-                      <p className="font-bold text-amber-600 text-lg">{fmt(pendingCommissions)}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {isManager && teamStats.length === 0 && (
-        <Card className="border-dashed">
-          <CardContent className="py-10 text-center text-slate-400">
-            <Users className="w-8 h-8 mx-auto mb-2 opacity-30" />
-            <p className="text-sm">No reps assigned to you yet. Admins can set manager assignments on each sales member's profile.</p>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Settings2, X } from 'lucide-react'
+import { Search, Settings2, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { PhoneSmsButton } from './PhoneSmsButton'
@@ -45,6 +45,7 @@ export function LocalPeopleTable({
 }) {
   const [showColumnPicker, setShowColumnPicker] = useState(false)
   const [selectedColumns, setSelectedColumns] = useState<ColumnKey[]>(DEFAULT_COLUMNS)
+  const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => {
     try {
@@ -76,6 +77,15 @@ export function LocalPeopleTable({
 
   const vis = new Set(selectedColumns)
 
+  const normalizedQuery = searchQuery.trim().toLowerCase()
+  const filteredPeople = normalizedQuery
+    ? people.filter(p =>
+        [p.name, p.title, p.companyName, p.email, p.phone].some(v =>
+          String(v ?? '').toLowerCase().includes(normalizedQuery)
+        )
+      )
+    : people
+
   if (people.length === 0) {
     return (
       <div className="px-6 py-12 text-center text-muted-foreground">
@@ -86,16 +96,27 @@ export function LocalPeopleTable({
 
   return (
     <div className="overflow-x-auto">
-      <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
         <div>
           <p className="text-sm font-medium text-slate-900">People</p>
-          <p className="text-xs text-slate-500">{people.length} contact{people.length !== 1 ? 's' : ''}</p>
+          <p className="text-xs text-slate-500">{filteredPeople.length} of {people.length} contact{people.length !== 1 ? 's' : ''}</p>
         </div>
-        <div className="relative">
-          <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => setShowColumnPicker(prev => !prev)}>
-            <Settings2 className="h-4 w-4" />
-            Customize Columns
-          </Button>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search people…"
+              className="h-9 pl-8 pr-3 rounded-md border border-input bg-white text-sm min-w-[180px]"
+            />
+          </div>
+          <div className="relative">
+            <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => setShowColumnPicker(prev => !prev)}>
+              <Settings2 className="h-4 w-4" />
+              Customize Columns
+            </Button>
           {showColumnPicker && (
             <div className="absolute right-0 z-10 mt-2 w-60 rounded-xl border border-slate-200 bg-white shadow-lg">
               <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
@@ -119,6 +140,7 @@ export function LocalPeopleTable({
               </div>
             </div>
           )}
+          </div>
         </div>
       </div>
 
@@ -137,7 +159,10 @@ export function LocalPeopleTable({
           </tr>
         </thead>
         <tbody className="divide-y">
-          {people.map((person) => (
+          {filteredPeople.length === 0 && (
+            <tr><td colSpan={99} className="px-6 py-10 text-center text-sm text-muted-foreground">No people match your search.</td></tr>
+          )}
+          {filteredPeople.map((person) => (
             <tr key={person.id} className="transition-colors hover:bg-slate-50">
               {vis.has('person') && (
                 <td className="px-4 py-3">
