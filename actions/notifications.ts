@@ -81,8 +81,14 @@ export async function initiateCall(to: string, recipientName: string) {
   const from = process.env.TELNYX_FROM_NUMBER
   const connectionId = process.env.TELNYX_CALL_CONTROL_ID
 
-  if (!apiKey || !from || !connectionId) {
-    return { error: 'Voice calling is not configured (missing TELNYX_CALL_CONTROL_ID)' }
+  const missingVars = [
+    !apiKey ? 'TELNYX_API_KEY' : null,
+    !from ? 'TELNYX_FROM_NUMBER' : null,
+    !connectionId ? 'TELNYX_CALL_CONTROL_ID' : null,
+  ].filter(Boolean)
+
+  if (missingVars.length > 0) {
+    return { error: `Voice calling is not configured (missing ${missingVars.join(', ')})` }
   }
 
   const normalized = to.replace(/[\s\-().]/g, '').replace(/^(\d{10})$/, '+1$1').replace(/^1(\d{10})$/, '+1$1')
