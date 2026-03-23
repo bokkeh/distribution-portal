@@ -465,7 +465,7 @@ export default async function DriverDeliveriesPage() {
                           <p className="text-sm font-semibold text-slate-900">Stop workflow</p>
                         </div>
                         <p className="mt-1 text-xs text-slate-500">
-                          Open directions, upload proof, and mark each stop delivered or failed from the list below.
+                          Drag stops into your preferred order, then open directions, upload proof, and mark each stop delivered or failed from the list below.
                         </p>
                       </div>
                       <SortableStopList

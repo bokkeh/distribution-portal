@@ -15,7 +15,7 @@ import { getDeliveryStopAdditionalPhotos } from '@/lib/deliveries/photos'
 import { signedPhotoUrl } from '@/lib/gcs/photo-url'
 import { formatDate } from '@/lib/utils'
 import Image from 'next/image'
-import { CheckCircle, Check, Clock, GripVertical, Home, ImageIcon, MapPin, Pencil, X, XCircle } from 'lucide-react'
+import { CheckCircle, Check, Clock, GripVertical, Home, MapPin, Pencil, X, XCircle } from 'lucide-react'
 import GetDirectionsButton from '@/components/shared/GetDirectionsButton'
 
 type Stop = {
@@ -84,6 +84,7 @@ function SortableStopCard({
   const [contactName, setContactName] = useState(stop.contactName ?? '')
   const [contactPhone, setContactPhone] = useState(stop.contactPhone ?? '')
   const [notes, setNotes] = useState(stop.notes ?? '')
+  const canReorder = mode === 'admin' || mode === 'driver'
 
   const style = { transform: CSS.Transform.toString(transform), transition }
 
@@ -116,13 +117,14 @@ function SortableStopCard({
       className={`rounded-lg border bg-white p-3 sm:p-4 ${isDragging ? 'opacity-40 shadow-lg' : ''}`}
     >
       <div className="flex items-start gap-3">
-        {mode === 'admin' && (
+        {canReorder && (
           <button
             {...attributes}
             {...listeners}
-            className="mt-1 text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing"
-            aria-label="Drag to reorder stop"
+            className="mt-1 text-slate-300 transition-colors hover:text-slate-500 cursor-grab active:cursor-grabbing"
+            aria-label={mode === 'driver' ? 'Drag to reorder stop in your route' : 'Drag to reorder stop'}
             type="button"
+            title={mode === 'driver' ? 'Drag to set your preferred stop order' : 'Drag to reorder stop'}
           >
             <GripVertical className="w-4 h-4" />
           </button>
@@ -418,6 +420,11 @@ export default function SortableStopList({
     <div className="space-y-2 sm:space-y-3">
       {mode === 'admin' && (
         <HombaseRow deliveryId={deliveryId} currentAddress={originAddress} onSaved={setOriginAddress} />
+      )}
+      {mode === 'driver' && stops.length > 1 && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+          Drag stops by the grip handle to set the route order you want.
+        </div>
       )}
       {stops.length > 0 && (
         <div className="pt-1">

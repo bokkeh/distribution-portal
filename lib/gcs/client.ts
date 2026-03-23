@@ -30,7 +30,7 @@ function getStorage() {
   return _storage
 }
 
-const ALLOWED_FOLDERS = new Set(['uploads', 'avatars', 'documents', 'tastings', 'products'])
+const ALLOWED_FOLDERS = new Set(['uploads', 'avatars', 'documents', 'tastings', 'products', 'sales-routes'])
 
 function validateFolder(folder: string): string {
   if (!ALLOWED_FOLDERS.has(folder)) throw new Error(`Invalid upload folder: ${folder}`)
