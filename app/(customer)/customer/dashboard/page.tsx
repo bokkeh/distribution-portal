@@ -3,7 +3,7 @@ import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { ArrowRight, BellRing, CreditCard, FileText, MessageSquare, Package, ShoppingCart, Truck, UserCircle } from 'lucide-react'
 import { requireRole } from '@/lib/auth/session'
 import { db } from '@/db'
-import { customerAccounts, invoices, orders, smsMessages, users } from '@/db/schema'
+import { customerAccounts, invoices, orders, smsMessages } from '@/db/schema'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -27,30 +27,8 @@ export default async function CustomerDashboard() {
   }
 
   const supportPhone = account.pocPhone || account.businessPhone || account.phone || ''
-  const adminUsers = await db
-    .select({
-      id: users.id,
-      name: users.name,
-      email: users.email,
-      phone: users.phone,
-      roles: users.roles,
-      active: users.active,
-    })
-    .from(users)
-
-  const adminContacts = adminUsers.filter(user => user.active && user.roles?.includes('admin'))
-  const supportEmails = Array.from(new Set([
-    ...adminContacts.map(user => user.email).filter(Boolean),
-    process.env.SUPER_ADMIN_EMAIL || '',
-    process.env.ORDER_NOTIFY_KRISTEN_EMAIL || '',
-  ].filter(Boolean)))
-  const supportPhones = Array.from(new Set([
-    ...adminContacts.map(user => user.phone).filter(Boolean),
-    process.env.ADMIN_NOTIFICATION_PHONE || '',
-    process.env.ORDER_NOTIFY_KRISTEN_PHONE || '',
-    process.env.TELNYX_FROM_NUMBER || '',
-  ].filter(Boolean)))
-  const emailHref = supportEmails.length > 0 ? `mailto:${supportEmails.join(',')}` : null
+  const supportSmsNumber = process.env.TELNYX_FROM_NUMBER || null
+  const emailHref = 'mailto:sales@wishervodka.com?cc=alex@ahawc.com,kristen@ahawc.com'
 
   const [
     totalOrders,
@@ -187,24 +165,19 @@ export default async function CustomerDashboard() {
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-xs uppercase tracking-wide text-slate-500">Support</p>
                 <p className="mt-2 text-sm text-slate-600">Reach the team directly if you need delivery help, product help, or invoice support.</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {supportPhones.slice(0, 2).map(phone => (
-                    <a key={phone} href={`sms:${phone}`}>
-                      <Button variant="outline" size="sm">Text {phone}</Button>
-                    </a>
-                  ))}
-                  {emailHref ? (
-                    <a href={emailHref}>
-                      <Button variant="ghost" size="sm">Email Support</Button>
-                    </a>
+                <div className="mt-3 space-y-2 text-sm">
+                  {supportSmsNumber ? (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Text support</p>
+                      <p className="mt-1 font-medium text-slate-900">{supportSmsNumber}</p>
+                    </div>
                   ) : null}
-                </div>
-                {(supportEmails.length > 0 || supportPhones.length > 0) ? (
-                  <div className="mt-3 space-y-1 text-xs text-slate-500">
-                    {supportEmails.length > 0 ? <p>Emails: {supportEmails.join(', ')}</p> : null}
-                    {supportPhones.length > 0 ? <p>SMS: {supportPhones.join(', ')}</p> : null}
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Email support</p>
+                    <p className="mt-1 font-medium text-slate-900">sales@wishervodka.com</p>
+                    <p className="mt-1 text-xs text-slate-500">CC alex@ahawc.com, kristen@ahawc.com</p>
                   </div>
-                ) : null}
+                </div>
               </div>
             </CardContent>
           </Card>
