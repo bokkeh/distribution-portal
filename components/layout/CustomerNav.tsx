@@ -59,7 +59,7 @@ export default function CustomerNav({
   const canUseCart = hasFeature('cart', roles, featureFlags)
 
   return (
-    <header className="border-b bg-white/95 backdrop-blur">
+    <header className="sticky top-0 z-30 border-b bg-white/95 backdrop-blur">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex min-h-16 items-center justify-between gap-4 py-3">
           <Link href="/customer/dashboard" className="flex items-center gap-3">
