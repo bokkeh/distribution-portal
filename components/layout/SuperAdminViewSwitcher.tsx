@@ -70,12 +70,12 @@ function AccountViewAs({ compact }: { compact: boolean }) {
   }
 
   const inputClass = compact
-    ? 'w-full rounded-xl border border-violet-500/40 bg-violet-900/50 text-slate-100 placeholder:text-slate-500 px-3 py-2 pr-8 text-xs outline-none focus:border-violet-400 transition'
+    ? 'w-full rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder:text-slate-400 px-3 py-2 pr-8 text-xs outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-100 transition'
     : 'w-full rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder:text-slate-400 px-3 py-2 pr-8 text-xs outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-100 transition'
 
   return (
-    <div ref={containerRef} className="relative mt-3 pt-3 border-t border-dashed" style={{ borderColor: compact ? 'rgba(139,92,246,0.3)' : '#e2e8f0' }}>
-      <div className={`flex items-center gap-1.5 mb-2 text-[10px] font-semibold uppercase tracking-wide ${compact ? 'text-violet-400' : 'text-violet-600'}`}>
+    <div ref={containerRef} className="relative mt-3 border-t border-dashed border-slate-200 pt-3">
+      <div className={`mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide ${compact ? 'text-violet-600' : 'text-violet-600'}`}>
         <Building2 className="w-3 h-3" />
         View as Account
       </div>
@@ -89,14 +89,14 @@ function AccountViewAs({ compact }: { compact: boolean }) {
         />
         <div className="absolute right-2.5 top-1/2 -translate-y-1/2">
           {searching || isPending
-            ? <Loader2 className={`w-3 h-3 animate-spin ${compact ? 'text-violet-400' : 'text-slate-400'}`} />
-            : <Search className={`w-3 h-3 ${compact ? 'text-violet-400' : 'text-slate-400'}`} />
+            ? <Loader2 className={`w-3 h-3 animate-spin ${compact ? 'text-slate-400' : 'text-slate-400'}`} />
+            : <Search className={`w-3 h-3 ${compact ? 'text-slate-400' : 'text-slate-400'}`} />
           }
         </div>
       </div>
 
       {open && results.length > 0 && (
-        <div className={`absolute left-0 right-0 mt-1 rounded-xl border shadow-lg z-50 overflow-hidden ${compact ? 'bg-slate-900 border-violet-500/30' : 'bg-white border-slate-200'}`}>
+        <div className={`absolute left-0 right-0 z-50 mt-1 overflow-hidden rounded-xl border shadow-lg ${compact ? 'border-slate-200 bg-white' : 'border-slate-200 bg-white'}`}>
           {results.map(account => (
             <button
               key={account.id}
@@ -104,19 +104,19 @@ function AccountViewAs({ compact }: { compact: boolean }) {
               disabled={isPending}
               className={`flex items-center justify-between w-full px-3 py-2 text-xs text-left transition-colors ${
                 compact
-                  ? 'text-slate-200 hover:bg-violet-900/60 border-b border-violet-500/20 last:border-0'
+                  ? 'border-b border-slate-100 text-slate-700 hover:bg-violet-50 last:border-0'
                   : 'text-slate-700 hover:bg-violet-50 border-b border-slate-100 last:border-0'
               }`}
             >
               <span className="truncate font-medium">{account.companyName}</span>
-              <Eye className={`w-3 h-3 shrink-0 ml-2 ${account.userId ? (compact ? 'text-violet-400' : 'text-violet-500') : 'text-slate-300'}`} />
+              <Eye className={`w-3 h-3 shrink-0 ml-2 ${account.userId ? (compact ? 'text-violet-500' : 'text-violet-500') : 'text-slate-300'}`} />
             </button>
           ))}
         </div>
       )}
 
       {open && results.length === 0 && query.trim() && !searching && (
-        <p className={`text-[11px] mt-1 ${compact ? 'text-slate-500' : 'text-slate-400'}`}>No accounts found</p>
+        <p className={`text-[11px] mt-1 ${compact ? 'text-slate-400' : 'text-slate-400'}`}>No accounts found</p>
       )}
 
       {error && (
@@ -136,16 +136,16 @@ export function SuperAdminViewSwitcher({ compact = false }: { compact?: boolean 
 
   if (compact) {
     return (
-      <div className="rounded-2xl border border-violet-500/30 bg-violet-950/40 p-3.5 shadow-[0_12px_30px_rgba(2,6,23,0.35)]">
+      <div className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-xl">
         <div className="mb-3 flex items-center gap-2">
-          <ShieldCheck className="h-3.5 w-3.5 text-violet-400 shrink-0" />
-          <span className="text-xs font-semibold uppercase tracking-wide text-violet-300">Switch View</span>
+          <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-violet-600" />
+          <span className="text-xs font-semibold uppercase tracking-wide text-violet-600">Switch View</span>
         </div>
-        <p className="text-xs text-slate-400 mb-3 leading-snug">Current: <span className="text-slate-200 font-medium">{current?.label}</span></p>
+        <p className="mb-3 text-xs leading-snug text-slate-500">Current: <span className="font-medium text-slate-700">{current?.label}</span></p>
         <div className="relative">
           <select
             aria-label="Switch portal view"
-            className="w-full appearance-none rounded-xl border border-violet-500/40 bg-violet-900/50 text-slate-100 px-3 py-2.5 pr-9 text-sm font-medium outline-none transition-colors hover:border-violet-400/60 focus:border-violet-400"
+            className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 pr-9 text-sm font-medium text-slate-900 outline-none transition-colors hover:border-violet-400 focus:border-violet-500 focus:ring-1 focus:ring-violet-200"
             value={value}
             onChange={e => {
               const nextView = VIEW_OPTIONS.find(option => option.id === e.target.value)
@@ -153,12 +153,12 @@ export function SuperAdminViewSwitcher({ compact = false }: { compact?: boolean 
             }}
           >
             {VIEW_OPTIONS.map(option => (
-              <option key={option.id} value={option.id} className="bg-slate-900">
+              <option key={option.id} value={option.id}>
                 {option.label}
               </option>
             ))}
           </select>
-          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-violet-400" />
+          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
         </div>
         <AccountViewAs compact />
       </div>
