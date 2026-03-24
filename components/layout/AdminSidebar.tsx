@@ -50,7 +50,6 @@ const navSections = [
     title: 'Operations',
     items: [
       { href: '/admin/inventory', label: 'Inventory', icon: Package, feature: 'inventory' },
-      { href: '/admin/jobs', label: 'Background Jobs', icon: Cpu, feature: 'dashboard' },
       { href: '/admin/tastings', label: 'Tastings', icon: CalendarDays, feature: 'tastings' },
       { href: '/admin/tastings/roi', label: 'Tasting ROI', icon: TrendingUp, feature: 'tastings' },
     ],
@@ -84,6 +83,7 @@ const navSections = [
     title: 'Admin',
     items: [
       { href: '/admin/users', label: 'User Management', icon: Users, feature: 'users' },
+      { href: '/admin/jobs', label: 'Background Jobs', icon: Cpu, feature: 'dashboard' },
       { href: '/admin/automations', label: 'Automations', icon: Workflow, feature: 'dashboard' },
       { href: '/admin/system', label: 'System Health', icon: HeartPulse, feature: 'dashboard' },
       { href: '/admin/profile', label: 'My Profile', icon: UserCircle, feature: 'profile' },
