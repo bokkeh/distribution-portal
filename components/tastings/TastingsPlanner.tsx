@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
-import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameDay, isSameMonth, startOfMonth, startOfWeek } from 'date-fns'
+import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, isBefore, isSameDay, isSameMonth, startOfMonth, startOfWeek } from 'date-fns'
 import { CalendarDays, Clock3, MapPin, Store } from 'lucide-react'
 import { createTasting, deleteTasting, reassignTasting, updateTastingStatus } from '@/actions/tastings'
 import { Badge } from '@/components/ui/badge'
@@ -67,6 +67,9 @@ export function TastingsPlanner({ mode, tastings, accounts, tasters, success, er
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [selectedAccountId, setSelectedAccountId] = useState('')
   const [dateInput, setDateInput] = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [activeTab, setActiveTab] = useState<'upcoming' | 'previous'>('upcoming')
+  const [previousFrom, setPreviousFrom] = useState('')
+  const [previousTo, setPreviousTo] = useState('')
 
   const calendarDays = useMemo(() => {
     const start = startOfWeek(startOfMonth(visibleMonth), { weekStartsOn: 0 })
@@ -75,6 +78,23 @@ export function TastingsPlanner({ mode, tastings, accounts, tasters, success, er
   }, [visibleMonth])
 
   const dayTastings = tastings.filter(tasting => isSameDay(new Date(tasting.scheduledAt), selectedDate))
+  const now = new Date()
+  const upcomingTastings = tastings.filter(tasting => !isBefore(new Date(tasting.scheduledAt), now))
+  const previousTastings = tastings.filter(tasting => isBefore(new Date(tasting.scheduledAt), now))
+  const filteredPreviousTastings = useMemo(() => {
+    return previousTastings.filter((tasting) => {
+      const tastingDate = new Date(tasting.scheduledAt)
+      if (previousFrom) {
+        const from = new Date(`${previousFrom}T00:00:00`)
+        if (tastingDate < from) return false
+      }
+      if (previousTo) {
+        const to = new Date(`${previousTo}T23:59:59.999`)
+        if (tastingDate > to) return false
+      }
+      return true
+    })
+  }, [previousFrom, previousTo, previousTastings])
 
   return (
     <div className="space-y-6">
@@ -306,10 +326,78 @@ export function TastingsPlanner({ mode, tastings, accounts, tasters, success, er
 
       <Card>
         <CardHeader>
-          <CardTitle>{mode === 'taster' ? 'My Upcoming Tastings' : 'Upcoming Tastings'}</CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <CardTitle>
+              {activeTab === 'upcoming'
+                ? (mode === 'taster' ? 'My Upcoming Tastings' : 'Upcoming Tastings')
+                : 'Previous Tastings'}
+            </CardTitle>
+            <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+              <button
+                type="button"
+                onClick={() => setActiveTab('upcoming')}
+                className={cn(
+                  'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
+                  activeTab === 'upcoming' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                )}
+              >
+                Upcoming
+                <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs">{upcomingTastings.length}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('previous')}
+                className={cn(
+                  'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
+                  activeTab === 'previous' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                )}
+              >
+                Previous
+                <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs">{previousTastings.length}</span>
+              </button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-3">
-          {tastings.length ? tastings.map(tasting => (
+          {activeTab === 'previous' ? (
+            <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <div className="space-y-1">
+                <Label htmlFor={`${mode}-previous-from`} className="text-xs uppercase tracking-wide text-slate-500">From</Label>
+                <Input
+                  id={`${mode}-previous-from`}
+                  type="date"
+                  value={previousFrom}
+                  onChange={(event) => setPreviousFrom(event.target.value)}
+                  className="w-auto min-w-[160px] bg-white"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor={`${mode}-previous-to`} className="text-xs uppercase tracking-wide text-slate-500">To</Label>
+                <Input
+                  id={`${mode}-previous-to`}
+                  type="date"
+                  value={previousTo}
+                  onChange={(event) => setPreviousTo(event.target.value)}
+                  className="w-auto min-w-[160px] bg-white"
+                />
+              </div>
+              {(previousFrom || previousTo) ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setPreviousFrom('')
+                    setPreviousTo('')
+                  }}
+                >
+                  Clear
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+
+          {(activeTab === 'upcoming' ? upcomingTastings : filteredPreviousTastings).length ? (activeTab === 'upcoming' ? upcomingTastings : filteredPreviousTastings).map(tasting => (
             <div key={tasting.id} className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
               <div className="flex items-start gap-4">
                 <div className="flex min-w-[84px] flex-col items-center rounded-2xl border border-blue-100 bg-blue-50 px-3 py-3 text-center">
@@ -350,7 +438,9 @@ export function TastingsPlanner({ mode, tastings, accounts, tasters, success, er
               </div>
             </div>
           )) : (
-            <p className="text-sm text-slate-500">No tastings scheduled yet.</p>
+            <p className="text-sm text-slate-500">
+              {activeTab === 'upcoming' ? 'No upcoming tastings scheduled yet.' : 'No previous tastings match this date range.'}
+            </p>
           )}
         </CardContent>
       </Card>
