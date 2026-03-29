@@ -5,7 +5,7 @@ import { eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { db } from '@/db'
-import { customerAccounts, drivers, userFeatureSettings, users } from '@/db/schema'
+import { customerAccounts, drivers, userFeatureSettings, userPreferences, users } from '@/db/schema'
 import { requireAdmin } from '@/lib/auth/session'
 
 const ALL_ROLES = ['admin', 'staff', 'driver', 'customer', 'taster', 'sales_rep', 'sales_manager'] as const
@@ -173,6 +173,44 @@ export async function updateUserProfile(
     revalidatePath('/admin/users')
     revalidatePath(`/admin/users/${userId}`)
     return {}
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+export async function updateUserNotificationPreferences(
+  _prev: { error?: string; success?: boolean } | null,
+  formData: FormData
+): Promise<{ error?: string; success?: boolean }> {
+  try {
+    await requireAdmin()
+
+    const userId = formData.get('userId') as string
+    const emailNotificationsEnabled = formData.get('emailNotificationsEnabled') === 'on'
+    const smsNotificationsEnabled = formData.get('smsNotificationsEnabled') === 'on'
+    const inAppNotificationsEnabled = formData.get('inAppNotificationsEnabled') === 'on'
+    const notificationPreference = (formData.get('notificationPreference') as string) || 'all'
+
+    await db.insert(userPreferences).values({
+      userId,
+      emailNotificationsEnabled,
+      smsNotificationsEnabled,
+      inAppNotificationsEnabled,
+      notificationPreference,
+      updatedAt: new Date(),
+    }).onConflictDoUpdate({
+      target: userPreferences.userId,
+      set: {
+        emailNotificationsEnabled,
+        smsNotificationsEnabled,
+        inAppNotificationsEnabled,
+        notificationPreference,
+        updatedAt: new Date(),
+      },
+    })
+
+    revalidatePath(`/admin/users/${userId}`)
+    return { success: true }
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) }
   }

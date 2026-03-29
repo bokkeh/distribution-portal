@@ -9,10 +9,12 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { getRecentUserAccessEvents, getUserAccessSummaryMap } from '@/lib/auth/activity'
 import { UserRoleForm } from './user-role-form'
+import { UserNotificationPrefsForm } from './user-notification-prefs-form'
 import { UserProfileCard } from '@/components/admin/UserProfileCard'
 import { TasterRateCard } from '@/components/admin/TasterRateCard'
 import { ViewAsButton } from '@/components/admin/ViewAsButton'
 import { auth } from '@/lib/auth/config'
+import { getUserPreferences } from '@/lib/preferences/read'
 
 function isMissingUserFeatureTable(error: unknown) {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
@@ -39,9 +41,10 @@ export default async function UserDetailPage({ params }: { params: Promise<{ use
 
   const [account] = await db.select().from(customerAccounts).where(eq(customerAccounts.userId, user.id))
   const [driver] = await db.select().from(drivers).where(eq(drivers.userId, user.id))
-  const [accessSummaryMap, accessEvents] = await Promise.all([
+  const [accessSummaryMap, accessEvents, prefs] = await Promise.all([
     getUserAccessSummaryMap(),
     getRecentUserAccessEvents(user.id),
+    getUserPreferences(user.id),
   ])
   const accessSummary = accessSummaryMap.get(user.id)
   let featureSettings: { features: string[] } | undefined
@@ -95,6 +98,14 @@ export default async function UserDetailPage({ params }: { params: Promise<{ use
             </div>
           </CardContent>
         </Card>
+
+        <UserNotificationPrefsForm
+          userId={user.id}
+          emailNotificationsEnabled={prefs.emailNotificationsEnabled}
+          smsNotificationsEnabled={prefs.smsNotificationsEnabled}
+          inAppNotificationsEnabled={prefs.inAppNotificationsEnabled}
+          notificationPreference={prefs.notificationPreference}
+        />
 
         <Card>
           <CardHeader><CardTitle>Access Activity</CardTitle></CardHeader>

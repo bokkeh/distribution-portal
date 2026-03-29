@@ -367,7 +367,7 @@ export async function sendSampleCaseAlert({
   const action = delta > 0 ? 'added' : 'removed'
 
   await sendEmail({
-    to: process.env.SAMPLE_CASE_ALERT_EMAIL ?? 'kris@ahawc.com',
+    to: process.env.SAMPLE_CASE_ALERT_EMAIL ?? '',
     recipientName: 'Inventory team',
     subject: `Sample case adjustment - ${productName}`,
     html: renderEmailCard({
@@ -415,6 +415,7 @@ export async function sendWelcomeEmail({
 }
 
 export async function sendWholesaleRequestNotification({
+  to,
   businessName,
   businessEmail,
   businessType,
@@ -422,6 +423,7 @@ export async function sendWholesaleRequestNotification({
   phoneNormalized,
   smsOptIn,
 }: {
+  to: string | string[]
   businessName: string
   businessEmail: string
   businessType?: string | null
@@ -429,9 +431,11 @@ export async function sendWholesaleRequestNotification({
   phoneNormalized: string | null
   smsOptIn: boolean
 }): Promise<void> {
+  const recipients = Array.isArray(to) ? to.filter(Boolean) : [to].filter(Boolean)
+  if (!recipients.length) return
   await sendAutomationEmail({
     key: 'wholesale_request',
-    to: process.env.WHOLESALE_REQUEST_NOTIFICATION_EMAIL ?? 'admin@ahawc.com',
+    to: recipients,
     recipientName: businessName,
     variables: {
       business_name: escapeHtml(businessName),
@@ -665,7 +669,7 @@ export async function sendTasterInvoiceNotification({
 }): Promise<void> {
   await sendAutomationEmail({
     key: 'taster_invoice',
-    to: process.env.TASTER_ACCOUNTING_EMAIL ?? 'kris@ahawc.com',
+    to: process.env.TASTER_ACCOUNTING_EMAIL ?? '',
     recipientName: payeeName,
     variables: {
       payee_name: escapeHtml(payeeName),
@@ -733,18 +737,22 @@ export async function sendSalesRepDigestEmail({
 }
 
 export async function sendNewOrderStaffNotification({
+  to,
   companyName,
   orderId,
   total,
   purchaseUnit,
   placedBy,
 }: {
+  to: string[]
   companyName: string
   orderId: string
   total: string
   purchaseUnit: string
   placedBy: string
 }): Promise<void> {
+  const recipients = to.filter(Boolean)
+  if (!recipients.length) return
   const orderShortId = orderId.slice(-8).toUpperCase()
   const orderUrl = portalUrl(`/admin/orders/${orderId}`)
   const subject = `New order from ${companyName} — $${total}`
@@ -756,14 +764,5 @@ export async function sendNewOrderStaffNotification({
     ctaLabel: 'View Order',
     ctaHref: orderUrl,
   })
-
-  // Kim's known contact addresses
-  const kimEmails = ['sales@wishervodka.com', 'kim@ahawc.com']
-  // Kristen — set ORDER_NOTIFY_KRISTEN_EMAIL in env
-  const kristenEmail = process.env.ORDER_NOTIFY_KRISTEN_EMAIL
-  const allEmails = [...kimEmails, ...(kristenEmail ? [kristenEmail] : [])].filter(Boolean)
-
-  if (allEmails.length) {
-    await sendEmail({ to: allEmails, subject, html })
-  }
+  await sendEmail({ to: recipients, subject, html })
 }

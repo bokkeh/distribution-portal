@@ -14,6 +14,7 @@ import {
   sendWelcomeEmail,
   sendWholesaleRequestNotification,
 } from '@/lib/resend/client'
+import { checkEmailEnabled, getStaffEmailsForNotification } from '@/lib/notifications/recipients'
 import type { NotificationEvent, NotificationEventPayloads } from '../events'
 
 export async function handleEmailChannel<E extends NotificationEvent>(
@@ -23,26 +24,46 @@ export async function handleEmailChannel<E extends NotificationEvent>(
   switch (event) {
     case 'order.received': {
       const p = payload as NotificationEventPayloads['order.received']
+
+      // Customer — respect their email preference
+      const customerEnabled = await checkEmailEnabled(p.userId)
+      const customerEmails = customerEnabled ? p.customerEmails : []
+
+      // Staff — role-based, preference-filtered; supplement with env-var external contacts
+      const staffEmails = await getStaffEmailsForNotification(['admin', 'staff'])
+      const externalStaffEmails = [
+        process.env.ORDER_NOTIFY_KIM_EMAIL,
+        process.env.ORDER_NOTIFY_KIM_EMAIL_2,
+        process.env.ORDER_NOTIFY_KRISTEN_EMAIL,
+      ].filter(Boolean) as string[]
+      const allStaffEmails = [...new Set([...staffEmails, ...externalStaffEmails])]
+
       await Promise.all([
-        sendOrderReceivedEmail({
-          to: p.customerEmails,
-          companyName: p.companyName,
-          orderId: p.orderId,
-          total: p.total,
-        }),
-        sendNewOrderStaffNotification({
-          companyName: p.companyName,
-          orderId: p.orderId,
-          total: p.total,
-          purchaseUnit: p.purchaseUnit,
-          placedBy: p.placedBy,
-        }),
+        customerEmails.length
+          ? sendOrderReceivedEmail({
+              to: customerEmails,
+              companyName: p.companyName,
+              orderId: p.orderId,
+              total: p.total,
+            })
+          : Promise.resolve(),
+        allStaffEmails.length
+          ? sendNewOrderStaffNotification({
+              to: allStaffEmails,
+              companyName: p.companyName,
+              orderId: p.orderId,
+              total: p.total,
+              purchaseUnit: p.purchaseUnit,
+              placedBy: p.placedBy,
+            })
+          : Promise.resolve(),
       ])
       break
     }
 
     case 'order.status_changed': {
       const p = payload as NotificationEventPayloads['order.status_changed']
+      if (!(await checkEmailEnabled(p.userId))) break
       await sendOrderStatusEmail({
         to: p.customerEmails,
         companyName: p.companyName,
@@ -54,6 +75,7 @@ export async function handleEmailChannel<E extends NotificationEvent>(
 
     case 'order.shipping_status_changed': {
       const p = payload as NotificationEventPayloads['order.shipping_status_changed']
+      if (!(await checkEmailEnabled(p.userId))) break
       await sendOrderShippingStatusEmail({
         to: p.customerEmails,
         companyName: p.companyName,
@@ -65,6 +87,7 @@ export async function handleEmailChannel<E extends NotificationEvent>(
 
     case 'invoice.created': {
       const p = payload as NotificationEventPayloads['invoice.created']
+      if (!(await checkEmailEnabled(p.userId))) break
       await sendInvoiceEmailNotification({
         to: p.customerEmail,
         invoiceNumber: p.invoiceNumber,
@@ -76,9 +99,12 @@ export async function handleEmailChannel<E extends NotificationEvent>(
     }
 
     case 'invoice.paid': {
+      // Notifies admin/staff that a payment came in — role-based, preference-filtered
+      const staffEmails = await getStaffEmailsForNotification(['admin', 'staff'])
+      if (!staffEmails.length) break
       const p = payload as NotificationEventPayloads['invoice.paid']
       await sendInvoicePaidConfirmationEmail({
-        to: p.notifyEmails,
+        to: staffEmails,
         companyName: p.companyName,
         invoiceNumber: p.invoiceNumber,
         total: p.total,
@@ -89,6 +115,7 @@ export async function handleEmailChannel<E extends NotificationEvent>(
     case 'delivery.completed': {
       const p = payload as NotificationEventPayloads['delivery.completed']
       if (!p.customerEmail) break
+      if (!(await checkEmailEnabled(p.userId))) break
       await sendDeliveryCompletedEmail({
         to: p.customerEmail,
         companyName: p.companyName,
@@ -101,6 +128,7 @@ export async function handleEmailChannel<E extends NotificationEvent>(
 
     case 'delivery.driver_assigned': {
       const p = payload as NotificationEventPayloads['delivery.driver_assigned']
+      if (!(await checkEmailEnabled(p.userId))) break
       await sendDriverDeliveryAssignmentEmail({
         to: p.driverEmail,
         driverName: p.driverName,
@@ -112,7 +140,13 @@ export async function handleEmailChannel<E extends NotificationEvent>(
 
     case 'wholesale_request.received': {
       const p = payload as NotificationEventPayloads['wholesale_request.received']
+      // Admin-only: role-based + configured env-var address
+      const adminEmails = await getStaffEmailsForNotification(['admin'])
+      const envEmail = process.env.WHOLESALE_REQUEST_NOTIFICATION_EMAIL
+      const recipients = [...new Set([...adminEmails, ...(envEmail ? [envEmail] : [])])]
+      if (!recipients.length) break
       await sendWholesaleRequestNotification({
+        to: recipients,
         businessName: p.businessName,
         businessEmail: p.businessEmail,
         businessType: p.businessType,
@@ -125,6 +159,7 @@ export async function handleEmailChannel<E extends NotificationEvent>(
 
     case 'tasting.taster_assigned': {
       const p = payload as NotificationEventPayloads['tasting.taster_assigned']
+      if (!(await checkEmailEnabled(p.userId))) break
       await sendTasterAssignmentEmail({
         to: p.tasterEmail,
         tasterName: p.tasterName,
@@ -139,6 +174,7 @@ export async function handleEmailChannel<E extends NotificationEvent>(
     case 'tasting.status_changed': {
       const p = payload as NotificationEventPayloads['tasting.status_changed']
       if (!p.tasterEmail) break
+      if (!(await checkEmailEnabled(p.userId))) break
       await sendTastingStatusEmail({
         to: p.tasterEmail,
         storeName: p.storeName,
@@ -150,6 +186,7 @@ export async function handleEmailChannel<E extends NotificationEvent>(
 
     case 'tasting.report_received': {
       const p = payload as NotificationEventPayloads['tasting.report_received']
+      if (!(await checkEmailEnabled(p.userId))) break
       await sendTastingReportReceivedEmail({
         to: p.tasterEmail,
         tasterName: p.tasterName,
@@ -159,10 +196,12 @@ export async function handleEmailChannel<E extends NotificationEvent>(
     }
 
     case 'tasting.taster_declined': {
+      // Notify admin/staff — role-based, preference-filtered
+      const teamEmails = await getStaffEmailsForNotification(['admin', 'staff'])
+      if (!teamEmails.length) break
       const p = payload as NotificationEventPayloads['tasting.taster_declined']
-      if (!p.teamEmails.length) break
       await sendInternalAlertEmail({
-        to: p.teamEmails,
+        to: teamEmails,
         subject: `Tasting declined - ${p.eventName}`,
         title: 'Tasting declined',
         body: `${p.declinedByName} declined ${p.eventName} scheduled for ${p.scheduledAt.toLocaleString('en-US', { timeZone: 'America/New_York' })}.`,
@@ -172,6 +211,7 @@ export async function handleEmailChannel<E extends NotificationEvent>(
     }
 
     case 'user.welcomed': {
+      // Transactional — always send regardless of preference (account creation)
       const p = payload as NotificationEventPayloads['user.welcomed']
       await sendWelcomeEmail({
         to: p.email,

@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, isNull, lte } from 'drizzle-orm'
 import { db } from '@/db'
-import { userNotifications, users } from '@/db/schema'
+import { userNotifications, userPreferences, users } from '@/db/schema'
 
 function isMissingUserNotificationsTable(error: unknown) {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
@@ -50,14 +50,21 @@ export async function createNotificationsForRoles(input: {
   availableAt?: Date
 }) {
   try {
-    const allUsers = await db.select({
-      id: users.id,
-      roles: users.roles,
-      active: users.active,
-    }).from(users)
+    const allUsers = await db
+      .select({
+        id: users.id,
+        roles: users.roles,
+        active: users.active,
+        inAppEnabled: userPreferences.inAppNotificationsEnabled,
+      })
+      .from(users)
+      .leftJoin(userPreferences, eq(users.id, userPreferences.userId))
 
-    const matchingUsers = allUsers.filter(user =>
-      user.active && input.roles.some(role => user.roles.includes(role))
+    const matchingUsers = allUsers.filter(
+      (user) =>
+        user.active &&
+        input.roles.some((role) => user.roles.includes(role)) &&
+        (user.inAppEnabled ?? true),
     )
 
     if (!matchingUsers.length) return

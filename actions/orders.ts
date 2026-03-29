@@ -354,7 +354,7 @@ export async function createOrder(formData: FormData) {
       purchaseUnit,
       placedBy: session.user.name ?? 'A customer',
       customerEmails: uniqueEmails(customerAccount?.pocEmail, customerAccount?.businessEmail, customerAccount?.email),
-      staffPhones: ['+12489339350', process.env.ORDER_NOTIFY_KRISTEN_PHONE].filter(Boolean) as string[],
+      staffPhones: [process.env.STAFF_NOTIFICATION_PHONE_2, process.env.ORDER_NOTIFY_KRISTEN_PHONE].filter(Boolean) as string[],
       userId: session.user.id,
     })
 

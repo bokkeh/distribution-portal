@@ -527,7 +527,7 @@ export default function SortableStopList({
           />
         </div>
       )}
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+      <DndContext id={`stop-list-${deliveryId}`} sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <SortableContext items={sortableStops.map(stop => stop.id)} strategy={verticalListSortingStrategy}>
           <div className="space-y-2 sm:space-y-3">
             {sortableStops.map((stop, index) => (

@@ -902,7 +902,7 @@ export async function requestTastingFromRep({
   const smsBody = `AHAWC: Tasting request from ${session.user.name} for ${account.companyName} on ${dateLabel}. View: ${tastingUrl}`
   const staffPhones = [
     process.env.ADMIN_NOTIFICATION_PHONE,
-    '+12489339350',
+    process.env.STAFF_NOTIFICATION_PHONE_2,
     process.env.ORDER_NOTIFY_KRISTEN_PHONE,
   ].filter(Boolean) as string[]
 
