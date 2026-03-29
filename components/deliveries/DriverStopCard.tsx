@@ -3,10 +3,10 @@
 import { type ReactNode, useMemo, useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import { completeDeliveryStop, markDeliveryStopArrived, markDeliveryStopFailed, startDeliveryForStop } from '@/actions/deliveries'
+import { completeDeliveryStop, markDeliveryStopArrived, markDeliveryStopFailed, saveRecipientSignature, startDeliveryForStop } from '@/actions/deliveries'
 import { getDeliveryStopAdditionalPhotos } from '@/lib/deliveries/photos'
 import { signedPhotoUrl } from '@/lib/gcs/photo-url'
-import { BottleWine, Camera, CheckCircle, Loader2, MapPinned, Navigation, PackageCheck, PenSquare, Timer, XCircle } from 'lucide-react'
+import { BottleWine, Camera, CheckCircle, Loader2, MapPinned, Navigation, PackageCheck, PenSquare, Save, Timer, XCircle } from 'lucide-react'
 import { SignaturePad } from '@/components/deliveries/SignaturePad'
 import { DriverLocationTracker, type DriverGpsState } from '@/components/deliveries/DriverLocationTracker'
 
@@ -60,7 +60,10 @@ export function DriverStopActions({
   const [uploadingProof, setUploadingProof] = useState(false)
   const [uploadingShelf, setUploadingShelf] = useState(false)
   const [uploadingAdditional, setUploadingAdditional] = useState<boolean[]>([false, false, false, false, false])
-  const trackingActive = stop.status === 'pending' && ['out_for_delivery', 'arriving_soon', 'arrived'].includes(stop.customerStatus ?? 'not_started')
+  const [uploadingSignature, setUploadingSignature] = useState(false)
+  const [signatureSaved, setSignatureSaved] = useState(!!stop.recipientSignatureUrl && !stop.recipientSignatureUrl.startsWith('data:'))
+  const [customerStatus, setCustomerStatus] = useState(stop.customerStatus ?? 'not_started')
+  const trackingActive = stop.status === 'pending' && ['out_for_delivery', 'arriving_soon', 'arrived'].includes(customerStatus)
   const [gpsState, setGpsState] = useState<DriverGpsState>({
     status: trackingActive ? 'sharing' : 'inactive',
     lastSentAt: stop.lastLocationAt ? new Date(stop.lastLocationAt).getTime() : null,
@@ -103,6 +106,25 @@ export function DriverStopActions({
     }
   }
 
+  async function handleSaveSignature() {
+    if (!recipientSignatureUrl) return
+    setUploadingSignature(true)
+    try {
+      let uploadedUrl = recipientSignatureUrl
+      if (uploadedUrl.startsWith('data:image/')) {
+        uploadedUrl = await uploadSignatureDataUrl(uploadedUrl)
+        setRecipientSignatureUrl(uploadedUrl)
+      }
+      await saveRecipientSignature(stop.id, uploadedUrl)
+      setSignatureSaved(true)
+      toast.success('Signature saved', { description: `Saved at ${new Date().toLocaleTimeString()}` })
+    } catch (error) {
+      toast.error('Failed to save signature', { description: error instanceof Error ? error.message : undefined })
+    } finally {
+      setUploadingSignature(false)
+    }
+  }
+
   async function uploadSignatureDataUrl(dataUrl: string) {
     const response = await fetch(dataUrl)
     const blob = await response.blob()
@@ -120,6 +142,7 @@ export function DriverStopActions({
     startTransition(async () => {
       try {
         await startDeliveryForStop(stop.id)
+        setCustomerStatus('out_for_delivery')
         toast.success('Delivery started and tracking link sent')
       } catch (error) {
         toast.error('Unable to start delivery', { description: error instanceof Error ? error.message : undefined })
@@ -131,6 +154,7 @@ export function DriverStopActions({
     startTransition(async () => {
       try {
         await markDeliveryStopArrived(stop.id)
+        setCustomerStatus('arrived')
         toast.success('Stop marked arrived')
       } catch (error) {
         toast.error('Unable to mark arrived', { description: error instanceof Error ? error.message : undefined })
@@ -206,7 +230,7 @@ export function DriverStopActions({
           <Navigation className="h-4 w-4 text-blue-600" />
           <span className="font-medium">Customer tracking</span>
           <span className="rounded-full bg-white px-2 py-0.5 text-xs text-slate-600">
-            {stop.customerStatus?.replace(/_/g, ' ') ?? 'not started'}
+            {customerStatus.replace(/_/g, ' ')}
           </span>
         </div>
         <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
@@ -250,7 +274,7 @@ export function DriverStopActions({
         <button
           type="button"
           onClick={handleArrived}
-          disabled={isPending || !trackingActive || stop.customerStatus === 'arrived'}
+          disabled={isPending || !trackingActive || customerStatus === 'arrived'}
           className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 text-sm font-semibold text-amber-700 disabled:opacity-50"
         >
           <Timer className="h-4 w-4" />
@@ -258,15 +282,36 @@ export function DriverStopActions({
         </button>
       </div>
 
+      {customerStatus !== 'arrived' && trackingActive && (
+        <div className="flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <Timer className="h-5 w-5 shrink-0 text-amber-500" />
+          <span>Tap <strong>Mark Arrived</strong> once you're on site to unlock photos, signature, and delivery confirmation.</span>
+        </div>
+      )}
+
+      {customerStatus === 'arrived' && (
+      <>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         {tiles.map(({ kind, label, url, uploading, icon, hint }) => (
           <label key={kind} className="block cursor-pointer">
             <span className="mb-1 block truncate text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
-            <span className="flex min-h-[100px] w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 px-2 py-3 text-center text-slate-600 transition-colors active:bg-blue-50 hover:border-blue-400 hover:bg-blue-50">
-              {uploading ? <Loader2 className="mb-2 h-7 w-7 animate-spin" /> : icon}
-              <span className="text-xs font-semibold leading-tight text-slate-900">{url ? 'Replace' : 'Upload'}</span>
-              <span className="mt-1 text-[10px] leading-tight text-muted-foreground">{hint}</span>
-              {url && <span className="mt-2 text-[10px] font-medium text-blue-600 underline">Preview</span>}
+            <span className="relative flex min-h-[100px] w-full overflow-hidden rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 transition-colors hover:border-blue-400">
+              {uploading ? (
+                <span className="flex w-full flex-col items-center justify-center px-2 py-3 text-slate-600">
+                  <Loader2 className="mb-2 h-7 w-7 animate-spin" />
+                </span>
+              ) : url ? (
+                <>
+                  <img src={url} alt={label} className="h-full w-full object-cover" style={{ minHeight: 100 }} />
+                  <span className="absolute bottom-1.5 right-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-semibold text-white">Tap to replace</span>
+                </>
+              ) : (
+                <span className="flex w-full flex-col items-center justify-center px-2 py-3 text-center text-slate-600">
+                  {icon}
+                  <span className="text-xs font-semibold leading-tight text-slate-900">Upload</span>
+                  <span className="mt-1 text-[10px] leading-tight text-muted-foreground">{hint}</span>
+                </span>
+              )}
             </span>
             <input
               type="file"
@@ -283,10 +328,23 @@ export function DriverStopActions({
         {additionalPhotoUrls.map((url, index) => (
           <label key={`additional-${index}`} className="block cursor-pointer">
             <span className="mb-1 block truncate text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Extra Photo {index + 1}</span>
-            <span className="flex min-h-[100px] w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 px-2 py-3 text-center text-slate-600 transition-colors active:bg-blue-50 hover:border-blue-400 hover:bg-blue-50">
-              {uploadingAdditional[index] ? <Loader2 className="mb-2 h-7 w-7 animate-spin" /> : <Camera className="mb-2 h-7 w-7" />}
-              <span className="text-xs font-semibold leading-tight text-slate-900">{url ? 'Replace' : 'Upload'}</span>
-              <span className="mt-1 text-[10px] leading-tight text-muted-foreground">Additional photo</span>
+            <span className="relative flex min-h-[100px] w-full overflow-hidden rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 transition-colors hover:border-blue-400">
+              {uploadingAdditional[index] ? (
+                <span className="flex w-full flex-col items-center justify-center px-2 py-3 text-slate-600">
+                  <Loader2 className="mb-2 h-7 w-7 animate-spin" />
+                </span>
+              ) : url ? (
+                <>
+                  <img src={url} alt={`Extra photo ${index + 1}`} className="h-full w-full object-cover" style={{ minHeight: 100 }} />
+                  <span className="absolute bottom-1.5 right-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-semibold text-white">Tap to replace</span>
+                </>
+              ) : (
+                <span className="flex w-full flex-col items-center justify-center px-2 py-3 text-center text-slate-600">
+                  <Camera className="mb-2 h-7 w-7" />
+                  <span className="text-xs font-semibold leading-tight text-slate-900">Upload</span>
+                  <span className="mt-1 text-[10px] leading-tight text-muted-foreground">Additional photo</span>
+                </span>
+              )}
             </span>
             <input
               type="file"
@@ -318,7 +376,29 @@ export function DriverStopActions({
           <PenSquare className="h-4 w-4" />
           Recipient Signature
         </div>
-        <SignaturePad value={recipientSignatureUrl} onChange={setRecipientSignatureUrl} disabled={isPending} />
+        <SignaturePad
+          value={recipientSignatureUrl}
+          onChange={(v) => { setRecipientSignatureUrl(v); setSignatureSaved(false) }}
+          disabled={isPending}
+        />
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-[11px] text-muted-foreground">
+            {signatureSaved
+              ? <span className="font-medium text-green-600">Signature saved to record</span>
+              : recipientSignatureUrl
+                ? 'Save signature before marking delivered'
+                : 'Draw signature above'}
+          </div>
+          <button
+            type="button"
+            onClick={handleSaveSignature}
+            disabled={!recipientSignatureUrl || uploadingSignature || isPending || signatureSaved}
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm disabled:opacity-50"
+          >
+            {uploadingSignature ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+            {signatureSaved ? 'Saved' : 'Save Signature'}
+          </button>
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -360,6 +440,8 @@ export function DriverStopActions({
           onConfirm={handleFailed}
         />
       </div>
+      </>
+      )}
     </div>
   )
 }

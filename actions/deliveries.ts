@@ -163,6 +163,7 @@ async function getStopTrackingContext(stopId: string) {
       deliveryId: deliveryStops.deliveryId,
       orderId: deliveryStops.orderId,
       customerId: deliveryStops.customerId,
+      status: deliveryStops.status,
       address: deliveryStops.address,
       lat: deliveryStops.lat,
       lng: deliveryStops.lng,
@@ -438,6 +439,19 @@ export async function getDeliveryStopUploadUrl(
   }
 }
 
+export async function saveRecipientSignature(stopId: string, signatureUrl: string): Promise<void> {
+  await requireDriverStopAccess(stopId)
+  await db
+    .update(deliveryStops)
+    .set({
+      recipientSignatureUrl: signatureUrl,
+      recipientSignedAt: new Date(),
+    })
+    .where(eq(deliveryStops.id, stopId))
+  revalidatePath('/driver/deliveries')
+  revalidatePath('/admin/deliveries')
+}
+
 export async function startDeliveryForStop(stopId: string) {
   const { session, stop } = await requireDriverStopAccess(stopId)
   if (stop.customerStatus === 'delivered' || stop.status !== 'pending') {
@@ -447,33 +461,29 @@ export async function startDeliveryForStop(stopId: string) {
   const trackingToken = stop.trackingToken ?? buildTrackingToken()
   const supportPhone = process.env.ADMIN_NOTIFICATION_PHONE ?? process.env.TELNYX_FROM_NUMBER ?? null
 
-  await db.transaction(async (tx) => {
-    const [activeStop] = await tx
-      .select({
-        id: deliveryStops.id,
-      })
-      .from(deliveryStops)
-      .where(and(
-        eq(deliveryStops.deliveryId, stop.deliveryId),
-        eq(deliveryStops.status, 'pending'),
-        inArray(deliveryStops.customerStatus, ['out_for_delivery', 'arriving_soon', 'arrived']),
-      ))
-      .limit(1)
+  const [activeStop] = await db
+    .select({ id: deliveryStops.id })
+    .from(deliveryStops)
+    .where(and(
+      eq(deliveryStops.deliveryId, stop.deliveryId),
+      eq(deliveryStops.status, 'pending'),
+      inArray(deliveryStops.customerStatus, ['out_for_delivery', 'arriving_soon', 'arrived']),
+    ))
+    .limit(1)
 
-    if (activeStop && activeStop.id !== stopId) {
-      throw new Error('Finish the current active stop before starting another delivery.')
-    }
+  if (activeStop && activeStop.id !== stopId) {
+    throw new Error('Finish the current active stop before starting another delivery.')
+  }
 
-    await tx.update(deliveries).set({ status: 'in_progress' }).where(eq(deliveries.id, stop.deliveryId))
-    await tx.update(deliveryStops).set({
-      trackingEnabled: true,
-      trackingToken,
-      trackingTokenCreatedAt: stop.trackingToken ? stop.outForDeliveryAt ?? new Date() : new Date(),
-      trackingExpiresAt: null,
-      customerStatus: 'out_for_delivery',
-      outForDeliveryAt: new Date(),
-    }).where(eq(deliveryStops.id, stopId))
-  })
+  await db.update(deliveries).set({ status: 'in_progress' }).where(eq(deliveries.id, stop.deliveryId))
+  await db.update(deliveryStops).set({
+    trackingEnabled: true,
+    trackingToken,
+    trackingTokenCreatedAt: stop.trackingToken ? stop.outForDeliveryAt ?? new Date() : new Date(),
+    trackingExpiresAt: null,
+    customerStatus: 'out_for_delivery',
+    outForDeliveryAt: new Date(),
+  }).where(eq(deliveryStops.id, stopId))
 
   if (stop.orderId) {
     await db.update(orders).set({ shippingStatus: 'out_for_delivery' }).where(eq(orders.id, stop.orderId))

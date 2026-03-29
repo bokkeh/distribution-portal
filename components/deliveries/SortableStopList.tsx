@@ -15,7 +15,7 @@ import { getDeliveryStopAdditionalPhotos } from '@/lib/deliveries/photos'
 import { signedPhotoUrl } from '@/lib/gcs/photo-url'
 import { formatDate } from '@/lib/utils'
 import Image from 'next/image'
-import { CheckCircle, Check, Clock, GripVertical, Home, MapPin, Pencil, X, XCircle } from 'lucide-react'
+import { CheckCircle, Check, ChevronDown, ChevronUp, Clock, GripVertical, Home, MapPin, Pencil, X, XCircle } from 'lucide-react'
 import GetDirectionsButton from '@/components/shared/GetDirectionsButton'
 
 type Stop = {
@@ -76,6 +76,10 @@ function SortableStopCard({
   deliveryId,
   onRemove,
   onUpdate,
+  onMoveUp,
+  onMoveDown,
+  canMoveUp,
+  canMoveDown,
   isRemoving,
   routeHasActiveStop = false,
   emphasis = 'default',
@@ -86,6 +90,10 @@ function SortableStopCard({
   deliveryId: string
   onRemove: (stopId: string) => void
   onUpdate: (stopId: string, data: Partial<Stop>) => void
+  onMoveUp: () => void
+  onMoveDown: () => void
+  canMoveUp: boolean
+  canMoveDown: boolean
   isRemoving: boolean
   routeHasActiveStop?: boolean
   emphasis?: 'default' | 'next' | 'active'
@@ -144,16 +152,35 @@ function SortableStopCard({
       ) : null}
       <div className="flex items-start gap-3">
         {canReorder && (
-          <button
-            {...attributes}
-            {...listeners}
-            className="mt-1 text-slate-300 transition-colors hover:text-slate-500 cursor-grab active:cursor-grabbing"
-            aria-label={mode === 'driver' ? 'Drag to reorder stop in your route' : 'Drag to reorder stop'}
-            type="button"
-            title={mode === 'driver' ? 'Drag to set your preferred stop order' : 'Drag to reorder stop'}
-          >
-            <GripVertical className="w-4 h-4" />
-          </button>
+          <div className="flex flex-col items-center gap-0.5 mt-0.5">
+            <button
+              type="button"
+              onClick={onMoveUp}
+              disabled={!canMoveUp}
+              className="rounded p-0.5 text-slate-300 transition-colors hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed"
+              aria-label="Move stop up"
+            >
+              <ChevronUp className="w-4 h-4" />
+            </button>
+            <button
+              {...attributes}
+              {...listeners}
+              className="text-slate-300 transition-colors hover:text-slate-500 cursor-grab active:cursor-grabbing"
+              aria-label="Drag to reorder"
+              type="button"
+            >
+              <GripVertical className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={onMoveDown}
+              disabled={!canMoveDown}
+              className="rounded p-0.5 text-slate-300 transition-colors hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed"
+              aria-label="Move stop down"
+            >
+              <ChevronDown className="w-4 h-4" />
+            </button>
+          </div>
         )}
         <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
           {index + 1}
@@ -481,6 +508,32 @@ export default function SortableStopList({
     })
   }
 
+  function handleMove(stopId: string, direction: 'up' | 'down') {
+    const list = mode === 'driver' ? sortableStops : stops
+    const oldIndex = list.findIndex(s => s.id === stopId)
+    const newIndex = direction === 'up' ? oldIndex - 1 : oldIndex + 1
+    if (newIndex < 0 || newIndex >= list.length) return
+
+    const reordered = arrayMove(list, oldIndex, newIndex).map((s, i) => ({ ...s, sequenceNumber: i + 1 }))
+    const nextStops = mode === 'driver'
+      ? [
+          ...reordered,
+          ...completedStops.map((s, i) => ({ ...s, sequenceNumber: reordered.length + i + 1 })),
+        ]
+      : reordered
+    const previousStops = stops
+    setStops(nextStops)
+
+    startTransition(async () => {
+      try {
+        await reorderDeliveryStops(deliveryId, nextStops.map(s => s.id))
+      } catch (error) {
+        setStops(previousStops)
+        toast.error('Unable to reorder stops', { description: error instanceof Error ? error.message : undefined })
+      }
+    })
+  }
+
   function handleUpdate(stopId: string, data: Partial<Stop>) {
     setStops(prev => prev.map(s => s.id === stopId ? { ...s, ...data } : s))
   }
@@ -516,7 +569,7 @@ export default function SortableStopList({
       )}
       {mode === 'driver' && stops.length > 1 && (
         <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
-          Drag stops by the grip handle to set the route order you want.
+          Use the arrows or drag the grip handle to set your preferred route order.
         </div>
       )}
       {(mode === 'driver' ? sortableStops : stops).length > 0 && (
@@ -539,6 +592,10 @@ export default function SortableStopList({
                 deliveryId={deliveryId}
                 onRemove={handleRemove}
                 onUpdate={handleUpdate}
+                onMoveUp={() => handleMove(stop.id, 'up')}
+                onMoveDown={() => handleMove(stop.id, 'down')}
+                canMoveUp={index > 0}
+                canMoveDown={index < sortableStops.length - 1}
                 isRemoving={isPending}
                 routeHasActiveStop={Boolean(activeTrackedStop)}
                 emphasis={mode === 'driver' && stop.id === leadStop?.id ? (activeTrackedStop ? 'active' : 'next') : 'default'}
