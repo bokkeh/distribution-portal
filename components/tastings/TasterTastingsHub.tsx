@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { format, isBefore } from 'date-fns'
+import { useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -39,7 +40,7 @@ const statusVariant: Record<string, 'secondary' | 'success' | 'warning' | 'destr
 
 function TastingCard({ tasting, compact = false }: { tasting: TastingRow; compact?: boolean }) {
   const tastingDate = new Date(tasting.scheduledAt)
-  const missingReport = tasting.status === 'completed' && !tasting.reportSubmittedAt
+  const missingReport = !tasting.reportSubmittedAt && tasting.status !== 'cancelled'
   const missingInvoice = tasting.status === 'completed' && !tasting.invoiceSubmittedAt
 
   return (
@@ -70,8 +71,8 @@ function TastingCard({ tasting, compact = false }: { tasting: TastingRow; compac
         </div>
         <div className="flex flex-wrap gap-2">
           {tasting.reportSubmittedAt ? <Badge variant="success">Report Submitted</Badge> : null}
+          {missingReport ? <Badge variant="warning">Missing Report</Badge> : null}
           {tasting.invoiceSubmittedAt ? <Badge variant="info">Invoice {tasting.invoiceStatus ?? 'submitted'}</Badge> : null}
-          {missingReport ? <Badge variant="warning">Report Needed</Badge> : null}
           {missingInvoice ? <Badge variant="warning">Invoice Needed</Badge> : null}
         </div>
       </div>
@@ -131,8 +132,23 @@ export function TasterTastingsHub({
   const now = new Date()
   const upcoming = tastings.filter(tasting => !isBefore(new Date(tasting.scheduledAt), now))
   const past = tastings.filter(tasting => isBefore(new Date(tasting.scheduledAt), now))
+  const [activeTab, setActiveTab] = useState<'upcoming' | 'previous'>('upcoming')
+  const [previousFrom, setPreviousFrom] = useState('')
+  const [previousTo, setPreviousTo] = useState('')
   const missingReportCount = tastings.filter(tasting => tasting.status === 'completed' && !tasting.reportSubmittedAt).length
   const missingInvoiceCount = tastings.filter(tasting => tasting.status === 'completed' && !tasting.invoiceSubmittedAt).length
+  const filteredPast = past.filter(tasting => {
+    const tastingDate = new Date(tasting.scheduledAt)
+    if (previousFrom) {
+      const from = new Date(`${previousFrom}T00:00:00`)
+      if (tastingDate < from) return false
+    }
+    if (previousTo) {
+      const to = new Date(`${previousTo}T23:59:59.999`)
+      if (tastingDate > to) return false
+    }
+    return true
+  })
 
   return (
     <div className="space-y-6">
@@ -156,31 +172,81 @@ export function TasterTastingsHub({
 
       <Card>
         <CardHeader>
-          <CardTitle>Upcoming Tastings</CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <CardTitle>{activeTab === 'upcoming' ? 'Upcoming Tastings' : 'Previous Tastings'}</CardTitle>
+            <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+              <button
+                type="button"
+                onClick={() => setActiveTab('upcoming')}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  activeTab === 'upcoming' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Upcoming
+                <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs">{upcoming.length}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('previous')}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  activeTab === 'previous' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Previous
+                <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs">{past.length}</span>
+              </button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {upcoming.length ? upcoming.map(tasting => (
-            <TastingCard key={tasting.id} tasting={tasting} />
-          )) : (
-            <p className="text-sm text-slate-500">No upcoming tastings assigned right now.</p>
+          {activeTab === 'previous' ? (
+            <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <label className="space-y-1 text-sm text-slate-600">
+                <span className="block text-xs font-medium uppercase tracking-wide text-slate-500">From</span>
+                <input
+                  type="date"
+                  value={previousFrom}
+                  onChange={event => setPreviousFrom(event.target.value)}
+                  className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                />
+              </label>
+              <label className="space-y-1 text-sm text-slate-600">
+                <span className="block text-xs font-medium uppercase tracking-wide text-slate-500">To</span>
+                <input
+                  type="date"
+                  value={previousTo}
+                  onChange={event => setPreviousTo(event.target.value)}
+                  className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                />
+              </label>
+              {(previousFrom || previousTo) ? (
+                <Button type="button" variant="ghost" size="sm" onClick={() => {
+                  setPreviousFrom('')
+                  setPreviousTo('')
+                }}>
+                  Clear
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+
+          {activeTab === 'upcoming' ? (
+            upcoming.length ? upcoming.map(tasting => (
+              <TastingCard key={tasting.id} tasting={tasting} />
+            )) : (
+              <p className="text-sm text-slate-500">No upcoming tastings assigned right now.</p>
+            )
+          ) : (
+            filteredPast.length ? filteredPast.map(tasting => (
+              <TastingCard key={tasting.id} tasting={tasting} compact />
+            )) : (
+              <p className="text-sm text-slate-500">No past tastings match this date range.</p>
+            )
           )}
         </CardContent>
       </Card>
 
       <TastingMapPanel tastings={upcoming} />
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Past Tastings</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {past.length ? past.map(tasting => (
-            <TastingCard key={tasting.id} tasting={tasting} compact />
-          )) : (
-            <p className="text-sm text-slate-500">No past tastings yet.</p>
-          )}
-        </CardContent>
-      </Card>
     </div>
   )
 }

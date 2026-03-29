@@ -1,12 +1,13 @@
 import { requireRole } from '@/lib/auth/session'
 import Link from 'next/link'
 import Image from 'next/image'
-import { Truck, Map, LogOut, UserCircle } from 'lucide-react'
+import { Truck, Map, UserCircle } from 'lucide-react'
 import { SuperAdminViewSwitcher } from '@/components/layout/SuperAdminViewSwitcher'
 import { hasFeature } from '@/lib/users/features'
 import { getBellNotificationsForUser } from '@/lib/notifications/in-app'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
 import { PortalTopBar } from '@/components/layout/PortalTopBar'
+import { DriverSignOutButton } from '@/components/layout/DriverSignOutButton'
 
 export default async function DriverLayout({ children }: { children: React.ReactNode }) {
   const session = await requireRole('driver', 'admin')
@@ -48,11 +49,7 @@ export default async function DriverLayout({ children }: { children: React.React
                 <UserCircle className="w-4 h-4" />Profile
               </Link>
             ) : null}
-            <form action="/api/auth/signout" method="post">
-              <button className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-slate-400 transition-colors hover:bg-slate-900 hover:text-white">
-                <LogOut className="w-4 h-4" />Sign Out
-              </button>
-            </form>
+            <DriverSignOutButton />
           </div>
         </div>
       </nav>

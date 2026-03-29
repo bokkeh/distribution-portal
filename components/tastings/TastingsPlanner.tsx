@@ -58,6 +58,10 @@ function formatTastingTimeRange(start: Date, end: Date | null) {
   return formatEasternTimeRange(start, end)
 }
 
+function isMissingReport(tasting: Pick<TastingRow, 'reportSubmittedAt' | 'status'>) {
+  return !tasting.reportSubmittedAt && tasting.status !== 'cancelled'
+}
+
 export function TastingsPlanner({ mode, tastings, accounts, tasters, success, error }: Props) {
   const [visibleMonth, setVisibleMonth] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState(new Date())
@@ -230,7 +234,10 @@ export function TastingsPlanner({ mode, tastings, accounts, tasters, success, er
                           <span className="flex items-center gap-1"><Store className="h-3.5 w-3.5" />{tasting.tasterName}</span>
                         </div>
                       </div>
-                      <Badge variant={statusVariant[tasting.status] ?? 'secondary'}>{tasting.status}</Badge>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant={statusVariant[tasting.status] ?? 'secondary'}>{tasting.status}</Badge>
+                        {isMissingReport(tasting) ? <Badge variant="warning">Missing Report</Badge> : null}
+                      </div>
                     </div>
                     <div className="mt-3 text-sm text-slate-600">
                       <p className="flex items-start gap-2">
@@ -328,6 +335,7 @@ export function TastingsPlanner({ mode, tastings, accounts, tasters, success, er
                   <p className="text-sm text-slate-500">{[tasting.storeAddress, tasting.storeCity, tasting.storeState, tasting.storeZip].filter(Boolean).join(', ') || 'Store address not provided'}</p>
                   <div className="flex flex-wrap gap-2 pt-1">
                     {tasting.reportSubmittedAt ? <Badge variant="success">Report Submitted</Badge> : null}
+                    {isMissingReport(tasting) ? <Badge variant="warning">Missing Report</Badge> : null}
                     {tasting.invoiceSubmittedAt ? <Badge variant="info">Invoice {tasting.invoiceStatus ?? 'submitted'}</Badge> : null}
                   </div>
                 </div>
