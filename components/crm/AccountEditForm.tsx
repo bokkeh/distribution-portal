@@ -17,6 +17,7 @@ type Account = {
   address: string | null
   city: string | null
   state: string | null
+  county?: string | null
   zip: string | null
   phone: string | null
   email: string | null
@@ -125,6 +126,13 @@ export function AccountEditForm({ account, mode }: { account: Account; mode: 'ad
           <Label htmlFor={`${mode}-state`}>State</Label>
           <Input id={`${mode}-state`} name="state" defaultValue={account.state ?? ''} maxLength={2} />
         </div>
+        <div className="space-y-2">
+          <Label htmlFor={`${mode}-county`}>County</Label>
+          <Input id={`${mode}-county`} name="county" defaultValue={account.county ?? ''} placeholder="Montgomery" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="space-y-2">
           <Label htmlFor={`${mode}-zip`}>ZIP</Label>
           <Input id={`${mode}-zip`} name="zip" defaultValue={account.zip ?? ''} />

@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { formatCurrency } from '@/lib/utils'
 import { useCart } from '@/hooks/useCart'
 import { getMinimumCaseQuantity, isWisherVodkaProduct } from '@/lib/orders/minimums'
+import { describePricingSource, type GeographicPricingSource } from '@/lib/pricing/geographic'
 
 interface Product {
   id: string
@@ -24,6 +25,7 @@ interface Product {
   imageUrl: string | null
   quantityPaid: number | null
   quantitySample: number | null
+  pricingSource: GeographicPricingSource
 }
 
 export default function CustomerProductCatalog({
@@ -128,7 +130,10 @@ export default function CustomerProductCatalog({
                   {product.category ? <Badge variant="secondary" className="mt-1 text-xs">{product.category}</Badge> : null}
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-blue-600">{formatCurrency(product.price)}</span>
+                  <div>
+                    <span className="font-bold text-blue-600">{formatCurrency(product.price)}</span>
+                    <p className="text-[11px] text-slate-500">{describePricingSource(product.pricingSource)}</p>
+                  </div>
                   <span className="text-xs text-muted-foreground">{stock ?? 0} avail.</span>
                 </div>
                 {hasMinimumCaseRequirement ? (

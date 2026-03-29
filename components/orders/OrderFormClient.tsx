@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Minus, Plus, Trash2 } from 'lucide-react'
 import { createOrder } from '@/actions/orders'
 import { toast } from 'sonner'
@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { PAYMENT_TERM_OPTIONS, formatPaymentTerms } from '@/lib/orders/payment-terms'
 import { formatCurrency } from '@/lib/utils'
+import { describePricingSource, resolveGeographicCasePrice, type GeographicPricingRuleInput, type GeographicPricingSource } from '@/lib/pricing/geographic'
 
 interface Product {
   id: string
@@ -29,6 +30,8 @@ interface Customer {
   id: string
   companyName: string
   paymentTerms: string | null
+  state: string | null
+  county: string | null
 }
 
 type PurchaseUnit = 'case' | 'bottle'
@@ -38,13 +41,14 @@ interface LineItem {
   name: string
   quantity: number
   unitPrice: number
+  pricingSource: GeographicPricingSource | null
 }
 
-function getBottlePrice(product: Product) {
+function getBottlePrice(product: Product, casePriceOverride?: number) {
   const explicitBottlePrice = parseFloat(product.bottlePrice || '0')
   if (explicitBottlePrice > 0) return explicitBottlePrice
   const bottlesPerCase = product.bottlesPerCase || 12
-  return parseFloat(product.price) / bottlesPerCase
+  return (casePriceOverride ?? parseFloat(product.price)) / bottlesPerCase
 }
 
 function getBottleStock(product: Product) {
@@ -55,10 +59,12 @@ function getBottleStock(product: Product) {
 export default function OrderFormClient({
   customers,
   products,
+  pricingRules,
   mode = 'staff',
 }: {
   customers: Customer[]
   products: Product[]
+  pricingRules: GeographicPricingRuleInput[]
   mode?: 'admin' | 'staff'
 }) {
   const [customerId, setCustomerId] = useState('')
@@ -70,28 +76,52 @@ export default function OrderFormClient({
 
   const selectedCustomer = customers.find((customer) => customer.id === customerId) ?? null
 
-  useEffect(() => {
-    if (!selectedCustomer) {
-      setPaymentTerms('NET30')
-      return
-    }
-    setPaymentTerms(selectedCustomer.paymentTerms ?? 'NET30')
-  }, [selectedCustomer])
-
   const filteredProducts = products.filter(product =>
     product.name.toLowerCase().includes(search.toLowerCase()) ||
     product.sku.toLowerCase().includes(search.toLowerCase()) ||
     (product.brand ?? '').toLowerCase().includes(search.toLowerCase())
   )
 
+  function getResolvedCasePrice(product: Product, customer: Customer | null) {
+    return resolveGeographicCasePrice({
+      productId: product.id,
+      baseCasePrice: product.price,
+      state: customer?.state,
+      county: customer?.county,
+      rules: pricingRules,
+      asOf: new Date(),
+    })
+  }
+
+  function repriceLineItems(nextCustomer: Customer | null, nextUnit: PurchaseUnit) {
+    setLineItems(prev => prev.map(item => {
+      const product = products.find(candidate => candidate.id === item.productId)
+      if (!product) return item
+      const resolvedCasePrice = getResolvedCasePrice(product, nextCustomer)
+
+      return {
+        ...item,
+        unitPrice: nextUnit === 'bottle' ? getBottlePrice(product, resolvedCasePrice.price) : resolvedCasePrice.price,
+        pricingSource: nextUnit === 'case' ? resolvedCasePrice.source : null,
+      }
+    }))
+  }
+
   const addProduct = (product: Product) => {
-    const price = purchaseUnit === 'bottle' ? getBottlePrice(product) : parseFloat(product.price)
+    const resolvedCasePrice = getResolvedCasePrice(product, selectedCustomer)
+    const price = purchaseUnit === 'bottle' ? getBottlePrice(product, resolvedCasePrice.price) : resolvedCasePrice.price
     setLineItems(prev => {
       const existing = prev.find(item => item.productId === product.id)
       if (existing) {
         return prev.map(item => item.productId === product.id ? { ...item, quantity: item.quantity + 1 } : item)
       }
-      return [...prev, { productId: product.id, name: product.name, quantity: 1, unitPrice: price }]
+      return [...prev, {
+        productId: product.id,
+        name: product.name,
+        quantity: 1,
+        unitPrice: price,
+        pricingSource: purchaseUnit === 'case' ? resolvedCasePrice.source : null,
+      }]
     })
   }
 
@@ -108,15 +138,7 @@ export default function OrderFormClient({
 
   function updatePurchaseUnit(nextUnit: PurchaseUnit) {
     setPurchaseUnit(nextUnit)
-    setLineItems(prev => prev.map(item => {
-      const product = products.find(candidate => candidate.id === item.productId)
-      if (!product) return item
-
-      return {
-        ...item,
-        unitPrice: nextUnit === 'bottle' ? getBottlePrice(product) : parseFloat(product.price),
-      }
-    }))
+    repriceLineItems(selectedCustomer, nextUnit)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -151,7 +173,13 @@ export default function OrderFormClient({
                 <Label>Customer</Label>
                 <select
                   value={customerId}
-                  onChange={e => setCustomerId(e.target.value)}
+                  onChange={e => {
+                    const nextCustomerId = e.target.value
+                    const nextCustomer = customers.find((customer) => customer.id === nextCustomerId) ?? null
+                    setCustomerId(nextCustomerId)
+                    setPaymentTerms(nextCustomer?.paymentTerms ?? 'NET30')
+                    repriceLineItems(nextCustomer, purchaseUnit)
+                  }}
                   required
                   className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 >
@@ -214,6 +242,9 @@ export default function OrderFormClient({
                     <p className="text-xs text-muted-foreground">
                       {formatCurrency(item.unitPrice)} x {item.quantity} {purchaseUnit}{item.quantity === 1 ? '' : 's'}
                     </p>
+                    {item.pricingSource ? (
+                      <p className="text-[11px] text-slate-500">{describePricingSource(item.pricingSource)}</p>
+                    ) : null}
                   </div>
                   <div className="flex items-center gap-1">
                     <button type="button" onClick={() => updateQuantity(item.productId, item.quantity - 1)} className="flex h-5 w-5 items-center justify-center rounded border hover:bg-slate-100">
@@ -247,7 +278,8 @@ export default function OrderFormClient({
 
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {filteredProducts.map(product => {
-              const price = purchaseUnit === 'bottle' ? getBottlePrice(product) : parseFloat(product.price)
+              const resolvedCasePrice = getResolvedCasePrice(product, selectedCustomer)
+              const price = purchaseUnit === 'bottle' ? getBottlePrice(product, resolvedCasePrice.price) : resolvedCasePrice.price
               const stock = purchaseUnit === 'bottle' ? getBottleStock(product) : (product.quantityPaid ?? 0)
               const inOrder = lineItems.find(item => item.productId === product.id)
 
@@ -271,7 +303,12 @@ export default function OrderFormClient({
                     </div>
 
                     <div className="mt-3 flex items-center justify-between">
-                      <span className="text-sm font-semibold">{formatCurrency(price)} / {purchaseUnit}</span>
+                      <div>
+                        <span className="text-sm font-semibold">{formatCurrency(price)} / {purchaseUnit}</span>
+                        {purchaseUnit === 'case' ? (
+                          <p className="text-[11px] text-slate-500">{describePricingSource(resolvedCasePrice.source)}</p>
+                        ) : null}
+                      </div>
                       <span className={`text-xs ${(stock ?? 0) <= 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
                         {stock ?? 0} {purchaseUnit}{stock === 1 ? '' : 's'} in stock
                       </span>

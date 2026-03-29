@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import OrderFormClient from '@/components/orders/OrderFormClient'
+import { getPricingRulesForProducts } from '@/lib/pricing/geographic-service'
 
 export default async function NewAdminOrderPage() {
   const [customers, productList] = await Promise.all([
@@ -13,6 +14,8 @@ export default async function NewAdminOrderPage() {
         id: customerAccounts.id,
         companyName: customerAccounts.companyName,
         paymentTerms: customerAccounts.paymentTerms,
+        state: customerAccounts.state,
+        county: customerAccounts.county,
       })
       .from(customerAccounts)
       .orderBy(customerAccounts.companyName),
@@ -26,6 +29,7 @@ export default async function NewAdminOrderPage() {
       .where(eq(products.active, true))
       .orderBy(products.name),
   ])
+  const pricingRules = await getPricingRulesForProducts(productList.map((product) => product.id))
 
   return (
     <div className="p-4 sm:p-8 space-y-6">
@@ -36,7 +40,7 @@ export default async function NewAdminOrderPage() {
           <p className="text-muted-foreground mt-1">Place an order on behalf of a customer and set payment terms</p>
         </div>
       </div>
-      <OrderFormClient customers={customers} products={productList} mode="admin" />
+      <OrderFormClient customers={customers} products={productList} pricingRules={pricingRules} mode="admin" />
     </div>
   )
 }

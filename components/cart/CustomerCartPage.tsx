@@ -10,8 +10,20 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { getMinimumCaseQuantity, getMinimumCaseQuantityMessage, isWisherVodkaProduct } from '@/lib/orders/minimums'
 
-export default function CustomerCartPage({ businessType }: { businessType?: string | null }) {
-  const { items, orderType, removeItem, updateQuantity, clearCart, total, itemCount } = useCart()
+function getDisplayedPrice(priceByProductId: Record<string, number>, item: { productId: string; price: string; samplePrice: string }, orderType: 'paid' | 'sample') {
+  if (orderType === 'sample') return parseFloat(item.samplePrice)
+  return priceByProductId[item.productId] ?? parseFloat(item.price)
+}
+
+export default function CustomerCartPage({
+  businessType,
+  casePriceByProductId,
+}: {
+  businessType?: string | null
+  casePriceByProductId: Record<string, number>
+}) {
+  const { items, orderType, removeItem, updateQuantity, clearCart, itemCount } = useCart()
+  const displayedTotal = items.reduce((sum, item) => sum + getDisplayedPrice(casePriceByProductId, item, orderType) * item.quantity, 0)
 
   if (items.length === 0) {
     return (
@@ -37,7 +49,7 @@ export default function CustomerCartPage({ businessType }: { businessType?: stri
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-3 lg:col-span-2">
           {items.map(item => {
-            const price = parseFloat(orderType === 'sample' ? item.samplePrice : item.price)
+            const price = getDisplayedPrice(casePriceByProductId, item, orderType)
             const minimumMessage = getMinimumCaseQuantityMessage(item, businessType)
             const min = getMinimumCaseQuantity(item, businessType)
             const isLockedAtMinimum = isWisherVodkaProduct(item) && item.quantity <= min
@@ -101,7 +113,7 @@ export default function CustomerCartPage({ businessType }: { businessType?: stri
           <CardContent className="space-y-4">
             <div className="space-y-2">
               {items.map(item => {
-                const price = parseFloat(orderType === 'sample' ? item.samplePrice : item.price)
+                const price = getDisplayedPrice(casePriceByProductId, item, orderType)
                 return (
                   <div key={item.productId} className="flex justify-between text-sm">
                     <span className="text-muted-foreground">{item.name} x{item.quantity}</span>
@@ -111,7 +123,7 @@ export default function CustomerCartPage({ businessType }: { businessType?: stri
               })}
             </div>
             <div className="flex justify-between border-t pt-3 text-lg font-bold">
-              <span>Total</span><span>{formatCurrency(total())}</span>
+              <span>Total</span><span>{formatCurrency(displayedTotal)}</span>
             </div>
             <Link href="/customer/checkout">
               <Button className="w-full">

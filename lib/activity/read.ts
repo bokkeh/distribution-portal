@@ -17,7 +17,7 @@ function isMissingActivityEventsTable(error: unknown) {
 }
 
 export async function getActivityTimeline(
-  entityType: 'account' | 'order' | 'delivery' | 'tasting' | 'inbox_thread' | 'wholesale_request' | 'job',
+  entityType: 'account' | 'order' | 'delivery' | 'tasting' | 'inbox_thread' | 'wholesale_request' | 'job' | 'pricing_rule',
   entityId: string,
   fallbackItems: TimelineItem[] = []
 ) {

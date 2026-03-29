@@ -211,6 +211,13 @@
       "when": 1774177200000,
       "tag": "0030_taster_availability",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1774800000000,
+      "tag": "0031_geographic_pricing",
+      "breakpoints": true
     }
   ]
 }

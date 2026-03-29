@@ -10,6 +10,7 @@ export type CRMAccountDetail = {
   address: string | null
   city: string | null
   state: string | null
+  county: string | null
   zip: string | null
   phone: string | null
   email: string | null
@@ -106,6 +107,7 @@ export async function getCRMAccountDetail(accountId: string): Promise<CRMAccount
     address: customerAccounts.address,
     city: customerAccounts.city,
     state: customerAccounts.state,
+    county: customerAccounts.county,
     zip: customerAccounts.zip,
     phone: customerAccounts.phone,
     email: customerAccounts.email,

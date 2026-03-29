@@ -10,6 +10,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { formatStatusLabel, orderStatusVariant, shippingStatusVariant } from '@/lib/orders/status'
 import { formatPaymentTerms } from '@/lib/orders/payment-terms'
 import { isMissingShippingStatusColumn } from '@/lib/orders/shipping-fallback'
+import { describePricingSource } from '@/lib/pricing/geographic'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { reorderCustomerOrder } from '@/actions/orders'
@@ -62,7 +63,7 @@ export default async function CustomerOrderDetailPage({ params }: { params: Prom
 
   const items = await db
     .select({
-      id: orderItems.id, quantity: orderItems.quantity, unitPrice: orderItems.unitPrice, total: orderItems.total,
+      id: orderItems.id, quantity: orderItems.quantity, unitPrice: orderItems.unitPrice, total: orderItems.total, pricingSource: orderItems.pricingSource,
       productName: products.name,
     })
     .from(orderItems)
@@ -195,7 +196,12 @@ export default async function CustomerOrderDetailPage({ params }: { params: Prom
             <tbody className="divide-y">
               {items.map(item => (
                 <tr key={item.id}>
-                  <td className="px-4 py-3 text-sm font-medium">{item.productName}</td>
+                  <td className="px-4 py-3 text-sm font-medium">
+                    <p>{item.productName}</p>
+                    {item.pricingSource ? (
+                      <p className="text-[11px] font-normal text-slate-500">{describePricingSource(item.pricingSource)}</p>
+                    ) : null}
+                  </td>
                   <td className="px-4 py-3 text-sm text-right">{item.quantity}</td>
                   <td className="px-4 py-3 text-sm text-right">{formatCurrency(item.unitPrice)}</td>
                   <td className="px-4 py-3 text-sm font-semibold text-right">{formatCurrency(item.total)}</td>

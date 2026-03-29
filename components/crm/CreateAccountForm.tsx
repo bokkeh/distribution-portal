@@ -86,6 +86,13 @@ export function CreateAccountForm() {
           <Input id="new-state" name="state" maxLength={2} />
         </div>
         <div className="space-y-2">
+          <Label htmlFor="new-county">County</Label>
+          <Input id="new-county" name="county" placeholder="Montgomery" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="space-y-2">
           <Label htmlFor="new-zip">ZIP</Label>
           <Input id="new-zip" name="zip" />
         </div>

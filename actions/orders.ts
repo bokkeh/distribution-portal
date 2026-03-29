@@ -1,7 +1,7 @@
 'use server'
 
 import { db } from '@/db'
-import { customerAccounts, inventory, orderItems, orders, products, salesMembers } from '@/db/schema'
+import { customerAccounts, inventory, orderItems, orders, products } from '@/db/schema'
 import { requireAuth } from '@/lib/auth/session'
 import { eq, inArray } from 'drizzle-orm'
 import { calculateCommissionForOrder, recordCommission } from '@/actions/sales-members'
@@ -13,11 +13,132 @@ import { createUserNotification } from '@/lib/notifications/in-app'
 import { notify } from '@/lib/notifications/dispatch'
 import { logActivityEvent } from '@/lib/activity/log'
 import { formatPaymentTerms } from '@/lib/orders/payment-terms'
+import { getPricingRulesForProducts, normalizeAccountGeography, resolveProductCasePrice } from '@/lib/pricing/geographic-service'
+import type { GeographicPricingSource } from '@/lib/pricing/geographic'
 
 type PurchaseUnit = 'case' | 'bottle'
 
+type PricingContext = {
+  state: string | null
+  county: string | null
+}
+
 function uniqueEmails(...values: Array<string | null | undefined>) {
   return Array.from(new Set(values.map((value) => value?.trim()).filter(Boolean) as string[]))
+}
+
+function getBottleUnitPrice(product: typeof products.$inferSelect, resolvedCasePrice: number) {
+  const explicitBottlePrice = parseFloat(product.bottlePrice || '0')
+  if (explicitBottlePrice > 0) {
+    return { unitPrice: explicitBottlePrice, inheritsCasePricing: false }
+  }
+
+  const bottlesPerCase = product.bottlesPerCase || 12
+  return {
+    unitPrice: resolvedCasePrice / bottlesPerCase,
+    inheritsCasePricing: true,
+  }
+}
+
+async function getAccountPricingContext(customerId: string): Promise<PricingContext> {
+  const [account] = await db
+    .select({
+      state: customerAccounts.state,
+      county: customerAccounts.county,
+    })
+    .from(customerAccounts)
+    .where(eq(customerAccounts.id, customerId))
+    .limit(1)
+
+  if (!account) {
+    throw new Error('Customer account not found')
+  }
+
+  return normalizeAccountGeography(account)
+}
+
+async function buildPricedLineItems(input: {
+  customerId: string
+  purchaseUnit: PurchaseUnit
+  orderDate: Date
+  items: { productId: string; quantity: number }[]
+  customerBusinessType: string | null
+}) {
+  const productIds = input.items.map((item) => item.productId)
+  const [productList, inventoryRows, pricingContext, pricingRules] = await Promise.all([
+    db.select().from(products).where(inArray(products.id, productIds)),
+    db.select().from(inventory).where(inArray(inventory.productId, productIds)),
+    getAccountPricingContext(input.customerId),
+    getPricingRulesForProducts(productIds),
+  ])
+
+  const productMap = Object.fromEntries(productList.map((product) => [product.id, product]))
+  const inventoryMap = Object.fromEntries(inventoryRows.map((row) => [row.productId, row]))
+  let subtotal = 0
+
+  const lineItems = input.items.map((item) => {
+    const product = productMap[item.productId]
+    const inv = inventoryMap[item.productId]
+    if (!product) {
+      throw new Error(`Product ${item.productId} not found`)
+    }
+    if (!inv) {
+      throw new Error(`Inventory record missing for product ${product.name}`)
+    }
+
+    const bottlesPerCase = product.bottlesPerCase || 12
+    const availableQuantity = input.purchaseUnit === 'bottle'
+      ? inv.quantityPaid * bottlesPerCase - inv.looseBottlePaid
+      : inv.quantityPaid
+
+    if (item.quantity > availableQuantity) {
+      throw new Error(`Not enough ${input.purchaseUnit}s in stock for ${product.name}`)
+    }
+
+    if (
+      input.purchaseUnit === 'case' &&
+      isWisherVodkaProduct(product) &&
+      item.quantity < getMinimumCaseQuantity(product, input.customerBusinessType)
+    ) {
+      throw new Error(`${product.name} requires a minimum order of ${getMinimumCaseQuantity(product, input.customerBusinessType)} cases`)
+    }
+
+    const pricing = resolveProductCasePrice({
+      productId: item.productId,
+      baseCasePrice: product.price,
+      account: pricingContext,
+      rules: pricingRules,
+      asOf: input.orderDate,
+    })
+
+    const bottlePricing = getBottleUnitPrice(product, pricing.price)
+    const unitPrice = input.purchaseUnit === 'case'
+      ? pricing.price
+      : bottlePricing.unitPrice
+
+    const total = unitPrice * item.quantity
+    subtotal += total
+
+    const pricingSource: GeographicPricingSource | null =
+      input.purchaseUnit === 'case' || bottlePricing.inheritsCasePricing
+        ? pricing.source
+        : null
+
+    return {
+      orderId: '',
+      productId: item.productId,
+      quantity: String(item.quantity),
+      unit: input.purchaseUnit,
+      unitPrice: unitPrice.toFixed(2),
+      total: total.toFixed(2),
+      pricingSource,
+      pricingRuleId: pricingSource ? pricing.matchedRule?.id ?? null : null,
+      pricingState: pricingSource ? pricing.matchedState : null,
+      pricingCounty: pricingSource ? pricing.matchedCounty : null,
+    }
+  })
+
+  return { lineItems, subtotal, productMap, inventoryMap }
 }
 
 export async function createOrder(formData: FormData) {
@@ -77,55 +198,12 @@ export async function createOrder(formData: FormData) {
       ? defaultPaymentTerms
       : (requestedPaymentTerms || defaultPaymentTerms)
 
-    const productIds = items.map(item => item.productId)
-    const [productList, inventoryRows] = await Promise.all([
-      db.select().from(products).where(inArray(products.id, productIds)),
-      db.select().from(inventory).where(inArray(inventory.productId, productIds)),
-    ])
-
-    const productMap = Object.fromEntries(productList.map(product => [product.id, product]))
-    const inventoryMap = Object.fromEntries(inventoryRows.map(row => [row.productId, row]))
-
-    let subtotal = 0
-
-    const lineItems = items.map(item => {
-    const product = productMap[item.productId]
-    const inv = inventoryMap[item.productId]
-    if (!product) {
-      throw new Error(`Product ${item.productId} not found`)
-    }
-    if (!inv) {
-      throw new Error(`Inventory record missing for product ${product.name}`)
-    }
-
-    const bottlesPerCase = product.bottlesPerCase || 12
-    const availableQuantity = purchaseUnit === 'bottle'
-      ? inv.quantityPaid * bottlesPerCase - inv.looseBottlePaid
-      : inv.quantityPaid
-
-    if (item.quantity > availableQuantity) {
-      throw new Error(`Not enough ${purchaseUnit}s in stock for ${product.name}`)
-    }
-
-    if (purchaseUnit === 'case' && isWisherVodkaProduct(product) && item.quantity < getMinimumCaseQuantity(product, customerBusinessType)) {
-      throw new Error(`${product.name} requires a minimum order of ${getMinimumCaseQuantity(product, customerBusinessType)} cases`)
-    }
-
-    const unitPrice = purchaseUnit === 'bottle'
-      ? parseFloat(product.bottlePrice || '0') || (parseFloat(product.price) / bottlesPerCase)
-      : parseFloat(product.price)
-
-    const total = unitPrice * item.quantity
-    subtotal += total
-
-    return {
-      orderId: '',
-      productId: item.productId,
-      quantity: String(item.quantity),
-      unit: purchaseUnit,
-      unitPrice: unitPrice.toFixed(2),
-      total: total.toFixed(2),
-    }
+    const { lineItems, subtotal, productMap, inventoryMap } = await buildPricedLineItems({
+      customerId,
+      purchaseUnit,
+      orderDate: new Date(),
+      items,
+      customerBusinessType,
     })
 
     const tax = 0
@@ -383,7 +461,7 @@ export async function reorderCustomerOrder(orderId: string) {
   }
 
   const [account] = await db
-    .select({ id: customerAccounts.id })
+    .select({ id: customerAccounts.id, businessType: customerAccounts.businessType })
     .from(customerAccounts)
     .where(eq(customerAccounts.userId, session.user.id))
     .limit(1)
@@ -422,7 +500,22 @@ export async function reorderCustomerOrder(orderId: string) {
     throw new Error('No order items found to reorder')
   }
 
-  const subtotal = existingItems.reduce((sum, item) => sum + Number(item.total), 0)
+  const purchaseUnits = Array.from(new Set(existingItems.map((item) => item.unit))) as PurchaseUnit[]
+  if (purchaseUnits.length !== 1) {
+    throw new Error('Mixed-unit reorders are not supported for this order.')
+  }
+
+  const purchaseUnit = purchaseUnits[0]
+  const { lineItems, subtotal } = await buildPricedLineItems({
+    customerId: account.id,
+    purchaseUnit,
+    orderDate: new Date(),
+    items: existingItems.map((item) => ({
+      productId: item.productId,
+      quantity: Number(item.quantity),
+    })),
+    customerBusinessType: account.businessType ?? null,
+  })
 
   const [newOrder] = await db.insert(orders).values({
     customerId: account.id,
@@ -437,13 +530,9 @@ export async function reorderCustomerOrder(orderId: string) {
   }).returning()
 
   await db.insert(orderItems).values(
-    existingItems.map((item) => ({
+    lineItems.map((item) => ({
+      ...item,
       orderId: newOrder.id,
-      productId: item.productId,
-      quantity: item.quantity,
-      unit: item.unit,
-      unitPrice: item.unitPrice,
-      total: item.total,
     }))
   )
 

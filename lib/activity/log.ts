@@ -7,7 +7,7 @@ function isMissingActivityEventsTable(error: unknown) {
 }
 
 export async function logActivityEvent(input: {
-  entityType: 'account' | 'order' | 'delivery' | 'tasting' | 'inbox_thread' | 'wholesale_request' | 'job' | 'invoice'
+  entityType: 'account' | 'order' | 'delivery' | 'tasting' | 'inbox_thread' | 'wholesale_request' | 'job' | 'invoice' | 'pricing_rule'
   entityId: string
   actorUserId?: string | null
   relatedUserId?: string | null

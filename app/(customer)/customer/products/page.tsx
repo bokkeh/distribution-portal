@@ -6,6 +6,7 @@ import { requireRole } from '@/lib/auth/session'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
+import { getPricingRulesForProducts, normalizeAccountGeography, resolveProductCasePrice } from '@/lib/pricing/geographic-service'
 
 export default async function CustomerProductsPage() {
   const session = await requireRole('customer')
@@ -20,16 +21,33 @@ export default async function CustomerProductsPage() {
       })
       .from(products)
       .leftJoin(inventory, eq(products.id, inventory.productId))
-      .where(products.active as any)
+      .where(eq(products.active, true))
       .orderBy(products.name),
     db
-      .select({ businessType: customerAccounts.businessType })
+      .select({ businessType: customerAccounts.businessType, state: customerAccounts.state, county: customerAccounts.county })
       .from(customerAccounts)
       .where(eq(customerAccounts.userId, session.user.id))
       .limit(1),
   ])
+  const pricingRules = await getPricingRulesForProducts(productList.map((product) => product.id))
+  const pricingContext = normalizeAccountGeography({ state: account?.state, county: account?.county })
+  const pricedProducts = productList.map((product) => {
+    const pricing = resolveProductCasePrice({
+      productId: product.id,
+      baseCasePrice: product.price,
+      account: pricingContext,
+      rules: pricingRules,
+      asOf: new Date(),
+    })
 
-  const categories = [...new Set(productList.map(p => p.category).filter(Boolean))]
+    return {
+      ...product,
+      price: pricing.price.toFixed(2),
+      pricingSource: pricing.source,
+    }
+  })
+
+  const categories = [...new Set(pricedProducts.map(p => p.category).filter(Boolean))]
 
   return (
     <div className="space-y-6">
@@ -55,7 +73,7 @@ export default async function CustomerProductsPage() {
           </div>
         </div>
       </section>
-      <CustomerProductCatalog products={productList} categories={categories as string[]} businessType={account?.businessType} />
+      <CustomerProductCatalog products={pricedProducts} categories={categories as string[]} businessType={account?.businessType} />
     </div>
   )
 }

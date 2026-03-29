@@ -11,6 +11,7 @@ export const customerAccounts = pgTable('customer_accounts', {
   address: text('address'),
   city: text('city'),
   state: text('state'),
+  county: text('county'),
   zip: text('zip'),
   phone: text('phone'),
   email: text('email'),

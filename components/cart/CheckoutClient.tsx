@@ -16,10 +16,19 @@ import { getCustomerPaymentBreakdown, type CustomerPaymentMethod } from '@/lib/s
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '')
 
+function getDisplayedPrice(
+  casePriceByProductId: Record<string, number>,
+  item: { productId: string; price: string; samplePrice: string },
+  orderType: 'paid' | 'sample'
+) {
+  if (orderType === 'sample') return parseFloat(item.samplePrice)
+  return casePriceByProductId[item.productId] ?? parseFloat(item.price)
+}
+
 function PaymentForm({ customerId, orderType, items, total, notes, deliveryTiming, preferredDeliveryDay, preferredDeliveryTime, deliveryRequirements, paymentMethod, processingFee, onSuccess }: {
   customerId: string
   orderType: 'paid' | 'sample'
-  items: any[]
+  items: Array<{ productId: string; quantity: number }>
   total: number
   notes: string
   deliveryTiming: 'standard' | 'time_sensitive'
@@ -88,8 +97,18 @@ function PaymentForm({ customerId, orderType, items, total, notes, deliveryTimin
   )
 }
 
-export default function CheckoutClient({ customerId, customerName, businessType }: { customerId: string; customerName: string; businessType?: string | null }) {
-  const { items, orderType, total, clearCart } = useCart()
+export default function CheckoutClient({
+  customerId,
+  customerName,
+  businessType,
+  casePriceByProductId,
+}: {
+  customerId: string
+  customerName: string
+  businessType?: string | null
+  casePriceByProductId: Record<string, number>
+}) {
+  const { items, orderType, clearCart } = useCart()
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [notes, setNotes] = useState('')
@@ -121,7 +140,7 @@ export default function CheckoutClient({ customerId, customerName, businessType 
         deliveryTiming === 'time_sensitive'
           ? (preferredDeliveryDay && ['saturday', 'sunday'].includes(preferredDeliveryDay.toLowerCase()) ? 50 : 30)
           : 0
-      const baseAmountCents = Math.round((total() + deliveryFee) * 100)
+      const baseAmountCents = Math.round((items.reduce((sum, item) => sum + getDisplayedPrice(casePriceByProductId, item, orderType) * item.quantity, 0) + deliveryFee) * 100)
       const res = await fetch('/api/stripe/payment-intent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -141,7 +160,7 @@ export default function CheckoutClient({ customerId, customerName, businessType 
     }
   }
 
-  const totalAmount = total()
+  const totalAmount = items.reduce((sum, item) => sum + getDisplayedPrice(casePriceByProductId, item, orderType) * item.quantity, 0)
   const timeSensitiveFee =
     deliveryTiming === 'time_sensitive'
       ? (preferredDeliveryDay && ['saturday', 'sunday'].includes(preferredDeliveryDay.toLowerCase()) ? 50 : 30)
@@ -172,7 +191,7 @@ export default function CheckoutClient({ customerId, customerName, businessType 
           )}
           <div className="space-y-2 border-t pt-3">
             {items.map(item => {
-              const price = parseFloat(orderType === 'sample' ? item.samplePrice : item.price)
+              const price = getDisplayedPrice(casePriceByProductId, item, orderType)
               return (
                 <div key={item.productId} className="flex justify-between text-sm">
                   <span>{item.name} x{item.quantity}</span>
@@ -182,7 +201,7 @@ export default function CheckoutClient({ customerId, customerName, businessType 
             })}
           </div>
           <div className="border-t pt-3 flex justify-between font-bold text-lg">
-            <span>Total</span><span>{formatCurrency(total())}</span>
+            <span>Total</span><span>{formatCurrency(totalAmount)}</span>
           </div>
           <div className="flex justify-between text-sm">
             <span>Delivery fee</span><span>{formatCurrency(timeSensitiveFee)}</span>

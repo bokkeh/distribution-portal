@@ -11,6 +11,7 @@ import { updateOrderShippingStatus, updateOrderStatus } from '@/actions/orders'
 import { formatStatusLabel, orderStatusVariant, shippingStatusVariant } from '@/lib/orders/status'
 import { formatPaymentTerms } from '@/lib/orders/payment-terms'
 import { isMissingShippingStatusColumn } from '@/lib/orders/shipping-fallback'
+import { describePricingSource } from '@/lib/pricing/geographic'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { ActivityTimeline } from '@/components/activity/ActivityTimeline'
@@ -86,6 +87,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
       unit: orderItems.unit,
       unitPrice: orderItems.unitPrice,
       total: orderItems.total,
+      pricingSource: orderItems.pricingSource,
       productName: products.name,
       productSku: products.sku,
     })
@@ -142,6 +144,9 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
                     <td className="px-4 py-3">
                       <p className="text-sm font-medium">{item.productName}</p>
                       <p className="text-xs text-muted-foreground">{item.productSku}</p>
+                      {item.pricingSource ? (
+                        <p className="text-[11px] text-slate-500">{describePricingSource(item.pricingSource)}</p>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3 text-sm text-right">{item.quantity} {item.unit}{item.quantity === '1' ? '' : 's'}</td>
                     <td className="px-4 py-3 text-sm text-right">{formatCurrency(item.unitPrice)}</td>

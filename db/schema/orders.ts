@@ -3,6 +3,7 @@ import { customerAccounts } from './customers'
 import { users } from './users'
 import { products } from './products'
 import { salesMembers } from './salesMembers'
+import { geographicPricingRules } from './geographicPricingRules'
 
 export const orders = pgTable('orders', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -32,6 +33,10 @@ export const orderItems = pgTable('order_items', {
   unit: text('unit', { enum: ['case', 'bottle'] }).notNull().default('case'),
   unitPrice: numeric('unit_price', { precision: 10, scale: 2 }).notNull(),
   total: numeric('total', { precision: 12, scale: 2 }).notNull(),
+  pricingSource: text('pricing_source', { enum: ['county_override', 'state_price', 'default_price'] }),
+  pricingRuleId: uuid('pricing_rule_id').references(() => geographicPricingRules.id, { onDelete: 'set null' }),
+  pricingState: text('pricing_state'),
+  pricingCounty: text('pricing_county'),
 })
 
 export type Order = typeof orders.$inferSelect

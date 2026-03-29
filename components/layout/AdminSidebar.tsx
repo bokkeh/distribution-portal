@@ -50,6 +50,7 @@ const navSections = [
     title: 'Operations',
     items: [
       { href: '/admin/inventory', label: 'Inventory', icon: Package, feature: 'inventory' },
+      { href: '/admin/pricing', label: 'Geographic Pricing', icon: FileText, feature: 'inventory' },
       { href: '/admin/tastings', label: 'Tastings', icon: CalendarDays, feature: 'tastings' },
       { href: '/admin/tastings/roi', label: 'Tasting ROI', icon: TrendingUp, feature: 'tastings' },
     ],
@@ -202,8 +203,6 @@ export default function AdminSidebar({
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const [dialpadOpen, setDialpadOpen] = useState(false)
-
-  useEffect(() => { setOpen(false) }, [pathname])
 
   useEffect(() => {
     document.body.style.overflow = open ? 'hidden' : ''

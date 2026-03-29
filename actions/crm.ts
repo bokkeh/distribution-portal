@@ -8,6 +8,7 @@ import { eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { upsertHubSpotContact, getHubSpotCompanies, updateHubSpotCompany } from '@/lib/hubspot/client'
 import { logActivityEvent } from '@/lib/activity/log'
+import { normalizeAccountGeography } from '@/lib/pricing/geographic-service'
 
 export async function updateDealStage(accountId: string, dealStage: string) {
   await requireAdminOrStaff()
@@ -367,6 +368,7 @@ export async function updateCustomerAccount(
     const address = (formData.get('address') as string) || null
     const city = (formData.get('city') as string) || null
     const state = (formData.get('state') as string) || null
+    const county = (formData.get('county') as string) || null
     const zip = (formData.get('zip') as string) || null
     const businessEmail = (formData.get('businessEmail') as string) || null
     const businessPhone = (formData.get('businessPhone') as string) || null
@@ -379,6 +381,7 @@ export async function updateCustomerAccount(
     const businessType = (formData.get('businessType') as string) || null
     const creditLimit = formData.get('creditLimit') as string
     const paymentTerms = formData.get('paymentTerms') as string
+    const normalizedGeography = normalizeAccountGeography({ state, county })
 
     const [existingAccount] = await db.select().from(customerAccounts).where(eq(customerAccounts.id, id)).limit(1)
     if (!existingAccount) {
@@ -392,7 +395,8 @@ export async function updateCustomerAccount(
       ['email', existingAccount.email, email],
       ['address', existingAccount.address, address],
       ['city', existingAccount.city, city],
-      ['state', existingAccount.state, state],
+      ['state', existingAccount.state, normalizedGeography.state],
+      ['county', existingAccount.county, normalizedGeography.county],
       ['zip', existingAccount.zip, zip],
       ['businessEmail', existingAccount.businessEmail, businessEmail],
       ['businessPhone', existingAccount.businessPhone, businessPhone],
@@ -411,7 +415,8 @@ export async function updateCustomerAccount(
       contactName,
       address,
       city,
-      state,
+      state: normalizedGeography.state,
+      county: normalizedGeography.county,
       zip,
       phone,
       email,
@@ -447,7 +452,7 @@ export async function updateCustomerAccount(
         phone: businessPhone || phone || '',
         address: address ?? '',
         city: city ?? '',
-        state: state ?? '',
+        state: normalizedGeography.state ?? '',
         zip: zip ?? '',
       }).catch(() => false)
     }
@@ -498,6 +503,7 @@ export async function createCustomerAccount(
     const address = ((formData.get('address') as string) || '').trim() || null
     const city = ((formData.get('city') as string) || '').trim() || null
     const state = ((formData.get('state') as string) || '').trim() || null
+    const county = ((formData.get('county') as string) || '').trim() || null
     const zip = ((formData.get('zip') as string) || '').trim() || null
     const businessEmail = ((formData.get('businessEmail') as string) || '').trim() || null
     const businessPhone = ((formData.get('businessPhone') as string) || '').trim() || null
@@ -509,6 +515,7 @@ export async function createCustomerAccount(
     const dcAbraNumber = ((formData.get('dcAbraNumber') as string) || '').trim() || null
     const creditLimit = ((formData.get('creditLimit') as string) || '0').trim() || '0'
     const paymentTerms = ((formData.get('paymentTerms') as string) || 'NET30').trim() || 'NET30'
+    const normalizedGeography = normalizeAccountGeography({ state, county })
 
     if (!companyName) {
       return { error: 'Company name is required.' }
@@ -519,7 +526,8 @@ export async function createCustomerAccount(
       contactName,
       address,
       city,
-      state,
+      state: normalizedGeography.state,
+      county: normalizedGeography.county,
       zip,
       phone,
       email,
@@ -550,7 +558,7 @@ export async function createCustomerAccount(
       company: companyName,
       phone: pocPhone || businessPhone || phone || '',
       city: city ?? '',
-      state: state ?? '',
+      state: normalizedGeography.state ?? '',
       credit_limit: creditLimit,
       payment_terms: paymentTerms,
       account_balance: '0',
