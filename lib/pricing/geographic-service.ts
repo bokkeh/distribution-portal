@@ -19,6 +19,8 @@ export async function getPricingRulesForProducts(productIds: string[]) {
       countyName: geographicPricingRules.countyName,
       countyKey: geographicPricingRules.countyKey,
       ruleType: geographicPricingRules.ruleType,
+      minCaseQuantity: geographicPricingRules.minCaseQuantity,
+      maxCaseQuantity: geographicPricingRules.maxCaseQuantity,
       casePrice: geographicPricingRules.casePrice,
       effectiveStartDate: geographicPricingRules.effectiveStartDate,
       effectiveEndDate: geographicPricingRules.effectiveEndDate,
@@ -49,6 +51,7 @@ export function resolveProductCasePrice(input: {
   account: AccountPricingContext
   rules: GeographicPricingRuleInput[]
   asOf?: Date | string
+  quantityCases?: number | null
 }) {
   return resolveGeographicCasePrice({
     productId: input.productId,
@@ -57,6 +60,7 @@ export function resolveProductCasePrice(input: {
     county: input.account.county,
     rules: input.rules,
     asOf: input.asOf ?? new Date(),
+    quantityCases: input.quantityCases,
   })
 }
 

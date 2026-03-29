@@ -9,21 +9,40 @@ import { Trash2, Plus, Minus, ShoppingCart, ArrowRight, ImageIcon } from 'lucide
 import Link from 'next/link'
 import Image from 'next/image'
 import { getMinimumCaseQuantity, getMinimumCaseQuantityMessage, isWisherVodkaProduct } from '@/lib/orders/minimums'
+import { resolveGeographicCasePrice, type GeographicPricingRuleInput } from '@/lib/pricing/geographic'
 
-function getDisplayedPrice(priceByProductId: Record<string, number>, item: { productId: string; price: string; samplePrice: string }, orderType: 'paid' | 'sample') {
+function getDisplayedPrice(
+  item: { productId: string; price: string; samplePrice: string; quantity: number },
+  orderType: 'paid' | 'sample',
+  pricingRules: GeographicPricingRuleInput[],
+  pricingState: string | null,
+  pricingCounty: string | null
+) {
   if (orderType === 'sample') return parseFloat(item.samplePrice)
-  return priceByProductId[item.productId] ?? parseFloat(item.price)
+  return resolveGeographicCasePrice({
+    productId: item.productId,
+    baseCasePrice: item.price,
+    state: pricingState,
+    county: pricingCounty,
+    rules: pricingRules,
+    asOf: new Date(),
+    quantityCases: item.quantity,
+  }).price
 }
 
 export default function CustomerCartPage({
   businessType,
-  casePriceByProductId,
+  pricingRules,
+  pricingState,
+  pricingCounty,
 }: {
   businessType?: string | null
-  casePriceByProductId: Record<string, number>
+  pricingRules: GeographicPricingRuleInput[]
+  pricingState: string | null
+  pricingCounty: string | null
 }) {
   const { items, orderType, removeItem, updateQuantity, clearCart, itemCount } = useCart()
-  const displayedTotal = items.reduce((sum, item) => sum + getDisplayedPrice(casePriceByProductId, item, orderType) * item.quantity, 0)
+  const displayedTotal = items.reduce((sum, item) => sum + getDisplayedPrice(item, orderType, pricingRules, pricingState, pricingCounty) * item.quantity, 0)
 
   if (items.length === 0) {
     return (
@@ -49,7 +68,7 @@ export default function CustomerCartPage({
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-3 lg:col-span-2">
           {items.map(item => {
-            const price = getDisplayedPrice(casePriceByProductId, item, orderType)
+            const price = getDisplayedPrice(item, orderType, pricingRules, pricingState, pricingCounty)
             const minimumMessage = getMinimumCaseQuantityMessage(item, businessType)
             const min = getMinimumCaseQuantity(item, businessType)
             const isLockedAtMinimum = isWisherVodkaProduct(item) && item.quantity <= min
@@ -113,7 +132,7 @@ export default function CustomerCartPage({
           <CardContent className="space-y-4">
             <div className="space-y-2">
               {items.map(item => {
-                const price = getDisplayedPrice(casePriceByProductId, item, orderType)
+                const price = getDisplayedPrice(item, orderType, pricingRules, pricingState, pricingCounty)
                 return (
                   <div key={item.productId} className="flex justify-between text-sm">
                     <span className="text-muted-foreground">{item.name} x{item.quantity}</span>

@@ -7,6 +7,8 @@ export type GeographicPricingRuleInput = {
   countyName: string | null
   countyKey: string | null
   ruleType: 'state' | 'county'
+  minCaseQuantity: number | null
+  maxCaseQuantity: number | null
   casePrice: string
   effectiveStartDate: string | Date
   effectiveEndDate: string | Date | null
@@ -21,6 +23,60 @@ export type GeographicPriceResolution = {
   matchedState: string | null
   matchedCounty: string | null
 }
+
+export const US_STATE_OPTIONS = [
+  { code: 'AL', name: 'Alabama' },
+  { code: 'AK', name: 'Alaska' },
+  { code: 'AZ', name: 'Arizona' },
+  { code: 'AR', name: 'Arkansas' },
+  { code: 'CA', name: 'California' },
+  { code: 'CO', name: 'Colorado' },
+  { code: 'CT', name: 'Connecticut' },
+  { code: 'DE', name: 'Delaware' },
+  { code: 'FL', name: 'Florida' },
+  { code: 'GA', name: 'Georgia' },
+  { code: 'HI', name: 'Hawaii' },
+  { code: 'ID', name: 'Idaho' },
+  { code: 'IL', name: 'Illinois' },
+  { code: 'IN', name: 'Indiana' },
+  { code: 'IA', name: 'Iowa' },
+  { code: 'KS', name: 'Kansas' },
+  { code: 'KY', name: 'Kentucky' },
+  { code: 'LA', name: 'Louisiana' },
+  { code: 'ME', name: 'Maine' },
+  { code: 'MD', name: 'Maryland' },
+  { code: 'MA', name: 'Massachusetts' },
+  { code: 'MI', name: 'Michigan' },
+  { code: 'MN', name: 'Minnesota' },
+  { code: 'MS', name: 'Mississippi' },
+  { code: 'MO', name: 'Missouri' },
+  { code: 'MT', name: 'Montana' },
+  { code: 'NE', name: 'Nebraska' },
+  { code: 'NV', name: 'Nevada' },
+  { code: 'NH', name: 'New Hampshire' },
+  { code: 'NJ', name: 'New Jersey' },
+  { code: 'NM', name: 'New Mexico' },
+  { code: 'NY', name: 'New York' },
+  { code: 'NC', name: 'North Carolina' },
+  { code: 'ND', name: 'North Dakota' },
+  { code: 'OH', name: 'Ohio' },
+  { code: 'OK', name: 'Oklahoma' },
+  { code: 'OR', name: 'Oregon' },
+  { code: 'PA', name: 'Pennsylvania' },
+  { code: 'RI', name: 'Rhode Island' },
+  { code: 'SC', name: 'South Carolina' },
+  { code: 'SD', name: 'South Dakota' },
+  { code: 'TN', name: 'Tennessee' },
+  { code: 'TX', name: 'Texas' },
+  { code: 'UT', name: 'Utah' },
+  { code: 'VT', name: 'Vermont' },
+  { code: 'VA', name: 'Virginia' },
+  { code: 'WA', name: 'Washington' },
+  { code: 'WV', name: 'West Virginia' },
+  { code: 'WI', name: 'Wisconsin' },
+  { code: 'WY', name: 'Wyoming' },
+  { code: 'DC', name: 'District of Columbia' },
+] as const
 
 const STATE_NAME_TO_CODE: Record<string, string> = {
   ALABAMA: 'AL',
@@ -155,8 +211,76 @@ export function dateRangesOverlap(
   return leftStartIso <= rightEndIso && rightStartIso <= leftEndIso
 }
 
+export function normalizeCaseQuantity(value: number | string | null | undefined) {
+  if (value === null || value === undefined || value === '') return null
+  const quantity = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(quantity) || quantity <= 0) return null
+  return Math.floor(quantity)
+}
+
+export function quantityRangeMatches(
+  rule: Pick<GeographicPricingRuleInput, 'minCaseQuantity' | 'maxCaseQuantity'>,
+  quantity: number | null | undefined
+) {
+  const normalizedQuantity = normalizeCaseQuantity(quantity)
+  const min = normalizeCaseQuantity(rule.minCaseQuantity)
+  const max = normalizeCaseQuantity(rule.maxCaseQuantity)
+  if (normalizedQuantity === null) return min === null && max === null
+  if (min !== null && normalizedQuantity < min) return false
+  if (max !== null && normalizedQuantity > max) return false
+  return true
+}
+
+export function quantityRangesConflict(
+  left: Pick<GeographicPricingRuleInput, 'minCaseQuantity' | 'maxCaseQuantity'>,
+  right: Pick<GeographicPricingRuleInput, 'minCaseQuantity' | 'maxCaseQuantity'>
+) {
+  const leftMin = normalizeCaseQuantity(left.minCaseQuantity)
+  const leftMax = normalizeCaseQuantity(left.maxCaseQuantity)
+  const rightMin = normalizeCaseQuantity(right.minCaseQuantity)
+  const rightMax = normalizeCaseQuantity(right.maxCaseQuantity)
+  const leftIsGeneric = leftMin === null && leftMax === null
+  const rightIsGeneric = rightMin === null && rightMax === null
+
+  if (leftIsGeneric || rightIsGeneric) return leftIsGeneric && rightIsGeneric
+
+  const normalizedLeftMax = leftMax ?? Number.POSITIVE_INFINITY
+  const normalizedRightMax = rightMax ?? Number.POSITIVE_INFINITY
+
+  return leftMin! <= normalizedRightMax && rightMin! <= normalizedLeftMax
+}
+
+export function quantityRangesCanStack(
+  left: Pick<GeographicPricingRuleInput, 'minCaseQuantity' | 'maxCaseQuantity'>,
+  right: Pick<GeographicPricingRuleInput, 'minCaseQuantity' | 'maxCaseQuantity'>
+) {
+  const leftMin = normalizeCaseQuantity(left.minCaseQuantity)
+  const leftMax = normalizeCaseQuantity(left.maxCaseQuantity)
+  const rightMin = normalizeCaseQuantity(right.minCaseQuantity)
+  const rightMax = normalizeCaseQuantity(right.maxCaseQuantity)
+
+  return leftMin !== null && rightMin !== null && leftMax === null && rightMax === null && leftMin !== rightMin
+}
+
+export function describeQuantityRange(rule: Pick<GeographicPricingRuleInput, 'minCaseQuantity' | 'maxCaseQuantity'>) {
+  const min = normalizeCaseQuantity(rule.minCaseQuantity)
+  const max = normalizeCaseQuantity(rule.maxCaseQuantity)
+  if (min === null && max === null) return 'All quantities'
+  if (min !== null && max !== null) return `${min}-${max} cases`
+  if (min !== null) return `${min}+ cases`
+  return `Up to ${max} cases`
+}
+
 function sortRules(rules: GeographicPricingRuleInput[]) {
   return [...rules].sort((a, b) => {
+    const aMin = normalizeCaseQuantity(a.minCaseQuantity) ?? 0
+    const bMin = normalizeCaseQuantity(b.minCaseQuantity) ?? 0
+    if (aMin !== bMin) return bMin - aMin
+
+    const aMax = normalizeCaseQuantity(a.maxCaseQuantity) ?? Number.POSITIVE_INFINITY
+    const bMax = normalizeCaseQuantity(b.maxCaseQuantity) ?? Number.POSITIVE_INFINITY
+    if (aMax !== bMax) return aMax - bMax
+
     const startDiff = compareDateDesc(toIsoDateString(a.effectiveStartDate), toIsoDateString(b.effectiveStartDate))
     if (startDiff !== 0) return startDiff
     const updatedDiff = compareDateDesc(toIsoDateString(a.updatedAt ?? null), toIsoDateString(b.updatedAt ?? null))
@@ -172,6 +296,7 @@ export function resolveGeographicCasePrice(input: {
   county: string | null | undefined
   rules: GeographicPricingRuleInput[]
   asOf: string | Date
+  quantityCases?: number | null
 }): GeographicPriceResolution {
   const basePrice = typeof input.baseCasePrice === 'number' ? input.baseCasePrice : Number(input.baseCasePrice)
   const normalizedState = normalizeStateCode(input.state)
@@ -180,12 +305,30 @@ export function resolveGeographicCasePrice(input: {
     input.rules.filter((rule) => rule.productId === input.productId && isRuleActiveOnDate(rule, input.asOf))
   )
 
+  function findBestRule(candidates: GeographicPricingRuleInput[]) {
+    const quantity = normalizeCaseQuantity(input.quantityCases)
+    if (quantity === null) {
+      return candidates.find((rule) => normalizeCaseQuantity(rule.minCaseQuantity) === null && normalizeCaseQuantity(rule.maxCaseQuantity) === null)
+    }
+
+    const quantitySpecific = candidates.find((rule) => {
+      const hasSpecificRange =
+        normalizeCaseQuantity(rule.minCaseQuantity) !== null ||
+        normalizeCaseQuantity(rule.maxCaseQuantity) !== null
+      return hasSpecificRange && quantityRangeMatches(rule, quantity)
+    })
+
+    if (quantitySpecific) return quantitySpecific
+
+    return candidates.find((rule) => normalizeCaseQuantity(rule.minCaseQuantity) === null && normalizeCaseQuantity(rule.maxCaseQuantity) === null)
+  }
+
   if (normalizedState && countyKey) {
-    const countyRule = relevantRules.find((rule) =>
+    const countyRule = findBestRule(relevantRules.filter((rule) =>
       rule.ruleType === 'county' &&
       normalizeStateCode(rule.stateCode) === normalizedState &&
       rule.countyKey === countyKey
-    )
+    ))
 
     if (countyRule) {
       return {
@@ -199,10 +342,10 @@ export function resolveGeographicCasePrice(input: {
   }
 
   if (normalizedState) {
-    const stateRule = relevantRules.find((rule) =>
+    const stateRule = findBestRule(relevantRules.filter((rule) =>
       rule.ruleType === 'state' &&
       normalizeStateCode(rule.stateCode) === normalizedState
-    )
+    ))
 
     if (stateRule) {
       return {

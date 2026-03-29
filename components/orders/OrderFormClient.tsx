@@ -82,7 +82,7 @@ export default function OrderFormClient({
     (product.brand ?? '').toLowerCase().includes(search.toLowerCase())
   )
 
-  function getResolvedCasePrice(product: Product, customer: Customer | null) {
+  function getResolvedCasePrice(product: Product, customer: Customer | null, quantityCases?: number | null) {
     return resolveGeographicCasePrice({
       productId: product.id,
       baseCasePrice: product.price,
@@ -90,6 +90,7 @@ export default function OrderFormClient({
       county: customer?.county,
       rules: pricingRules,
       asOf: new Date(),
+      quantityCases,
     })
   }
 
@@ -97,7 +98,7 @@ export default function OrderFormClient({
     setLineItems(prev => prev.map(item => {
       const product = products.find(candidate => candidate.id === item.productId)
       if (!product) return item
-      const resolvedCasePrice = getResolvedCasePrice(product, nextCustomer)
+      const resolvedCasePrice = getResolvedCasePrice(product, nextCustomer, nextUnit === 'case' ? item.quantity : null)
 
       return {
         ...item,
@@ -108,12 +109,22 @@ export default function OrderFormClient({
   }
 
   const addProduct = (product: Product) => {
-    const resolvedCasePrice = getResolvedCasePrice(product, selectedCustomer)
+    const resolvedCasePrice = getResolvedCasePrice(product, selectedCustomer, purchaseUnit === 'case' ? 1 : null)
     const price = purchaseUnit === 'bottle' ? getBottlePrice(product, resolvedCasePrice.price) : resolvedCasePrice.price
     setLineItems(prev => {
       const existing = prev.find(item => item.productId === product.id)
       if (existing) {
-        return prev.map(item => item.productId === product.id ? { ...item, quantity: item.quantity + 1 } : item)
+        return prev.map(item => {
+          if (item.productId !== product.id) return item
+          const nextQuantity = item.quantity + 1
+          const nextCasePrice = getResolvedCasePrice(product, selectedCustomer, purchaseUnit === 'case' ? nextQuantity : null)
+          return {
+            ...item,
+            quantity: nextQuantity,
+            unitPrice: purchaseUnit === 'bottle' ? getBottlePrice(product, nextCasePrice.price) : nextCasePrice.price,
+            pricingSource: purchaseUnit === 'case' ? nextCasePrice.source : null,
+          }
+        })
       }
       return [...prev, {
         productId: product.id,
@@ -131,7 +142,18 @@ export default function OrderFormClient({
       return
     }
 
-    setLineItems(prev => prev.map(item => item.productId === productId ? { ...item, quantity } : item))
+    setLineItems(prev => prev.map(item => {
+      if (item.productId !== productId) return item
+      const product = products.find(candidate => candidate.id === productId)
+      if (!product) return { ...item, quantity }
+      const nextCasePrice = getResolvedCasePrice(product, selectedCustomer, purchaseUnit === 'case' ? quantity : null)
+      return {
+        ...item,
+        quantity,
+        unitPrice: purchaseUnit === 'bottle' ? getBottlePrice(product, nextCasePrice.price) : nextCasePrice.price,
+        pricingSource: purchaseUnit === 'case' ? nextCasePrice.source : null,
+      }
+    }))
   }
 
   const total = lineItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0)

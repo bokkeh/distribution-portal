@@ -3,7 +3,7 @@ import { customerAccounts, products } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { requireRole } from '@/lib/auth/session'
 import CheckoutClient from '@/components/cart/CheckoutClient'
-import { getPricingRulesForProducts, normalizeAccountGeography, resolveProductCasePrice } from '@/lib/pricing/geographic-service'
+import { getPricingRulesForProducts, normalizeAccountGeography } from '@/lib/pricing/geographic-service'
 
 export default async function CheckoutPage() {
   const session = await requireRole('customer')
@@ -16,19 +16,6 @@ export default async function CheckoutPage() {
   const productList = await db.select({ id: products.id, price: products.price }).from(products).where(eq(products.active, true))
   const pricingRules = await getPricingRulesForProducts(productList.map((product) => product.id))
   const pricingContext = normalizeAccountGeography({ state: account?.state, county: account?.county })
-  const casePriceByProductId = Object.fromEntries(
-    productList.map((product) => {
-      const pricing = resolveProductCasePrice({
-        productId: product.id,
-        baseCasePrice: product.price,
-        account: pricingContext,
-        rules: pricingRules,
-        asOf: new Date(),
-      })
-
-      return [product.id, pricing.price]
-    })
-  )
 
   return (
     <div className="space-y-6">
@@ -40,7 +27,9 @@ export default async function CheckoutPage() {
         customerId={account?.id ?? ''}
         customerName={session.user.name ?? ''}
         businessType={account?.businessType}
-        casePriceByProductId={casePriceByProductId}
+        pricingRules={pricingRules}
+        pricingState={pricingContext.state}
+        pricingCounty={pricingContext.county}
       />
     </div>
   )

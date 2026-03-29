@@ -13,16 +13,27 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { getMinimumCaseQuantity, isWisherVodkaProduct } from '@/lib/orders/minimums'
 import { getCustomerPaymentBreakdown, type CustomerPaymentMethod } from '@/lib/stripe/fees'
+import { resolveGeographicCasePrice, type GeographicPricingRuleInput } from '@/lib/pricing/geographic'
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '')
 
 function getDisplayedPrice(
-  casePriceByProductId: Record<string, number>,
-  item: { productId: string; price: string; samplePrice: string },
-  orderType: 'paid' | 'sample'
+  item: { productId: string; price: string; samplePrice: string; quantity: number },
+  orderType: 'paid' | 'sample',
+  pricingRules: GeographicPricingRuleInput[],
+  pricingState: string | null,
+  pricingCounty: string | null
 ) {
   if (orderType === 'sample') return parseFloat(item.samplePrice)
-  return casePriceByProductId[item.productId] ?? parseFloat(item.price)
+  return resolveGeographicCasePrice({
+    productId: item.productId,
+    baseCasePrice: item.price,
+    state: pricingState,
+    county: pricingCounty,
+    rules: pricingRules,
+    asOf: new Date(),
+    quantityCases: item.quantity,
+  }).price
 }
 
 function PaymentForm({ customerId, orderType, items, total, notes, deliveryTiming, preferredDeliveryDay, preferredDeliveryTime, deliveryRequirements, paymentMethod, processingFee, onSuccess }: {
@@ -101,12 +112,16 @@ export default function CheckoutClient({
   customerId,
   customerName,
   businessType,
-  casePriceByProductId,
+  pricingRules,
+  pricingState,
+  pricingCounty,
 }: {
   customerId: string
   customerName: string
   businessType?: string | null
-  casePriceByProductId: Record<string, number>
+  pricingRules: GeographicPricingRuleInput[]
+  pricingState: string | null
+  pricingCounty: string | null
 }) {
   const { items, orderType, clearCart } = useCart()
   const [clientSecret, setClientSecret] = useState<string | null>(null)
@@ -140,7 +155,7 @@ export default function CheckoutClient({
         deliveryTiming === 'time_sensitive'
           ? (preferredDeliveryDay && ['saturday', 'sunday'].includes(preferredDeliveryDay.toLowerCase()) ? 50 : 30)
           : 0
-      const baseAmountCents = Math.round((items.reduce((sum, item) => sum + getDisplayedPrice(casePriceByProductId, item, orderType) * item.quantity, 0) + deliveryFee) * 100)
+      const baseAmountCents = Math.round((items.reduce((sum, item) => sum + getDisplayedPrice(item, orderType, pricingRules, pricingState, pricingCounty) * item.quantity, 0) + deliveryFee) * 100)
       const res = await fetch('/api/stripe/payment-intent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -160,7 +175,7 @@ export default function CheckoutClient({
     }
   }
 
-  const totalAmount = items.reduce((sum, item) => sum + getDisplayedPrice(casePriceByProductId, item, orderType) * item.quantity, 0)
+  const totalAmount = items.reduce((sum, item) => sum + getDisplayedPrice(item, orderType, pricingRules, pricingState, pricingCounty) * item.quantity, 0)
   const timeSensitiveFee =
     deliveryTiming === 'time_sensitive'
       ? (preferredDeliveryDay && ['saturday', 'sunday'].includes(preferredDeliveryDay.toLowerCase()) ? 50 : 30)
@@ -191,7 +206,7 @@ export default function CheckoutClient({
           )}
           <div className="space-y-2 border-t pt-3">
             {items.map(item => {
-              const price = getDisplayedPrice(casePriceByProductId, item, orderType)
+              const price = getDisplayedPrice(item, orderType, pricingRules, pricingState, pricingCounty)
               return (
                 <div key={item.productId} className="flex justify-between text-sm">
                   <span>{item.name} x{item.quantity}</span>

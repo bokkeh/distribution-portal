@@ -1,4 +1,4 @@
-import { boolean, index, numeric, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
+import { boolean, index, integer, numeric, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
 import { products } from './products'
 import { users } from './users'
 
@@ -9,6 +9,8 @@ export const geographicPricingRules = pgTable('geographic_pricing_rules', {
   countyName: text('county_name'),
   countyKey: text('county_key'),
   ruleType: text('rule_type', { enum: ['state', 'county'] }).notNull(),
+  minCaseQuantity: integer('min_case_quantity'),
+  maxCaseQuantity: integer('max_case_quantity'),
   casePrice: numeric('case_price', { precision: 10, scale: 2 }).notNull(),
   effectiveStartDate: timestamp('effective_start_date', { withTimezone: true }).notNull(),
   effectiveEndDate: timestamp('effective_end_date', { withTimezone: true }),

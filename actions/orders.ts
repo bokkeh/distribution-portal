@@ -109,6 +109,7 @@ async function buildPricedLineItems(input: {
       account: pricingContext,
       rules: pricingRules,
       asOf: input.orderDate,
+      quantityCases: input.purchaseUnit === 'case' ? item.quantity : null,
     })
 
     const bottlePricing = getBottleUnitPrice(product, pricing.price)

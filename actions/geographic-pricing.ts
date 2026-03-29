@@ -6,7 +6,7 @@ import { db } from '@/db'
 import { geographicPricingRules } from '@/db/schema'
 import { requireRole } from '@/lib/auth/session'
 import { logActivityEvent } from '@/lib/activity/log'
-import { dateRangesOverlap, buildCountyKey, normalizeCountyName, normalizeStateCode } from '@/lib/pricing/geographic'
+import { dateRangesOverlap, buildCountyKey, describeQuantityRange, normalizeCaseQuantity, normalizeCountyName, normalizeStateCode, quantityRangesCanStack, quantityRangesConflict } from '@/lib/pricing/geographic'
 import { getPotentialConflictingRules } from '@/lib/pricing/geographic-service'
 
 type UpsertPricingRuleInput = {
@@ -15,6 +15,8 @@ type UpsertPricingRuleInput = {
   stateCode: string
   countyName?: string | null
   ruleType: 'state' | 'county'
+  minCaseQuantity?: string | null
+  maxCaseQuantity?: string | null
   casePrice: string
   effectiveStartDate: string
   effectiveEndDate?: string | null
@@ -43,6 +45,8 @@ export async function upsertGeographicPricingRule(input: UpsertPricingRuleInput)
   const stateCode = normalizeStateCode(input.stateCode)
   const countyName = normalizeCountyName(input.countyName)
   const countyKey = buildCountyKey(input.countyName)
+  const minCaseQuantity = normalizeCaseQuantity(input.minCaseQuantity)
+  const maxCaseQuantity = normalizeCaseQuantity(input.maxCaseQuantity)
   const casePrice = Number(input.casePrice)
   const effectiveStartDate = input.effectiveStartDate ? new Date(input.effectiveStartDate) : null
   const effectiveEndDate = input.effectiveEndDate ? new Date(input.effectiveEndDate) : null
@@ -52,6 +56,11 @@ export async function upsertGeographicPricingRule(input: UpsertPricingRuleInput)
   if (!stateCode) return { error: 'A valid 2-letter state code is required.' }
   if (input.ruleType === 'county' && !countyName) return { error: 'County is required for county override rules.' }
   if (input.ruleType === 'state' && input.countyName?.trim()) return { error: 'State-level rules cannot include a county.' }
+  if (input.minCaseQuantity && minCaseQuantity === null) return { error: 'Minimum quantity must be a whole number greater than zero.' }
+  if (input.maxCaseQuantity && maxCaseQuantity === null) return { error: 'Maximum quantity must be a whole number greater than zero.' }
+  if (minCaseQuantity !== null && maxCaseQuantity !== null && maxCaseQuantity < minCaseQuantity) {
+    return { error: 'Maximum quantity must be greater than or equal to minimum quantity.' }
+  }
   if (!Number.isFinite(casePrice) || casePrice <= 0) return { error: 'Case price must be greater than zero.' }
   if (!effectiveStartDate || Number.isNaN(effectiveStartDate.getTime())) return { error: 'Effective start date is required.' }
   if (effectiveEndDate && Number.isNaN(effectiveEndDate.getTime())) return { error: 'Effective end date is invalid.' }
@@ -65,25 +74,14 @@ export async function upsertGeographicPricingRule(input: UpsertPricingRuleInput)
     excludeRuleId: input.id ?? null,
   })
 
-  if (input.isActive) {
-    const overlapping = existingConflicts.find((rule) =>
-      rule.isActive &&
-      dateRangesOverlap(rule.effectiveStartDate, rule.effectiveEndDate, effectiveStartDate, effectiveEndDate)
-    )
-
-    if (overlapping) {
-      return {
-        error: `An active ${input.ruleType === 'county' ? 'county' : 'state'} rule already overlaps this product and date range.`,
-      }
-    }
-  }
-
   const nextValues = {
     productId,
     stateCode,
     countyName: input.ruleType === 'county' ? countyName : null,
     countyKey: input.ruleType === 'county' ? countyKey : null,
     ruleType: input.ruleType,
+    minCaseQuantity,
+    maxCaseQuantity,
     casePrice: casePrice.toFixed(2),
     effectiveStartDate,
     effectiveEndDate,
@@ -91,6 +89,21 @@ export async function upsertGeographicPricingRule(input: UpsertPricingRuleInput)
     notes,
     updatedBy: session.user.id,
     updatedAt: new Date(),
+  }
+
+  if (input.isActive) {
+    const overlappingGeneric = existingConflicts.find((rule) =>
+      rule.isActive &&
+      dateRangesOverlap(rule.effectiveStartDate, rule.effectiveEndDate, effectiveStartDate, effectiveEndDate) &&
+      quantityRangesConflict(rule, { minCaseQuantity, maxCaseQuantity }) &&
+      !quantityRangesCanStack(rule, { minCaseQuantity, maxCaseQuantity })
+    )
+
+    if (overlappingGeneric) {
+      return {
+        error: `An active ${input.ruleType === 'county' ? 'county' : 'state'} rule already overlaps this product, date range, and quantity tier.`,
+      }
+    }
   }
 
   if (input.id) {
@@ -114,7 +127,7 @@ export async function upsertGeographicPricingRule(input: UpsertPricingRuleInput)
       actorUserId: session.user.id,
       kind: 'pricing_rule_updated',
       title: 'Geographic pricing rule updated',
-      body: `${updatedRule.ruleType === 'county' ? updatedRule.countyName : updatedRule.stateCode} pricing was updated.`,
+      body: `${updatedRule.ruleType === 'county' ? updatedRule.countyName : updatedRule.stateCode} pricing was updated for ${describeQuantityRange(updatedRule)}.`,
       metadata: {
         previousValue: existingRule,
         newValue: updatedRule,
@@ -139,7 +152,7 @@ export async function upsertGeographicPricingRule(input: UpsertPricingRuleInput)
     actorUserId: session.user.id,
     kind: 'pricing_rule_created',
     title: 'Geographic pricing rule created',
-    body: `${createdRule.ruleType === 'county' ? createdRule.countyName : createdRule.stateCode} pricing was created.`,
+    body: `${createdRule.ruleType === 'county' ? createdRule.countyName : createdRule.stateCode} pricing was created for ${describeQuantityRange(createdRule)}.`,
     metadata: {
       previousValue: null,
       newValue: createdRule,
@@ -177,7 +190,7 @@ export async function deactivateGeographicPricingRule(ruleId: string) {
     actorUserId: session.user.id,
     kind: 'pricing_rule_deactivated',
     title: 'Geographic pricing rule deactivated',
-    body: `${updatedRule.ruleType === 'county' ? updatedRule.countyName : updatedRule.stateCode} pricing was deactivated.`,
+    body: `${updatedRule.ruleType === 'county' ? updatedRule.countyName : updatedRule.stateCode} pricing was deactivated for ${describeQuantityRange(updatedRule)}.`,
     metadata: {
       previousValue: existingRule,
       newValue: updatedRule,
@@ -207,7 +220,7 @@ export async function deleteGeographicPricingRule(ruleId: string) {
     actorUserId: session.user.id,
     kind: 'pricing_rule_deleted',
     title: 'Geographic pricing rule deleted',
-    body: `${existingRule.ruleType === 'county' ? existingRule.countyName : existingRule.stateCode} pricing was deleted.`,
+    body: `${existingRule.ruleType === 'county' ? existingRule.countyName : existingRule.stateCode} pricing was deleted for ${describeQuantityRange(existingRule)}.`,
     metadata: {
       previousValue: existingRule,
       newValue: null,

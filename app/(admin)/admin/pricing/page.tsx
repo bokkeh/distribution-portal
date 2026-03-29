@@ -30,7 +30,7 @@ async function hasGeographicPricingSchema() {
         or
         (table_name = 'order_items' and column_name in ('pricing_source', 'pricing_rule_id', 'pricing_state', 'pricing_county'))
         or
-        (table_name = 'geographic_pricing_rules' and column_name in ('product_id', 'state_code', 'county_name', 'county_key', 'rule_type', 'case_price', 'effective_start_date', 'effective_end_date', 'is_active', 'updated_by', 'updated_at'))
+        (table_name = 'geographic_pricing_rules' and column_name in ('product_id', 'state_code', 'county_name', 'county_key', 'rule_type', 'min_case_quantity', 'max_case_quantity', 'case_price', 'effective_start_date', 'effective_end_date', 'is_active', 'updated_by', 'updated_at'))
       )
   `)
 
@@ -51,7 +51,7 @@ async function hasGeographicPricingSchema() {
   const requiredColumns: Record<string, string[]> = {
     customer_accounts: ['county'],
     order_items: ['pricing_source', 'pricing_rule_id', 'pricing_state', 'pricing_county'],
-    geographic_pricing_rules: ['product_id', 'state_code', 'county_name', 'county_key', 'rule_type', 'case_price', 'effective_start_date', 'effective_end_date', 'is_active', 'updated_by', 'updated_at'],
+    geographic_pricing_rules: ['product_id', 'state_code', 'county_name', 'county_key', 'rule_type', 'min_case_quantity', 'max_case_quantity', 'case_price', 'effective_start_date', 'effective_end_date', 'is_active', 'updated_by', 'updated_at'],
   }
 
   for (const [tableName, required] of Object.entries(requiredColumns)) {
@@ -77,6 +77,8 @@ export default async function GeographicPricingPage() {
     stateCode: string
     countyName: string | null
     ruleType: 'state' | 'county'
+    minCaseQuantity: number | null
+    maxCaseQuantity: number | null
     casePrice: string
     effectiveStartDate: string | Date
     effectiveEndDate: string | Date | null
@@ -119,6 +121,8 @@ export default async function GeographicPricingPage() {
           stateCode: geographicPricingRules.stateCode,
           countyName: geographicPricingRules.countyName,
           ruleType: geographicPricingRules.ruleType,
+          minCaseQuantity: geographicPricingRules.minCaseQuantity,
+          maxCaseQuantity: geographicPricingRules.maxCaseQuantity,
           casePrice: geographicPricingRules.casePrice,
           effectiveStartDate: geographicPricingRules.effectiveStartDate,
           effectiveEndDate: geographicPricingRules.effectiveEndDate,
@@ -166,8 +170,8 @@ export default async function GeographicPricingPage() {
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
           <p className="font-semibold text-amber-900">Migration required</p>
           <p className="mt-2 text-sm text-amber-800">
-            The geographic pricing tables and columns have not been applied yet. Run the database migration for
-            `0031_geographic_pricing.sql`, then reload this page.
+            The geographic pricing tables and columns have not been applied yet. Run the database migrations for
+            `0031_geographic_pricing.sql` and `0032_geographic_pricing_quantity_tiers.sql`, then reload this page.
           </p>
         </div>
       </div>

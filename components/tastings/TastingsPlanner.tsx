@@ -70,7 +70,6 @@ export function TastingsPlanner({ mode, tastings, accounts, tasters, success, er
   const [activeTab, setActiveTab] = useState<'upcoming' | 'previous'>('upcoming')
   const [previousFrom, setPreviousFrom] = useState('')
   const [previousTo, setPreviousTo] = useState('')
-
   const calendarDays = useMemo(() => {
     const start = startOfWeek(startOfMonth(visibleMonth), { weekStartsOn: 0 })
     const end = endOfWeek(endOfMonth(visibleMonth), { weekStartsOn: 0 })

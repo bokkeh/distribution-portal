@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { US_STATE_OPTIONS, describeQuantityRange } from '@/lib/pricing/geographic'
 import { formatCurrency, formatDate } from '@/lib/utils'
 
 type ProductOption = {
@@ -25,6 +26,8 @@ type RuleRow = {
   stateCode: string
   countyName: string | null
   ruleType: 'state' | 'county'
+  minCaseQuantity: number | null
+  maxCaseQuantity: number | null
   casePrice: string
   effectiveStartDate: string | Date
   effectiveEndDate: string | Date | null
@@ -49,6 +52,8 @@ type FormState = {
   stateCode: string
   countyName: string
   ruleType: 'state' | 'county'
+  minCaseQuantity: string
+  maxCaseQuantity: string
   casePrice: string
   effectiveStartDate: string
   effectiveEndDate: string
@@ -62,6 +67,8 @@ const EMPTY_FORM: FormState = {
   stateCode: '',
   countyName: '',
   ruleType: 'state',
+  minCaseQuantity: '',
+  maxCaseQuantity: '',
   casePrice: '',
   effectiveStartDate: '',
   effectiveEndDate: '',
@@ -120,6 +127,8 @@ export function GeographicPricingManager({
       stateCode: rule.stateCode,
       countyName: rule.countyName ?? '',
       ruleType: rule.ruleType,
+      minCaseQuantity: rule.minCaseQuantity?.toString() ?? '',
+      maxCaseQuantity: rule.maxCaseQuantity?.toString() ?? '',
       casePrice: rule.casePrice,
       effectiveStartDate: toDateInputValue(rule.effectiveStartDate),
       effectiveEndDate: toDateInputValue(rule.effectiveEndDate),
@@ -136,6 +145,8 @@ export function GeographicPricingManager({
         stateCode: form.stateCode,
         countyName: form.ruleType === 'county' ? form.countyName : null,
         ruleType: form.ruleType,
+        minCaseQuantity: form.minCaseQuantity || null,
+        maxCaseQuantity: form.maxCaseQuantity || null,
         casePrice: form.casePrice,
         effectiveStartDate: form.effectiveStartDate,
         effectiveEndDate: form.effectiveEndDate || null,
@@ -187,6 +198,10 @@ export function GeographicPricingManager({
           <CardTitle>{form.id ? 'Edit Geographic Pricing Rule' : 'Add Geographic Pricing Rule'}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+            Create one rule per quantity break. Example: `3+ cases` at one price, `5+ cases` at a lower price, and
+            `10+ cases` at the best price. If multiple breaks match, the highest qualifying break wins.
+          </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <div className="space-y-2 xl:col-span-2">
               <Label htmlFor="pricing-product">Product / SKU</Label>
@@ -206,13 +221,19 @@ export function GeographicPricingManager({
             </div>
             <div className="space-y-2">
               <Label htmlFor="pricing-state">State</Label>
-              <Input
+              <select
                 id="pricing-state"
                 value={form.stateCode}
-                onChange={(event) => setForm((current) => ({ ...current, stateCode: event.target.value.toUpperCase() }))}
-                maxLength={2}
-                placeholder="MD"
-              />
+                onChange={(event) => setForm((current) => ({ ...current, stateCode: event.target.value }))}
+                className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm"
+              >
+                <option value="">Select state...</option>
+                {US_STATE_OPTIONS.map((state) => (
+                  <option key={state.code} value={state.code}>
+                    {state.code} - {state.name}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="pricing-rule-type">Rule Type</Label>
@@ -244,6 +265,32 @@ export function GeographicPricingManager({
               />
             </div>
             <div className="space-y-2">
+              <Label htmlFor="pricing-min-qty">Break Starts At</Label>
+              <Input
+                id="pricing-min-qty"
+                type="number"
+                min="1"
+                step="1"
+                value={form.minCaseQuantity}
+                onChange={(event) => setForm((current) => ({ ...current, minCaseQuantity: event.target.value }))}
+                placeholder="3"
+              />
+              <p className="text-xs text-slate-500">Enter the case count where this price begins, like `3`, `5`, or `10`.</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="pricing-max-qty">Applies Through</Label>
+              <Input
+                id="pricing-max-qty"
+                type="number"
+                min="1"
+                step="1"
+                value={form.maxCaseQuantity}
+                onChange={(event) => setForm((current) => ({ ...current, maxCaseQuantity: event.target.value }))}
+                placeholder="Leave blank for 3+"
+              />
+              <p className="text-xs text-slate-500">Optional. Leave blank for an open-ended break such as `10+ cases`.</p>
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="pricing-price">Case Price</Label>
               <Input
                 id="pricing-price"
@@ -254,6 +301,7 @@ export function GeographicPricingManager({
                 onChange={(event) => setForm((current) => ({ ...current, casePrice: event.target.value }))}
                 placeholder="120.00"
               />
+              <p className="text-xs text-slate-500">Price per case for this quantity break.</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="pricing-start">Effective Start</Label>
@@ -338,6 +386,7 @@ export function GeographicPricingManager({
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Product / SKU</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Geography</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Rule Type</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Quantity</th>
                   <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground">Case Price</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Effective Dates</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Status</th>
@@ -361,6 +410,7 @@ export function GeographicPricingManager({
                         {rule.ruleType === 'county' ? 'County override' : 'State price'}
                       </Badge>
                     </td>
+                    <td className="px-4 py-3 text-sm text-slate-600">{describeQuantityRange(rule)}</td>
                     <td className="px-4 py-3 text-right text-sm font-medium">{formatCurrency(rule.casePrice)}</td>
                     <td className="px-4 py-3 text-sm text-slate-600">
                       <p>{formatDate(rule.effectiveStartDate)}</p>
