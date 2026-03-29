@@ -53,6 +53,7 @@ export default function DeliveryMap({
 }) {
   const [selectedStop, setSelectedStop] = useState<Stop | null>(null)
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null)
+  const [directionsAvailable, setDirectionsAvailable] = useState(true)
 
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ?? '',
@@ -103,10 +104,7 @@ export default function DeliveryMap({
   }, [estimatedTravelTime, onEstimateChange])
 
   useEffect(() => {
-    if (!isLoaded || validStops.length === 0 || (!originPoint && validStops.length < 2)) {
-      setDirections(null)
-      return
-    }
+    if (!directionsAvailable || !isLoaded || validStops.length === 0 || (!originPoint && validStops.length < 2)) return
 
     const directionsService = new google.maps.DirectionsService()
     const routeOrigin = originPoint
@@ -132,10 +130,17 @@ export default function DeliveryMap({
           return
         }
 
+        if (
+          status === google.maps.DirectionsStatus.REQUEST_DENIED ||
+          status === google.maps.DirectionsStatus.OVER_QUERY_LIMIT
+        ) {
+          setDirectionsAvailable(false)
+        }
+
         setDirections(null)
       }
     )
-  }, [isLoaded, routeKey, originPoint?.lat, originPoint?.lng])
+  }, [directionsAvailable, isLoaded, originPoint, routeKey, validStops])
 
   if (!isLoaded) return <div className="w-full h-full flex items-center justify-center bg-slate-100"><p className="text-sm text-muted-foreground">Loading map...</p></div>
 

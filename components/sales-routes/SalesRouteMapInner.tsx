@@ -46,6 +46,7 @@ export default function SalesRouteMapInner({
 }) {
   const [selectedStop, setSelectedStop] = useState<SalesStop | null>(null)
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null)
+  const [directionsAvailable, setDirectionsAvailable] = useState(true)
   const mapRef = useRef<google.maps.Map | null>(null)
 
   const { isLoaded } = useJsApiLoader({
@@ -70,7 +71,7 @@ export default function SalesRouteMapInner({
     const bounds = new google.maps.LatLngBounds()
     allPoints.forEach((p) => bounds.extend(p))
     mapRef.current.fitBounds(bounds, 60)
-  }, [routeKey, originKey, isLoaded])
+  }, [routeKey, originKey, isLoaded, originPoint, validStops])
 
   const totalDurationSeconds =
     directions?.routes[0]?.legs?.reduce((sum, leg) => sum + (leg.duration?.value ?? 0), 0) ?? 0
@@ -97,13 +98,9 @@ export default function SalesRouteMapInner({
 
   // Fetch directions in the order stops are given — no waypoint reordering
   useEffect(() => {
-    if (!isLoaded || (validStops.length < 2 && (!originPoint || validStops.length < 1))) {
-      setDirections(null)
-      return
-    }
+    if (!directionsAvailable || !isLoaded || (validStops.length < 2 && (!originPoint || validStops.length < 1))) return
 
     if (exceedsDirectionsWaypointLimit) {
-      setDirections(null)
       return
     }
 
@@ -133,11 +130,17 @@ export default function SalesRouteMapInner({
         if (status === google.maps.DirectionsStatus.OK && result) {
           setDirections(result)
         } else {
+          if (
+            status === google.maps.DirectionsStatus.REQUEST_DENIED ||
+            status === google.maps.DirectionsStatus.OVER_QUERY_LIMIT
+          ) {
+            setDirectionsAvailable(false)
+          }
           setDirections(null)
         }
       }
     )
-  }, [exceedsDirectionsWaypointLimit, isLoaded, routeKey, originKey])
+  }, [directionsAvailable, exceedsDirectionsWaypointLimit, isLoaded, originKey, originPoint, routeKey, validStops])
 
   if (!isLoaded) {
     return (

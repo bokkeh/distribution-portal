@@ -23,6 +23,7 @@ type Stop = {
   sequenceNumber: number
   address: string
   status: 'pending' | 'delivered' | 'failed'
+  customerStatus?: 'not_started' | 'out_for_delivery' | 'arriving_soon' | 'arrived' | 'delivered' | 'failed'
   contactName: string | null
   contactPhone: string | null
   contactEmail?: string | null
@@ -34,6 +35,14 @@ type Stop = {
   additionalPhotoUrl3?: string | null
   additionalPhotoUrl4?: string | null
   additionalPhotoUrl5?: string | null
+  trackingEnabled?: boolean
+  trackingToken?: string | null
+  etaMinutes?: number | null
+  lastLocationAt?: Date | null
+  recipientSignatureUrl?: string | null
+  recipientSignedName?: string | null
+  lat?: string | null
+  lng?: string | null
   completedAt?: Date | null
   companyName: string | null
 }
@@ -154,7 +163,7 @@ function SortableStopCard({
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-semibold leading-tight">{stop.companyName ?? stop.address}</p>
-              {mode === 'driver' ? <StopStatusBadge status={stop.status} /> : null}
+            {mode === 'driver' ? <StopStatusBadge status={stop.status} /> : null}
             </div>
             {stop.companyName && (
               <p className="mt-0.5 flex items-start gap-1 text-xs text-muted-foreground">
@@ -228,6 +237,7 @@ function SortableStopCard({
           <DriverStopActions stop={{
             id: stop.id,
             status: stop.status,
+            customerStatus: stop.customerStatus,
             notes: stop.notes,
             proofOfDeliveryUrl: stop.proofOfDeliveryUrl,
             shelfPhotoUrl: stop.shelfPhotoUrl,
@@ -236,6 +246,14 @@ function SortableStopCard({
             additionalPhotoUrl3: stop.additionalPhotoUrl3,
             additionalPhotoUrl4: stop.additionalPhotoUrl4,
             additionalPhotoUrl5: stop.additionalPhotoUrl5,
+            trackingEnabled: stop.trackingEnabled,
+            trackingToken: stop.trackingToken,
+            etaMinutes: stop.etaMinutes,
+            lastLocationAt: stop.lastLocationAt,
+            recipientSignatureUrl: stop.recipientSignatureUrl,
+            recipientSignedName: stop.recipientSignedName,
+            lat: stop.lat,
+            lng: stop.lng,
           }} />
         </div>
       )}

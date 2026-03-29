@@ -83,6 +83,7 @@ export default async function DeliveryDetailPage({
     lat: string | null
     lng: string | null
     status: 'pending' | 'delivered' | 'failed'
+    customerStatus: 'not_started' | 'out_for_delivery' | 'arriving_soon' | 'arrived' | 'delivered' | 'failed'
     notes: string | null
     completedAt: Date | null
     proofOfDeliveryUrl: string | null
@@ -92,6 +93,12 @@ export default async function DeliveryDetailPage({
     additionalPhotoUrl3: string | null
     additionalPhotoUrl4: string | null
     additionalPhotoUrl5: string | null
+    trackingEnabled: boolean
+    trackingToken: string | null
+    etaMinutes: number | null
+    lastLocationAt: Date | null
+    recipientSignatureUrl: string | null
+    recipientSignedName: string | null
     companyName: string | null
   }> = []
 
@@ -107,6 +114,7 @@ export default async function DeliveryDetailPage({
         lat: deliveryStops.lat,
         lng: deliveryStops.lng,
         status: deliveryStops.status,
+        customerStatus: deliveryStops.customerStatus,
         notes: deliveryStops.notes,
         completedAt: deliveryStops.completedAt,
         proofOfDeliveryUrl: deliveryStops.proofOfDeliveryUrl,
@@ -116,6 +124,12 @@ export default async function DeliveryDetailPage({
         additionalPhotoUrl3: deliveryStops.additionalPhotoUrl3,
         additionalPhotoUrl4: deliveryStops.additionalPhotoUrl4,
         additionalPhotoUrl5: deliveryStops.additionalPhotoUrl5,
+        trackingEnabled: deliveryStops.trackingEnabled,
+        trackingToken: deliveryStops.trackingToken,
+        etaMinutes: deliveryStops.etaMinutes,
+        lastLocationAt: deliveryStops.lastLocationAt,
+        recipientSignatureUrl: deliveryStops.recipientSignatureUrl,
+        recipientSignedName: deliveryStops.recipientSignedName,
         companyName: customerAccounts.companyName,
       })
       .from(deliveryStops)
@@ -159,6 +173,13 @@ export default async function DeliveryDetailPage({
         additionalPhotoUrl3: null,
         additionalPhotoUrl4: null,
         additionalPhotoUrl5: null,
+        customerStatus: (row.status === 'delivered' ? 'delivered' : row.status === 'failed' ? 'failed' : 'not_started') as 'not_started' | 'out_for_delivery' | 'arriving_soon' | 'arrived' | 'delivered' | 'failed',
+        trackingEnabled: false,
+        trackingToken: null,
+        etaMinutes: null,
+        lastLocationAt: null,
+        recipientSignatureUrl: null,
+        recipientSignedName: null,
       })))
   }
 
@@ -250,6 +271,32 @@ export default async function DeliveryDetailPage({
             </div>
             <Button type="submit" variant="outline">Reassign Driver</Button>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>Customer Tracking</CardTitle></CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          {stops.filter((stop) => stop.trackingToken).length === 0 ? (
+            <p className="text-muted-foreground">No customer tracking links have been activated yet.</p>
+          ) : stops.filter((stop) => stop.trackingToken).map((stop) => (
+            <div key={stop.id} className="rounded-xl border border-slate-200 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="font-medium text-slate-900">{stop.companyName ?? stop.address}</p>
+                  <p className="text-xs text-slate-500">{stop.customerStatus.replace(/_/g, ' ')}{stop.etaMinutes ? ` • ETA ${stop.etaMinutes} min` : ''}</p>
+                </div>
+                <a
+                  href={`/track/delivery/${stop.trackingToken}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-600 underline"
+                >
+                  Open Tracking Page
+                </a>
+              </div>
+            </div>
+          ))}
         </CardContent>
       </Card>
 

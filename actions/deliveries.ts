@@ -1,7 +1,8 @@
 'use server'
 
+import { randomBytes } from 'crypto'
 import { db } from '@/db'
-import { deliveries, deliveryStops, orders, drivers, users, customerAccounts } from '@/db/schema'
+import { deliveries, deliveryLocationUpdates, deliveryNotifications, deliveryStops, deliveryTrackingEvents, orders, drivers, users, customerAccounts } from '@/db/schema'
 import { requireAdmin, requireAdminOrStaff, requireRole } from '@/lib/auth/session'
 import { and, count, desc, eq, inArray, ne } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
@@ -12,8 +13,187 @@ import { notify } from '@/lib/notifications/dispatch'
 import { v4 as uuidv4 } from 'uuid'
 import { logActivityEvent } from '@/lib/activity/log'
 import { getAccountPreferences, getUserPreferences } from '@/lib/preferences/read'
-import { formatDateInTimeZone, getShortTimeZoneLabel } from '@/lib/timezones'
+import { formatDateInTimeZone } from '@/lib/timezones'
 import { logAccountNoteEvent } from '@/lib/crm/account-notes'
+import { sendSms } from '@/lib/telnyx/client'
+import { toDisplayAvatarUrl } from '@/lib/users/avatar'
+
+const TRACKING_TOKEN_BYTES = 18
+const TRACKING_EXPIRATION_HOURS = 48
+const ARRIVING_SOON_THRESHOLD_MINUTES = 10
+
+function buildTrackingToken() {
+  return randomBytes(TRACKING_TOKEN_BYTES).toString('base64url')
+}
+
+function buildTrackingUrl(token: string) {
+  return `${process.env.NEXTAUTH_URL}/track/delivery/${token}`
+}
+
+function toMiles(meters: number) {
+  return meters * 0.000621371
+}
+
+async function estimateTravelToStop(originLat: number, originLng: number, destinationLat: number, destinationLng: number) {
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY
+  if (apiKey) {
+    try {
+      const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${originLat},${originLng}&destination=${destinationLat},${destinationLng}&key=${apiKey}`
+      const response = await fetch(url, { cache: 'no-store' })
+      const payload = await response.json() as {
+        routes?: Array<{ legs?: Array<{ duration?: { value?: number }, distance?: { value?: number } }> }>
+      }
+      const leg = payload.routes?.[0]?.legs?.[0]
+      const seconds = leg?.duration?.value
+      const meters = leg?.distance?.value
+      if (seconds && meters) {
+        return {
+          etaMinutes: Math.max(1, Math.round(seconds / 60)),
+          distanceMiles: Number(toMiles(meters).toFixed(2)),
+        }
+      }
+    } catch {}
+  }
+
+  const latDelta = destinationLat - originLat
+  const lngDelta = destinationLng - originLng
+  const approxMiles = Math.sqrt((latDelta * 69) ** 2 + (lngDelta * 54.6) ** 2)
+  return {
+    etaMinutes: Math.max(1, Math.round((approxMiles / 30) * 60)),
+    distanceMiles: Number(approxMiles.toFixed(2)),
+  }
+}
+
+async function recordTrackingEvent(input: {
+  deliveryId: string
+  stopId: string
+  eventType: string
+  eventData?: Record<string, unknown>
+  createdBy?: string | null
+}) {
+  await db.insert(deliveryTrackingEvents).values({
+    deliveryId: input.deliveryId,
+    stopId: input.stopId,
+    eventType: input.eventType,
+    eventData: input.eventData ?? {},
+    createdBy: input.createdBy ?? null,
+  })
+}
+
+async function sendStopTrackingNotification(input: {
+  stopId: string
+  deliveryId: string
+  customerId: string | null
+  phoneNumber: string | null
+  companyName: string
+  driverName: string
+  driverAvatarUrl: string | null
+  trackingToken: string
+  notificationType: 'out_for_delivery' | 'arriving_soon' | 'arrived' | 'delivered'
+  supportPhone: string | null
+  actorUserId?: string | null
+}) {
+  if (!input.phoneNumber) return
+
+  const trackingUrl = buildTrackingUrl(input.trackingToken)
+  const supportLine = input.supportPhone ?? 'our office'
+
+  const messageByType: Record<typeof input.notificationType, string> = {
+    out_for_delivery: `Your AHAWC delivery driver, ${input.driverName}, is on the way.\n\nTrack your delivery: ${trackingUrl}\n\nQuestions? Contact ${supportLine}.`,
+    arriving_soon: `Your AHAWC delivery is about 10 minutes away.\n\nTrack your delivery: ${trackingUrl}\n\nQuestions? Contact ${supportLine}.`,
+    arrived: `Your AHAWC delivery driver has arrived.\n\nTrack your delivery: ${trackingUrl}\n\nQuestions? Contact ${supportLine}.`,
+    delivered: `Your AHAWC delivery for ${input.companyName} has been completed.\n\nIf anything looks off, contact ${supportLine}.`,
+  }
+
+  const body = messageByType[input.notificationType]
+  const mediaUrl = input.notificationType === 'delivered' ? null : input.driverAvatarUrl
+
+  let channel: 'sms' | 'mms' = mediaUrl ? 'mms' : 'sms'
+  let status: 'sent' | 'failed' = 'sent'
+  let failureReason: string | null = null
+
+  try {
+    await sendSms({
+      to: input.phoneNumber,
+      body,
+      mediaUrls: mediaUrl ? [mediaUrl] : undefined,
+      contactName: input.companyName,
+      userId: input.actorUserId ?? null,
+    })
+  } catch (error) {
+    if (mediaUrl) {
+      try {
+        await sendSms({
+          to: input.phoneNumber,
+          body,
+          contactName: input.companyName,
+          userId: input.actorUserId ?? null,
+        })
+        channel = 'sms'
+      } catch (smsError) {
+        status = 'failed'
+        failureReason = smsError instanceof Error ? smsError.message : String(smsError)
+      }
+    } else {
+      status = 'failed'
+      failureReason = error instanceof Error ? error.message : String(error)
+    }
+  }
+
+  await db.insert(deliveryNotifications).values({
+    deliveryId: input.deliveryId,
+    stopId: input.stopId,
+    customerId: input.customerId,
+    notificationType: input.notificationType,
+    channel,
+    messageBody: body,
+    mediaUrl,
+    status,
+    sentAt: status === 'sent' ? new Date() : null,
+    failedAt: status === 'failed' ? new Date() : null,
+    failureReason,
+    createdBy: input.actorUserId ?? null,
+  })
+}
+
+async function getStopTrackingContext(stopId: string) {
+  const [stop] = await db
+    .select({
+      id: deliveryStops.id,
+      deliveryId: deliveryStops.deliveryId,
+      orderId: deliveryStops.orderId,
+      customerId: deliveryStops.customerId,
+      address: deliveryStops.address,
+      lat: deliveryStops.lat,
+      lng: deliveryStops.lng,
+      trackingEnabled: deliveryStops.trackingEnabled,
+      trackingToken: deliveryStops.trackingToken,
+      customerStatus: deliveryStops.customerStatus,
+      outForDeliveryAt: deliveryStops.outForDeliveryAt,
+      arrivingSoonAt: deliveryStops.arrivingSoonAt,
+      contactPhone: deliveryStops.contactPhone,
+      contactEmail: deliveryStops.contactEmail,
+      accountPhone: customerAccounts.phone,
+      accountEmail: customerAccounts.email,
+      businessEmail: customerAccounts.businessEmail,
+      notificationPreference: customerAccounts.notificationPreference,
+      companyName: customerAccounts.companyName,
+      driverId: deliveries.driverId,
+      deliveryStatus: deliveries.status,
+      driverName: users.name,
+      driverPhone: users.phone,
+      driverAvatarUrl: users.avatarUrl,
+    })
+    .from(deliveryStops)
+    .innerJoin(deliveries, eq(deliveryStops.deliveryId, deliveries.id))
+    .leftJoin(customerAccounts, eq(deliveryStops.customerId, customerAccounts.id))
+    .leftJoin(drivers, eq(deliveries.driverId, drivers.id))
+    .leftJoin(users, eq(drivers.userId, users.id))
+    .where(eq(deliveryStops.id, stopId))
+    .limit(1)
+
+  return stop ?? null
+}
 
 async function resequenceDeliveryStops(deliveryId: string) {
   const existingStops = await db
@@ -172,7 +352,14 @@ export async function updateStopStatus(stopId: string, status: 'delivered' | 'fa
     .limit(1)
 
   await db.update(deliveryStops)
-    .set({ status, completedAt: status === 'delivered' ? new Date() : null })
+    .set({
+      status,
+      completedAt: status === 'delivered' ? new Date() : null,
+      trackingEnabled: false,
+      customerStatus: status === 'failed' ? 'failed' : 'delivered',
+      deliveredAt: status === 'delivered' ? new Date() : null,
+      trackingExpiresAt: new Date(Date.now() + TRACKING_EXPIRATION_HOURS * 60 * 60 * 1000),
+    })
     .where(eq(deliveryStops.id, stopId))
 
   if (stop?.orderId && status === 'delivered') {
@@ -221,15 +408,195 @@ export async function getDeliveryStopUploadUrl(
   }
 }
 
+export async function startDeliveryForStop(stopId: string) {
+  const session = await requireRole('driver', 'admin')
+  const stop = await getStopTrackingContext(stopId)
+  if (!stop) throw new Error('Stop not found')
+
+  const trackingToken = stop.trackingToken ?? buildTrackingToken()
+  const supportPhone = process.env.ADMIN_NOTIFICATION_PHONE ?? process.env.TELNYX_FROM_NUMBER ?? null
+
+  await db.update(deliveries).set({ status: 'in_progress' }).where(eq(deliveries.id, stop.deliveryId))
+  await db.update(deliveryStops).set({
+    trackingEnabled: true,
+    trackingToken,
+    trackingTokenCreatedAt: stop.trackingToken ? stop.outForDeliveryAt ?? new Date() : new Date(),
+    trackingExpiresAt: null,
+    customerStatus: 'out_for_delivery',
+    outForDeliveryAt: new Date(),
+  }).where(eq(deliveryStops.id, stopId))
+
+  if (stop.orderId) {
+    await db.update(orders).set({ shippingStatus: 'out_for_delivery' }).where(eq(orders.id, stop.orderId))
+  }
+
+  const [existing] = await db
+    .select({ id: deliveryNotifications.id })
+    .from(deliveryNotifications)
+    .where(and(eq(deliveryNotifications.stopId, stopId), eq(deliveryNotifications.notificationType, 'out_for_delivery')))
+    .limit(1)
+
+  if (!existing) {
+    await sendStopTrackingNotification({
+      stopId,
+      deliveryId: stop.deliveryId,
+      customerId: stop.customerId,
+      phoneNumber: stop.contactPhone || stop.accountPhone,
+      companyName: stop.companyName ?? stop.address,
+      driverName: stop.driverName ?? 'Your driver',
+      driverAvatarUrl: toDisplayAvatarUrl(stop.driverAvatarUrl),
+      trackingToken,
+      notificationType: 'out_for_delivery',
+      supportPhone,
+      actorUserId: session.user.id,
+    })
+  }
+
+  await recordTrackingEvent({
+    deliveryId: stop.deliveryId,
+    stopId,
+    eventType: 'delivery_started',
+    eventData: { trackingToken },
+    createdBy: session.user.id,
+  })
+
+  await logActivityEvent({
+    entityType: 'delivery',
+    entityId: stop.deliveryId,
+    actorUserId: session.user.id,
+    kind: 'delivery_started',
+    title: 'Stop delivery started',
+    body: `${stop.companyName ?? stop.address} is now out for delivery.`,
+  })
+
+  revalidatePath('/driver/deliveries')
+  revalidatePath('/driver/map')
+  revalidatePath(`/admin/deliveries/${stop.deliveryId}`)
+}
+
+export async function markDeliveryStopArrived(stopId: string) {
+  const session = await requireRole('driver', 'admin')
+  const stop = await getStopTrackingContext(stopId)
+  if (!stop) throw new Error('Stop not found')
+
+  await db.update(deliveryStops).set({
+    customerStatus: 'arrived',
+    arrivedAt: new Date(),
+  }).where(eq(deliveryStops.id, stopId))
+
+  if (stop.trackingToken) {
+    const [existing] = await db
+      .select({ id: deliveryNotifications.id })
+      .from(deliveryNotifications)
+      .where(and(eq(deliveryNotifications.stopId, stopId), eq(deliveryNotifications.notificationType, 'arrived')))
+      .limit(1)
+
+    if (!existing) {
+      await sendStopTrackingNotification({
+        stopId,
+        deliveryId: stop.deliveryId,
+        customerId: stop.customerId,
+        phoneNumber: stop.contactPhone || stop.accountPhone,
+        companyName: stop.companyName ?? stop.address,
+        driverName: stop.driverName ?? 'Your driver',
+        driverAvatarUrl: toDisplayAvatarUrl(stop.driverAvatarUrl),
+        trackingToken: stop.trackingToken,
+        notificationType: 'arrived',
+        supportPhone: process.env.ADMIN_NOTIFICATION_PHONE ?? process.env.TELNYX_FROM_NUMBER ?? null,
+        actorUserId: session.user.id,
+      })
+    }
+  }
+
+  await recordTrackingEvent({
+    deliveryId: stop.deliveryId,
+    stopId,
+    eventType: 'driver_arrived',
+    createdBy: session.user.id,
+  })
+
+  revalidatePath('/driver/deliveries')
+  revalidatePath('/driver/map')
+  revalidatePath(`/admin/deliveries/${stop.deliveryId}`)
+}
+
+export async function updateDriverLocation(input: { stopId: string; lat: number; lng: number }) {
+  const session = await requireRole('driver', 'admin')
+  const stop = await getStopTrackingContext(input.stopId)
+  if (!stop) throw new Error('Stop not found')
+  if (!stop.trackingEnabled || !stop.lat || !stop.lng || !stop.driverId) return { success: true, skipped: true }
+
+  const now = new Date()
+  const { etaMinutes, distanceMiles } = await estimateTravelToStop(input.lat, input.lng, Number(stop.lat), Number(stop.lng))
+  const nextStatus =
+    stop.customerStatus === 'arrived' || stop.customerStatus === 'delivered'
+      ? stop.customerStatus
+      : etaMinutes <= ARRIVING_SOON_THRESHOLD_MINUTES
+        ? 'arriving_soon'
+        : 'out_for_delivery'
+
+  await db.insert(deliveryLocationUpdates).values({
+    deliveryId: stop.deliveryId,
+    stopId: stop.id,
+    driverId: stop.driverId,
+    lat: input.lat.toFixed(7),
+    lng: input.lng.toFixed(7),
+    source: 'driver_browser',
+    recordedAt: now,
+  })
+
+  await db.update(deliveryStops).set({
+    etaMinutes,
+    distanceMiles: distanceMiles.toFixed(2),
+    lastKnownDriverLat: input.lat.toFixed(7),
+    lastKnownDriverLng: input.lng.toFixed(7),
+    lastLocationAt: now,
+    customerStatus: nextStatus,
+    arrivingSoonAt: nextStatus === 'arriving_soon' && !stop.arrivingSoonAt ? now : stop.arrivingSoonAt,
+  }).where(eq(deliveryStops.id, stop.id))
+
+  if (nextStatus === 'arriving_soon' && stop.trackingToken && !stop.arrivingSoonAt) {
+    const [existing] = await db
+      .select({ id: deliveryNotifications.id })
+      .from(deliveryNotifications)
+      .where(and(eq(deliveryNotifications.stopId, stop.id), eq(deliveryNotifications.notificationType, 'arriving_soon')))
+      .limit(1)
+
+    if (!existing) {
+      await sendStopTrackingNotification({
+        stopId: stop.id,
+        deliveryId: stop.deliveryId,
+        customerId: stop.customerId,
+        phoneNumber: stop.contactPhone || stop.accountPhone,
+        companyName: stop.companyName ?? stop.address,
+        driverName: stop.driverName ?? 'Your driver',
+        driverAvatarUrl: toDisplayAvatarUrl(stop.driverAvatarUrl),
+        trackingToken: stop.trackingToken,
+        notificationType: 'arriving_soon',
+        supportPhone: process.env.ADMIN_NOTIFICATION_PHONE ?? process.env.TELNYX_FROM_NUMBER ?? null,
+        actorUserId: session.user.id,
+      })
+    }
+  }
+
+  return { success: true, etaMinutes, distanceMiles }
+}
+
 export async function completeDeliveryStop(stopId: string, formData: FormData) {
   await requireRole('driver', 'admin')
 
   const proofOfDeliveryUrl = ((formData.get('proofOfDeliveryUrl') as string) || '').trim() || null
   const shelfPhotoUrl = ((formData.get('shelfPhotoUrl') as string) || '').trim() || null
+  const recipientSignatureUrl = ((formData.get('recipientSignatureUrl') as string) || '').trim() || null
+  const recipientSignedName = ((formData.get('recipientSignedName') as string) || '').trim() || null
   const additionalPhotoUrls = Array.from({ length: 5 }, (_, index) => (
     ((formData.get(`additionalPhotoUrl${index + 1}`) as string) || '').trim() || null
   ))
   const notes = ((formData.get('notes') as string) || '').trim() || null
+
+  if (!recipientSignatureUrl || !recipientSignedName) {
+    throw new Error('Recipient signature and signer name are required before marking delivered.')
+  }
 
   const [stop] = await db
     .select({
@@ -245,9 +612,15 @@ export async function completeDeliveryStop(stopId: string, formData: FormData) {
       accountEmail: customerAccounts.email,
       businessEmail: customerAccounts.businessEmail,
       notificationPreference: customerAccounts.notificationPreference,
+      trackingToken: deliveryStops.trackingToken,
+      driverName: users.name,
+      driverAvatarUrl: users.avatarUrl,
     })
     .from(deliveryStops)
     .leftJoin(customerAccounts, eq(deliveryStops.customerId, customerAccounts.id))
+    .innerJoin(deliveries, eq(deliveryStops.deliveryId, deliveries.id))
+    .leftJoin(drivers, eq(deliveries.driverId, drivers.id))
+    .leftJoin(users, eq(drivers.userId, users.id))
     .where(eq(deliveryStops.id, stopId))
     .limit(1)
 
@@ -259,9 +632,16 @@ export async function completeDeliveryStop(stopId: string, formData: FormData) {
     .set({
       status: 'delivered',
       completedAt: new Date(),
+      trackingEnabled: false,
+      deliveredAt: new Date(),
+      customerStatus: 'delivered',
+      trackingExpiresAt: new Date(Date.now() + TRACKING_EXPIRATION_HOURS * 60 * 60 * 1000),
       notes,
       proofOfDeliveryUrl,
       shelfPhotoUrl,
+      recipientSignatureUrl,
+      recipientSignedName,
+      recipientSignedAt: new Date(),
       additionalPhotoUrl: additionalPhotoUrls[0],
       additionalPhotoUrl2: additionalPhotoUrls[1],
       additionalPhotoUrl3: additionalPhotoUrls[2],
@@ -317,6 +697,22 @@ export async function completeDeliveryStop(stopId: string, formData: FormData) {
     shelfPhotoUrl,
   })
 
+  if (stop.trackingToken) {
+    await sendStopTrackingNotification({
+      stopId,
+      deliveryId: stop.deliveryId,
+      customerId: stop.customerId,
+      phoneNumber: stop.contactPhone || stop.accountPhone,
+      companyName: stop.companyName ?? stop.address,
+      driverName: stop.driverName ?? 'Your driver',
+      driverAvatarUrl: toDisplayAvatarUrl(stop.driverAvatarUrl),
+      trackingToken: stop.trackingToken,
+      notificationType: 'delivered',
+      supportPhone: process.env.ADMIN_NOTIFICATION_PHONE ?? process.env.TELNYX_FROM_NUMBER ?? null,
+      actorUserId: null,
+    })
+  }
+
   await logActivityEvent({
     entityType: 'delivery',
     entityId: stop.deliveryId,
@@ -331,6 +727,16 @@ export async function completeDeliveryStop(stopId: string, formData: FormData) {
     note: notes,
     source: 'delivery_stop',
     sourceId: stop.id,
+  })
+
+  await recordTrackingEvent({
+    deliveryId: stop.deliveryId,
+    stopId,
+    eventType: 'delivery_completed',
+    eventData: {
+      recipientSignedName,
+      recipientSignatureUrl,
+    },
   })
 
   revalidatePath('/driver/deliveries')

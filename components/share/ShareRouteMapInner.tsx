@@ -13,6 +13,7 @@ const STATUS_COLORS: Record<string, string> = {
 export default function ShareRouteMapInner({ stops, origin }: { stops: ShareStop[]; origin?: { lat: number; lng: number; address: string } | null }) {
   const [selectedStop, setSelectedStop] = useState<ShareStop | null>(null)
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null)
+  const [directionsAvailable, setDirectionsAvailable] = useState(true)
   const mapRef = useRef<google.maps.Map | null>(null)
 
   const { isLoaded } = useJsApiLoader({
@@ -25,20 +26,17 @@ export default function ShareRouteMapInner({ stops, origin }: { stops: ShareStop
 
   // Fit map to all stops + origin whenever they change
   useEffect(() => {
-    if (!mapRef.current) return
+    if (!mapRef.current || !isLoaded) return
     const points = [...validStops.map(s => ({ lat: s.lat, lng: s.lng })), ...(origin ? [{ lat: origin.lat, lng: origin.lng }] : [])]
     if (points.length === 0) return
     const bounds = new google.maps.LatLngBounds()
     points.forEach((p) => bounds.extend(p))
     mapRef.current.fitBounds(bounds, 60)
-  }, [routeKey, originKey, isLoaded])
+  }, [routeKey, origin, originKey, isLoaded, validStops])
 
   // Fetch directions
   useEffect(() => {
-    if (!isLoaded || validStops.length < 2) {
-      setDirections(null)
-      return
-    }
+    if (!directionsAvailable || !isLoaded || validStops.length < 2) return
 
     const service = new google.maps.DirectionsService()
     const routeOrigin = origin
@@ -63,11 +61,17 @@ export default function ShareRouteMapInner({ stops, origin }: { stops: ShareStop
         if (status === google.maps.DirectionsStatus.OK && result) {
           setDirections(result)
         } else {
+          if (
+            status === google.maps.DirectionsStatus.REQUEST_DENIED ||
+            status === google.maps.DirectionsStatus.OVER_QUERY_LIMIT
+          ) {
+            setDirectionsAvailable(false)
+          }
           setDirections(null)
         }
       }
     )
-  }, [isLoaded, routeKey, originKey])
+  }, [directionsAvailable, isLoaded, origin, originKey, routeKey, validStops])
 
   if (!isLoaded) {
     return (

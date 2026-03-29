@@ -38,7 +38,7 @@ function hrefForSegments(segments: string[], index: number) {
   if (root === 'admin') return '/admin/dashboard'
   if (root === 'staff') return '/staff/dashboard'
   if (root === 'customer') return '/customer/dashboard'
-  if (root === 'driver') return '/driver/deliveries'
+  if (root === 'driver') return '/driver/dashboard'
   if (root === 'taster') return '/taster/tastings'
   return `/${root}`
 }

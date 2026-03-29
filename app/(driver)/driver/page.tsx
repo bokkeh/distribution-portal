@@ -11,5 +11,5 @@ export default async function DriverIndexPage() {
       redirect('/driver/welcome')
     }
   }
-  redirect('/driver/deliveries')
+  redirect('/driver/dashboard')
 }
