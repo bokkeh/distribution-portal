@@ -1,12 +1,14 @@
 import Image from 'next/image'
-import { eq } from 'drizzle-orm'
+import { and, desc, eq, sql } from 'drizzle-orm'
+import { headers } from 'next/headers'
 import { notFound } from 'next/navigation'
 import { db } from '@/db'
-import { customerAccounts, deliveries, deliveryStops, drivers, users } from '@/db/schema'
+import { customerAccounts, deliveries, deliveryStops, deliveryTrackingEvents, drivers, users } from '@/db/schema'
 import DeliveryMapWrapper from '@/components/deliveries/DeliveryMapWrapper'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { TrackingAutoRefresh } from '@/components/deliveries/TrackingAutoRefresh'
+import { isDeliveryTrackingRateLimited } from '@/lib/auth/rate-limit'
 import { signedPhotoUrl } from '@/lib/gcs/photo-url'
 import { toDisplayAvatarUrl } from '@/lib/users/avatar'
 import { formatDate } from '@/lib/utils'
@@ -17,6 +19,32 @@ export default async function PublicDeliveryTrackingPage({
   params: Promise<{ token: string }> | { token: string }
 }) {
   const { token } = await Promise.resolve(params)
+  const headerStore = await headers()
+  const forwardedFor = headerStore.get('x-forwarded-for')?.split(',')[0]?.trim()
+  const realIp = headerStore.get('x-real-ip')?.trim()
+  const userAgent = headerStore.get('user-agent')?.trim() ?? 'unknown'
+  const viewerKey = forwardedFor || realIp || userAgent
+
+  if (await isDeliveryTrackingRateLimited(`${token}:${viewerKey}`)) {
+    return (
+      <div className="min-h-screen bg-slate-50 p-4 sm:p-6">
+        <div className="mx-auto max-w-xl">
+          <Card>
+            <CardHeader>
+              <CardTitle>Tracking Temporarily Unavailable</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-slate-600">
+              Please wait a moment before refreshing this tracking page again.
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
+  const [{ requestTime }] = await db.select({
+    requestTime: sql<Date>`now()`,
+  })
 
   const [stop] = await db
     .select({
@@ -54,7 +82,34 @@ export default async function PublicDeliveryTrackingPage({
   if (!stop) notFound()
   if (stop.trackingExpiresAt && new Date(stop.trackingExpiresAt) < new Date()) notFound()
 
+  const [latestView] = await db
+    .select({
+      createdAt: deliveryTrackingEvents.createdAt,
+    })
+    .from(deliveryTrackingEvents)
+    .where(and(
+      eq(deliveryTrackingEvents.stopId, stop.id),
+      eq(deliveryTrackingEvents.eventType, 'tracking_page_viewed'),
+    ))
+    .orderBy(desc(deliveryTrackingEvents.createdAt))
+    .limit(1)
+
+  if (!latestView || requestTime.getTime() - new Date(latestView.createdAt).getTime() > 5 * 60 * 1000) {
+    await db.insert(deliveryTrackingEvents).values({
+      deliveryId: stop.deliveryId,
+      stopId: stop.id,
+      eventType: 'tracking_page_viewed',
+      eventData: {
+        viewerKey,
+        userAgent,
+      },
+    })
+  }
+
   const driverAvatar = toDisplayAvatarUrl(stop.driverAvatarUrl)
+  const staleLocation = stop.lastLocationAt
+    ? requestTime.getTime() - new Date(stop.lastLocationAt).getTime() > 5 * 60 * 1000
+    : true
   const origin = stop.lastKnownDriverLat && stop.lastKnownDriverLng
     ? {
         lat: Number(stop.lastKnownDriverLat),
@@ -101,6 +156,7 @@ export default async function PublicDeliveryTrackingPage({
                 <div className="rounded-2xl border border-slate-200 bg-white p-3">
                   <p className="text-xs uppercase tracking-wide text-slate-500">ETA</p>
                   <p className="mt-1 text-lg font-semibold text-slate-900">{stop.etaMinutes ? `${stop.etaMinutes} min` : 'Updating'}</p>
+                  {staleLocation ? <p className="mt-1 text-[11px] text-amber-600">ETA based on the last location update</p> : null}
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-white p-3">
                   <p className="text-xs uppercase tracking-wide text-slate-500">Distance</p>
@@ -114,6 +170,7 @@ export default async function PublicDeliveryTrackingPage({
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
                 <p className="font-medium text-slate-900">{stop.companyName ?? 'Delivery destination'}</p>
                 <p className="mt-1">{stop.address}</p>
+                {staleLocation ? <p className="mt-2 text-xs font-medium text-amber-600">Live location unavailable, ETA based on the last update.</p> : null}
                 {stop.lastLocationAt ? <p className="mt-2 text-xs text-slate-500">Last updated {formatDate(stop.lastLocationAt)}</p> : null}
               </div>
             </div>

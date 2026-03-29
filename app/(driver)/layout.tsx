@@ -22,7 +22,9 @@ export default async function DriverLayout({ children }: { children: React.React
         canViewProfile={hasFeature('profile', roles, featureFlags)}
       />
       <main className="mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
-        <PortalTopBar />
+        <div className="hidden sm:block">
+          <PortalTopBar />
+        </div>
         {children}
       </main>
       {isSuperAdmin ? (

@@ -215,6 +215,11 @@ export async function getDriverWorkspaceData(userId: string): Promise<DriverWork
       } satisfies DriverDeliveryCard
     }),
   )
+  deliveryCards.sort((a, b) => {
+    if (a.status === 'in_progress' && b.status !== 'in_progress') return -1
+    if (b.status === 'in_progress' && a.status !== 'in_progress') return 1
+    return a.weekStartDate.localeCompare(b.weekStartDate)
+  })
 
   const previousDeliveryCards = await Promise.all(
     previousDeliveries.map(async (delivery) => {

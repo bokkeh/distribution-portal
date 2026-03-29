@@ -53,6 +53,9 @@ export const isUploadRateLimited = makeLimiter('upload', 30, '1 h')
 /** Geocode: 60 / minute per user */
 export const isGeocodeRateLimited = makeLimiter('geocode', 60, '1 m')
 
+/** Public delivery tracking token lookups: 60 / 15 min per token+viewer */
+export const isDeliveryTrackingRateLimited = makeLimiter('delivery-tracking', 60, '15 m')
+
 // ---------------------------------------------------------------------------
 // Shared 429 response
 // ---------------------------------------------------------------------------

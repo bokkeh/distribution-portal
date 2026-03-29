@@ -3,12 +3,12 @@
 import { type ReactNode, useMemo, useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import { completeDeliveryStop, markDeliveryStopArrived, startDeliveryForStop, updateStopStatus } from '@/actions/deliveries'
+import { completeDeliveryStop, markDeliveryStopArrived, markDeliveryStopFailed, startDeliveryForStop } from '@/actions/deliveries'
 import { getDeliveryStopAdditionalPhotos } from '@/lib/deliveries/photos'
 import { signedPhotoUrl } from '@/lib/gcs/photo-url'
 import { BottleWine, Camera, CheckCircle, Loader2, MapPinned, Navigation, PackageCheck, PenSquare, Timer, XCircle } from 'lucide-react'
 import { SignaturePad } from '@/components/deliveries/SignaturePad'
-import { DriverLocationTracker } from '@/components/deliveries/DriverLocationTracker'
+import { DriverLocationTracker, type DriverGpsState } from '@/components/deliveries/DriverLocationTracker'
 
 type Stop = {
   id: string
@@ -32,7 +32,22 @@ type Stop = {
   lng?: string | null
 }
 
-export function DriverStopActions({ stop }: { stop: Stop }) {
+function formatRelativeMinutes(timestamp: number | Date | null | undefined) {
+  if (!timestamp) return null
+  const value = timestamp instanceof Date ? timestamp.getTime() : timestamp
+  const diffMs = Date.now() - value
+  if (diffMs < 60_000) return 'just now'
+  const minutes = Math.max(1, Math.round(diffMs / 60_000))
+  return `${minutes}m ago`
+}
+
+export function DriverStopActions({
+  stop,
+  routeHasActiveStop = false,
+}: {
+  stop: Stop
+  routeHasActiveStop?: boolean
+}) {
   const [isPending, startTransition] = useTransition()
   const [notes, setNotes] = useState(stop.notes ?? '')
   const [proofOfDeliveryUrl, setProofOfDeliveryUrl] = useState(stop.proofOfDeliveryUrl ?? '')
@@ -46,6 +61,13 @@ export function DriverStopActions({ stop }: { stop: Stop }) {
   const [uploadingShelf, setUploadingShelf] = useState(false)
   const [uploadingAdditional, setUploadingAdditional] = useState<boolean[]>([false, false, false, false, false])
   const trackingActive = stop.status === 'pending' && ['out_for_delivery', 'arriving_soon', 'arrived'].includes(stop.customerStatus ?? 'not_started')
+  const [gpsState, setGpsState] = useState<DriverGpsState>({
+    status: trackingActive ? 'sharing' : 'inactive',
+    lastSentAt: stop.lastLocationAt ? new Date(stop.lastLocationAt).getTime() : null,
+  })
+  const hasAnotherActiveStop = routeHasActiveStop && !trackingActive
+  const lastLocationAge = formatRelativeMinutes(gpsState.lastSentAt)
+  const staleLocation = gpsState.lastSentAt ? Date.now() - gpsState.lastSentAt > 5 * 60_000 : false
 
   async function handleUpload(file: File, kind: 'proof' | 'shelf' | 'additional', additionalIndex = 0) {
     if (file.size > 10 * 1024 * 1024) {
@@ -145,7 +167,7 @@ export function DriverStopActions({ stop }: { stop: Stop }) {
   function handleFailed() {
     startTransition(async () => {
       try {
-        await updateStopStatus(stop.id, 'failed')
+        await markDeliveryStopFailed(stop.id)
         toast.success('Stop marked failed')
       } catch (error) {
         toast.error('Unable to update stop', { description: error instanceof Error ? error.message : undefined })
@@ -177,7 +199,7 @@ export function DriverStopActions({ stop }: { stop: Stop }) {
 
   return (
     <div className="space-y-4">
-      <DriverLocationTracker stopId={stop.id} enabled={trackingActive} />
+      <DriverLocationTracker stopId={stop.id} enabled={trackingActive} onStateChange={setGpsState} />
 
       <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
         <div className="flex flex-wrap items-center gap-2">
@@ -187,14 +209,39 @@ export function DriverStopActions({ stop }: { stop: Stop }) {
             {stop.customerStatus?.replace(/_/g, ' ') ?? 'not started'}
           </span>
         </div>
+        <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+          <span className={`rounded-full px-2 py-1 font-medium ${
+            gpsState.status === 'sharing'
+              ? 'bg-emerald-100 text-emerald-700'
+              : gpsState.status === 'permission_needed'
+                ? 'bg-amber-100 text-amber-700'
+                : gpsState.status === 'unsupported' || gpsState.status === 'error'
+                  ? 'bg-red-100 text-red-700'
+                  : 'bg-slate-200 text-slate-600'
+          }`}>
+            {gpsState.status === 'sharing'
+              ? 'GPS sharing location'
+              : gpsState.status === 'permission_needed'
+                ? 'GPS permission needed'
+                : gpsState.status === 'unsupported'
+                  ? 'GPS unsupported'
+                  : gpsState.status === 'error'
+                    ? 'GPS paused'
+                    : 'GPS idle'}
+          </span>
+          {lastLocationAge ? <span className="rounded-full bg-white px-2 py-1 text-slate-600">Last ping {lastLocationAge}</span> : null}
+        </div>
         {stop.etaMinutes ? <p className="mt-2 text-xs text-slate-500">Latest ETA: {stop.etaMinutes} min</p> : null}
+        {staleLocation ? <p className="mt-2 text-xs font-medium text-amber-600">Live location unavailable, ETA based on the last update.</p> : null}
+        {gpsState.message ? <p className="mt-2 text-xs text-slate-500">{gpsState.message}</p> : null}
+        {hasAnotherActiveStop ? <p className="mt-2 text-xs font-medium text-slate-600">Another stop on this run is already active. Finish it before starting this one.</p> : null}
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <button
           type="button"
           onClick={handleStartDelivery}
-          disabled={isPending || trackingActive}
+          disabled={isPending || trackingActive || hasAnotherActiveStop}
           className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm disabled:opacity-50"
         >
           {isPending && !trackingActive ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPinned className="h-4 w-4" />}

@@ -23,9 +23,42 @@ export default async function DriverDeliveriesPage() {
   }
 
   const { driver, deliveryCards, previousDeliveryCards, homeBaseAddress } = workspace
+  const nextActionDelivery = deliveryCards.find((delivery) => delivery.status === 'in_progress') ?? deliveryCards[0] ?? null
+  const nextActionStop = nextActionDelivery?.nextStop ?? null
 
   return (
     <div className="space-y-6">
+      {nextActionDelivery && nextActionStop ? (
+        <Card className="border-blue-200 bg-gradient-to-br from-blue-50 via-white to-white shadow-sm">
+          <CardContent className="p-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="space-y-2">
+                <Badge variant={nextActionDelivery.status === 'in_progress' ? 'info' : 'secondary'}>
+                  {nextActionDelivery.status === 'in_progress' ? 'Active Delivery' : 'Next Up'}
+                </Badge>
+                <div>
+                  <h1 className="text-2xl font-bold text-slate-900">{nextActionStop.companyName ?? nextActionStop.address}</h1>
+                  <p className="mt-1 text-sm text-slate-600">{nextActionStop.address}</p>
+                </div>
+                <div className="flex flex-wrap gap-3 text-xs text-slate-500">
+                  <span>Run {formatDate(nextActionDelivery.weekStartDate)}</span>
+                  <span>Status: {nextActionStop.customerStatus.replace(/_/g, ' ')}</span>
+                  {nextActionStop.etaMinutes ? <span>ETA {nextActionStop.etaMinutes} min</span> : null}
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <a href={`#delivery-${nextActionDelivery.id}`}>
+                  <Button size="sm">Open Current Stop</Button>
+                </a>
+                <a href="#past-deliveries">
+                  <Button size="sm" variant="outline">Past Deliveries</Button>
+                </a>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <section id="current-deliveries" className="space-y-6">
         {deliveryCards.length === 0 ? (
           <Card>
@@ -53,7 +86,7 @@ export default async function DriverDeliveriesPage() {
               const routeOriginAddress = delivery.originAddress ?? (homeBaseAddress || null)
 
               return (
-                <Card key={delivery.id} className="overflow-hidden">
+                <Card key={delivery.id} id={`delivery-${delivery.id}`} className="overflow-hidden">
                   <CardHeader className="border-b border-slate-100 bg-slate-50/80">
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div className="space-y-3">
@@ -206,7 +239,7 @@ export default async function DriverDeliveriesPage() {
         )}
       </section>
 
-      <Card id="past-deliveries">
+      <Card id="past-deliveries" className="hidden sm:block">
         <CardHeader className="pb-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -280,6 +313,71 @@ export default async function DriverDeliveriesPage() {
           )}
         </CardContent>
       </Card>
+
+      <details id="past-deliveries-mobile" className="rounded-2xl border border-slate-200 bg-white shadow-sm sm:hidden">
+        <summary className="cursor-pointer list-none px-4 py-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-base font-semibold text-slate-900">Previous Deliveries</p>
+              <p className="mt-1 text-sm text-slate-500">Completed runs and proof coverage</p>
+            </div>
+            <Badge variant="outline">{previousDeliveryCards.length}</Badge>
+          </div>
+        </summary>
+        <div className="border-t border-slate-100 px-4 py-4">
+          {previousDeliveryCards.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center">
+              <p className="font-medium text-slate-700">No completed deliveries yet.</p>
+              <p className="mt-1 text-sm text-slate-500">Finished runs will appear here once dispatch marks them complete.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {previousDeliveryCards.map((delivery) => {
+                const completionRate = delivery.stopCount > 0
+                  ? Math.round((delivery.deliveredCount / delivery.stopCount) * 100)
+                  : 0
+
+                return (
+                  <div key={delivery.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-slate-900">Delivery Run {formatDate(delivery.weekStartDate)}</p>
+                        <p className="mt-1 text-xs text-slate-500">{delivery.originAddress ?? 'No starting location saved'}</p>
+                      </div>
+                      <Badge variant="success" className="capitalize">completed</Badge>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-3 gap-3">
+                      <div className="rounded-xl bg-slate-50 p-3 text-center">
+                        <p className="text-[11px] uppercase tracking-wide text-slate-500">Stops</p>
+                        <p className="mt-1 text-lg font-semibold text-slate-900">{delivery.stopCount}</p>
+                      </div>
+                      <div className="rounded-xl bg-slate-50 p-3 text-center">
+                        <p className="text-[11px] uppercase tracking-wide text-slate-500">Delivered</p>
+                        <p className="mt-1 text-lg font-semibold text-emerald-600">{delivery.deliveredCount}</p>
+                      </div>
+                      <div className="rounded-xl bg-slate-50 p-3 text-center">
+                        <p className="text-[11px] uppercase tracking-wide text-slate-500">Proof</p>
+                        <p className="mt-1 text-lg font-semibold text-slate-900">{delivery.capturedProofCount}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4">
+                      <div className="mb-2 flex items-center justify-between text-xs font-medium text-slate-500">
+                        <span>Completion rate</span>
+                        <span>{completionRate}%</span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                        <div className="h-full rounded-full bg-emerald-500" style={{ width: `${completionRate}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </details>
     </div>
   )
 }

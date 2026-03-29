@@ -195,6 +195,36 @@ async function getStopTrackingContext(stopId: string) {
   return stop ?? null
 }
 
+async function requireDriverStopAccess(stopId: string) {
+  const session = await requireRole('driver', 'admin')
+  const roles = session.user.roles ?? [session.user.role]
+  const stop = await getStopTrackingContext(stopId)
+
+  if (!stop) {
+    throw new Error('Stop not found')
+  }
+
+  if (roles.includes('admin')) {
+    return { session, stop }
+  }
+
+  const [driver] = await db
+    .select({ id: drivers.id })
+    .from(drivers)
+    .where(eq(drivers.userId, session.user.id))
+    .limit(1)
+
+  if (!driver) {
+    throw new Error('Driver profile not found')
+  }
+
+  if (stop.driverId !== driver.id) {
+    throw new Error('Unauthorized')
+  }
+
+  return { session, stop }
+}
+
 async function resequenceDeliveryStops(deliveryId: string) {
   const existingStops = await db
     .select({
@@ -409,22 +439,41 @@ export async function getDeliveryStopUploadUrl(
 }
 
 export async function startDeliveryForStop(stopId: string) {
-  const session = await requireRole('driver', 'admin')
-  const stop = await getStopTrackingContext(stopId)
-  if (!stop) throw new Error('Stop not found')
+  const { session, stop } = await requireDriverStopAccess(stopId)
+  if (stop.customerStatus === 'delivered' || stop.status !== 'pending') {
+    throw new Error('This stop can no longer be started.')
+  }
 
   const trackingToken = stop.trackingToken ?? buildTrackingToken()
   const supportPhone = process.env.ADMIN_NOTIFICATION_PHONE ?? process.env.TELNYX_FROM_NUMBER ?? null
 
-  await db.update(deliveries).set({ status: 'in_progress' }).where(eq(deliveries.id, stop.deliveryId))
-  await db.update(deliveryStops).set({
-    trackingEnabled: true,
-    trackingToken,
-    trackingTokenCreatedAt: stop.trackingToken ? stop.outForDeliveryAt ?? new Date() : new Date(),
-    trackingExpiresAt: null,
-    customerStatus: 'out_for_delivery',
-    outForDeliveryAt: new Date(),
-  }).where(eq(deliveryStops.id, stopId))
+  await db.transaction(async (tx) => {
+    const [activeStop] = await tx
+      .select({
+        id: deliveryStops.id,
+      })
+      .from(deliveryStops)
+      .where(and(
+        eq(deliveryStops.deliveryId, stop.deliveryId),
+        eq(deliveryStops.status, 'pending'),
+        inArray(deliveryStops.customerStatus, ['out_for_delivery', 'arriving_soon', 'arrived']),
+      ))
+      .limit(1)
+
+    if (activeStop && activeStop.id !== stopId) {
+      throw new Error('Finish the current active stop before starting another delivery.')
+    }
+
+    await tx.update(deliveries).set({ status: 'in_progress' }).where(eq(deliveries.id, stop.deliveryId))
+    await tx.update(deliveryStops).set({
+      trackingEnabled: true,
+      trackingToken,
+      trackingTokenCreatedAt: stop.trackingToken ? stop.outForDeliveryAt ?? new Date() : new Date(),
+      trackingExpiresAt: null,
+      customerStatus: 'out_for_delivery',
+      outForDeliveryAt: new Date(),
+    }).where(eq(deliveryStops.id, stopId))
+  })
 
   if (stop.orderId) {
     await db.update(orders).set({ shippingStatus: 'out_for_delivery' }).where(eq(orders.id, stop.orderId))
@@ -475,9 +524,10 @@ export async function startDeliveryForStop(stopId: string) {
 }
 
 export async function markDeliveryStopArrived(stopId: string) {
-  const session = await requireRole('driver', 'admin')
-  const stop = await getStopTrackingContext(stopId)
-  if (!stop) throw new Error('Stop not found')
+  const { session, stop } = await requireDriverStopAccess(stopId)
+  if (!stop.trackingEnabled || stop.status !== 'pending') {
+    throw new Error('Start delivery before marking this stop as arrived.')
+  }
 
   await db.update(deliveryStops).set({
     customerStatus: 'arrived',
@@ -521,9 +571,7 @@ export async function markDeliveryStopArrived(stopId: string) {
 }
 
 export async function updateDriverLocation(input: { stopId: string; lat: number; lng: number }) {
-  const session = await requireRole('driver', 'admin')
-  const stop = await getStopTrackingContext(input.stopId)
-  if (!stop) throw new Error('Stop not found')
+  const { session, stop } = await requireDriverStopAccess(input.stopId)
   if (!stop.trackingEnabled || !stop.lat || !stop.lng || !stop.driverId) return { success: true, skipped: true }
 
   const now = new Date()
@@ -583,7 +631,7 @@ export async function updateDriverLocation(input: { stopId: string; lat: number;
 }
 
 export async function completeDeliveryStop(stopId: string, formData: FormData) {
-  await requireRole('driver', 'admin')
+  await requireDriverStopAccess(stopId)
 
   const proofOfDeliveryUrl = ((formData.get('proofOfDeliveryUrl') as string) || '').trim() || null
   const shelfPhotoUrl = ((formData.get('shelfPhotoUrl') as string) || '').trim() || null
@@ -626,6 +674,10 @@ export async function completeDeliveryStop(stopId: string, formData: FormData) {
 
   if (!stop) {
     throw new Error('Stop not found')
+  }
+
+  if (stop.status !== 'pending') {
+    throw new Error('This stop has already been completed.')
   }
 
   await db.update(deliveryStops)
@@ -743,8 +795,50 @@ export async function completeDeliveryStop(stopId: string, formData: FormData) {
   revalidatePath('/driver/map')
 }
 
+export async function markDeliveryStopFailed(stopId: string) {
+  const { session, stop } = await requireDriverStopAccess(stopId)
+
+  if (stop.status !== 'pending') {
+    throw new Error('This stop has already been completed.')
+  }
+
+  await db.update(deliveryStops)
+    .set({
+      status: 'failed',
+      trackingEnabled: false,
+      customerStatus: 'failed',
+      trackingExpiresAt: new Date(Date.now() + TRACKING_EXPIRATION_HOURS * 60 * 60 * 1000),
+      etaMinutes: null,
+      distanceMiles: null,
+      lastKnownDriverLat: null,
+      lastKnownDriverLng: null,
+      lastLocationAt: null,
+    })
+    .where(eq(deliveryStops.id, stopId))
+
+  await recordTrackingEvent({
+    deliveryId: stop.deliveryId,
+    stopId,
+    eventType: 'delivery_failed',
+    createdBy: session.user.id,
+  })
+
+  await logActivityEvent({
+    entityType: 'delivery',
+    entityId: stop.deliveryId,
+    actorUserId: session.user.id,
+    kind: 'delivery_stop_failed',
+    title: 'Stop marked failed',
+    body: `${stop.companyName ?? stop.address} was marked failed.`,
+  })
+
+  revalidatePath('/driver/deliveries')
+  revalidatePath('/driver/map')
+  revalidatePath(`/admin/deliveries/${stop.deliveryId}`)
+}
+
 export async function updateStopNotes(stopId: string, formData: FormData) {
-  const session = await requireRole('driver', 'admin')
+  const { session } = await requireDriverStopAccess(stopId)
 
   const notes = ((formData.get('notes') as string) || '').trim()
 

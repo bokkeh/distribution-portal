@@ -38,7 +38,8 @@ function DriverNavLinks({
   return (
     <>
       {items.map(({ href, label, icon: Icon }) => {
-        const active = pathname === href || pathname.startsWith(href + '/')
+        const baseHref = href.split('#')[0]
+        const active = pathname === baseHref || pathname.startsWith(baseHref + '/')
 
         return (
           <Link

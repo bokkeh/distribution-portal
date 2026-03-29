@@ -77,6 +77,8 @@ function SortableStopCard({
   onRemove,
   onUpdate,
   isRemoving,
+  routeHasActiveStop = false,
+  emphasis = 'default',
 }: {
   stop: Stop
   index: number
@@ -85,6 +87,8 @@ function SortableStopCard({
   onRemove: (stopId: string) => void
   onUpdate: (stopId: string, data: Partial<Stop>) => void
   isRemoving: boolean
+  routeHasActiveStop?: boolean
+  emphasis?: 'default' | 'next' | 'active'
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stop.id })
   const [editing, setEditing] = useState(false)
@@ -123,8 +127,21 @@ function SortableStopCard({
     <div
       ref={setNodeRef}
       style={style}
-      className={`rounded-lg border bg-white p-3 sm:p-4 ${isDragging ? 'opacity-40 shadow-lg' : ''}`}
+      className={`rounded-lg border bg-white p-3 sm:p-4 ${
+        emphasis === 'active'
+          ? 'border-emerald-200 bg-emerald-50/60 shadow-sm'
+          : emphasis === 'next'
+            ? 'border-blue-200 bg-blue-50/60 shadow-sm'
+            : ''
+      } ${isDragging ? 'opacity-40 shadow-lg' : ''}`}
     >
+      {mode === 'driver' && emphasis !== 'default' ? (
+        <div className={`mb-3 inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
+          emphasis === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'
+        }`}>
+          {emphasis === 'active' ? 'Active Delivery' : 'Next Action'}
+        </div>
+      ) : null}
       <div className="flex items-start gap-3">
         {canReorder && (
           <button
@@ -254,9 +271,36 @@ function SortableStopCard({
             recipientSignedName: stop.recipientSignedName,
             lat: stop.lat,
             lng: stop.lng,
-          }} />
+          }} routeHasActiveStop={routeHasActiveStop} />
         </div>
       )}
+    </div>
+  )
+}
+
+function CompletedStopCard({ stop }: { stop: Stop }) {
+  return (
+    <div className="rounded-lg border bg-white p-3 sm:p-4">
+      <div className="flex items-start gap-3">
+        <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-bold text-slate-700">
+          <CheckCircle className="h-4 w-4" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-semibold leading-tight">{stop.companyName ?? stop.address}</p>
+            <StopStatusBadge status={stop.status} />
+          </div>
+          {stop.companyName ? (
+            <p className="mt-0.5 flex items-start gap-1 text-xs text-muted-foreground">
+              <MapPin className="mt-0.5 h-3 w-3 shrink-0" />
+              {stop.address}
+            </p>
+          ) : null}
+          <div className="mt-3">
+            <DriverStopActions stop={stop} />
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -371,8 +415,30 @@ export default function SortableStopList({
   const [activeId, setActiveId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
+  const pendingStops = useMemo(() => stops.filter((stop) => stop.status === 'pending'), [stops])
+  const completedStops = useMemo(() => stops.filter((stop) => stop.status !== 'pending'), [stops])
+  const activeTrackedStop = useMemo(
+    () => mode === 'driver'
+      ? pendingStops.find((stop) => ['out_for_delivery', 'arriving_soon', 'arrived'].includes(stop.customerStatus ?? 'not_started')) ?? null
+      : null,
+    [mode, pendingStops],
+  )
+  const leadStop = useMemo(
+    () => mode === 'driver' ? activeTrackedStop ?? pendingStops[0] ?? null : null,
+    [activeTrackedStop, mode, pendingStops],
+  )
+  const sortableStops = useMemo(
+    () => mode === 'driver'
+      ? [
+          ...(leadStop ? [leadStop] : []),
+          ...pendingStops.filter((stop) => stop.id !== leadStop?.id),
+        ]
+      : stops,
+    [leadStop, mode, pendingStops, stops],
+  )
+
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
-  const activeStop = useMemo(() => stops.find(stop => stop.id === activeId) ?? null, [stops, activeId])
+  const activeStop = useMemo(() => sortableStops.find(stop => stop.id === activeId) ?? null, [sortableStops, activeId])
 
   function handleDragStart(event: DragStartEvent) {
     setActiveId(event.active.id as string)
@@ -383,14 +449,23 @@ export default function SortableStopList({
     const { active, over } = event
     if (!over || active.id === over.id) return
 
-    const oldIndex = stops.findIndex(stop => stop.id === active.id)
-    const newIndex = stops.findIndex(stop => stop.id === over.id)
+    const oldIndex = sortableStops.findIndex(stop => stop.id === active.id)
+    const newIndex = sortableStops.findIndex(stop => stop.id === over.id)
     if (oldIndex === -1 || newIndex === -1) return
 
-    const nextStops = arrayMove(stops, oldIndex, newIndex).map((stop, index) => ({
+    const reorderedPending = arrayMove(sortableStops, oldIndex, newIndex).map((stop, index) => ({
       ...stop,
       sequenceNumber: index + 1,
     }))
+    const nextStops = mode === 'driver'
+      ? [
+          ...reorderedPending,
+          ...completedStops.map((stop, index) => ({
+            ...stop,
+            sequenceNumber: reorderedPending.length + index + 1,
+          })),
+        ]
+      : reorderedPending
     const previousStops = stops
 
     setStops(nextStops)
@@ -444,18 +519,18 @@ export default function SortableStopList({
           Drag stops by the grip handle to set the route order you want.
         </div>
       )}
-      {stops.length > 0 && (
+      {(mode === 'driver' ? sortableStops : stops).length > 0 && (
         <div className="pt-1">
           <GetDirectionsButton
-            stops={stops.map(s => ({ address: s.address }))}
+            stops={(mode === 'driver' ? sortableStops : stops).map(s => ({ address: s.address }))}
             originAddress={originAddress}
           />
         </div>
       )}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <SortableContext items={stops.map(stop => stop.id)} strategy={verticalListSortingStrategy}>
+        <SortableContext items={sortableStops.map(stop => stop.id)} strategy={verticalListSortingStrategy}>
           <div className="space-y-2 sm:space-y-3">
-            {stops.map((stop, index) => (
+            {sortableStops.map((stop, index) => (
               <SortableStopCard
                 key={stop.id}
                 stop={stop}
@@ -465,6 +540,8 @@ export default function SortableStopList({
                 onRemove={handleRemove}
                 onUpdate={handleUpdate}
                 isRemoving={isPending}
+                routeHasActiveStop={Boolean(activeTrackedStop)}
+                emphasis={mode === 'driver' && stop.id === leadStop?.id ? (activeTrackedStop ? 'active' : 'next') : 'default'}
               />
             ))}
           </div>
@@ -474,6 +551,31 @@ export default function SortableStopList({
           {activeStop ? <DragPreview stop={activeStop} /> : null}
         </DragOverlay>
       </DndContext>
+
+      {mode === 'driver' && completedStops.length > 0 ? (
+        <>
+          <details className="rounded-xl border border-slate-200 bg-white sm:hidden">
+            <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-slate-900">
+              Completed and Failed Stops ({completedStops.length})
+            </summary>
+            <div className="space-y-2 border-t border-slate-100 px-3 py-3">
+              {completedStops.map((stop) => (
+                <CompletedStopCard key={stop.id} stop={stop} />
+              ))}
+            </div>
+          </details>
+
+          <div className="hidden space-y-2 sm:block">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-slate-900">Completed and Failed Stops</p>
+              <Badge variant="outline">{completedStops.length}</Badge>
+            </div>
+            {completedStops.map((stop) => (
+              <CompletedStopCard key={stop.id} stop={stop} />
+            ))}
+          </div>
+        </>
+      ) : null}
     </div>
   )
 }
