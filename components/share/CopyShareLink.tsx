@@ -4,7 +4,13 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Check, Link2 } from 'lucide-react'
 
-export default function CopyShareLink({ path }: { path: string }) {
+export default function CopyShareLink({
+  path,
+  label = 'Share Link',
+}: {
+  path: string
+  label?: string
+}) {
   const [copied, setCopied] = useState(false)
 
   async function handleCopy() {
@@ -17,7 +23,7 @@ export default function CopyShareLink({ path }: { path: string }) {
   return (
     <Button type="button" variant="outline" onClick={handleCopy} className="gap-1.5">
       {copied ? <Check className="w-4 h-4 text-green-600" /> : <Link2 className="w-4 h-4" />}
-      {copied ? 'Copied!' : 'Share Link'}
+      {copied ? 'Copied!' : label}
     </Button>
   )
 }

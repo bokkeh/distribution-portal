@@ -1,9 +1,9 @@
 import { db } from '@/db'
 import { deliveries, deliveryStops, drivers, customerAccounts } from '@/db/schema'
-import { eq, and } from 'drizzle-orm'
+import { eq, and, inArray } from 'drizzle-orm'
 import { requireRole } from '@/lib/auth/session'
 import DeliveryMapWrapper from '@/components/deliveries/DeliveryMapWrapper'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 
 export default async function DriverMapPage() {
   const session = await requireRole('driver', 'admin')
@@ -39,7 +39,7 @@ export default async function DriverMapPage() {
         .from(deliveries)
         .innerJoin(deliveryStops, eq(deliveryStops.deliveryId, deliveries.id))
         .leftJoin(customerAccounts, eq(deliveryStops.customerId, customerAccounts.id))
-        .where(eq(deliveries.driverId, driver.id))
+        .where(and(eq(deliveries.driverId, driver.id), inArray(deliveries.status, ['scheduled', 'in_progress'])))
         .orderBy(deliveryStops.sequenceNumber)
     } catch (error) {
       const code = (error as { code?: string; cause?: { code?: string } } | null)?.code
@@ -63,7 +63,7 @@ export default async function DriverMapPage() {
         .from(deliveries)
         .innerJoin(deliveryStops, eq(deliveryStops.deliveryId, deliveries.id))
         .leftJoin(customerAccounts, eq(deliveryStops.customerId, customerAccounts.id))
-        .where(eq(deliveries.driverId, driver.id))
+        .where(and(eq(deliveries.driverId, driver.id), inArray(deliveries.status, ['scheduled', 'in_progress'])))
         .orderBy(deliveryStops.sequenceNumber)
         .then(rows => rows.map(row => ({
           ...row,

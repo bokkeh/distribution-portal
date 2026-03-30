@@ -9,12 +9,19 @@ import { createDelivery } from '@/actions/deliveries'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 
-export default async function NewDeliveryPage() {
+export default async function NewDeliveryPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ error?: string }> | { error?: string }
+}) {
+  const resolvedSearchParams = await Promise.resolve(searchParams ?? {})
+  const pageError = resolvedSearchParams.error
+
   const activeDrivers = await db
     .select({ id: drivers.id, name: users.name, phone: users.phone })
     .from(drivers)
     .innerJoin(users, eq(drivers.userId, users.id))
-    .where(drivers.active as any)
+    .where(eq(drivers.active, true))
 
   const openOrders = await db
     .select({
@@ -47,6 +54,11 @@ export default async function NewDeliveryPage() {
       <Card className="max-w-3xl">
         <CardHeader><CardTitle>Delivery Details</CardTitle></CardHeader>
         <CardContent>
+          {pageError ? (
+            <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {pageError}
+            </div>
+          ) : null}
           <form action={createDelivery} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="weekStartDate">Delivery Date</Label>

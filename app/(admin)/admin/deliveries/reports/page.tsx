@@ -10,6 +10,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { ArrowLeft, Clock, MapPin, Camera, User, Truck } from 'lucide-react'
 import { ShelfInsightsCard } from '@/components/deliveries/ShelfInsightsCard'
+import { SignaturePreviewDialog } from '@/components/deliveries/SignaturePreviewDialog'
 import type { SerializedShelfAnalysis } from '@/components/deliveries/ShelfInsightsCard'
 import { getDeliveryStopAdditionalPhotos } from '@/lib/deliveries/photos'
 import { signedPhotoUrl } from '@/lib/gcs/photo-url'
@@ -89,6 +90,8 @@ export default async function DeliveryReportsPage() {
     additionalPhotoUrl3: string | null
     additionalPhotoUrl4: string | null
     additionalPhotoUrl5: string | null
+    recipientSignatureUrl: string | null
+    recipientSignedName: string | null
   }
 
   let allStops: StopRow[]
@@ -111,6 +114,8 @@ export default async function DeliveryReportsPage() {
         additionalPhotoUrl3: deliveryStops.additionalPhotoUrl3,
         additionalPhotoUrl4: deliveryStops.additionalPhotoUrl4,
         additionalPhotoUrl5: deliveryStops.additionalPhotoUrl5,
+        recipientSignatureUrl: deliveryStops.recipientSignatureUrl,
+        recipientSignedName: deliveryStops.recipientSignedName,
       })
       .from(deliveryStops)
       .leftJoin(customerAccounts, eq(deliveryStops.customerId, customerAccounts.id))
@@ -130,6 +135,8 @@ export default async function DeliveryReportsPage() {
         completedAt: deliveryStops.completedAt,
         proofOfDeliveryUrl: deliveryStops.proofOfDeliveryUrl,
         shelfPhotoUrl: deliveryStops.shelfPhotoUrl,
+        recipientSignatureUrl: deliveryStops.recipientSignatureUrl,
+        recipientSignedName: deliveryStops.recipientSignedName,
       })
       .from(deliveryStops)
       .leftJoin(customerAccounts, eq(deliveryStops.customerId, customerAccounts.id))
@@ -142,6 +149,8 @@ export default async function DeliveryReportsPage() {
         additionalPhotoUrl3: null,
         additionalPhotoUrl4: null,
         additionalPhotoUrl5: null,
+        recipientSignatureUrl: row.recipientSignatureUrl,
+        recipientSignedName: row.recipientSignedName,
       })))
   }
 
@@ -359,6 +368,13 @@ export default async function DeliveryReportsPage() {
                         </Badge>
                         {(stop.proofOfDeliveryUrl || stop.shelfPhotoUrl || getDeliveryStopAdditionalPhotos(stop).length > 0) && (
                           <Camera className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                        )}
+                        {stop.recipientSignatureUrl && (
+                          <SignaturePreviewDialog
+                            stopLabel={stop.companyName ?? stop.address}
+                            signerName={stop.recipientSignedName}
+                            signatureUrl={stop.recipientSignatureUrl}
+                          />
                         )}
                       </div>
                     ))}

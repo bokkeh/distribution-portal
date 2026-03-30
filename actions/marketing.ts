@@ -171,7 +171,12 @@ export async function submitWholesaleAccountRequest(
     }
 
     const { sendWholesaleRequestNotification } = await import('@/lib/resend/client')
+    const { getStaffEmailsForNotification } = await import('@/lib/notifications/recipients')
+    const staffEmails = await getStaffEmailsForNotification().catch(() => [])
+    const wholesaleEmail = process.env.WHOLESALE_REQUEST_NOTIFICATION_EMAIL
+    const toAddresses = [...new Set([...staffEmails, ...(wholesaleEmail ? [wholesaleEmail] : [])])]
     void sendWholesaleRequestNotification({
+      to: toAddresses,
       businessName: parsed.businessName,
       businessEmail: parsed.businessEmail,
       businessType: parsed.businessType || null,

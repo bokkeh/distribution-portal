@@ -1,17 +1,32 @@
 import Image from 'next/image'
-import { and, desc, eq, sql } from 'drizzle-orm'
+import { and, desc, eq } from 'drizzle-orm'
 import { headers } from 'next/headers'
 import { notFound } from 'next/navigation'
+import { Clock3, MapPin, Navigation, Phone } from 'lucide-react'
 import { db } from '@/db'
 import { customerAccounts, deliveries, deliveryStops, deliveryTrackingEvents, drivers, users } from '@/db/schema'
 import DeliveryMapWrapper from '@/components/deliveries/DeliveryMapWrapper'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '@/components/ui/card'
 import { TrackingAutoRefresh } from '@/components/deliveries/TrackingAutoRefresh'
 import { isDeliveryTrackingRateLimited } from '@/lib/auth/rate-limit'
 import { signedPhotoUrl } from '@/lib/gcs/photo-url'
 import { toDisplayAvatarUrl } from '@/lib/users/avatar'
 import { formatDate } from '@/lib/utils'
+import DriverMessageButton from '@/components/share/DriverMessageButton'
+
+function maskDriverName(name: string | null) {
+  if (!name) return 'Your driver'
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length < 2) return parts[0] ?? 'Your driver'
+  return `${parts[0]} ${parts[1][0]}.`
+}
+
+function formatMiles(value: string | null) {
+  if (!value) return 'Updating'
+  const miles = Number(value)
+  if (!Number.isFinite(miles)) return 'Updating'
+  return `${miles.toFixed(1)} mi`
+}
 
 export default async function PublicDeliveryTrackingPage({
   params,
@@ -30,10 +45,7 @@ export default async function PublicDeliveryTrackingPage({
       <div className="min-h-screen bg-slate-50 p-4 sm:p-6">
         <div className="mx-auto max-w-xl">
           <Card>
-            <CardHeader>
-              <CardTitle>Tracking Temporarily Unavailable</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm text-slate-600">
+            <CardContent className="p-6 text-sm text-slate-600">
               Please wait a moment before refreshing this tracking page again.
             </CardContent>
           </Card>
@@ -42,9 +54,7 @@ export default async function PublicDeliveryTrackingPage({
     )
   }
 
-  const [{ requestTime }] = await db.select({
-    requestTime: sql<Date>`now()`,
-  })
+  const requestTime = new Date()
 
   const [stop] = await db
     .select({
@@ -110,11 +120,12 @@ export default async function PublicDeliveryTrackingPage({
   const staleLocation = stop.lastLocationAt
     ? requestTime.getTime() - new Date(stop.lastLocationAt).getTime() > 5 * 60 * 1000
     : true
+  const officePhone = process.env.ADMIN_NOTIFICATION_PHONE ?? process.env.TELNYX_FROM_NUMBER ?? null
   const origin = stop.lastKnownDriverLat && stop.lastKnownDriverLng
     ? {
         lat: Number(stop.lastKnownDriverLat),
         lng: Number(stop.lastKnownDriverLng),
-        title: stop.driverName ?? 'Driver',
+        title: 'Driver location',
         address: 'Current driver location',
       }
     : null
@@ -127,79 +138,95 @@ export default async function PublicDeliveryTrackingPage({
     address: stop.address,
     status: stop.customerStatus,
   }] : []
+  const maskedDriverName = maskDriverName(stop.driverName ?? null)
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 sm:p-6">
+    <div className="min-h-screen bg-[#f5f6f8]">
       <TrackingAutoRefresh />
-      <div className="mx-auto max-w-4xl space-y-4">
-        <Card className="overflow-hidden border-slate-200 shadow-sm">
-          <CardContent className="grid gap-6 p-6 md:grid-cols-[160px_1fr]">
-            <div className="flex items-center justify-center">
-              <div className="relative h-32 w-32 overflow-hidden rounded-3xl bg-slate-200">
-                {driverAvatar ? (
-                  <Image src={driverAvatar} alt={stop.driverName ?? 'Driver'} fill className="object-cover" unoptimized />
+      <div className="mx-auto max-w-md bg-white shadow-sm sm:my-6 sm:overflow-hidden sm:rounded-[32px]">
+        <section className="bg-[#22324a] px-6 pb-6 pt-8 text-white">
+          <p className="text-[2rem] font-light leading-tight">{stop.companyName ?? 'Delivery Tracking'}</p>
+          <div className="mt-8 flex items-end gap-4">
+            <div className="relative h-24 w-24 overflow-hidden rounded-full border-4 border-white/70 bg-white/15 shadow-lg">
+              {driverAvatar ? (
+                <Image src={driverAvatar} alt={maskedDriverName} fill className="object-cover" unoptimized />
+              ) : null}
+            </div>
+            <div className="pb-2">
+              <p className="text-2xl font-medium">{maskedDriverName}</p>
+              <p className="mt-1 text-sm text-slate-200">On the way with your delivery</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="bg-slate-100">
+          <div className="h-[420px]">
+            <DeliveryMapWrapper stops={stops} origin={origin} />
+          </div>
+        </section>
+
+        <section className="space-y-6 px-6 py-6">
+          <div className="space-y-4 text-slate-600">
+            <div className="flex items-start gap-4">
+              <MapPin className="mt-0.5 h-6 w-6 text-slate-500" />
+              <div>
+                <p className="text-2xl font-light leading-tight text-slate-700">{stop.address}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <Navigation className="h-6 w-6 text-slate-500" />
+              <p className="text-2xl font-light text-slate-700">Est distance: {formatMiles(stop.distanceMiles)}</p>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <Clock3 className="h-6 w-6 text-slate-500" />
+              <div>
+                <p className="text-2xl font-light text-slate-700">
+                  Est arrival time: {stop.etaMinutes ? `${stop.etaMinutes} mins` : 'Updating'}
+                </p>
+                {staleLocation ? (
+                  <p className="mt-1 text-xs font-medium text-amber-600">ETA is based on the most recent location update.</p>
                 ) : null}
               </div>
             </div>
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="info">AHAWC Delivery Tracking</Badge>
-                <Badge variant={stop.customerStatus === 'delivered' ? 'success' : stop.customerStatus === 'arrived' ? 'warning' : 'secondary'}>
-                  {stop.customerStatus.replace(/_/g, ' ')}
-                </Badge>
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-slate-900">{stop.driverName ?? 'Your driver'}</h1>
-                <p className="text-sm text-slate-500">Delivery Driver</p>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-2xl border border-slate-200 bg-white p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">ETA</p>
-                  <p className="mt-1 text-lg font-semibold text-slate-900">{stop.etaMinutes ? `${stop.etaMinutes} min` : 'Updating'}</p>
-                  {staleLocation ? <p className="mt-1 text-[11px] text-amber-600">ETA based on the last location update</p> : null}
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-white p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Distance</p>
-                  <p className="mt-1 text-lg font-semibold text-slate-900">{stop.distanceMiles ? `${stop.distanceMiles} mi` : 'Updating'}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-white p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Support</p>
-                  <p className="mt-1 text-lg font-semibold text-slate-900">{stop.driverPhone ?? 'AHAWC office'}</p>
-                </div>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
-                <p className="font-medium text-slate-900">{stop.companyName ?? 'Delivery destination'}</p>
-                <p className="mt-1">{stop.address}</p>
-                {staleLocation ? <p className="mt-2 text-xs font-medium text-amber-600">Live location unavailable, ETA based on the last update.</p> : null}
-                {stop.lastLocationAt ? <p className="mt-2 text-xs text-slate-500">Last updated {formatDate(stop.lastLocationAt)}</p> : null}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
-        <Card className="overflow-hidden">
-          <CardHeader>
-            <CardTitle>Live Delivery Map</CardTitle>
-          </CardHeader>
-          <CardContent className="h-[420px] p-0">
-            <DeliveryMapWrapper stops={stops} origin={origin} />
-          </CardContent>
-        </Card>
+            {officePhone ? (
+              <div className="flex items-center gap-4">
+                <Phone className="h-6 w-6 text-slate-500" />
+                <a href={`tel:${officePhone}`} className="text-2xl font-light text-sky-500 hover:text-sky-600">
+                  Office phone: {officePhone}
+                </a>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            {stop.driverPhone ? <DriverMessageButton phone={stop.driverPhone} driverName={maskedDriverName} /> : null}
+          </div>
+
+          {stop.lastLocationAt ? (
+            <p className="text-xs text-slate-400">Last updated {formatDate(stop.lastLocationAt)}</p>
+          ) : null}
+        </section>
 
         {stop.customerStatus === 'delivered' ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Delivered</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm text-slate-600">
-              <p>Delivered {stop.deliveredAt ? formatDate(stop.deliveredAt) : 'recently'}.</p>
-              {stop.recipientSignedName ? <p>Signed by {stop.recipientSignedName}.</p> : null}
-              <div className="flex flex-wrap gap-3">
-                {stop.proofOfDeliveryUrl ? <a href={signedPhotoUrl(stop.proofOfDeliveryUrl) ?? stop.proofOfDeliveryUrl} className="text-blue-600 underline" target="_blank" rel="noreferrer">View proof photo</a> : null}
-                {stop.recipientSignatureUrl ? <a href={signedPhotoUrl(stop.recipientSignatureUrl) ?? stop.recipientSignatureUrl} className="text-blue-600 underline" target="_blank" rel="noreferrer">View signature</a> : null}
-              </div>
-            </CardContent>
-          </Card>
+          <section className="border-t border-slate-100 px-6 py-6 text-sm text-slate-600">
+            <p>Delivered {stop.deliveredAt ? formatDate(stop.deliveredAt) : 'recently'}.</p>
+            {stop.recipientSignedName ? <p className="mt-2">Signed by {stop.recipientSignedName}.</p> : null}
+            <div className="mt-3 flex flex-wrap gap-3">
+              {stop.proofOfDeliveryUrl ? (
+                <a href={signedPhotoUrl(stop.proofOfDeliveryUrl) ?? stop.proofOfDeliveryUrl} className="text-blue-600 underline" target="_blank" rel="noreferrer">
+                  View proof photo
+                </a>
+              ) : null}
+              {stop.recipientSignatureUrl ? (
+                <a href={signedPhotoUrl(stop.recipientSignatureUrl) ?? stop.recipientSignatureUrl} className="text-blue-600 underline" target="_blank" rel="noreferrer">
+                  View signature
+                </a>
+              ) : null}
+            </div>
+          </section>
         ) : null}
       </div>
     </div>

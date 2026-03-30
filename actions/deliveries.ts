@@ -22,6 +22,10 @@ const TRACKING_TOKEN_BYTES = 18
 const TRACKING_EXPIRATION_HOURS = 48
 const ARRIVING_SOON_THRESHOLD_MINUTES = 10
 
+function uniqueEmails(...values: Array<string | null | undefined>) {
+  return Array.from(new Set(values.map((value) => value?.trim()).filter(Boolean) as string[]))
+}
+
 function buildTrackingToken() {
   return randomBytes(TRACKING_TOKEN_BYTES).toString('base64url')
 }
@@ -177,6 +181,7 @@ async function getStopTrackingContext(stopId: string) {
       accountPhone: customerAccounts.phone,
       accountEmail: customerAccounts.email,
       businessEmail: customerAccounts.businessEmail,
+      accountUserId: customerAccounts.userId,
       notificationPreference: customerAccounts.notificationPreference,
       companyName: customerAccounts.companyName,
       driverId: deliveries.driverId,
@@ -281,13 +286,61 @@ async function requireDeliveryReorderAccess(deliveryId: string) {
   }
 }
 
+async function syncScheduledOrderStatuses(input: Array<{
+  id: string
+  companyName: string | null
+  userId: string | null
+  phone: string | null
+  email: string | null
+  businessEmail: string | null
+  pocPhone: string | null
+  pocEmail: string | null
+  notificationPreference: string | null
+}>) {
+  const orderIds = Array.from(new Set(input.map((row) => row.id).filter(Boolean)))
+  if (!orderIds.length) return
+
+  await db
+    .update(orders)
+    .set({ shippingStatus: 'scheduled' })
+    .where(inArray(orders.id, orderIds))
+
+  await Promise.all(
+    input.map((order) =>
+      notify('order.shipping_status_changed', {
+        companyName: order.companyName ?? 'Customer account',
+        orderId: order.id,
+        status: 'scheduled',
+        customerEmails: uniqueEmails(order.pocEmail, order.businessEmail, order.email),
+        customerPhone: order.notificationPreference === 'email' ? null : (order.pocPhone || order.phone || null),
+        userId: order.userId,
+      }),
+    ),
+  )
+}
+
 
 export async function createDelivery(formData: FormData) {
   await requireAdmin()
 
   const weekStartDate = formData.get('weekStartDate') as string
   const driverId = formData.get('driverId') as string
-  const orderIds = formData.getAll('orderIds') as string[]
+  const orderIds = Array.from(new Set(formData.getAll('orderIds') as string[]))
+
+  if (orderIds.length > 0) {
+    const alreadyAssignedOrders = await db
+      .select({ orderId: deliveryStops.orderId })
+      .from(deliveryStops)
+      .innerJoin(deliveries, eq(deliveryStops.deliveryId, deliveries.id))
+      .where(and(
+        inArray(deliveryStops.orderId, orderIds),
+        inArray(deliveries.status, ['scheduled', 'in_progress']),
+      ))
+
+    if (alreadyAssignedOrders.length > 0) {
+      redirect(`/admin/deliveries/new?error=${encodeURIComponent('One or more selected orders are already assigned to an active delivery.')}`)
+    }
+  }
 
   const [delivery] = await db.insert(deliveries).values({
     weekStartDate,
@@ -301,10 +354,15 @@ export async function createDelivery(formData: FormData) {
         id: orders.id,
         customerId: orders.customerId,
         companyName: customerAccounts.companyName,
+        userId: customerAccounts.userId,
         address: customerAccounts.address,
         city: customerAccounts.city,
         state: customerAccounts.state,
         zip: customerAccounts.zip,
+        phone: customerAccounts.phone,
+        email: customerAccounts.email,
+        businessEmail: customerAccounts.businessEmail,
+        notificationPreference: customerAccounts.notificationPreference,
         contactName: customerAccounts.contactName,
         pocName: customerAccounts.pocName,
         pocPhone: customerAccounts.pocPhone,
@@ -341,6 +399,20 @@ export async function createDelivery(formData: FormData) {
         status: 'pending',
       })
     }
+
+    await syncScheduledOrderStatuses(
+      selectedOrders.map((order) => ({
+        id: order.id,
+        companyName: order.companyName,
+        userId: order.userId,
+        phone: order.phone,
+        email: order.email,
+        businessEmail: order.businessEmail,
+        pocPhone: order.pocPhone,
+        pocEmail: order.pocEmail,
+        notificationPreference: order.notificationPreference,
+      })),
+    )
   }
 
   await logActivityEvent({
@@ -393,9 +465,9 @@ export async function updateStopStatus(stopId: string, status: 'delivered' | 'fa
     })
     .where(eq(deliveryStops.id, stopId))
 
-  if (stop?.orderId && status === 'delivered') {
+  if (stop?.orderId) {
     await db.update(orders)
-      .set({ shippingStatus: 'delivered' })
+      .set({ shippingStatus: status === 'delivered' ? 'delivered' : 'issue' })
       .where(eq(orders.id, stop.orderId))
   }
 
@@ -827,6 +899,41 @@ export async function markDeliveryStopFailed(stopId: string) {
     })
     .where(eq(deliveryStops.id, stopId))
 
+  if (stop.orderId) {
+    await db.update(orders)
+      .set({ shippingStatus: 'issue' })
+      .where(eq(orders.id, stop.orderId))
+
+    await notify('order.shipping_status_changed', {
+      companyName: stop.companyName ?? stop.address,
+      orderId: stop.orderId,
+      status: 'issue',
+      customerEmails: uniqueEmails(stop.contactEmail, stop.businessEmail, stop.accountEmail),
+      customerPhone: stop.notificationPreference === 'email' ? null : (stop.contactPhone || stop.accountPhone || null),
+      userId: stop.accountUserId ?? null,
+    })
+  }
+
+  const [{ pendingCount }] = await db
+    .select({ pendingCount: count() })
+    .from(deliveryStops)
+    .where(and(
+      eq(deliveryStops.deliveryId, stop.deliveryId),
+      ne(deliveryStops.id, stopId),
+      eq(deliveryStops.status, 'pending'),
+    ))
+
+  if (pendingCount === 0) {
+    await db.update(deliveries)
+      .set({ status: 'completed' })
+      .where(eq(deliveries.id, stop.deliveryId))
+
+    await notify('delivery.run_completed', {
+      deliveryId: stop.deliveryId,
+      deliveryUrl: `${process.env.NEXTAUTH_URL}/admin/deliveries/${stop.deliveryId}`,
+    })
+  }
+
   await recordTrackingEvent({
     deliveryId: stop.deliveryId,
     stopId,
@@ -885,6 +992,36 @@ export async function updateStopNotes(stopId: string, formData: FormData) {
 
   revalidatePath('/driver/deliveries')
   revalidatePath('/driver/map')
+}
+
+export async function updateDeliveryStopMedia(stopId: string, formData: FormData): Promise<void> {
+  await requireDriverStopAccess(stopId)
+
+  const proofOfDeliveryUrl = ((formData.get('proofOfDeliveryUrl') as string) || '').trim() || null
+  const shelfPhotoUrl = ((formData.get('shelfPhotoUrl') as string) || '').trim() || null
+  const recipientSignatureUrl = ((formData.get('recipientSignatureUrl') as string) || '').trim() || null
+  const recipientSignedName = ((formData.get('recipientSignedName') as string) || '').trim() || null
+  const notes = ((formData.get('notes') as string) || '').trim() || null
+  const additionalPhotoUrls = Array.from({ length: 5 }, (_, i) =>
+    ((formData.get(`additionalPhotoUrl${i + 1}`) as string) || '').trim() || null,
+  )
+
+  await db.update(deliveryStops).set({
+    ...(proofOfDeliveryUrl !== null && { proofOfDeliveryUrl }),
+    ...(shelfPhotoUrl !== null && { shelfPhotoUrl }),
+    ...(recipientSignatureUrl !== null && { recipientSignatureUrl }),
+    ...(recipientSignedName !== null && { recipientSignedName }),
+    ...(recipientSignatureUrl !== null && { recipientSignedAt: new Date() }),
+    ...(notes !== null && { notes }),
+    ...(additionalPhotoUrls[0] !== null && { additionalPhotoUrl: additionalPhotoUrls[0] }),
+    ...(additionalPhotoUrls[1] !== null && { additionalPhotoUrl2: additionalPhotoUrls[1] }),
+    ...(additionalPhotoUrls[2] !== null && { additionalPhotoUrl3: additionalPhotoUrls[2] }),
+    ...(additionalPhotoUrls[3] !== null && { additionalPhotoUrl4: additionalPhotoUrls[3] }),
+    ...(additionalPhotoUrls[4] !== null && { additionalPhotoUrl5: additionalPhotoUrls[4] }),
+  }).where(eq(deliveryStops.id, stopId))
+
+  revalidatePath('/driver/deliveries')
+  revalidatePath('/admin/deliveries')
 }
 
 export async function updateDeliveryStop(
@@ -1086,14 +1223,33 @@ export async function addDeliveryStop(deliveryId: string, formData: FormData) {
       throw new Error('Delivery not found.')
     }
 
+    const [existingActiveStop] = await db
+      .select({ id: deliveryStops.id })
+      .from(deliveryStops)
+      .innerJoin(deliveries, eq(deliveryStops.deliveryId, deliveries.id))
+      .where(and(
+        eq(deliveryStops.customerId, customerId),
+        inArray(deliveries.status, ['scheduled', 'in_progress']),
+      ))
+      .limit(1)
+
+    if (existingActiveStop) {
+      throw new Error('This account is already on an active delivery.')
+    }
+
     const [account] = await db
       .select({
         id: customerAccounts.id,
         companyName: customerAccounts.companyName,
+        userId: customerAccounts.userId,
         address: customerAccounts.address,
         city: customerAccounts.city,
         state: customerAccounts.state,
         zip: customerAccounts.zip,
+        phone: customerAccounts.phone,
+        email: customerAccounts.email,
+        businessEmail: customerAccounts.businessEmail,
+        notificationPreference: customerAccounts.notificationPreference,
         contactName: customerAccounts.contactName,
         pocName: customerAccounts.pocName,
         pocPhone: customerAccounts.pocPhone,
@@ -1114,11 +1270,16 @@ export async function addDeliveryStop(deliveryId: string, formData: FormData) {
       .orderBy(desc(deliveryStops.sequenceNumber))
       .limit(1)
 
-    const [openOrder] = await db
+    const openOrders = await db
       .select({ id: orders.id })
       .from(orders)
       .where(and(eq(orders.customerId, customerId), inArray(orders.status, ['pending', 'confirmed'])))
-      .limit(1)
+
+    if (openOrders.length > 1) {
+      throw new Error('This account has multiple open orders. Add it from the delivery scheduling screen so the correct order is selected.')
+    }
+
+    const [openOrder] = openOrders
 
     const fullAddress = [account.address, account.city, account.state, account.zip].filter(Boolean).join(', ')
     if (!fullAddress) {
@@ -1149,6 +1310,20 @@ export async function addDeliveryStop(deliveryId: string, formData: FormData) {
       lng: lng?.toFixed(7) ?? null,
       status: 'pending',
     })
+
+    if (openOrder) {
+      await syncScheduledOrderStatuses([{
+        id: openOrder.id,
+        companyName: account.companyName,
+        userId: account.userId,
+        phone: account.phone,
+        email: account.email,
+        businessEmail: account.businessEmail,
+        pocPhone: account.pocPhone,
+        pocEmail: account.pocEmail,
+        notificationPreference: account.notificationPreference,
+      }])
+    }
 
     await logActivityEvent({
       entityType: 'delivery',

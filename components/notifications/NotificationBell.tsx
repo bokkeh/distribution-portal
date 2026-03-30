@@ -26,17 +26,24 @@ export function NotificationBell({
   dark?: boolean
 }) {
   const [open, setOpen] = useState(false)
-  const [localItems, setLocalItems] = useState(items)
-  const [localUnreadCount, setLocalUnreadCount] = useState(unreadCount)
+  const [itemsOverride, setItemsOverride] = useState<NotificationItem[] | null>(null)
+  const [unreadCountOverride, setUnreadCountOverride] = useState<number | null>(null)
   const [panelStyle, setPanelStyle] = useState<{ top: number; left: number; width: number } | null>(null)
+  const [retentionCutoff, setRetentionCutoff] = useState<number | null>(null)
   const [isPending, startTransition] = useTransition()
   const buttonRef = useRef<HTMLButtonElement | null>(null)
   const seenNotificationIdsRef = useRef(new Set(items.map(item => item.id)))
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const resolvedItems = itemsOverride ?? items
+  const resolvedUnreadCount = unreadCountOverride ?? unreadCount
 
   const visibleItems = useMemo(() => {
-    const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000
-    return localItems.filter((item) => new Date(item.createdAt).getTime() >= cutoff || !item.readAt)
-  }, [localItems])
+    if (retentionCutoff === null) {
+      return resolvedItems
+    }
+
+    return resolvedItems.filter((item) => new Date(item.createdAt).getTime() >= retentionCutoff || !item.readAt)
+  }, [resolvedItems, retentionCutoff])
 
   const groupedItems = useMemo(() => {
     const groups = new Map<string, NotificationItem[]>()
@@ -79,12 +86,78 @@ export function NotificationBell({
   }, [dark])
 
   useEffect(() => {
-    setLocalItems(items)
-    setLocalUnreadCount(unreadCount)
     for (const item of items) {
       seenNotificationIdsRef.current.add(item.id)
     }
-  }, [items, unreadCount])
+  }, [items])
+
+  useEffect(() => {
+    const refreshRetentionCutoff = () => {
+      setRetentionCutoff(Date.now() - 14 * 24 * 60 * 60 * 1000)
+    }
+
+    refreshRetentionCutoff()
+    const intervalId = window.setInterval(refreshRetentionCutoff, 60 * 60 * 1000)
+    return () => window.clearInterval(intervalId)
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof Notification === 'undefined') return
+    if (Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => null)
+    }
+  }, [])
+
+  function playNotificationCue() {
+    if (typeof window === 'undefined') return
+
+    if ('vibrate' in navigator) {
+      navigator.vibrate?.(120)
+    }
+
+    try {
+      const AudioContextCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+      if (!AudioContextCtor) return
+
+      const context = audioContextRef.current ?? new AudioContextCtor()
+      audioContextRef.current = context
+
+      const oscillator = context.createOscillator()
+      const gain = context.createGain()
+      oscillator.type = 'sine'
+      oscillator.frequency.value = 880
+      gain.gain.setValueAtTime(0.0001, context.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.03, context.currentTime + 0.01)
+      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.22)
+      oscillator.connect(gain)
+      gain.connect(context.destination)
+      oscillator.start()
+      oscillator.stop(context.currentTime + 0.24)
+    } catch {
+      // Ignore browsers that block synthetic audio cues.
+    }
+  }
+
+  function showSystemNotification(item: NotificationItem) {
+    if (typeof window === 'undefined' || typeof Notification === 'undefined') return
+    if (Notification.permission !== 'granted') return
+
+    try {
+      const notification = new Notification(item.title, {
+        body: item.body.length > 120 ? `${item.body.slice(0, 117)}...` : item.body,
+        tag: item.id,
+      })
+
+      if (item.href) {
+        notification.onclick = () => {
+          window.focus()
+          window.location.href = item.href as string
+        }
+      }
+    } catch {
+      // Ignore Notification API failures.
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -107,17 +180,22 @@ export function NotificationBell({
           item => !item.readAt && !seenNotificationIdsRef.current.has(item.id)
         )
 
-        setLocalItems(nextData.notifications)
-        setLocalUnreadCount(nextData.unreadCount)
+        setItemsOverride(nextData.notifications)
+        setUnreadCountOverride(nextData.unreadCount)
 
         for (const item of nextData.notifications) {
           seenNotificationIdsRef.current.add(item.id)
+        }
+
+        if (newUnreadItems.length > 0) {
+          playNotificationCue()
         }
 
         for (const item of newUnreadItems.slice(0, 3)) {
           toast(item.title, {
             description: item.body.length > 120 ? `${item.body.slice(0, 117)}...` : item.body,
           })
+          showSystemNotification(item)
         }
       } catch {
         // Keep the bell quiet if polling fails.
@@ -176,8 +254,8 @@ export function NotificationBell({
   function handleMarkAll() {
     startTransition(async () => {
       await markAllNotificationsRead()
-      setLocalItems(prev => prev.map(item => ({ ...item, readAt: item.readAt ?? new Date() })))
-      setLocalUnreadCount(0)
+      setItemsOverride(prev => (prev ?? items).map(item => ({ ...item, readAt: item.readAt ?? new Date() })))
+      setUnreadCountOverride(0)
     })
   }
 
@@ -185,23 +263,23 @@ export function NotificationBell({
     const kinds = Array.from(new Set(groupItems.map((item) => item.kind)))
     startTransition(async () => {
       await markNotificationKindsRead(kinds)
-      setLocalItems((prev) =>
-        prev.map((item) =>
+      setItemsOverride((prev) =>
+        (prev ?? items).map((item) =>
           kinds.includes(item.kind) && !item.readAt ? { ...item, readAt: new Date() } : item
         )
       )
       const unreadInGroup = groupItems.filter((item) => !item.readAt).length
-      setLocalUnreadCount((prev) => Math.max(0, prev - unreadInGroup))
+      setUnreadCountOverride((prev) => Math.max(0, (prev ?? unreadCount) - unreadInGroup))
     })
   }
 
   function handleOpenNotification(notificationId: string) {
     startTransition(async () => {
-      const existing = localItems.find(item => item.id === notificationId)
+      const existing = resolvedItems.find(item => item.id === notificationId)
       await markNotificationRead(notificationId)
-      setLocalItems(prev => prev.map(item => item.id === notificationId ? { ...item, readAt: item.readAt ?? new Date() } : item))
+      setItemsOverride(prev => (prev ?? items).map(item => item.id === notificationId ? { ...item, readAt: item.readAt ?? new Date() } : item))
       if (existing && !existing.readAt) {
-        setLocalUnreadCount(prev => Math.max(0, prev - 1))
+        setUnreadCountOverride(prev => Math.max(0, (prev ?? unreadCount) - 1))
       }
     })
   }
@@ -220,9 +298,9 @@ export function NotificationBell({
         aria-label="Open notifications"
       >
         <Bell className="h-4 w-4 fill-current" />
-        {localUnreadCount > 0 ? (
+        {resolvedUnreadCount > 0 ? (
           <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
-            {localUnreadCount > 9 ? '9+' : localUnreadCount}
+            {resolvedUnreadCount > 9 ? '9+' : resolvedUnreadCount}
           </span>
         ) : null}
       </button>
@@ -236,12 +314,12 @@ export function NotificationBell({
             <div className="flex items-center justify-between border-b border-inherit px-4 py-3">
               <div>
                 <p className={dark ? 'text-sm font-semibold text-slate-900' : 'text-sm font-semibold text-slate-900'}>Notifications</p>
-                <p className={dark ? 'text-xs text-slate-500' : 'text-xs text-slate-500'}>{localUnreadCount} unread</p>
+                <p className={dark ? 'text-xs text-slate-500' : 'text-xs text-slate-500'}>{resolvedUnreadCount} unread</p>
               </div>
               <button
                 type="button"
                 onClick={handleMarkAll}
-                disabled={isPending || localUnreadCount === 0}
+                disabled={isPending || resolvedUnreadCount === 0}
                 className={dark ? 'text-xs text-slate-600 hover:text-slate-900 disabled:text-slate-300' : 'text-xs text-slate-600 hover:text-slate-900 disabled:text-slate-300'}
               >
                 Mark all read

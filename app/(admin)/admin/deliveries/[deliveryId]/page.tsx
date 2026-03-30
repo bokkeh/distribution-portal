@@ -228,7 +228,6 @@ export default async function DeliveryDetailPage({
           </Badge>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <CopyShareLink path={`/share/delivery/${resolvedParams.deliveryId}`} />
           <Link href={isDriverView
             ? `/admin/deliveries/${resolvedParams.deliveryId}${showAddStop ? '?addStop=1' : ''}`
             : `/admin/deliveries/${resolvedParams.deliveryId}?view=driver`}>
@@ -294,6 +293,7 @@ export default async function DeliveryDetailPage({
                 >
                   Open Tracking Page
                 </a>
+                <CopyShareLink path={`/track/delivery/${stop.trackingToken}`} label="Copy Customer Link" />
               </div>
             </div>
           ))}

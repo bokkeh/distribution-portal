@@ -268,7 +268,11 @@ export default async function DriverDeliveriesPage() {
                   : 0
 
                 return (
-                  <div key={delivery.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <a
+                    key={delivery.id}
+                    href={`/driver/deliveries/${delivery.id}`}
+                    className="block rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:border-blue-300 hover:shadow-md"
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="font-semibold text-slate-900">Delivery Run {formatDate(delivery.weekStartDate)}</p>
@@ -306,7 +310,7 @@ export default async function DriverDeliveriesPage() {
                       <span>{delivery.failedCount > 0 ? `${delivery.failedCount} failed stop${delivery.failedCount === 1 ? '' : 's'}` : 'No failed stops'}</span>
                       <span>{delivery.capturedProofCount}/{delivery.stopCount} with photos</span>
                     </div>
-                  </div>
+                  </a>
                 )
               })}
             </div>
@@ -338,7 +342,11 @@ export default async function DriverDeliveriesPage() {
                   : 0
 
                 return (
-                  <div key={delivery.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <a
+                    key={delivery.id}
+                    href={`/driver/deliveries/${delivery.id}`}
+                    className="block rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:border-blue-300 hover:shadow-md"
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="font-semibold text-slate-900">Delivery Run {formatDate(delivery.weekStartDate)}</p>
@@ -371,7 +379,7 @@ export default async function DriverDeliveriesPage() {
                         <div className="h-full rounded-full bg-emerald-500" style={{ width: `${completionRate}%` }} />
                       </div>
                     </div>
-                  </div>
+                  </a>
                 )
               })}
             </div>

@@ -6,8 +6,10 @@ import { db } from '@/db'
 import { deliveries, deliveryStops, salesRoutes, salesRouteStops } from '@/db/schema'
 import { geocodeAddress } from '@/lib/maps/geocode'
 import { logAccountNoteEvent } from '@/lib/crm/account-notes'
+import { requireAdminOrStaff } from '@/lib/auth/session'
 
 export async function updateSharedSalesRouteOrigin(routeId: string, formData: FormData) {
+  await requireAdminOrStaff()
   const address = (formData.get('originAddress') as string)?.trim() || null
 
   if (!address) {
@@ -44,6 +46,7 @@ export async function updateSharedSalesRouteOrigin(routeId: string, formData: Fo
 }
 
 export async function updateSharedSalesRouteStopNotes(routeId: string, stopId: string, formData: FormData) {
+  await requireAdminOrStaff()
   const notes = (formData.get('notes') as string)?.trim() || null
 
   const [stop] = await db
@@ -71,6 +74,7 @@ export async function updateSharedSalesRouteStopNotes(routeId: string, stopId: s
 }
 
 export async function updateSharedDeliveryOrigin(deliveryId: string, formData: FormData) {
+  await requireAdminOrStaff()
   const address = (formData.get('originAddress') as string)?.trim() || null
 
   if (!address) {
@@ -107,6 +111,7 @@ export async function updateSharedDeliveryOrigin(deliveryId: string, formData: F
 }
 
 export async function updateSharedDeliveryStopNotes(deliveryId: string, stopId: string, formData: FormData) {
+  await requireAdminOrStaff()
   const notes = (formData.get('notes') as string)?.trim() || null
 
   const [stop] = await db

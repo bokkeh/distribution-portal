@@ -3,7 +3,7 @@
 import { type ReactNode, useMemo, useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import { completeDeliveryStop, markDeliveryStopArrived, markDeliveryStopFailed, saveRecipientSignature, startDeliveryForStop } from '@/actions/deliveries'
+import { completeDeliveryStop, markDeliveryStopArrived, markDeliveryStopFailed, saveRecipientSignature, startDeliveryForStop, updateDeliveryStopMedia } from '@/actions/deliveries'
 import { getDeliveryStopAdditionalPhotos } from '@/lib/deliveries/photos'
 import { signedPhotoUrl } from '@/lib/gcs/photo-url'
 import { BottleWine, Camera, CheckCircle, Loader2, MapPinned, Navigation, PackageCheck, PenSquare, Save, Timer, XCircle } from 'lucide-react'
@@ -44,9 +44,11 @@ function formatRelativeMinutes(timestamp: number | Date | null | undefined) {
 export function DriverStopActions({
   stop,
   routeHasActiveStop = false,
+  onCompleted,
 }: {
   stop: Stop
   routeHasActiveStop?: boolean
+  onCompleted?: () => void
 }) {
   const [isPending, startTransition] = useTransition()
   const [notes, setNotes] = useState(stop.notes ?? '')
@@ -182,6 +184,7 @@ export function DriverStopActions({
         })
         await completeDeliveryStop(stop.id, formData)
         toast.success('Stop marked delivered')
+        onCompleted?.()
       } catch (error) {
         toast.error('Unable to complete stop', { description: error instanceof Error ? error.message : undefined })
       }
@@ -193,6 +196,7 @@ export function DriverStopActions({
       try {
         await markDeliveryStopFailed(stop.id)
         toast.success('Stop marked failed')
+        onCompleted?.()
       } catch (error) {
         toast.error('Unable to update stop', { description: error instanceof Error ? error.message : undefined })
       }
@@ -200,18 +204,150 @@ export function DriverStopActions({
   }
 
   const savedAdditionalPhotos = useMemo(() => additionalPhotoUrls.filter(Boolean), [additionalPhotoUrls])
+  const [editingCompleted, setEditingCompleted] = useState(false)
+  const [savingMedia, setSavingMedia] = useState(false)
 
   if (stop.status !== 'pending') {
+    if (!editingCompleted) {
+      return (
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            {proofOfDeliveryUrl && <a href={signedPhotoUrl(proofOfDeliveryUrl) ?? proofOfDeliveryUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline">Proof of delivery</a>}
+            {shelfPhotoUrl && <a href={signedPhotoUrl(shelfPhotoUrl) ?? shelfPhotoUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline">Shelf photo</a>}
+            {recipientSignatureUrl && <a href={signedPhotoUrl(recipientSignatureUrl) ?? recipientSignatureUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline">Signature</a>}
+            {savedAdditionalPhotos.map((url, index) => (
+              <a key={url} href={signedPhotoUrl(url) ?? url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline">
+                Extra photo {index + 1}
+              </a>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => setEditingCompleted(true)}
+            className="flex items-center gap-1.5 text-xs font-medium text-slate-600 underline"
+          >
+            <Camera className="h-3.5 w-3.5" /> Add / edit photos & signature
+          </button>
+        </div>
+      )
+    }
+
+    async function handleSaveMedia() {
+      setSavingMedia(true)
+      try {
+        let sigUrl = recipientSignatureUrl
+        if (sigUrl.startsWith('data:image/')) {
+          sigUrl = await uploadSignatureDataUrl(sigUrl)
+          setRecipientSignatureUrl(sigUrl)
+        }
+        const formData = new FormData()
+        formData.append('proofOfDeliveryUrl', proofOfDeliveryUrl)
+        formData.append('shelfPhotoUrl', shelfPhotoUrl)
+        formData.append('recipientSignatureUrl', sigUrl)
+        formData.append('recipientSignedName', recipientSignedName)
+        formData.append('notes', notes)
+        additionalPhotoUrls.forEach((url, i) => formData.append(`additionalPhotoUrl${i + 1}`, url))
+        await updateDeliveryStopMedia(stop.id, formData)
+        toast.success('Stop updated')
+        setEditingCompleted(false)
+      } catch (error) {
+        toast.error('Failed to save', { description: error instanceof Error ? error.message : undefined })
+      } finally {
+        setSavingMedia(false)
+      }
+    }
+
+    const editTiles: { kind: 'proof' | 'shelf'; label: string; url: string; uploading: boolean; icon: ReactNode; hint: string }[] = [
+      { kind: 'proof', label: 'Proof of Delivery', url: proofOfDeliveryUrl, uploading: uploadingProof, icon: <PackageCheck className="mb-2 h-6 w-6" />, hint: 'Drop-off confirmation' },
+      { kind: 'shelf', label: 'Shelf Photo', url: shelfPhotoUrl, uploading: uploadingShelf, icon: <BottleWine className="mb-2 h-6 w-6" />, hint: 'Shelf after stocking' },
+    ]
+
     return (
-      <div className="space-y-1">
-        {proofOfDeliveryUrl && <a href={signedPhotoUrl(proofOfDeliveryUrl) ?? proofOfDeliveryUrl} target="_blank" rel="noreferrer" className="block text-xs text-blue-600 underline">View proof of delivery</a>}
-        {shelfPhotoUrl && <a href={signedPhotoUrl(shelfPhotoUrl) ?? shelfPhotoUrl} target="_blank" rel="noreferrer" className="block text-xs text-blue-600 underline">View shelf photo</a>}
-        {stop.recipientSignatureUrl && <a href={signedPhotoUrl(stop.recipientSignatureUrl) ?? stop.recipientSignatureUrl} target="_blank" rel="noreferrer" className="block text-xs text-blue-600 underline">View recipient signature</a>}
-        {savedAdditionalPhotos.map((url, index) => (
-          <a key={url} href={signedPhotoUrl(url) ?? url} target="_blank" rel="noreferrer" className="block text-xs text-blue-600 underline">
-            View additional photo {index + 1}
-          </a>
-        ))}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Edit delivery record</span>
+          <button type="button" onClick={() => setEditingCompleted(false)} className="text-xs text-slate-500 underline">Cancel</button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+          {editTiles.map(({ kind, label, url, uploading, icon, hint }) => (
+            <label key={kind} className="block cursor-pointer">
+              <span className="mb-1 block truncate text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
+              <span className="relative flex min-h-[100px] w-full overflow-hidden rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 transition-colors hover:border-blue-400">
+                {uploading ? (
+                  <span className="flex w-full flex-col items-center justify-center px-2 py-3"><Loader2 className="h-7 w-7 animate-spin" /></span>
+                ) : url ? (
+                  <>
+                    <img src={url} alt={label} className="h-full w-full object-cover" style={{ minHeight: 100 }} />
+                    <span className="absolute bottom-1.5 right-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-semibold text-white">Tap to replace</span>
+                  </>
+                ) : (
+                  <span className="flex w-full flex-col items-center justify-center px-2 py-3 text-center text-slate-600">
+                    {icon}
+                    <span className="text-xs font-semibold">Upload</span>
+                    <span className="mt-1 text-[10px] text-muted-foreground">{hint}</span>
+                  </span>
+                )}
+              </span>
+              <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleUpload(f, kind) }} />
+            </label>
+          ))}
+          {additionalPhotoUrls.map((url, index) => (
+            <label key={`additional-${index}`} className="block cursor-pointer">
+              <span className="mb-1 block truncate text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Extra Photo {index + 1}</span>
+              <span className="relative flex min-h-[100px] w-full overflow-hidden rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 transition-colors hover:border-blue-400">
+                {uploadingAdditional[index] ? (
+                  <span className="flex w-full flex-col items-center justify-center px-2 py-3"><Loader2 className="h-7 w-7 animate-spin" /></span>
+                ) : url ? (
+                  <>
+                    <img src={url} alt={`Extra ${index + 1}`} className="h-full w-full object-cover" style={{ minHeight: 100 }} />
+                    <span className="absolute bottom-1.5 right-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-semibold text-white">Tap to replace</span>
+                  </>
+                ) : (
+                  <span className="flex w-full flex-col items-center justify-center px-2 py-3 text-center text-slate-600">
+                    <Camera className="mb-2 h-7 w-7" />
+                    <span className="text-xs font-semibold">Upload</span>
+                    <span className="mt-1 text-[10px] text-muted-foreground">Additional photo</span>
+                  </span>
+                )}
+              </span>
+              <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleUpload(f, 'additional', index) }} />
+            </label>
+          ))}
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Recipient Name</label>
+          <input value={recipientSignedName} onChange={(e) => setRecipientSignedName(e.target.value)}
+            placeholder="Who signed for this delivery?"
+            className="flex h-11 w-full rounded-xl border border-input bg-white px-3 text-base shadow-sm" />
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <PenSquare className="h-4 w-4" /> Recipient Signature
+          </div>
+          <SignaturePad value={recipientSignatureUrl} onChange={(v) => { setRecipientSignatureUrl(v); setSignatureSaved(false) }} disabled={savingMedia} />
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Driver Notes</label>
+          <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
+            placeholder="Add delivery updates, owner requests, or shelf notes."
+            className="min-h-20 w-full rounded-xl border border-input bg-white px-3 py-2.5 text-base shadow-sm" />
+        </div>
+
+        <button
+          type="button"
+          onClick={handleSaveMedia}
+          disabled={savingMedia || uploadingProof || uploadingShelf || uploadingAdditional.some(Boolean)}
+          className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 text-sm font-semibold text-white shadow-sm disabled:opacity-50"
+        >
+          {savingMedia ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          Save Changes
+        </button>
       </div>
     )
   }

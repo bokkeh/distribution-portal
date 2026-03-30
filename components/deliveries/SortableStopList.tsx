@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { DndContext, DragOverlay, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -83,6 +83,8 @@ function SortableStopCard({
   isRemoving,
   routeHasActiveStop = false,
   emphasis = 'default',
+  onCompleted,
+  cardRef,
 }: {
   stop: Stop
   index: number
@@ -97,10 +99,13 @@ function SortableStopCard({
   isRemoving: boolean
   routeHasActiveStop?: boolean
   emphasis?: 'default' | 'next' | 'active'
+  onCompleted?: () => void
+  cardRef?: (el: HTMLDivElement | null) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stop.id })
   const [editing, setEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
   const [address, setAddress] = useState(stop.address)
   const [contactName, setContactName] = useState(stop.contactName ?? '')
   const [contactPhone, setContactPhone] = useState(stop.contactPhone ?? '')
@@ -133,7 +138,7 @@ function SortableStopCard({
 
   return (
     <div
-      ref={setNodeRef}
+      ref={(el) => { setNodeRef(el); cardRef?.(el) }}
       style={style}
       className={`rounded-lg border bg-white p-3 sm:p-4 ${
         emphasis === 'active'
@@ -278,27 +283,43 @@ function SortableStopCard({
 
       {mode === 'driver' && !editing && (
         <div className="mt-4 border-t pt-4">
-          <DriverStopActions stop={{
-            id: stop.id,
-            status: stop.status,
-            customerStatus: stop.customerStatus,
-            notes: stop.notes,
-            proofOfDeliveryUrl: stop.proofOfDeliveryUrl,
-            shelfPhotoUrl: stop.shelfPhotoUrl,
-            additionalPhotoUrl: stop.additionalPhotoUrl,
-            additionalPhotoUrl2: stop.additionalPhotoUrl2,
-            additionalPhotoUrl3: stop.additionalPhotoUrl3,
-            additionalPhotoUrl4: stop.additionalPhotoUrl4,
-            additionalPhotoUrl5: stop.additionalPhotoUrl5,
-            trackingEnabled: stop.trackingEnabled,
-            trackingToken: stop.trackingToken,
-            etaMinutes: stop.etaMinutes,
-            lastLocationAt: stop.lastLocationAt,
-            recipientSignatureUrl: stop.recipientSignatureUrl,
-            recipientSignedName: stop.recipientSignedName,
-            lat: stop.lat,
-            lng: stop.lng,
-          }} routeHasActiveStop={routeHasActiveStop} />
+          {collapsed ? (
+            <div className="flex items-center justify-between">
+              <span className={`flex items-center gap-1.5 text-sm font-medium ${stop.status === 'failed' ? 'text-red-600' : 'text-green-600'}`}>
+                {stop.status === 'failed' ? <XCircle className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
+                {stop.status === 'failed' ? 'Marked failed' : 'Delivered'}
+              </span>
+              <button
+                type="button"
+                onClick={() => setCollapsed(false)}
+                className="text-xs text-blue-600 underline"
+              >
+                View details
+              </button>
+            </div>
+          ) : (
+            <DriverStopActions stop={{
+              id: stop.id,
+              status: stop.status,
+              customerStatus: stop.customerStatus,
+              notes: stop.notes,
+              proofOfDeliveryUrl: stop.proofOfDeliveryUrl,
+              shelfPhotoUrl: stop.shelfPhotoUrl,
+              additionalPhotoUrl: stop.additionalPhotoUrl,
+              additionalPhotoUrl2: stop.additionalPhotoUrl2,
+              additionalPhotoUrl3: stop.additionalPhotoUrl3,
+              additionalPhotoUrl4: stop.additionalPhotoUrl4,
+              additionalPhotoUrl5: stop.additionalPhotoUrl5,
+              trackingEnabled: stop.trackingEnabled,
+              trackingToken: stop.trackingToken,
+              etaMinutes: stop.etaMinutes,
+              lastLocationAt: stop.lastLocationAt,
+              recipientSignatureUrl: stop.recipientSignatureUrl,
+              recipientSignedName: stop.recipientSignedName,
+              lat: stop.lat,
+              lng: stop.lng,
+            }} routeHasActiveStop={routeHasActiveStop} onCompleted={() => { setCollapsed(true); onCompleted?.() }} />
+          )}
         </div>
       )}
     </div>
@@ -441,6 +462,7 @@ export default function SortableStopList({
   const [originAddress, setOriginAddress] = useState(initialOriginAddress ?? null)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const stopRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
   const pendingStops = useMemo(() => stops.filter((stop) => stop.status === 'pending'), [stops])
   const completedStops = useMemo(() => stops.filter((stop) => stop.status !== 'pending'), [stops])
@@ -534,6 +556,15 @@ export default function SortableStopList({
     })
   }
 
+  function handleStopCompleted(stopId: string) {
+    const nextPending = sortableStops.find((s) => s.id !== stopId && s.status === 'pending')
+    if (!nextPending) return
+    setTimeout(() => {
+      const el = stopRefs.current.get(nextPending.id)
+      el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 300)
+  }
+
   function handleUpdate(stopId: string, data: Partial<Stop>) {
     setStops(prev => prev.map(s => s.id === stopId ? { ...s, ...data } : s))
   }
@@ -599,6 +630,11 @@ export default function SortableStopList({
                 isRemoving={isPending}
                 routeHasActiveStop={Boolean(activeTrackedStop)}
                 emphasis={mode === 'driver' && stop.id === leadStop?.id ? (activeTrackedStop ? 'active' : 'next') : 'default'}
+                onCompleted={() => handleStopCompleted(stop.id)}
+                cardRef={(el) => {
+                  if (el) stopRefs.current.set(stop.id, el)
+                  else stopRefs.current.delete(stop.id)
+                }}
               />
             ))}
           </div>
