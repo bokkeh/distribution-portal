@@ -783,6 +783,7 @@ export async function submitTasterInvoice(formData: FormData) {
   const [tasting] = await db
     .select({
       id: tastings.id,
+      status: tastings.status,
       assignedUserId: tastings.assignedUserId,
       eventName: tastings.eventName,
       scheduledAt: tastings.scheduledAt,

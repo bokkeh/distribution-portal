@@ -60,7 +60,7 @@ export default function TasterSignupPage() {
               <p className="text-sm font-semibold uppercase tracking-widest text-blue-700">
                 Taster Sign Up
               </p>
-              <h1 className="text-4xl font-bold leading-tight text-slate-900 sm:text-5xl">
+              <h1 className="text-4xl font-bold leading-tight text-slate-500 sm:text-5xl">
                 Create your AHAWC<br />taster account
               </h1>
               <p className="max-w-xl text-lg leading-relaxed text-slate-600">
