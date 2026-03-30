@@ -33,8 +33,8 @@ const BENEFITS = [
 
 export default function TasterSignupPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-blue-950">
-      <header className="border-b border-white/10 px-6 py-4">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(191,219,254,0.65),_transparent_36%),radial-gradient(circle_at_bottom_right,_rgba(254,215,170,0.5),_transparent_32%),linear-gradient(180deg,_#f8fafc_0%,_#eef4ff_52%,_#fffaf5_100%)]">
+      <header className="border-b border-slate-200/80 bg-white/75 px-6 py-4 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
           <div className="flex items-center gap-2">
             <Image
@@ -42,11 +42,11 @@ export default function TasterSignupPage() {
               alt="AHAWC"
               width={32}
               height={32}
-              className="h-8 w-8 rounded-lg bg-white object-contain p-0.5"
+              className="h-8 w-8 rounded-lg border border-slate-200 bg-white object-contain p-0.5 shadow-sm"
             />
-            <span className="text-sm font-bold tracking-wide text-white">AHAWC</span>
+            <span className="text-sm font-bold tracking-wide text-slate-900">AHAWC</span>
           </div>
-          <Link href="/login" className="text-sm text-blue-300 transition-colors hover:text-white">
+          <Link href="/login" className="text-sm text-slate-600 transition-colors hover:text-slate-900">
             Already have a taster account?{' '}
             <span className="font-medium underline underline-offset-2">Sign in</span>
           </Link>
@@ -57,13 +57,13 @@ export default function TasterSignupPage() {
         <div className="grid gap-12 lg:grid-cols-2 lg:items-start lg:gap-16">
           <div className="space-y-8">
             <div className="space-y-4">
-              <p className="text-sm font-semibold uppercase tracking-widest text-blue-400">
+              <p className="text-sm font-semibold uppercase tracking-widest text-blue-700">
                 Taster Sign Up
               </p>
-              <h1 className="text-4xl font-bold leading-tight text-white sm:text-5xl">
+              <h1 className="text-4xl font-bold leading-tight text-slate-900 sm:text-5xl">
                 Create your AHAWC<br />taster account
               </h1>
-              <p className="text-lg leading-relaxed text-slate-300">
+              <p className="max-w-xl text-lg leading-relaxed text-slate-600">
                 This page is for AHAWC tasters and brand ambassadors. Create your taster portal account with your invite code, then an admin can activate access for assignments, reports, and payouts.
               </p>
             </div>
@@ -72,13 +72,15 @@ export default function TasterSignupPage() {
               {BENEFITS.map(({ icon: Icon, title, description }) => (
                 <div
                   key={title}
-                  className="space-y-2 rounded-xl border border-white/10 bg-white/5 p-4"
+                  className="space-y-2 rounded-2xl border border-slate-200 bg-white/80 p-4 shadow-[0_16px_40px_-24px_rgba(15,23,42,0.35)] backdrop-blur"
                 >
                   <div className="flex items-center gap-2">
-                    <Icon className="h-4 w-4 shrink-0 text-blue-400" />
-                    <p className="text-sm font-semibold text-white">{title}</p>
+                    <div className="rounded-full bg-blue-100 p-1.5 text-blue-700">
+                      <Icon className="h-4 w-4 shrink-0" />
+                    </div>
+                    <p className="text-sm font-semibold text-slate-900">{title}</p>
                   </div>
-                  <p className="text-sm text-slate-400">{description}</p>
+                  <p className="text-sm text-slate-600">{description}</p>
                 </div>
               ))}
             </div>
@@ -87,7 +89,7 @@ export default function TasterSignupPage() {
               Questions? Email us at{' '}
               <a
                 href="mailto:tastings@ahawc.com"
-                className="text-slate-400 underline underline-offset-2 hover:text-white"
+                className="text-slate-700 underline underline-offset-2 hover:text-slate-900"
               >
                 tastings@ahawc.com
               </a>
