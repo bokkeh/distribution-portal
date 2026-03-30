@@ -7,6 +7,7 @@ import { addMonths, eachDayOfInterval, endOfMonth, format, getDay, isSameDay, st
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatEasternTimeRange } from '@/lib/tastings/time'
+import { toDisplayAvatarUrl } from '@/lib/users/avatar'
 
 type TeamTaster = {
   id: string
@@ -37,8 +38,32 @@ function initialsForName(name: string) {
     .join('') || 'T'
 }
 
+function TasterAvatar({ name, avatarUrl }: { name: string; avatarUrl?: string | null }) {
+  const [imageFailed, setImageFailed] = useState(false)
+  const displayAvatarUrl = imageFailed ? null : toDisplayAvatarUrl(avatarUrl)
+
+  return (
+    <div className="relative h-10 w-10 overflow-hidden rounded-full border border-blue-200 bg-blue-50">
+      {displayAvatarUrl ? (
+        <Image
+          src={displayAvatarUrl}
+          alt={name}
+          fill
+          className="object-cover"
+          unoptimized={displayAvatarUrl.includes('googleusercontent.com') || displayAvatarUrl.startsWith('/api/')}
+          onError={() => setImageFailed(true)}
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-blue-700">
+          {initialsForName(name)}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function isBookedStatus(status: string) {
-  return status !== 'cancelled' && status !== 'declined'
+  return status === 'scheduled' || status === 'confirmed'
 }
 
 function isTastingDay(date: Date) {
@@ -179,15 +204,7 @@ export function TasterTeamPanel({
                   <tr key={taster.id}>
                     <td className="px-3 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="relative h-10 w-10 overflow-hidden rounded-full border border-blue-200 bg-blue-50">
-                          {taster.avatarUrl ? (
-                            <Image src={taster.avatarUrl} alt={taster.name} fill className="object-cover" unoptimized />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-blue-700">
-                              {initialsForName(taster.name)}
-                            </div>
-                          )}
-                        </div>
+                        <TasterAvatar name={taster.name} avatarUrl={taster.avatarUrl} />
                         <div>
                           <p className="font-medium text-slate-900">{taster.name}</p>
                           <p className="text-xs text-slate-500">Taster</p>

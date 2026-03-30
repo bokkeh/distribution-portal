@@ -1,5 +1,5 @@
 import { db } from '@/db'
-import { tastings, tastingReports, tasterInvoices, users, customerAccounts } from '@/db/schema'
+import { tastingReports, tasterInvoices, users, customerAccounts } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { requireFeature } from '@/lib/auth/session'
@@ -14,6 +14,7 @@ import Link from 'next/link'
 import { ArrowLeft, Calendar, MapPin, Phone, User, FileText, Receipt, StickyNote } from 'lucide-react'
 
 const STATUS_COLORS: Record<string, string> = {
+  requested: 'text-violet-700 border-violet-200 bg-violet-50',
   scheduled: 'text-blue-700 border-blue-200 bg-blue-50',
   confirmed: 'text-green-700 border-green-200 bg-green-50',
   completed: 'text-slate-700 border-slate-200 bg-slate-50',
@@ -56,7 +57,7 @@ export default async function AdminTastingDetailPage({
       .then(rows => rows.filter(u => u.roles?.includes('taster'))),
   ])
 
-  const canChangeStatus = tasting.status !== 'completed' && tasting.status !== 'cancelled'
+  const canChangeStatus = tasting.status !== 'completed' && tasting.status !== 'cancelled' && tasting.status !== 'declined'
 
   return (
     <div className="space-y-6">
@@ -194,6 +195,7 @@ export default async function AdminTastingDetailPage({
                 {[
                   { label: 'Hours Worked', value: invoice.hoursWorked },
                   { label: 'Hourly Rate', value: invoice.hourlyRate ? `$${invoice.hourlyRate}` : null },
+                  { label: 'Mileage', value: invoice.mileage ? `$${invoice.mileage}` : null },
                   { label: 'Expenses', value: invoice.expenseAmount ? `$${invoice.expenseAmount}` : null },
                   { label: 'Total', value: invoice.totalAmount ? `$${invoice.totalAmount}` : null },
                 ].map(({ label, value }) => value != null && (
@@ -287,6 +289,15 @@ export default async function AdminTastingDetailPage({
                 <CardTitle className="text-sm font-semibold text-slate-700">Actions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
+                {tasting.status === 'requested' && (
+                  <form action={updateTastingStatus}>
+                    <input type="hidden" name="tastingId" value={tastingId} />
+                    <input type="hidden" name="status" value="scheduled" />
+                    <input type="hidden" name="mode" value="admin" />
+                    <input type="hidden" name="redirectTo" value={`/admin/tastings/${tastingId}`} />
+                    <Button type="submit" className="w-full" size="sm">Approve Request</Button>
+                  </form>
+                )}
                 {tasting.status === 'scheduled' && (
                   <form action={updateTastingStatus}>
                     <input type="hidden" name="tastingId" value={tastingId} />
@@ -315,7 +326,7 @@ export default async function AdminTastingDetailPage({
                 <form action={deleteTasting}>
                   <input type="hidden" name="tastingId" value={tastingId} />
                   <input type="hidden" name="mode" value="admin" />
-                  <ConfirmSubmitButton variant="outline" className="w-full text-red-600 border-red-200 hover:bg-red-50" size="sm" title="Permanently delete tasting?" description="This cannot be undone." confirmLabel="Delete">Delete</ConfirmSubmitButton>
+                  <ConfirmSubmitButton variant="outline" className="w-full text-red-600 border-red-200 hover:bg-red-50" size="sm" title="Archive this tasting as cancelled?" description="History, reports, and invoices will be preserved." confirmLabel="Archive as Cancelled">Archive as Cancelled</ConfirmSubmitButton>
                 </form>
               </CardContent>
             </Card>

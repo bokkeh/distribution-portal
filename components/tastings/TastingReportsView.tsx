@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { formatEasternDateTime } from '@/lib/tastings/time'
@@ -46,6 +47,7 @@ export type TastingReportRow = {
 function statusVariant(s: string): 'secondary' | 'success' | 'destructive' | 'warning' {
   if (s === 'completed') return 'success'
   if (s === 'cancelled' || s === 'declined') return 'destructive'
+  if (s === 'requested') return 'warning'
   if (s === 'confirmed') return 'secondary'
   return 'secondary'
 }
@@ -176,13 +178,13 @@ export function TastingReportsView({
                           {row.setupPhotoUrl && (
                             <a href={signedPhotoUrl(row.setupPhotoUrl) ?? row.setupPhotoUrl} target="_blank" rel="noreferrer"
                               className="block h-14 w-14 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
-                              <img src={signedPhotoUrl(row.setupPhotoUrl) ?? row.setupPhotoUrl} alt="Setup" className="h-full w-full object-cover" />
+                              <Image src={signedPhotoUrl(row.setupPhotoUrl) ?? row.setupPhotoUrl} alt="Setup" width={56} height={56} className="h-full w-full object-cover" unoptimized />
                             </a>
                           )}
                           {(row.shelfPhotoUrls ?? []).map((url, i) => (
                             <a key={i} href={signedPhotoUrl(url) ?? url} target="_blank" rel="noreferrer"
                               className="block h-14 w-14 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
-                              <img src={signedPhotoUrl(url) ?? url} alt={`Shelf ${i + 1}`} className="h-full w-full object-cover" />
+                              <Image src={signedPhotoUrl(url) ?? url} alt={`Shelf ${i + 1}`} width={56} height={56} className="h-full w-full object-cover" unoptimized />
                             </a>
                           ))}
                         </div>

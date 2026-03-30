@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { db } from '@/db'
-import { tasterInvoices, tastingReports, tastings, users } from '@/db/schema'
+import { tasterInvoices, tastingReports, users } from '@/db/schema'
 import { TastingSubmissionDetail } from '@/components/tastings/TastingSubmissionDetail'
 import { Button } from '@/components/ui/button'
 import { requireFeature } from '@/lib/auth/session'
@@ -38,6 +38,7 @@ export default async function TasterTastingDetailPage({
 
   const roles = session.user.roles ?? [session.user.role]
   if (!roles.includes('admin') && tasting.assignedUserId !== session.user.id) notFound()
+  if (!roles.includes('admin') && tasting.status === 'requested') notFound()
   const start = new Date(tasting.scheduledAt)
   const end = tasting.endAt ? new Date(tasting.endAt) : new Date(start.getTime() + 2 * 60 * 60 * 1000)
   const location = [tasting.storeAddress, tasting.storeCity, tasting.storeState, tasting.storeZip].filter(Boolean).join(', ')
@@ -116,6 +117,7 @@ export default async function TasterTastingDetailPage({
             payeePhone: invoice.payeePhone,
             hourlyRate: invoice.hourlyRate,
             hoursWorked: invoice.hoursWorked,
+            mileage: invoice.mileage,
             expenseAmount: invoice.expenseAmount,
             totalAmount: invoice.totalAmount,
             notes: invoice.notes,

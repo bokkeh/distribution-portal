@@ -48,10 +48,12 @@ interface Props {
 }
 
 const statusVariant: Record<string, 'secondary' | 'success' | 'warning' | 'destructive' | 'info'> = {
+  requested: 'secondary',
   scheduled: 'info',
   confirmed: 'warning',
   completed: 'success',
   cancelled: 'destructive',
+  declined: 'destructive',
 }
 
 function formatTastingTimeRange(start: Date, end: Date | null) {
@@ -59,7 +61,7 @@ function formatTastingTimeRange(start: Date, end: Date | null) {
 }
 
 function isMissingReport(tasting: Pick<TastingRow, 'reportSubmittedAt' | 'status'>) {
-  return !tasting.reportSubmittedAt && tasting.status !== 'cancelled'
+  return tasting.status === 'completed' && !tasting.reportSubmittedAt
 }
 
 export function TastingsPlanner({ mode, tastings, accounts, tasters, success, error }: Props) {
@@ -269,7 +271,15 @@ export function TastingsPlanner({ mode, tastings, accounts, tasters, success, er
                     <form action={updateTastingStatus} className="mt-4 flex flex-wrap gap-2">
                       <input type="hidden" name="tastingId" value={tasting.id} />
                       <input type="hidden" name="mode" value={mode} />
-                      {['scheduled', 'confirmed', 'completed', 'cancelled'].map(status => (
+                      {(
+                        tasting.status === 'requested'
+                          ? ['scheduled', 'cancelled']
+                          : tasting.status === 'scheduled'
+                            ? ['confirmed', 'cancelled']
+                            : tasting.status === 'confirmed'
+                              ? ['completed', 'cancelled']
+                              : []
+                      ).map(status => (
                         <Button
                           key={status}
                           type="submit"

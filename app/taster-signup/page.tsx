@@ -64,7 +64,7 @@ export default function TasterSignupPage() {
                 Create your AHAWC<br />taster account
               </h1>
               <p className="text-lg leading-relaxed text-slate-300">
-                This page is for AHAWC tasters and brand ambassadors. Create your taster portal account to accept tasting assignments, submit reports, and track payouts in one place.
+                This page is for AHAWC tasters and brand ambassadors. Create your taster portal account with your invite code, then an admin can activate access for assignments, reports, and payouts.
               </p>
             </div>
 

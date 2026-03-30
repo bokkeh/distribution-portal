@@ -41,7 +41,7 @@ export function TasterSignupForm() {
     <div className="space-y-1 rounded-2xl border border-white/10 bg-white/5 p-6 sm:p-8">
       <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-blue-300">Taster Sign Up</p>
       <p className="mb-2 text-lg font-bold text-white">Create your taster account</p>
-      <p className="mb-4 text-sm text-slate-400">For AHAWC tasting staff and brand ambassadors only.</p>
+      <p className="mb-4 text-sm text-slate-400">For AHAWC tasting staff and brand ambassadors only. You need an invite code from the team.</p>
 
       {state && 'error' in state && (
         <div className="mb-4 rounded-lg border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
@@ -50,6 +50,19 @@ export function TasterSignupForm() {
       )}
 
       <form action={formAction} className="space-y-3">
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium uppercase tracking-wide text-slate-400">
+            Invite Code <span className="text-red-400">*</span>
+          </label>
+          <input
+            name="inviteCode"
+            type="text"
+            placeholder="Enter your invite code"
+            required
+            className="w-full rounded-lg border border-white/15 bg-white/10 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+          />
+        </div>
+
         <div className="space-y-1.5">
           <label className="text-xs font-medium uppercase tracking-wide text-slate-400">
             Full Name <span className="text-red-400">*</span>

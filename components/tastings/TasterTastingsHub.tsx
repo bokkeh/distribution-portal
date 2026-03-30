@@ -32,15 +32,17 @@ function formatTimeRange(start: Date, end: Date | null) {
 }
 
 const statusVariant: Record<string, 'secondary' | 'success' | 'warning' | 'destructive' | 'info'> = {
+  requested: 'secondary',
   scheduled: 'info',
   confirmed: 'warning',
   completed: 'success',
   cancelled: 'destructive',
+  declined: 'destructive',
 }
 
 function TastingCard({ tasting, compact = false }: { tasting: TastingRow; compact?: boolean }) {
   const tastingDate = new Date(tasting.scheduledAt)
-  const missingReport = !tasting.reportSubmittedAt && tasting.status !== 'cancelled'
+  const missingReport = tasting.status === 'completed' && !tasting.reportSubmittedAt
   const missingInvoice = tasting.status === 'completed' && !tasting.invoiceSubmittedAt
 
   return (

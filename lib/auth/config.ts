@@ -19,6 +19,23 @@ function normalizeRoles(primaryRole: string, roles?: string[] | null) {
   return Array.from(nextRoles)
 }
 
+function isAppManagedAvatar(avatarUrl: string | null | undefined) {
+  if (!avatarUrl) return false
+  return avatarUrl.startsWith('/api/image') || avatarUrl.startsWith('https://storage.googleapis.com/')
+}
+
+function resolvePreferredAvatar(existingAvatar: string | null | undefined, googleAvatar: string | null | undefined) {
+  if (isAppManagedAvatar(existingAvatar)) {
+    return existingAvatar
+  }
+
+  if (googleAvatar) {
+    return googleAvatar
+  }
+
+  return existingAvatar ?? null
+}
+
 function isMissingUsersColumn(error: unknown) {
   const code = (error as { code?: string; cause?: { code?: string } } | null)?.code
     ?? (error as { cause?: { code?: string } } | null)?.cause?.code
@@ -208,14 +225,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         const googleAvatar = user.image ?? (profile?.picture as string | undefined) ?? null
         const needsRoleUpdate = isSuperAdmin && !existingUser.roles.includes(ADMIN_ROLE)
-        const needsAvatarUpdate = !existingUser.avatarUrl && googleAvatar !== null
+        const preferredAvatar = resolvePreferredAvatar(existingUser.avatarUrl, googleAvatar)
+        const needsAvatarUpdate = preferredAvatar !== (existingUser.avatarUrl ?? null)
 
         let effectiveUser = existingUser
         if (needsRoleUpdate || needsAvatarUpdate) {
           ;[effectiveUser] = await db.update(users)
             .set({
               ...(needsRoleUpdate ? { role: ADMIN_ROLE, roles: normalizeRoles(ADMIN_ROLE, existingUser.roles), active: true } : {}),
-              ...(needsAvatarUpdate ? { avatarUrl: googleAvatar } : {}),
+              ...(needsAvatarUpdate ? { avatarUrl: preferredAvatar } : {}),
             })
             .where(eq(users.id, existingUser.id))
             .returning()
@@ -226,7 +244,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         ;(user as typeof user & { roles: string[] }).roles = effectiveUser.roles
         ;(user as typeof user & { featureFlags: string[] }).featureFlags = await getFeatureFlags(effectiveUser.id, effectiveUser.roles)
         user.name = effectiveUser.name
-        user.image = effectiveUser.avatarUrl ?? googleAvatar
+        user.image = resolvePreferredAvatar(effectiveUser.avatarUrl, googleAvatar)
         return true
       }
 

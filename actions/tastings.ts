@@ -1,10 +1,10 @@
 'use server'
 
-import { desc, eq } from 'drizzle-orm'
+import { and, eq, gte, lte } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { db } from '@/db'
-import { customerAccounts, tasterInvoices, tastingReports, tastings, users } from '@/db/schema'
+import { customerAccounts, salesMembers, tasterAvailability, tasterInvoices, tastingReports, tastings, users } from '@/db/schema'
 import { requireFeature, requireRole } from '@/lib/auth/session'
 import { notify } from '@/lib/notifications/dispatch'
 import { sendTasterInvoiceNotification } from '@/lib/resend/client'
@@ -26,8 +26,125 @@ function tastingRedirectPath(mode: string) {
   return mode === 'staff' ? '/staff/tastings' : '/admin/tastings'
 }
 
-function uniqueEmails(...values: Array<string | null | undefined>) {
-  return Array.from(new Set(values.map((value) => value?.trim()).filter(Boolean) as string[]))
+type TastingStatus = 'requested' | 'scheduled' | 'confirmed' | 'completed' | 'cancelled' | 'declined'
+
+const DEFAULT_TASTING_DURATION_MS = 2 * 60 * 60 * 1000
+const BOOKED_TASTING_STATUSES = new Set<TastingStatus>(['scheduled', 'confirmed'])
+const ACTIVE_TASTING_STATUSES = new Set<TastingStatus>(['requested', 'scheduled', 'confirmed'])
+const TERMINAL_TASTING_STATUSES = new Set<TastingStatus>(['completed', 'cancelled', 'declined'])
+const ALLOWED_TASTING_TRANSITIONS: Record<TastingStatus, TastingStatus[]> = {
+  requested: ['scheduled', 'cancelled'],
+  scheduled: ['confirmed', 'cancelled', 'declined'],
+  confirmed: ['completed', 'cancelled', 'declined'],
+  completed: [],
+  cancelled: [],
+  declined: [],
+}
+
+function getTastingEndTime(start: Date, end: Date | null) {
+  return end ?? new Date(start.getTime() + DEFAULT_TASTING_DURATION_MS)
+}
+
+function rangesOverlap(startA: Date, endA: Date, startB: Date, endB: Date) {
+  return startA < endB && startB < endA
+}
+
+function getEasternDateKey(value: Date) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(value)
+}
+
+async function getSalesMemberIdForUser(userId: string) {
+  const [member] = await db
+    .select({ id: salesMembers.id, status: salesMembers.status })
+    .from(salesMembers)
+    .where(eq(salesMembers.userId, userId))
+    .limit(1)
+
+  if (!member || member.status !== 'active') {
+    return null
+  }
+
+  return member.id
+}
+
+async function validateTastingWindow({
+  customerId,
+  assignedUserId,
+  scheduledAt,
+  endAt,
+  excludeTastingId,
+}: {
+  customerId: string
+  assignedUserId: string
+  scheduledAt: Date
+  endAt: Date | null
+  excludeTastingId?: string
+}) {
+  const requestedDateKey = getEasternDateKey(scheduledAt)
+  const monthStart = `${requestedDateKey.slice(0, 7)}-01`
+  const monthEnd = `${requestedDateKey.slice(0, 7)}-31`
+  const requestedEnd = getTastingEndTime(scheduledAt, endAt)
+
+  const [availabilityRows, assignedTastings, accountTastings] = await Promise.all([
+    db
+      .select({ availableDate: tasterAvailability.availableDate })
+      .from(tasterAvailability)
+      .where(and(
+        eq(tasterAvailability.userId, assignedUserId),
+        gte(tasterAvailability.availableDate, monthStart),
+        lte(tasterAvailability.availableDate, monthEnd),
+      )),
+    db
+      .select({
+        id: tastings.id,
+        scheduledAt: tastings.scheduledAt,
+        endAt: tastings.endAt,
+        status: tastings.status,
+      })
+      .from(tastings)
+      .where(eq(tastings.assignedUserId, assignedUserId)),
+    db
+      .select({
+        id: tastings.id,
+        scheduledAt: tastings.scheduledAt,
+        status: tastings.status,
+      })
+      .from(tastings)
+      .where(eq(tastings.customerId, customerId)),
+  ])
+
+  if (availabilityRows.length > 0 && !availabilityRows.some((row) => row.availableDate === requestedDateKey)) {
+    return 'That taster has not marked themselves available on the selected date.'
+  }
+
+  for (const tasting of assignedTastings) {
+    if (tasting.id === excludeTastingId) continue
+    if (!BOOKED_TASTING_STATUSES.has((tasting.status as TastingStatus) ?? 'scheduled')) continue
+
+    const existingStart = new Date(tasting.scheduledAt)
+    if (getEasternDateKey(existingStart) !== requestedDateKey) continue
+
+    const existingEnd = getTastingEndTime(existingStart, tasting.endAt ? new Date(tasting.endAt) : null)
+    if (rangesOverlap(scheduledAt, requestedEnd, existingStart, existingEnd)) {
+      return 'That taster is already booked during the selected time window.'
+    }
+  }
+
+  for (const tasting of accountTastings) {
+    if (tasting.id === excludeTastingId) continue
+    if (!ACTIVE_TASTING_STATUSES.has((tasting.status as TastingStatus) ?? 'scheduled')) continue
+
+    if (getEasternDateKey(new Date(tasting.scheduledAt)) === requestedDateKey) {
+      return 'This account already has an active tasting or request on that date.'
+    }
+  }
+
+  return null
 }
 
 
@@ -68,13 +185,23 @@ export async function createTasting(formData: FormData) {
   }
 
   const [assignedUser] = await db
-    .select({ id: users.id, name: users.name, phone: users.phone, email: users.email, roles: users.roles })
+    .select({ id: users.id, name: users.name, phone: users.phone, email: users.email, roles: users.roles, active: users.active })
     .from(users)
     .where(eq(users.id, assignedUserId))
     .limit(1)
 
-  if (!assignedUser || !assignedUser.roles.includes('taster')) {
+  if (!assignedUser || !assignedUser.active || !assignedUser.roles.includes('taster')) {
     redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('Choose a valid taster account.')}`)
+  }
+
+  const schedulingError = await validateTastingWindow({
+    customerId: account.id,
+    assignedUserId: assignedUser.id,
+    scheduledAt,
+    endAt,
+  })
+  if (schedulingError) {
+    redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent(schedulingError)}`)
   }
   const assignedUserPrefs = await getUserPreferences(assignedUser.id).catch(() => null)
 
@@ -143,7 +270,7 @@ export async function createTasting(formData: FormData) {
 export async function updateTastingStatus(formData: FormData) {
   const session = await requireRole('admin', 'staff', 'taster')
   const tastingId = formData.get('tastingId') as string
-  const nextStatus = formData.get('status') as 'scheduled' | 'confirmed' | 'completed' | 'cancelled' | 'declined'
+  const nextStatus = formData.get('status') as TastingStatus
   const mode = (formData.get('mode') as string) || 'taster'
 
   const [tasting] = await db
@@ -152,6 +279,8 @@ export async function updateTastingStatus(formData: FormData) {
       assignedUserId: tastings.assignedUserId,
       eventName: tastings.eventName,
       scheduledAt: tastings.scheduledAt,
+      status: tastings.status,
+      checkedInAt: tastings.checkedInAt,
     })
     .from(tastings)
     .where(eq(tastings.id, tastingId))
@@ -164,6 +293,28 @@ export async function updateTastingStatus(formData: FormData) {
   const roles = session.user.roles ?? [session.user.role]
   if (!roles.includes('admin') && !roles.includes('staff') && tasting.assignedUserId !== session.user.id) {
     redirect('/unauthorized')
+  }
+
+  const currentStatus = tasting.status as TastingStatus
+  if (!ALLOWED_TASTING_TRANSITIONS[currentStatus]?.includes(nextStatus)) {
+    redirect(`/${mode}/tastings?error=${encodeURIComponent(`Cannot change a ${currentStatus} tasting to ${nextStatus}.`)}`)
+  }
+
+  if (nextStatus === 'completed') {
+    const reportExists = await db
+      .select({ id: tastingReports.id })
+      .from(tastingReports)
+      .where(eq(tastingReports.tastingId, tastingId))
+      .limit(1)
+      .then((rows) => rows[0] ?? null)
+
+    if (!tasting.checkedInAt && !reportExists) {
+      redirect(`/${mode}/tastings?error=${encodeURIComponent('Complete the tasting after check-in or after a report has been submitted.')}`)
+    }
+
+    if (new Date(tasting.scheduledAt).getTime() > Date.now() + (15 * 60 * 1000)) {
+      redirect(`/${mode}/tastings?error=${encodeURIComponent('You cannot complete a tasting before its scheduled start time.')}`)
+    }
   }
 
   await db.update(tastings).set({ status: nextStatus }).where(eq(tastings.id, tastingId))
@@ -296,6 +447,7 @@ export async function deleteTasting(formData: FormData) {
       eventName: tastings.eventName,
       scheduledAt: tastings.scheduledAt,
       assignedUserId: tastings.assignedUserId,
+      status: tastings.status,
       tasterName: users.name,
       tasterPhone: users.phone,
     })
@@ -308,7 +460,11 @@ export async function deleteTasting(formData: FormData) {
     redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('Tasting not found.')}`)
   }
 
-  await db.delete(tastings).where(eq(tastings.id, tastingId))
+  if (TERMINAL_TASTING_STATUSES.has(tasting.status as TastingStatus) && tasting.status !== 'declined') {
+    redirect(`${tastingRedirectPath(mode)}?success=${encodeURIComponent('That tasting is already closed.')}`)
+  }
+
+  await db.update(tastings).set({ status: 'cancelled' }).where(eq(tastings.id, tastingId))
   await clearScheduledTastingSmsJobs(tasting.id)
   await logActivityEvent({
     entityType: 'tasting',
@@ -340,7 +496,7 @@ export async function deleteTasting(formData: FormData) {
   revalidatePath('/staff/tastings')
   revalidatePath('/taster/tastings')
   revalidatePath('/taster/payouts')
-  redirect(`${tastingRedirectPath(mode)}?success=${encodeURIComponent('Tasting removed and taster notified.')}`)
+  redirect(`${tastingRedirectPath(mode)}?success=${encodeURIComponent('Tasting cancelled and preserved in history.')}`)
 }
 
 export async function reassignTasting(formData: FormData) {
@@ -363,7 +519,9 @@ export async function reassignTasting(formData: FormData) {
       storeCity: tastings.storeCity,
       storeState: tastings.storeState,
       storeZip: tastings.storeZip,
+      customerId: tastings.customerId,
       assignedUserId: tastings.assignedUserId,
+      status: tastings.status,
       currentTasterName: users.name,
       currentTasterPhone: users.phone,
     })
@@ -380,14 +538,29 @@ export async function reassignTasting(formData: FormData) {
     redirect(`${tastingRedirectPath(mode)}?success=${encodeURIComponent('Tasting already assigned to that taster.')}`)
   }
 
+  if (TERMINAL_TASTING_STATUSES.has(tasting.status as TastingStatus)) {
+    redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('Closed tastings cannot be reassigned.')}`)
+  }
+
   const [nextTaster] = await db
-    .select({ id: users.id, name: users.name, phone: users.phone, email: users.email, roles: users.roles })
+    .select({ id: users.id, name: users.name, phone: users.phone, email: users.email, roles: users.roles, active: users.active })
     .from(users)
     .where(eq(users.id, nextAssignedUserId))
     .limit(1)
 
-  if (!nextTaster || !nextTaster.roles.includes('taster')) {
+  if (!nextTaster || !nextTaster.active || !nextTaster.roles.includes('taster')) {
     redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('Choose a valid taster account.')}`)
+  }
+
+  const reassignmentError = await validateTastingWindow({
+    customerId: tasting.customerId,
+    assignedUserId: nextTaster.id,
+    scheduledAt: new Date(tasting.scheduledAt),
+    endAt: tasting.endAt ? new Date(tasting.endAt) : null,
+    excludeTastingId: tastingId,
+  })
+  if (reassignmentError) {
+    redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent(reassignmentError)}`)
   }
 
   await db.update(tastings).set({
@@ -587,6 +760,16 @@ export async function submitTastingReport(formData: FormData) {
     })
   }
 
+  if (payload.followUpNeeded) {
+    await createNotificationsForRoles({
+      roles: ['admin', 'staff'],
+      kind: 'tasting_follow_up_needed',
+      title: `Follow-up needed - ${tastingInfo?.eventName ?? 'Tasting'}`,
+      body: payload.followUpNotes?.trim() || 'A submitted tasting report requires staff follow-up.',
+      href: `/admin/tastings/${tastingId}`,
+    })
+  }
+
   revalidatePath('/admin/tastings')
   revalidatePath('/staff/tastings')
   revalidatePath('/taster/tastings')
@@ -621,8 +804,23 @@ export async function submitTasterInvoice(formData: FormData) {
     redirect('/unauthorized')
   }
 
+  if (tasting.status !== 'completed') {
+    redirect(`/taster/tastings/${tastingId}?error=${encodeURIComponent('You can submit an invoice after the tasting is marked completed.')}`)
+  }
+
   const hoursWorked = (formData.get('hoursWorked') as string) || '0'
+  const mileage = (formData.get('mileage') as string) || '0'
   const expenseAmount = (formData.get('expenseAmount') as string) || '0'
+
+  const [report] = await db
+    .select({ id: tastingReports.id })
+    .from(tastingReports)
+    .where(eq(tastingReports.tastingId, tastingId))
+    .limit(1)
+
+  if (!report) {
+    redirect(`/taster/tastings/${tastingId}?error=${encodeURIComponent('Submit the tasting report before invoicing accounting.')}`)
+  }
 
   // Fetch admin-set hourly rate from user record
   const [tasterUser] = await db
@@ -631,7 +829,7 @@ export async function submitTasterInvoice(formData: FormData) {
     .where(eq(users.id, tasting.assignedUserId ?? session.user.id))
     .limit(1)
   const hourlyRate = tasterUser?.tasterHourlyRate ?? '25'
-  const totalAmount = (Number(hourlyRate) * Number(hoursWorked) + Number(expenseAmount)).toFixed(2)
+  const totalAmount = (Number(hourlyRate) * Number(hoursWorked) + Number(expenseAmount) + Number(mileage)).toFixed(2)
 
   const payload = {
     submittedByUserId: session.user.id,
@@ -640,6 +838,7 @@ export async function submitTasterInvoice(formData: FormData) {
     payeePhone: (formData.get('payeePhone') as string) || null,
     hourlyRate,
     hoursWorked,
+    mileage,
     expenseAmount,
     totalAmount,
     notes: ((formData.get('notes') as string) || '').trim() || null,
@@ -647,10 +846,14 @@ export async function submitTasterInvoice(formData: FormData) {
   }
 
   const [existing] = await db
-    .select({ id: tasterInvoices.id })
+    .select({ id: tasterInvoices.id, status: tasterInvoices.status })
     .from(tasterInvoices)
     .where(eq(tasterInvoices.tastingId, tastingId))
     .limit(1)
+
+  if (existing && (existing.status === 'approved' || existing.status === 'paid')) {
+    redirect(`/taster/tastings/${tastingId}?error=${encodeURIComponent(`This invoice has already been ${existing.status} and can no longer be edited.`)}`)
+  }
 
   if (existing) {
     await db.update(tasterInvoices).set(payload).where(eq(tasterInvoices.tastingId, tastingId))
@@ -678,6 +881,7 @@ export async function submitTasterInvoice(formData: FormData) {
     storeAddress: [tasting.storeAddress, tasting.storeCity, tasting.storeState, tasting.storeZip].filter(Boolean).join(', '),
     hourlyRate,
     hoursWorked,
+    mileage,
     expenseAmount,
     totalAmount,
     notes: payload.notes,
@@ -721,6 +925,16 @@ export async function checkInToTasting(tastingId: string) {
   const tasting = await getTastingById(tastingId)
   if (!tasting) redirect('/taster/tastings?error=Tasting%20not%20found.')
   if (!session.user.roles.includes('admin') && tasting.assignedUserId !== session.user.id) redirect('/unauthorized')
+
+  if (tasting.status === 'requested' || tasting.status === 'cancelled' || tasting.status === 'declined' || tasting.status === 'completed') {
+    redirect(`/taster/tastings/${tastingId}?error=${encodeURIComponent('Check-in is not available for the current tasting status.')}`)
+  }
+
+  const now = Date.now()
+  const scheduledStart = new Date(tasting.scheduledAt).getTime()
+  if (now < scheduledStart - (12 * 60 * 60 * 1000)) {
+    redirect(`/taster/tastings/${tastingId}?error=${encodeURIComponent('Check-in opens 12 hours before the tasting start time.')}`)
+  }
 
   await db.update(tastings).set({ checkedInAt: new Date(), status: tasting.status === 'scheduled' ? 'confirmed' : tasting.status }).where(eq(tastings.id, tastingId))
   await logActivityEvent({
@@ -846,38 +1060,77 @@ export async function requestTastingFromRep({
     return { error: 'Account, date and time are required' }
   }
 
-  // Verify this account belongs to the requesting rep (unless admin)
+  const roles = session.user.roles ?? [session.user.role]
+  const isAdmin = roles.includes('admin')
+  const isSalesManager = roles.includes('sales_manager')
+
+  let memberId: string | null = null
+  if (!isAdmin && !isSalesManager) {
+    memberId = await getSalesMemberIdForUser(session.user.id)
+    if (!memberId) {
+      return { error: 'Your sales member profile is not active yet.' }
+    }
+  }
+
+  // Verify this account belongs to the requesting rep (unless admin/sales manager)
   const [account] = await db
-    .select()
+    .select({
+      id: customerAccounts.id,
+      companyName: customerAccounts.companyName,
+      address: customerAccounts.address,
+      city: customerAccounts.city,
+      state: customerAccounts.state,
+      zip: customerAccounts.zip,
+      phone: customerAccounts.phone,
+      assignedSalesRepId: customerAccounts.assignedSalesRepId,
+    })
     .from(customerAccounts)
     .where(eq(customerAccounts.id, accountId))
     .limit(1)
 
   if (!account) return { error: 'Account not found' }
+  if (!isAdmin && !isSalesManager && account.assignedSalesRepId !== memberId) {
+    return { error: 'You can only request tastings for accounts assigned to you.' }
+  }
 
   // Find any available taster to assign (required field — pick first available or fall back to requester)
+  const scheduledAt = parseDateTimeInTimeZone(preferredDate, preferredTime)
+  if (Number.isNaN(scheduledAt.getTime())) {
+    return { error: 'Choose a valid tasting date and time.' }
+  }
+
+  const requestedDateKey = getEasternDateKey(scheduledAt)
+  const accountTastings = await db
+    .select({ scheduledAt: tastings.scheduledAt, status: tastings.status })
+    .from(tastings)
+    .where(eq(tastings.customerId, accountId))
+
+  if (accountTastings.some((tasting) =>
+    ACTIVE_TASTING_STATUSES.has((tasting.status as TastingStatus) ?? 'requested')
+    && getEasternDateKey(new Date(tasting.scheduledAt)) === requestedDateKey
+  )) {
+    return { error: 'This account already has an active tasting or request on that date.' }
+  }
+
   const tasterRows = await db
-    .select({ id: users.id, name: users.name, roles: users.roles })
+    .select({ id: users.id, roles: users.roles })
     .from(users)
     .where(eq(users.active, true))
 
-  const availableTaster = tasterRows.find(u => u.roles?.includes('taster'))
-  if (!availableTaster) {
+  const placeholderTaster = tasterRows.find((user) => user.roles?.includes('taster'))
+  if (!placeholderTaster) {
     return { error: 'No tasters are currently configured. Ask an admin to add a taster before requesting a tasting.' }
   }
-  const assignedUserId = availableTaster.id
-
-  const scheduledAt = new Date(`${preferredDate}T${preferredTime}:00`)
 
   const [created] = await db
     .insert(tastings)
     .values({
       customerId: accountId,
-      assignedUserId,
+      assignedUserId: placeholderTaster.id,
       createdByUserId: session.user.id,
-      eventName: `Tasting Request — ${account.companyName}`,
+      eventName: account.companyName,
       scheduledAt,
-      status: 'scheduled',
+      status: 'requested',
       storeAddress: account.address ?? null,
       storeCity: account.city ?? null,
       storeState: account.state ?? null,
@@ -912,5 +1165,7 @@ export async function requestTastingFromRep({
   ])
 
   revalidatePath('/sales/tastings')
+  revalidatePath('/admin/tastings')
+  revalidatePath('/staff/tastings')
   return { success: true }
 }

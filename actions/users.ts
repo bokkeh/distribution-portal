@@ -7,6 +7,7 @@ import { redirect } from 'next/navigation'
 import { db } from '@/db'
 import { customerAccounts, drivers, userFeatureSettings, userPreferences, users } from '@/db/schema'
 import { requireAdmin } from '@/lib/auth/session'
+import { notify } from '@/lib/notifications/dispatch'
 
 const ALL_ROLES = ['admin', 'staff', 'driver', 'customer', 'taster', 'sales_rep', 'sales_manager'] as const
 type UserRole = typeof ALL_ROLES[number]
@@ -85,6 +86,16 @@ export async function createUser(formData: FormData) {
     } catch (error) {
       if (!isMissingUserFeatureTable(error)) throw error
     }
+  }
+
+  if (roles.includes('taster')) {
+    await notify('user.welcomed', {
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      password,
+      role: 'taster',
+    })
   }
 
   revalidatePath('/admin/users')

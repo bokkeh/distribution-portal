@@ -34,6 +34,7 @@ type InvoiceRecord = {
   payeePhone: string | null
   hourlyRate: string
   hoursWorked: string
+  mileage: string
   expenseAmount: string
   totalAmount: string
   notes: string | null
@@ -73,12 +74,15 @@ export function TastingSubmissionDetail({
   success?: string
   error?: string
 }) {
+  const invoiceLocked = invoice?.status === 'approved' || invoice?.status === 'paid'
+  const invoiceReady = tasting.status === 'completed'
   const totalEstimate = useMemo(() => {
     const rate = Number(adminHourlyRate ?? invoice?.hourlyRate ?? '25')
     const hours = Number(invoice?.hoursWorked ?? '2')
+    const mileage = Number(invoice?.mileage ?? '0')
     const expenses = Number(invoice?.expenseAmount ?? '0')
-    return (rate * hours) + expenses
-  }, [adminHourlyRate, invoice?.expenseAmount, invoice?.hourlyRate, invoice?.hoursWorked])
+    return (rate * hours) + mileage + expenses
+  }, [adminHourlyRate, invoice?.expenseAmount, invoice?.hourlyRate, invoice?.hoursWorked, invoice?.mileage])
 
   const invoiceFormRef = useRef<HTMLFormElement | null>(null)
   const invoiceDraft = useFormDraftAutosave(invoiceFormRef, `tasting-invoice:${tasting.id}`)
@@ -132,6 +136,7 @@ export function TastingSubmissionDetail({
           <CardContent>
             <form ref={invoiceFormRef} action={submitTasterInvoice} className="space-y-4">
               <input type="hidden" name="tastingId" value={tasting.id} />
+              <fieldset disabled={invoiceLocked} className="space-y-4 disabled:opacity-70">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="payeeName">Payee Name</Label>
@@ -153,6 +158,11 @@ export function TastingSubmissionDetail({
               </div>
 
               <div className="space-y-2">
+                <Label htmlFor="mileage">Mileage Reimbursement ($)</Label>
+                <Input id="mileage" name="mileage" type="number" step="0.01" min="0" defaultValue={invoice?.mileage ?? '0.00'} />
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="expenseAmount">Other Expenses ($)</Label>
                 <Input id="expenseAmount" name="expenseAmount" type="number" step="0.01" min="0" defaultValue={invoice?.expenseAmount ?? '0.00'} />
               </div>
@@ -168,10 +178,22 @@ export function TastingSubmissionDetail({
                 <Label htmlFor="notes">Invoice Notes</Label>
                 <textarea id="notes" name="notes" className="min-h-24 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm" defaultValue={invoice?.notes ?? ''} placeholder="Anything accounting should know about this payment." />
               </div>
+              </fieldset>
 
               {invoice ? (
                 <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
                   Submitted {formatEasternDateTime(invoice.submittedAt)} • Status: <span className="font-medium text-slate-900">{invoice.status}</span>
+                </div>
+              ) : null}
+
+              {!invoiceReady ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  Complete the tasting and submit the event report before sending an invoice to accounting.
+                </div>
+              ) : null}
+              {invoiceLocked ? (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                  This invoice is locked because it has already been {invoice?.status}.
                 </div>
               ) : null}
 
@@ -180,7 +202,7 @@ export function TastingSubmissionDetail({
                 <span className="text-slate-500">{invoice ? `Status: ${invoice.status}` : 'Draft mode'}</span>
               </div>
 
-              <Button type="submit" className="w-full">{invoice ? 'Update Invoice' : 'Submit Invoice'}</Button>
+              <Button type="submit" className="w-full" disabled={!invoiceReady || invoiceLocked}>{invoice ? 'Update Invoice' : 'Submit Invoice'}</Button>
             </form>
           </CardContent>
         </Card>

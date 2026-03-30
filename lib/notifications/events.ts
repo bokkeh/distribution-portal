@@ -129,6 +129,7 @@ export interface TastingReportReceivedPayload {
 export interface UserWelcomedPayload {
   name: string
   email: string
+  phone?: string | null
   password: string
   role: string
 }
@@ -174,5 +175,5 @@ export const EVENT_CHANNELS: Record<NotificationEvent, NotificationChannel[]> = 
   'tasting.status_changed':        ['email', 'sms'],
   'tasting.report_received':       ['email'],
   'tasting.taster_declined':       ['email', 'sms', 'in-app'],
-  'user.welcomed':                 ['email'],
+  'user.welcomed':                 ['email', 'sms'],
 }

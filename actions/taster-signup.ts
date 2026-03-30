@@ -14,6 +14,7 @@ export async function registerTaster(
   _prev: TasterSignupState,
   formData: FormData,
 ): Promise<TasterSignupState> {
+  const inviteCode = (formData.get('inviteCode') as string)?.trim()
   const name = (formData.get('name') as string)?.trim()
   const email = (formData.get('email') as string)?.trim().toLowerCase()
   const password = formData.get('password') as string
@@ -22,6 +23,15 @@ export async function registerTaster(
 
   if (!name || !email || !password) {
     return { error: 'Name, email, and password are required.' }
+  }
+
+  const expectedInviteCode = process.env.TASTER_SIGNUP_INVITE_CODE?.trim()
+  if (!expectedInviteCode) {
+    return { error: 'Taster self-signup is disabled until an invite code is configured.' }
+  }
+
+  if (!inviteCode || inviteCode !== expectedInviteCode) {
+    return { error: 'A valid taster invite code is required.' }
   }
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -56,7 +66,7 @@ export async function registerTaster(
     role: 'taster',
     roles: ['taster'],
     phone,
-    active: true,
+    active: false,
   })
 
   return { success: true, email }

@@ -11,7 +11,7 @@ export const tastings = pgTable('tastings', {
   scheduledAt: timestamp('scheduled_at', { withTimezone: true }).notNull(),
   endAt: timestamp('end_at', { withTimezone: true }),
   checkedInAt: timestamp('checked_in_at', { withTimezone: true }),
-  status: text('status', { enum: ['scheduled', 'confirmed', 'completed', 'cancelled', 'declined'] }).notNull().default('scheduled'),
+  status: text('status', { enum: ['requested', 'scheduled', 'confirmed', 'completed', 'cancelled', 'declined'] }).notNull().default('scheduled'),
   storeAddress: text('store_address'),
   storeCity: text('store_city'),
   storeState: text('store_state'),

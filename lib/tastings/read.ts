@@ -75,9 +75,10 @@ export async function getTastingsForViewWithFallback({ assignedUserId }: { assig
 
   try {
     const base = buildBaseQuery()
-    return assignedUserId
+    const rows = assignedUserId
       ? await base.where(eq(tastings.assignedUserId, assignedUserId)).orderBy(desc(tastings.scheduledAt))
       : await base.orderBy(desc(tastings.scheduledAt))
+    return assignedUserId ? rows.filter((row) => row.status !== 'requested') : rows
   } catch (error) {
     if (!isMissingTastingColumn(error)) throw error
 
@@ -112,6 +113,7 @@ export async function getTastingsForViewWithFallback({ assignedUserId }: { assig
       ? await base.where(eq(tastings.assignedUserId, assignedUserId)).orderBy(desc(tastings.scheduledAt))
       : await base.orderBy(desc(tastings.scheduledAt))
 
-    return rows.map(row => ({ ...row, endAt: null }))
+    const hydratedRows = rows.map(row => ({ ...row, endAt: null }))
+    return assignedUserId ? hydratedRows.filter((row) => row.status !== 'requested') : hydratedRows
   }
 }

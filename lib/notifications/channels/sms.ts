@@ -154,5 +154,17 @@ export async function handleSmsChannel<E extends NotificationEvent>(
       )
       break
     }
+
+    case 'user.welcomed': {
+      const p = payload as NotificationEventPayloads['user.welcomed']
+      if (!p.phone) break
+      await sendSms({
+        to: p.phone,
+        body: `Welcome to AHAWC. Your ${p.role} portal account is ready. Email: ${p.email} Temporary password: ${p.password} Log in: ${(process.env.NEXTAUTH_URL ?? 'https://portal.ahawc.com')}/login`,
+        contactName: p.name,
+        bypassOptOut: true,
+      })
+      break
+    }
   }
 }

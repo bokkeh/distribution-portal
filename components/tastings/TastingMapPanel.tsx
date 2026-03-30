@@ -21,6 +21,7 @@ type TastingMapRow = {
 }
 
 const statusVariant: Record<string, 'secondary' | 'success' | 'warning' | 'destructive' | 'info'> = {
+  requested: 'secondary',
   scheduled: 'info',
   confirmed: 'warning',
   completed: 'success',
@@ -42,30 +43,69 @@ function buildEmbedHref(address: string) {
   return `https://maps.google.com/maps?hl=en&q=${encodeURIComponent(address)}&z=14&output=embed`
 }
 
+function MapEmbed({ address, eventName }: { address: string; eventName: string }) {
+  const [mapLoaded, setMapLoaded] = useState(false)
+  const [showFallback, setShowFallback] = useState(false)
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setShowFallback(true)
+    }, 3500)
+    return () => window.clearTimeout(timeout)
+  }, [])
+
+  if (showFallback && !mapLoaded) {
+    return (
+      <div className="flex h-[320px] flex-col items-center justify-center gap-4 bg-gradient-to-br from-slate-50 via-white to-blue-50 px-6 text-center">
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-100 text-blue-700">
+          <MapPin className="h-7 w-7" />
+        </div>
+        <div className="space-y-2">
+          <p className="text-base font-semibold text-slate-900">Map preview unavailable</p>
+          <p className="mx-auto max-w-md text-sm text-slate-500">
+            The live embed did not load here, but directions are ready for this tasting location.
+          </p>
+          <p className="text-sm font-medium text-slate-700">{address}</p>
+        </div>
+        <a href={buildDirectionsHref(address)} target="_blank" rel="noreferrer">
+          <Button className="gap-2">
+            <Navigation className="h-4 w-4" />
+            Open in Google Maps
+          </Button>
+        </a>
+      </div>
+    )
+  }
+
+  return (
+    <div className="relative h-[320px] w-full bg-slate-50">
+      {!mapLoaded ? (
+        <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-slate-100 via-white to-blue-50" />
+      ) : null}
+      <iframe
+        title={`${eventName} map`}
+        src={buildEmbedHref(address)}
+        className={`h-[320px] w-full border-0 ${mapLoaded ? 'opacity-100' : 'opacity-0'}`}
+        loading="lazy"
+        referrerPolicy="no-referrer-when-downgrade"
+        onLoad={() => {
+          setMapLoaded(true)
+          setShowFallback(false)
+        }}
+      />
+    </div>
+  )
+}
+
 export function TastingMapPanel({ tastings }: { tastings: TastingMapRow[] }) {
   const mappableTastings = useMemo(
     () => tastings.filter((tasting) => buildAddress(tasting)),
     [tastings],
   )
   const [selectedId, setSelectedId] = useState<string | null>(mappableTastings[0]?.id ?? null)
-  const [mapLoaded, setMapLoaded] = useState(false)
-  const [showFallback, setShowFallback] = useState(false)
 
   const selectedTasting = mappableTastings.find((tasting) => tasting.id === selectedId) ?? mappableTastings[0] ?? null
   const selectedAddress = selectedTasting ? buildAddress(selectedTasting) : ''
-
-  useEffect(() => {
-    setMapLoaded(false)
-    setShowFallback(false)
-  }, [selectedId, selectedAddress])
-
-  useEffect(() => {
-    if (!selectedTasting) return
-    const timeout = window.setTimeout(() => {
-      setShowFallback(true)
-    }, 3500)
-    return () => window.clearTimeout(timeout)
-  }, [selectedTasting])
 
   if (!mappableTastings.length) {
     return (
@@ -88,43 +128,7 @@ export function TastingMapPanel({ tastings }: { tastings: TastingMapRow[] }) {
       <CardContent className="space-y-4">
         {selectedTasting ? (
           <div className="overflow-hidden rounded-2xl border border-slate-200">
-            {showFallback && !mapLoaded ? (
-              <div className="flex h-[320px] flex-col items-center justify-center gap-4 bg-gradient-to-br from-slate-50 via-white to-blue-50 px-6 text-center">
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-100 text-blue-700">
-                  <MapPin className="h-7 w-7" />
-                </div>
-                <div className="space-y-2">
-                  <p className="text-base font-semibold text-slate-900">Map preview unavailable</p>
-                  <p className="mx-auto max-w-md text-sm text-slate-500">
-                    The live embed did not load here, but directions are ready for this tasting location.
-                  </p>
-                  <p className="text-sm font-medium text-slate-700">{selectedAddress}</p>
-                </div>
-                <a href={buildDirectionsHref(selectedAddress)} target="_blank" rel="noreferrer">
-                  <Button className="gap-2">
-                    <Navigation className="h-4 w-4" />
-                    Open in Google Maps
-                  </Button>
-                </a>
-              </div>
-            ) : (
-              <div className="relative h-[320px] w-full bg-slate-50">
-                {!mapLoaded ? (
-                  <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-slate-100 via-white to-blue-50" />
-                ) : null}
-                <iframe
-                  title={`${selectedTasting.eventName} map`}
-                  src={buildEmbedHref(selectedAddress)}
-                  className={`h-[320px] w-full border-0 ${mapLoaded ? 'opacity-100' : 'opacity-0'}`}
-                  loading="lazy"
-                  referrerPolicy="no-referrer-when-downgrade"
-                  onLoad={() => {
-                    setMapLoaded(true)
-                    setShowFallback(false)
-                  }}
-                />
-              </div>
-            )}
+            <MapEmbed key={selectedAddress} address={selectedAddress} eventName={selectedTasting.eventName} />
           </div>
         ) : null}
 
