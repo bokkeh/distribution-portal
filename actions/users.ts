@@ -11,6 +11,7 @@ import { notify } from '@/lib/notifications/dispatch'
 
 const ALL_ROLES = ['admin', 'staff', 'driver', 'customer', 'taster', 'sales_rep', 'sales_manager'] as const
 type UserRole = typeof ALL_ROLES[number]
+const WELCOME_ELIGIBLE_ROLES: UserRole[] = ['driver', 'customer', 'taster', 'sales_rep', 'sales_manager']
 
 function parseRoles(formData: FormData, primaryRole: UserRole) {
   const selectedRoles = formData.getAll('roles').map(value => String(value)) as UserRole[]
@@ -21,6 +22,10 @@ function parseRoles(formData: FormData, primaryRole: UserRole) {
 
 function parseFeatures(formData: FormData) {
   return formData.getAll('features').map(value => String(value)).filter(Boolean)
+}
+
+function formatRoleLabel(role: UserRole) {
+  return role.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase())
 }
 
 function isMissingUserFeatureTable(error: unknown) {
@@ -88,13 +93,13 @@ export async function createUser(formData: FormData) {
     }
   }
 
-  if (roles.includes('taster')) {
+  if (WELCOME_ELIGIBLE_ROLES.includes(role)) {
     await notify('user.welcomed', {
       name: user.name,
       email: user.email,
       phone: user.phone,
       password,
-      role: 'taster',
+      role: formatRoleLabel(role),
     })
   }
 
