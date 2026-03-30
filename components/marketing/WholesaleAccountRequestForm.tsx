@@ -7,6 +7,8 @@ import { submitWholesaleAccountRequest } from '@/actions/marketing'
 import { SMS_CONSENT_COPY } from '@/lib/telnyx/messages'
 
 const initialState = null
+const fieldClassName =
+  'w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100'
 
 export function WholesaleAccountRequestForm() {
   const formRef = useRef<HTMLFormElement>(null)
@@ -27,35 +29,35 @@ export function WholesaleAccountRequestForm() {
   }, [state])
 
   return (
-    <form ref={formRef} action={formAction} className="bg-white/10 rounded-xl p-6 space-y-3">
+    <form ref={formRef} action={formAction} className="space-y-3 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_22px_60px_-30px_rgba(15,23,42,0.28)]">
       <input type="hidden" name="source" value="marketing_contact_form" />
       <input type="hidden" name="submissionPage" value="/#contact" />
 
-      <p className="font-semibold text-sm">Request a Wholesale Account</p>
+      <p className="text-lg font-bold text-slate-900">Request a Wholesale Account</p>
       <input
         name="businessName"
         type="text"
         placeholder="Business name"
         required
-        className="w-full rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-sm text-white placeholder-blue-300 focus:outline-none focus:ring-2 focus:ring-white/30"
+        className={fieldClassName}
       />
       <input
         name="businessEmail"
         type="email"
         placeholder="Business email"
         required
-        className="w-full rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-sm text-white placeholder-blue-300 focus:outline-none focus:ring-2 focus:ring-white/30"
+        className={fieldClassName}
       />
       <select
         name="businessType"
         defaultValue=""
-        className="w-full rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-white/30"
+        className={fieldClassName}
       >
-        <option value="" className="text-slate-900">Business type</option>
-        <option value="restaurant" className="text-slate-900">Restaurant</option>
-        <option value="restaurant_group" className="text-slate-900">Restaurant Group</option>
-        <option value="liquor_store" className="text-slate-900">Liquor Store</option>
-        <option value="hotel_group" className="text-slate-900">Hotel Group</option>
+        <option value="">Business type</option>
+        <option value="restaurant">Restaurant</option>
+        <option value="restaurant_group">Restaurant Group</option>
+        <option value="liquor_store">Liquor Store</option>
+        <option value="hotel_group">Hotel Group</option>
       </select>
       <input
         name="phone"
@@ -63,27 +65,27 @@ export function WholesaleAccountRequestForm() {
         placeholder="Mobile phone number"
         required
         autoComplete="tel"
-        className="w-full rounded-lg bg-white/10 border border-white/20 px-3 py-2 text-sm text-white placeholder-blue-300 focus:outline-none focus:ring-2 focus:ring-white/30"
+        className={fieldClassName}
       />
 
-      <label className="flex items-start gap-3 rounded-lg border border-white/15 bg-white/5 p-3 text-sm text-blue-100">
+      <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
         <input
           name="smsOptIn"
           type="checkbox"
-          className="mt-1 h-4 w-4 rounded border-white/40 bg-transparent accent-amber-400"
+          className="mt-1 h-4 w-4 rounded border-slate-300 accent-blue-600"
         />
         <span>
           I agree to receive SMS messages from AHAWC about my wholesale account request and account setup.
         </span>
       </label>
 
-      <p className="text-xs leading-relaxed text-blue-200">
+      <p className="text-xs leading-relaxed text-slate-500">
         {SMS_CONSENT_COPY} See our{' '}
-        <Link href="/privacy" className="font-medium text-white underline underline-offset-2">
+        <Link href="/privacy" className="font-medium text-slate-700 underline underline-offset-2 hover:text-slate-900">
           Privacy Policy
         </Link>{' '}
         and{' '}
-        <Link href="/terms" className="font-medium text-white underline underline-offset-2">
+        <Link href="/terms" className="font-medium text-slate-700 underline underline-offset-2 hover:text-slate-900">
           Terms &amp; Conditions
         </Link>
         .
@@ -92,7 +94,7 @@ export function WholesaleAccountRequestForm() {
       <button
         type="submit"
         disabled={pending}
-        className="block w-full text-center bg-amber-400 hover:bg-amber-300 disabled:opacity-70 disabled:cursor-not-allowed text-slate-900 font-semibold px-4 py-2.5 rounded-lg text-sm transition-colors"
+        className="block w-full rounded-xl bg-slate-900 px-4 py-3 text-center text-sm font-semibold text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
       >
         {pending ? 'Submitting...' : 'Send Request'}
       </button>
