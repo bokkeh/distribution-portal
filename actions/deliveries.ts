@@ -662,6 +662,7 @@ export async function completeDeliveryStop(stopId: string, formData: FormData) {
       deliveryId: deliveryStops.deliveryId,
       orderId: deliveryStops.orderId,
       customerId: deliveryStops.customerId,
+      status: deliveryStops.status,
       address: deliveryStops.address,
       companyName: customerAccounts.companyName,
       contactPhone: deliveryStops.contactPhone,
