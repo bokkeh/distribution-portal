@@ -22,6 +22,14 @@ const STATUS_COLORS: Record<string, string> = {
   declined: 'text-orange-700 border-orange-200 bg-orange-50',
 }
 
+function isMissingSubmissionTables(error: unknown) {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+  return (
+    (message.includes('tasting_reports') && message.includes('does not exist')) ||
+    (message.includes('taster_invoices') && message.includes('does not exist'))
+  )
+}
+
 export default async function AdminTastingDetailPage({
   params,
 }: {
@@ -33,29 +41,73 @@ export default async function AdminTastingDetailPage({
   const tasting = await getTastingById(tastingId)
   if (!tasting) notFound()
 
-  const [account, taster, report, invoice, allTasters] = await Promise.all([
-    db.select({
-      id: customerAccounts.id,
-      companyName: customerAccounts.companyName,
-      phone: customerAccounts.phone,
-      address: customerAccounts.address,
-      city: customerAccounts.city,
-      state: customerAccounts.state,
-    }).from(customerAccounts).where(eq(customerAccounts.id, tasting.customerId)).limit(1).then(r => r[0] ?? null),
+  let account: {
+    id: string
+    companyName: string | null
+    phone: string | null
+    address: string | null
+    city: string | null
+    state: string | null
+  } | null = null
+  let taster: {
+    id: string
+    name: string | null
+    phone: string | null
+    email: string | null
+  } | null = null
+  let report: typeof tastingReports.$inferSelect | null = null
+  let invoice: typeof tasterInvoices.$inferSelect | null = null
+  let allTasters: Array<{ id: string; name: string | null; roles: string[] | null }> = []
+  let missingSubmissionTables = false
 
-    db.select({ id: users.id, name: users.name, phone: users.phone, email: users.email })
-      .from(users).where(eq(users.id, tasting.assignedUserId)).limit(1).then(r => r[0] ?? null),
+  try {
+    ;[account, taster, report, invoice, allTasters] = await Promise.all([
+      db.select({
+        id: customerAccounts.id,
+        companyName: customerAccounts.companyName,
+        phone: customerAccounts.phone,
+        address: customerAccounts.address,
+        city: customerAccounts.city,
+        state: customerAccounts.state,
+      }).from(customerAccounts).where(eq(customerAccounts.id, tasting.customerId)).limit(1).then(r => r[0] ?? null),
 
-    db.select().from(tastingReports).where(eq(tastingReports.tastingId, tastingId)).limit(1).then(r => r[0] ?? null),
+      db.select({ id: users.id, name: users.name, phone: users.phone, email: users.email })
+        .from(users).where(eq(users.id, tasting.assignedUserId)).limit(1).then(r => r[0] ?? null),
 
-    db.select().from(tasterInvoices).where(eq(tasterInvoices.tastingId, tastingId)).limit(1).then(r => r[0] ?? null),
+      db.select().from(tastingReports).where(eq(tastingReports.tastingId, tastingId)).limit(1).then(r => r[0] ?? null),
 
-    db.select({ id: users.id, name: users.name, roles: users.roles })
-      .from(users)
-      .where(eq(users.active, true))
-      .orderBy(users.name)
-      .then(rows => rows.filter(u => u.roles?.includes('taster'))),
-  ])
+      db.select().from(tasterInvoices).where(eq(tasterInvoices.tastingId, tastingId)).limit(1).then(r => r[0] ?? null),
+
+      db.select({ id: users.id, name: users.name, roles: users.roles })
+        .from(users)
+        .where(eq(users.active, true))
+        .orderBy(users.name)
+        .then(rows => rows.filter(u => u.roles?.includes('taster'))),
+    ])
+  } catch (error) {
+    if (!isMissingSubmissionTables(error)) throw error
+
+    missingSubmissionTables = true
+    ;[account, taster, allTasters] = await Promise.all([
+      db.select({
+        id: customerAccounts.id,
+        companyName: customerAccounts.companyName,
+        phone: customerAccounts.phone,
+        address: customerAccounts.address,
+        city: customerAccounts.city,
+        state: customerAccounts.state,
+      }).from(customerAccounts).where(eq(customerAccounts.id, tasting.customerId)).limit(1).then(r => r[0] ?? null),
+
+      db.select({ id: users.id, name: users.name, phone: users.phone, email: users.email })
+        .from(users).where(eq(users.id, tasting.assignedUserId)).limit(1).then(r => r[0] ?? null),
+
+      db.select({ id: users.id, name: users.name, roles: users.roles })
+        .from(users)
+        .where(eq(users.active, true))
+        .orderBy(users.name)
+        .then(rows => rows.filter(u => u.roles?.includes('taster'))),
+    ])
+  }
 
   const canChangeStatus = tasting.status !== 'completed' && tasting.status !== 'cancelled' && tasting.status !== 'declined'
 
@@ -81,6 +133,11 @@ export default async function AdminTastingDetailPage({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left column */}
         <div className="lg:col-span-2 space-y-4">
+          {missingSubmissionTables ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              The tasting report and invoice tables are not in this database yet. Run `npm run db:push` before using the submission workflow in production.
+            </div>
+          ) : null}
           {/* Details card */}
           <Card>
             <CardHeader className="pb-3">

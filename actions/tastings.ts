@@ -262,19 +262,23 @@ export async function createTasting(formData: FormData) {
   const storeAddress = [account.address, account.city, account.state, account.zip].filter(Boolean).join(', ') || 'Store address not provided'
 
   if (assignedUser.phone && (assignedUserPrefs?.smsNotificationsEnabled ?? true)) {
-    await queueScheduledTastingSmsJobs({
-      ...formatTastingSmsPayload({
-        tastingId: tasting.id,
-        userId: assignedUser.id,
-        phoneNumber: assignedUser.phone,
-        storeName: account.companyName,
-        storeAddress,
+    try {
+      await queueScheduledTastingSmsJobs({
+        ...formatTastingSmsPayload({
+          tastingId: tasting.id,
+          userId: assignedUser.id,
+          phoneNumber: assignedUser.phone,
+          storeName: account.companyName,
+          storeAddress,
+          scheduledAt,
+          endAt,
+        }),
         scheduledAt,
         endAt,
-      }),
-      scheduledAt,
-      endAt,
-    })
+      })
+    } catch (error) {
+      console.error('Failed to queue tasting SMS jobs:', error)
+    }
   }
 
   await notify('tasting.taster_assigned', {

@@ -1,12 +1,12 @@
 'use server'
 
-import { eq } from 'drizzle-orm'
+import { and, desc, eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { db } from '@/db'
-import { users, wholesaleAccountRequests } from '@/db/schema'
+import { activityEvents, users, wholesaleAccountRequests } from '@/db/schema'
 import { requireAdmin, requireAdminOrStaff } from '@/lib/auth/session'
 import { logActivityEvent } from '@/lib/activity/log'
-import { sendWholesalerInvitationEmail } from '@/lib/resend/client'
+import { sendWholesalerApprovalEmail, sendWholesalerInvitationEmail } from '@/lib/resend/client'
 
 export async function updateWholesaleRequestWorkflow(formData: FormData) {
   const session = await requireAdmin()
@@ -23,6 +23,7 @@ export async function updateWholesaleRequestWorkflow(formData: FormData) {
     .select({
       id: wholesaleAccountRequests.id,
       businessName: wholesaleAccountRequests.businessName,
+      businessEmail: wholesaleAccountRequests.businessEmail,
     })
     .from(wholesaleAccountRequests)
     .where(eq(wholesaleAccountRequests.id, requestId))
@@ -31,6 +32,22 @@ export async function updateWholesaleRequestWorkflow(formData: FormData) {
   if (!request) {
     return { error: 'Wholesale request not found.' }
   }
+
+  const [latestWorkflowEvent] = await db
+    .select({ metadata: activityEvents.metadata })
+    .from(activityEvents)
+    .where(and(
+      eq(activityEvents.entityType, 'wholesale_request'),
+      eq(activityEvents.entityId, request.id),
+      eq(activityEvents.kind, 'wholesale_request_updated'),
+    ))
+    .orderBy(desc(activityEvents.createdAt))
+    .limit(1)
+
+  const previousMetadata = latestWorkflowEvent?.metadata && typeof latestWorkflowEvent.metadata === 'object'
+    ? latestWorkflowEvent.metadata as Record<string, unknown>
+    : {}
+  const previousStatus = typeof previousMetadata.status === 'string' ? previousMetadata.status : 'new'
 
   let assigneeName: string | null = null
   if (assigneeUserId) {
@@ -69,6 +86,27 @@ export async function updateWholesaleRequestWorkflow(formData: FormData) {
       notes,
     },
   })
+
+  if (status === 'approved' && previousStatus !== 'approved') {
+    await sendWholesalerApprovalEmail({
+      to: request.businessEmail,
+      businessName: request.businessName,
+      senderName: session.user.name ?? 'The AHAWC Team',
+      personalMessage: notes || null,
+    })
+
+    await logActivityEvent({
+      entityType: 'wholesale_request',
+      entityId: request.id,
+      actorUserId: session.user.id,
+      kind: 'wholesale_request_approval_sent',
+      title: 'Wholesale approval email sent',
+      body: `Approval email sent to ${request.businessEmail}.`,
+      metadata: {
+        email: request.businessEmail,
+      },
+    })
+  }
 
   revalidatePath('/admin/wholesale-requests')
   revalidatePath('/admin/attention')

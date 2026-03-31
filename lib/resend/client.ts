@@ -642,6 +642,37 @@ export async function sendWholesalerInvitationEmail({
   })
 }
 
+export async function sendWholesalerApprovalEmail({
+  to,
+  businessName,
+  senderName,
+  personalMessage,
+}: {
+  to: string
+  businessName: string
+  senderName: string
+  personalMessage?: string | null
+}): Promise<void> {
+  const loginUrl = portalUrl(`/login?email=${encodeURIComponent(to)}`)
+  await sendEmail({
+    to,
+    subject: `${businessName} has been approved for the AHAWC Portal`,
+    html: renderEmailCard({
+      eyebrow: 'Approved',
+      title: 'Your wholesale access has been approved',
+      intro: `${escapeHtml(senderName)} approved ${escapeHtml(businessName)} for access to the AHAWC Distribution Portal.`,
+      body: `
+        ${personalMessage ? `<p style="margin: 0 0 14px;">${escapeHtml(personalMessage)}</p>` : ''}
+        <p style="margin: 0 0 10px;">Use the button below to sign in.</p>
+        <p style="margin: 0 0 10px;">If this is your first time accessing the portal, choose <strong>Continue with Google</strong> and use this approved email address: <strong>${escapeHtml(to)}</strong>.</p>
+        <p style="margin: 0; color: #64748b; font-size: 13px;">If you already have a password-based account, you can sign in with your email and password instead.</p>
+      `,
+      ctaLabel: 'Open Sign In',
+      ctaHref: loginUrl,
+    }),
+  })
+}
+
 export async function sendTasterInvoiceNotification({
   payeeName,
   payeeEmail,

@@ -7,7 +7,23 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { sendWholesalerInvitation } from '@/actions/wholesale-requests'
 
-export function SendInvitationModal() {
+interface Props {
+  defaultEmail?: string
+  defaultMessage?: string
+  triggerLabel?: string
+  triggerVariant?: 'default' | 'outline' | 'secondary' | 'ghost' | 'destructive'
+  title?: string
+  description?: string
+}
+
+export function SendInvitationModal({
+  defaultEmail = '',
+  defaultMessage = '',
+  triggerLabel = 'Send Invitation',
+  triggerVariant = 'outline',
+  title = 'Send Invitation',
+  description = 'Invite someone to request a wholesale account.',
+}: Props) {
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const formRef = useRef<HTMLFormElement>(null)
@@ -29,9 +45,9 @@ export function SendInvitationModal() {
 
   return (
     <>
-      <Button variant="outline" onClick={() => setOpen(true)} className="gap-2">
+      <Button variant={triggerVariant} onClick={() => setOpen(true)} className="gap-2">
         <Mail className="h-4 w-4" />
-        Send Invitation
+        {triggerLabel}
       </Button>
 
       {open && (
@@ -39,8 +55,8 @@ export function SendInvitationModal() {
           <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
               <div>
-                <p className="text-base font-semibold text-slate-900">Send Invitation</p>
-                <p className="mt-0.5 text-sm text-muted-foreground">Invite someone to request a wholesale account.</p>
+                <p className="text-base font-semibold text-slate-900">{title}</p>
+                <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
               </div>
               <button
                 type="button"
@@ -62,6 +78,7 @@ export function SendInvitationModal() {
                   placeholder="wholesaler@example.com"
                   required
                   autoFocus
+                  defaultValue={defaultEmail}
                   className="h-10"
                 />
               </div>
@@ -74,6 +91,7 @@ export function SendInvitationModal() {
                   name="personalMessage"
                   placeholder="Hi, I'd like to invite you to apply for a wholesale account with AHAWC..."
                   rows={3}
+                  defaultValue={defaultMessage}
                   className="flex w-full rounded-md border border-input bg-white px-3 py-2 text-sm resize-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 />
                 <p className="text-xs text-muted-foreground">This message will appear in the invitation email along with a link to the signup form.</p>
