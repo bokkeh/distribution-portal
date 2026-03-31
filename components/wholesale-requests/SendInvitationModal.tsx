@@ -5,11 +5,13 @@ import { toast } from 'sonner'
 import { Mail, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { sendWholesalerInvitation } from '@/actions/wholesale-requests'
+import { resendWholesalerApprovalEmail, sendWholesalerInvitation } from '@/actions/wholesale-requests'
 
 interface Props {
   defaultEmail?: string
   defaultMessage?: string
+  businessName?: string
+  mode?: 'invitation' | 'approval'
   triggerLabel?: string
   triggerVariant?: 'default' | 'outline' | 'secondary' | 'ghost' | 'destructive'
   title?: string
@@ -19,6 +21,8 @@ interface Props {
 export function SendInvitationModal({
   defaultEmail = '',
   defaultMessage = '',
+  businessName = '',
+  mode = 'invitation',
   triggerLabel = 'Send Invitation',
   triggerVariant = 'outline',
   title = 'Send Invitation',
@@ -30,13 +34,23 @@ export function SendInvitationModal({
 
   function handleSubmit(formData: FormData) {
     startTransition(async () => {
-      const result = await sendWholesalerInvitation(formData)
+      if (businessName) {
+        formData.set('businessName', businessName)
+      }
+
+      const result = mode === 'approval'
+        ? await resendWholesalerApprovalEmail(formData)
+        : await sendWholesalerInvitation(formData)
+
       if (result?.error) {
         toast.error(result.error)
         return
       }
-      toast.success('Invitation sent', {
-        description: `We sent them a link to request access at /join.`,
+
+      toast.success(mode === 'approval' ? 'Approval email sent' : 'Invitation sent', {
+        description: mode === 'approval'
+          ? 'We sent them the sign-in email again.'
+          : 'We sent them a link to request access at /join.',
       })
       formRef.current?.reset()
       setOpen(false)
@@ -94,12 +108,16 @@ export function SendInvitationModal({
                   defaultValue={defaultMessage}
                   className="flex w-full rounded-md border border-input bg-white px-3 py-2 text-sm resize-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 />
-                <p className="text-xs text-muted-foreground">This message will appear in the invitation email along with a link to the signup form.</p>
+                <p className="text-xs text-muted-foreground">
+                  {mode === 'approval'
+                    ? 'This message will appear in the approval email along with a link to the sign-in page.'
+                    : 'This message will appear in the invitation email along with a link to the signup form.'}
+                </p>
               </div>
 
               <div className="flex gap-3 pt-1">
                 <Button type="submit" disabled={isPending} className="flex-1">
-                  {isPending ? 'Sending…' : 'Send Invitation'}
+                  {isPending ? 'Sending...' : mode === 'approval' ? 'Send Approval Email' : 'Send Invitation'}
                 </Button>
                 <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isPending}>
                   Cancel

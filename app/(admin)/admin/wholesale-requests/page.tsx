@@ -194,11 +194,13 @@ export default async function WholesaleRequestsPage() {
                       </Badge>
                       <SendInvitationModal
                         defaultEmail={request.businessEmail}
+                        businessName={request.businessName}
+                        mode={status === 'approved' ? 'approval' : 'invitation'}
                         defaultMessage={status === 'approved' ? `Your wholesale request for ${request.businessName} was approved. If you still need the portal link, here it is again.` : ''}
                         triggerLabel={status === 'approved' ? 'Resend Invite' : 'Send Invite'}
                         triggerVariant="outline"
-                        title={status === 'approved' ? 'Resend Invitation' : 'Send Invitation'}
-                        description={status === 'approved' ? 'Resend the portal access email if the customer cannot find it.' : 'Send this request a portal invitation email.'}
+                        title={status === 'approved' ? 'Resend Approval Email' : 'Send Invitation'}
+                        description={status === 'approved' ? 'Resend the login email if the customer cannot find it.' : 'Send this request a portal invitation email.'}
                       />
                     </div>
                   </div>

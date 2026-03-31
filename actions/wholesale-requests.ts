@@ -130,3 +130,23 @@ export async function sendWholesalerInvitation(formData: FormData) {
 
   return { success: true }
 }
+
+export async function resendWholesalerApprovalEmail(formData: FormData) {
+  const session = await requireAdminOrStaff()
+  const email = ((formData.get('email') as string) || '').trim().toLowerCase()
+  const businessName = ((formData.get('businessName') as string) || '').trim() || 'Your business'
+  const personalMessage = ((formData.get('personalMessage') as string) || '').trim() || null
+
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { error: 'Please enter a valid email address.' }
+  }
+
+  await sendWholesalerApprovalEmail({
+    to: email,
+    businessName,
+    senderName: session.user.name ?? 'The AHAWC Team',
+    personalMessage,
+  })
+
+  return { success: true }
+}
