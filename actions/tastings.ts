@@ -58,6 +58,14 @@ function getEasternDateKey(value: Date) {
   }).format(value)
 }
 
+function isMissingTrainingDayColumn(error: unknown) {
+  const code = (error as { code?: string; cause?: { code?: string } } | null)?.code
+    ?? (error as { cause?: { code?: string } } | null)?.cause?.code
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+
+  return code === '42703' || message.includes('training_day')
+}
+
 async function getSalesMemberIdForUser(userId: string) {
   const [member] = await db
     .select({ id: salesMembers.id, status: salesMembers.status })
@@ -118,7 +126,21 @@ async function validateTastingWindow({
         status: tastings.status,
       })
       .from(tastings)
-      .where(eq(tastings.customerId, customerId)),
+      .where(eq(tastings.customerId, customerId))
+      .catch(async (error) => {
+        if (!isMissingTrainingDayColumn(error)) throw error
+
+        const rows = await db
+          .select({
+            id: tastings.id,
+            scheduledAt: tastings.scheduledAt,
+            status: tastings.status,
+          })
+          .from(tastings)
+          .where(eq(tastings.customerId, customerId))
+
+        return rows.map((row) => ({ ...row, trainingDay: false }))
+      }),
   ])
 
   if (availabilityRows.length > 0 && !availabilityRows.some((row) => row.availableDate === requestedDateKey)) {
@@ -214,7 +236,7 @@ export async function createTasting(formData: FormData) {
   }
   const assignedUserPrefs = await getUserPreferences(assignedUser.id).catch(() => null)
 
-  const [tasting] = await db.insert(tastings).values({
+  const baseTastingValues = {
     customerId: account.id,
     assignedUserId: assignedUser.id,
     createdByUserId: session.user.id,
@@ -226,9 +248,16 @@ export async function createTasting(formData: FormData) {
     storeState: account.state,
     storeZip: account.zip,
     storePhone: account.phone,
-    trainingDay,
     notes,
-  }).returning({ id: tastings.id })
+  }
+
+  const [tasting] = await db.insert(tastings).values({
+    ...baseTastingValues,
+    trainingDay,
+  }).returning({ id: tastings.id }).catch(async (error) => {
+    if (!isMissingTrainingDayColumn(error)) throw error
+    return db.insert(tastings).values(baseTastingValues).returning({ id: tastings.id })
+  })
 
   const storeAddress = [account.address, account.city, account.state, account.zip].filter(Boolean).join(', ') || 'Store address not provided'
 
@@ -540,6 +569,32 @@ export async function reassignTasting(formData: FormData) {
     .innerJoin(users, eq(tastings.assignedUserId, users.id))
     .where(eq(tastings.id, tastingId))
     .limit(1)
+    .catch(async (error) => {
+      if (!isMissingTrainingDayColumn(error)) throw error
+
+      const rows = await db
+        .select({
+          id: tastings.id,
+          eventName: tastings.eventName,
+          scheduledAt: tastings.scheduledAt,
+          endAt: tastings.endAt,
+          storeAddress: tastings.storeAddress,
+          storeCity: tastings.storeCity,
+          storeState: tastings.storeState,
+          storeZip: tastings.storeZip,
+          customerId: tastings.customerId,
+          assignedUserId: tastings.assignedUserId,
+          status: tastings.status,
+          currentTasterName: users.name,
+          currentTasterPhone: users.phone,
+        })
+        .from(tastings)
+        .innerJoin(users, eq(tastings.assignedUserId, users.id))
+        .where(eq(tastings.id, tastingId))
+        .limit(1)
+
+      return rows.map((row) => ({ ...row, trainingDay: false }))
+    })
 
   if (!tasting) {
     redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('Tasting not found.')}`)
