@@ -18,6 +18,7 @@ export default async function CustomerProfilePage() {
       .select({
         id: customerAccounts.id,
         notificationPreference: customerAccounts.notificationPreference,
+        notificationPhone: customerAccounts.notificationPhone,
       })
       .from(customerAccounts)
       .where(eq(customerAccounts.userId, session.user.id))

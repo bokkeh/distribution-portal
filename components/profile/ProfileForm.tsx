@@ -59,6 +59,7 @@ interface Props {
     creditLimit: string
     balance: string
     paymentTerms: string | null
+    notificationPhone: string | null
     preferences?: {
       timeZone: string
       quietHoursStart: string | null
@@ -268,6 +269,14 @@ export function ProfileForm({ user, account }: Props) {
                     )
                   })}
                 </div>
+              </Field>
+              <Field label="Phone Number For Text Notifications">
+                <Input
+                  name="notificationPhone"
+                  type="tel"
+                  defaultValue={account.notificationPhone ?? account.pocPhone ?? account.businessPhone ?? user.phone ?? ''}
+                  placeholder="+1 (555) 000-0000"
+                />
               </Field>
               <FieldRow>
                 <Field label="Business Time Zone">

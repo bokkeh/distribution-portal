@@ -585,6 +585,7 @@ export async function updateOrderShippingStatus(orderId: string, formData: FormD
       businessEmail: customerAccounts.businessEmail,
       pocEmail: customerAccounts.pocEmail,
       phone: customerAccounts.phone,
+      notificationPhone: customerAccounts.notificationPhone,
       notificationPreference: customerAccounts.notificationPreference,
     })
     .from(orders)
@@ -598,7 +599,7 @@ export async function updateOrderShippingStatus(orderId: string, formData: FormD
     orderId,
     status: shippingStatus,
     customerEmails: uniqueEmails(order?.pocEmail, order?.businessEmail, order?.email),
-    customerPhone: prefersNoSms ? null : (order?.phone ?? null),
+    customerPhone: prefersNoSms ? null : (order?.notificationPhone ?? order?.phone ?? null),
     userId: order?.customerUserId,
   })
 

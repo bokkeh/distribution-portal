@@ -22,48 +22,47 @@ function formatPaymentTerms(terms: string | null): string {
 }
 
 const statusStyles: Record<string, string> = {
-  draft: 'bg-slate-100 text-slate-700 border-slate-200',
-  sent: 'bg-blue-50 text-blue-700 border-blue-200',
-  paid: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  overdue: 'bg-red-50 text-red-700 border-red-200',
+  draft: 'border-slate-200 bg-slate-100 text-slate-700',
+  sent: 'border-sky-200 bg-sky-50 text-sky-700',
+  paid: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  overdue: 'border-red-200 bg-red-50 text-red-700',
 }
 
 export function InvoiceVisual({ invoice }: { invoice: InvoiceDetailData }) {
   return (
-    <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-200 bg-slate-950 px-6 py-8 text-white sm:px-8">
+    <div className="overflow-hidden rounded-[32px] border border-slate-200 bg-[linear-gradient(180deg,_rgba(255,255,255,0.98),_rgba(248,250,252,0.98))] shadow-[0_24px_70px_-40px_rgba(15,23,42,0.32)]">
+      <div className="border-b border-slate-200 bg-[linear-gradient(135deg,_#f8fbff_0%,_#eef4ff_62%,_#fdf8f3_100%)] px-6 py-8 sm:px-8">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="mb-4 flex items-center gap-3">
-              <div className="relative h-10 w-10 overflow-hidden rounded-lg bg-white shrink-0">
+              <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                 <Image src="/brand/logo.png" alt="AHAWC" fill className="object-contain p-1" unoptimized />
               </div>
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-blue-200">AHAWC Distribution</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-blue-700">AHAWC Distribution</p>
             </div>
-            <h2 className="text-3xl font-bold">Invoice</h2>
-            <p className="mt-2 max-w-md text-sm text-slate-300">
+            <h2 className="text-3xl font-bold text-slate-900">Invoice</h2>
+            <p className="mt-2 max-w-md text-sm text-slate-600">
               Premium distribution billing statement for products, tasting support, and related account charges.
             </p>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-sm">
-            <div className="flex items-center justify-between gap-6">
-              <span className="text-slate-300">Invoice #</span>
-              <span className="font-semibold text-white">{invoice.invoiceNumber}</span>
-            </div>
-            <div className="mt-2 flex items-center justify-between gap-6">
-              <span className="text-slate-300">Issue date</span>
-              <span>{formatDate(invoice.createdAt)}</span>
-            </div>
-            <div className="mt-2 flex items-center justify-between gap-6">
-              <span className="text-slate-300">Due date</span>
-              <span>{invoice.dueDate ? formatDate(invoice.dueDate) : '—'}</span>
+
+          <div className="rounded-2xl border border-slate-200 bg-white/95 px-4 py-4 text-sm shadow-sm sm:min-w-[250px]">
+            <div className="grid grid-cols-[88px_minmax(0,1fr)] items-start gap-x-4 gap-y-3">
+              <span className="text-slate-500">Invoice #</span>
+              <span className="break-words text-right font-semibold text-slate-900">{invoice.invoiceNumber}</span>
+
+              <span className="text-slate-500">Issue date</span>
+              <span className="text-right text-slate-900">{formatDate(invoice.createdAt)}</span>
+
+              <span className="text-slate-500">Due date</span>
+              <span className="text-right text-slate-900">{invoice.dueDate ? formatDate(invoice.dueDate) : '—'}</span>
             </div>
           </div>
         </div>
       </div>
 
       <div className="grid gap-6 px-6 py-6 sm:grid-cols-2 sm:px-8">
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_12px_30px_-28px_rgba(15,23,42,0.4)]">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Bill To</p>
           <p className="mt-3 text-lg font-semibold text-slate-950">{invoice.companyName}</p>
           {invoice.customerAddressLines.map((line) => (
@@ -73,7 +72,7 @@ export function InvoiceVisual({ invoice }: { invoice: InvoiceDetailData }) {
           {invoice.customerPhone ? <p className="mt-1 text-sm text-slate-600">{invoice.customerPhone}</p> : null}
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-5">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_12px_30px_-28px_rgba(15,23,42,0.4)]">
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Status</p>
             <span className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${statusStyles[invoice.status] ?? statusStyles.draft}`}>
@@ -81,22 +80,24 @@ export function InvoiceVisual({ invoice }: { invoice: InvoiceDetailData }) {
             </span>
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-xl bg-slate-50 p-3">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
               <p className="text-xs uppercase tracking-wide text-slate-500">Terms</p>
               <p className="mt-1 text-sm font-medium text-slate-900">{formatPaymentTerms(invoice.paymentTerms)}</p>
             </div>
-            <div className="rounded-xl bg-slate-50 p-3">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
               <p className="text-xs uppercase tracking-wide text-slate-500">Linked Order</p>
-              <p className="mt-1 text-sm font-medium text-slate-900">{invoice.orderId ? invoice.orderId.slice(-8).toUpperCase() : 'Direct invoice'}</p>
+              <p className="mt-1 text-sm font-medium text-slate-900">
+                {invoice.orderId ? invoice.orderId.slice(-8).toUpperCase() : 'Direct invoice'}
+              </p>
             </div>
           </div>
         </div>
       </div>
 
       <div className="px-6 pb-6 sm:px-8">
-        <div className="overflow-hidden rounded-2xl border border-slate-200">
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_12px_30px_-28px_rgba(15,23,42,0.32)]">
           <table className="w-full">
-            <thead className="bg-slate-50">
+            <thead className="bg-slate-50/80">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Item</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">SKU</th>
@@ -120,8 +121,8 @@ export function InvoiceVisual({ invoice }: { invoice: InvoiceDetailData }) {
         </div>
       </div>
 
-      <div className="border-t border-slate-200 bg-slate-50 px-6 py-6 sm:px-8">
-        <div className="ml-auto max-w-sm space-y-3 rounded-2xl border border-slate-200 bg-white p-5">
+      <div className="border-t border-slate-200 bg-slate-50/80 px-6 py-6 sm:px-8">
+        <div className="ml-auto max-w-sm space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_12px_30px_-28px_rgba(15,23,42,0.32)]">
           <div className="flex items-center justify-between text-sm">
             <span className="text-slate-500">Subtotal</span>
             <span className="font-medium text-slate-900">{formatCurrency(invoice.amount)}</span>

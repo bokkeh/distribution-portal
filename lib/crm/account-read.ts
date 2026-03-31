@@ -27,6 +27,7 @@ export type CRMAccountDetail = {
   businessEmail: string | null
   businessPhone: string | null
   notificationPreference: string | null
+  notificationPhone: string | null
   pocName: string | null
   pocPhone: string | null
   pocEmail: string | null
@@ -54,6 +55,7 @@ const DEFAULT_ACCOUNT_DETAIL = {
   businessEmail: null,
   businessPhone: null,
   notificationPreference: 'email',
+  notificationPhone: null,
   pocName: null,
   pocPhone: null,
   pocEmail: null,
@@ -140,6 +142,7 @@ export async function getCRMAccountDetail(accountId: string): Promise<CRMAccount
     'businessEmail',
     'businessPhone',
     'notificationPreference',
+    'notificationPhone',
     'pocName',
     'pocPhone',
     'pocEmail',
@@ -163,6 +166,7 @@ export async function getCRMAccountDetail(accountId: string): Promise<CRMAccount
     businessEmail: 'business_email',
     businessPhone: 'business_phone',
     notificationPreference: 'notification_preference',
+    notificationPhone: 'notification_phone',
     pocName: 'poc_name',
     pocPhone: 'poc_phone',
     pocEmail: 'poc_email',

@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatDate } from '@/lib/utils'
 import { createInvoiceAdjustment, markInvoicePaid, recordOfflineInvoicePayment, sendInvoiceEmail } from '@/actions/invoices'
 import { getInvoiceDetailData } from '@/lib/invoices/read'
+import { getInvoicePublicPaymentPath } from '@/lib/invoices/public-token'
 import { InvoiceVisual } from '@/components/invoices/InvoiceVisual'
 
 export default async function InvoiceDetailPage({
@@ -98,7 +99,7 @@ export default async function InvoiceDetailPage({
                 </form>
               ) : null}
               {invoice.status !== 'paid' ? (
-                <CopyPaymentLinkButton invoiceId={invoice.id} />
+                <CopyPaymentLinkButton paymentPath={getInvoicePublicPaymentPath(invoice.id)} />
               ) : null}
             </CardContent>
           </Card>

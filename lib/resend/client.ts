@@ -651,7 +651,6 @@ export async function sendTasterInvoiceNotification({
   storeAddress,
   hourlyRate,
   hoursWorked,
-  mileage,
   expenseAmount,
   totalAmount,
   notes,
@@ -664,7 +663,6 @@ export async function sendTasterInvoiceNotification({
   storeAddress: string
   hourlyRate: string
   hoursWorked: string
-  mileage: string
   expenseAmount: string
   totalAmount: string
   notes: string | null
@@ -682,7 +680,6 @@ export async function sendTasterInvoiceNotification({
       store_address: escapeHtml(storeAddress || '-'),
       hourly_rate_currency: formatCurrencyValue(hourlyRate),
       hours_worked: Number(hoursWorked || 0).toFixed(2),
-      mileage_currency: formatCurrencyValue(mileage),
       expense_amount_currency: formatCurrencyValue(expenseAmount),
       total_amount_currency: formatCurrencyValue(totalAmount),
       notes_html: notes ? `<p style="margin: 0;"><strong>Notes:</strong> ${escapeHtml(notes)}</p>` : '',

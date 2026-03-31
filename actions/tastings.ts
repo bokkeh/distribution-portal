@@ -810,7 +810,6 @@ export async function submitTasterInvoice(formData: FormData) {
   }
 
   const hoursWorked = (formData.get('hoursWorked') as string) || '0'
-  const mileage = (formData.get('mileage') as string) || '0'
   const expenseAmount = (formData.get('expenseAmount') as string) || '0'
 
   const [report] = await db
@@ -830,7 +829,7 @@ export async function submitTasterInvoice(formData: FormData) {
     .where(eq(users.id, tasting.assignedUserId ?? session.user.id))
     .limit(1)
   const hourlyRate = tasterUser?.tasterHourlyRate ?? '25'
-  const totalAmount = (Number(hourlyRate) * Number(hoursWorked) + Number(expenseAmount) + Number(mileage)).toFixed(2)
+  const totalAmount = (Number(hourlyRate) * Number(hoursWorked) + Number(expenseAmount)).toFixed(2)
 
   const payload = {
     submittedByUserId: session.user.id,
@@ -839,7 +838,7 @@ export async function submitTasterInvoice(formData: FormData) {
     payeePhone: (formData.get('payeePhone') as string) || null,
     hourlyRate,
     hoursWorked,
-    mileage,
+    mileage: '0',
     expenseAmount,
     totalAmount,
     notes: ((formData.get('notes') as string) || '').trim() || null,
@@ -882,7 +881,6 @@ export async function submitTasterInvoice(formData: FormData) {
     storeAddress: [tasting.storeAddress, tasting.storeCity, tasting.storeState, tasting.storeZip].filter(Boolean).join(', '),
     hourlyRate,
     hoursWorked,
-    mileage,
     expenseAmount,
     totalAmount,
     notes: payload.notes,

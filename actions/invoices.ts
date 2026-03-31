@@ -1,31 +1,41 @@
 'use server'
 
-import { db } from '@/db'
-import { invoices, customerAccounts, journalEntries, journalEntryLines, chartOfAccounts } from '@/db/schema'
-import { requireAdminOrStaff, requireAdmin, requireAuth } from '@/lib/auth/session'
-import { eq, sql } from 'drizzle-orm'
+import { randomBytes } from 'crypto'
+import Stripe from 'stripe'
+import { eq, inArray } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
-import Stripe from 'stripe'
+import { db } from '@/db'
+import { invoices, invoiceItems, customerAccounts, journalEntries, journalEntryLines, chartOfAccounts, orders, products } from '@/db/schema'
+import { requireAdminOrStaff, requireAuth } from '@/lib/auth/session'
 import { logActivityEvent } from '@/lib/activity/log'
+import { resolveInvoiceIdFromPublicToken } from '@/lib/invoices/public-token'
 import { notify } from '@/lib/notifications/dispatch'
+import { getPricingRulesForProducts, normalizeAccountGeography } from '@/lib/pricing/geographic-service'
+import { resolveProductUnitPrice } from '@/lib/pricing/product-price'
 import { getCustomerPaymentBreakdown, type CustomerPaymentMethod } from '@/lib/stripe/fees'
 
 if (!process.env.STRIPE_SECRET_KEY) throw new Error('Missing STRIPE_SECRET_KEY')
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2026-02-25.clover' })
 
-function generateInvoiceNumber(seq: number) {
-  return `INV-${new Date().getFullYear()}-${String(seq).padStart(5, '0')}`
+function generateInvoiceNumber() {
+  const now = new Date()
+  const datePart = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
+  const randomPart = randomBytes(2).toString('hex').toUpperCase()
+  return `INV-${datePart}-${randomPart}`
+}
+
+function isInvoicePayable(status: string) {
+  return status === 'sent' || status === 'overdue'
 }
 
 async function getFinanceAccounts() {
   const accounts = await db.select().from(chartOfAccounts)
   return {
-    accounts,
-    cashAccount: accounts.find(a => a.accountNumber === '1000') ?? accounts.find(a => a.type === 'asset'),
-    arAccount: accounts.find(a => a.accountNumber === '1100') ?? accounts.find(a => a.type === 'asset'),
-    revenueAccount: accounts.find(a => a.type === 'revenue'),
-    expenseAccount: accounts.find(a => a.type === 'expense'),
+    cashAccount: accounts.find(account => account.accountNumber === '1000') ?? accounts.find(account => account.type === 'asset'),
+    arAccount: accounts.find(account => account.accountNumber === '1100') ?? accounts.find(account => account.type === 'asset'),
+    revenueAccount: accounts.find(account => account.type === 'revenue'),
+    expenseAccount: accounts.find(account => account.type === 'expense'),
   }
 }
 
@@ -61,30 +71,289 @@ async function createJournalEntryForLines(input: {
   return entry
 }
 
+async function getInvoiceSettlementContext(invoiceId: string) {
+  const [invoice] = await db
+    .select({
+      id: invoices.id,
+      invoiceNumber: invoices.invoiceNumber,
+      orderId: invoices.orderId,
+      total: invoices.total,
+      status: invoices.status,
+      companyName: customerAccounts.companyName,
+      email: customerAccounts.email,
+      businessEmail: customerAccounts.businessEmail,
+      pocEmail: customerAccounts.pocEmail,
+      accountUserId: customerAccounts.userId,
+    })
+    .from(invoices)
+    .leftJoin(customerAccounts, eq(invoices.customerId, customerAccounts.id))
+    .where(eq(invoices.id, invoiceId))
+    .limit(1)
+
+  return invoice ?? null
+}
+
+async function applyInvoicePaid(
+  invoiceId: string,
+  input: {
+    actorUserId: string
+    paymentReference: string
+    journalReference: string
+    skipJournalEntry?: boolean
+  },
+) {
+  const invoice = await getInvoiceSettlementContext(invoiceId)
+  if (!invoice || invoice.status === 'paid') return invoice
+
+  await db.update(invoices).set({
+    status: 'paid',
+    paidAt: new Date(),
+  }).where(eq(invoices.id, invoiceId))
+
+  await logActivityEvent({
+    entityType: 'invoice',
+    entityId: invoice.id,
+    actorUserId: input.actorUserId,
+    kind: 'invoice_paid',
+    title: 'Invoice paid',
+    body: `${invoice.invoiceNumber} was settled for $${Number(invoice.total).toFixed(2)}.`,
+    metadata: { paymentReference: input.paymentReference },
+  })
+
+  if (invoice.orderId) {
+    await logActivityEvent({
+      entityType: 'order',
+      entityId: invoice.orderId,
+      actorUserId: input.actorUserId,
+      kind: 'invoice_paid',
+      title: 'Invoice marked paid',
+      body: `${invoice.invoiceNumber} was marked paid for $${Number(invoice.total).toFixed(2)}.`,
+      metadata: { invoiceId: invoice.id, paymentReference: input.paymentReference },
+    })
+  }
+
+  if (!input.skipJournalEntry) {
+    const { cashAccount, arAccount } = await getFinanceAccounts()
+    if (cashAccount && arAccount) {
+      await createJournalEntryForLines({
+        description: `Payment received for ${invoice.invoiceNumber}`,
+        reference: input.journalReference,
+        createdBy: input.actorUserId,
+        lines: [
+          { accountId: cashAccount.id, debit: invoice.total, credit: '0', description: 'Cash received' },
+          { accountId: arAccount.id, debit: '0', credit: invoice.total, description: 'AR cleared' },
+        ],
+      })
+    }
+  }
+
+  const notifyEmails = Array.from(new Set(
+    [invoice.pocEmail, invoice.businessEmail, invoice.email]
+      .map(value => value?.trim())
+      .filter(Boolean) as string[],
+  ))
+
+  await notify('invoice.paid', {
+    companyName: invoice.companyName ?? '',
+    invoiceNumber: invoice.invoiceNumber,
+    total: invoice.total,
+    notifyEmails,
+  })
+
+  revalidatePath('/admin/invoicing')
+  revalidatePath('/admin/invoicing/aging')
+  revalidatePath(`/admin/invoicing/${invoice.id}`)
+  revalidatePath('/admin/accounts/journal')
+  revalidatePath('/customer/invoices')
+  revalidatePath(`/customer/invoices/${invoice.id}`)
+
+  return invoice
+}
+
+export async function applyWebhookInvoicePaid(invoiceId: string, paymentIntentId: string, actorUserId: string) {
+  return applyInvoicePaid(invoiceId, {
+    actorUserId,
+    paymentReference: paymentIntentId,
+    journalReference: paymentIntentId,
+  })
+}
+
 export async function createInvoice(formData: FormData) {
-  const session = await requireAdminOrStaff()
+  await requireAdminOrStaff()
 
-  const customerId = formData.get('customerId') as string
-  const orderId = formData.get('orderId') as string | null
-  const amount = parseFloat(formData.get('amount') as string)
-  const tax = parseFloat((formData.get('tax') as string) || '0')
+  const customerId = (formData.get('customerId') as string) || ''
+  const orderId = (formData.get('orderId') as string) || ''
+  let amount = Number(formData.get('amount') as string)
+  let tax = Number((formData.get('tax') as string) || '0')
+  const dueDate = (formData.get('dueDate') as string) || null
+  const lineItemProductIds = formData.getAll('lineItemProductId')
+  const lineItemDescriptions = formData.getAll('lineItemDescription')
+  const lineItemSkus = formData.getAll('lineItemSku')
+  const lineItemQuantities = formData.getAll('lineItemQuantity')
+  const lineItemUnits = formData.getAll('lineItemUnit')
+  const lineItemUnitPrices = formData.getAll('lineItemUnitPrice')
+  const manualLineItems = lineItemProductIds
+    .map((value, index) => ({
+      productId: String(value || '').trim(),
+      description: String(lineItemDescriptions[index] || '').trim(),
+      sku: String(lineItemSkus[index] || '').trim(),
+      quantity: Number(lineItemQuantities[index] || ''),
+      unit: String(lineItemUnits[index] || 'case').trim(),
+      unitPrice: Number(lineItemUnitPrices[index] || ''),
+    }))
+    .filter((item) => item.productId || item.description || item.quantity || item.unitPrice)
+
+  if (!customerId) {
+    redirect('/admin/invoicing/new?error=' + encodeURIComponent('Enter a valid customer, amount, and tax.'))
+  }
+
+  if (orderId) {
+    const [order] = await db
+      .select({
+        id: orders.id,
+        customerId: orders.customerId,
+        status: orders.status,
+        subtotal: orders.subtotal,
+        tax: orders.tax,
+        total: orders.total,
+      })
+      .from(orders)
+      .where(eq(orders.id, orderId))
+      .limit(1)
+
+    if (!order) {
+      redirect('/admin/invoicing/new?error=' + encodeURIComponent('Linked order not found.'))
+    }
+
+    if (order.customerId !== customerId) {
+      redirect('/admin/invoicing/new?error=' + encodeURIComponent('The selected order belongs to a different customer account.'))
+    }
+
+    if (order.status !== 'fulfilled') {
+      redirect('/admin/invoicing/new?error=' + encodeURIComponent('Only fulfilled orders can be invoiced.'))
+    }
+
+    const [existingInvoice] = await db
+      .select({ id: invoices.id, invoiceNumber: invoices.invoiceNumber })
+      .from(invoices)
+      .where(eq(invoices.orderId, orderId))
+      .limit(1)
+
+    if (existingInvoice) {
+      redirect(`/admin/invoicing/new?error=${encodeURIComponent(`Order already has invoice ${existingInvoice.invoiceNumber}.`)}`)
+    }
+
+    amount = Number(order.subtotal)
+    tax = Number(order.tax)
+  } else {
+    if (!Number.isFinite(tax) || tax < 0) {
+      redirect('/admin/invoicing/new?error=' + encodeURIComponent('Enter valid direct invoice products and tax.'))
+    }
+
+    if (manualLineItems.length === 0) {
+      redirect('/admin/invoicing/new?error=' + encodeURIComponent('Add at least one product for a direct invoice.'))
+    }
+
+    const invalidLineItem = manualLineItems.find((item) => (
+      !item.productId ||
+      !item.description ||
+      !Number.isFinite(item.quantity) ||
+      item.quantity <= 0 ||
+      !Number.isFinite(item.unitPrice) ||
+      item.unitPrice < 0 ||
+      !['case', 'bottle'].includes(item.unit)
+    ))
+
+    if (invalidLineItem) {
+      redirect('/admin/invoicing/new?error=' + encodeURIComponent('Each direct invoice product needs a product, description, quantity, unit, and unit price.'))
+    }
+
+    const [account] = await db
+      .select({
+        state: customerAccounts.state,
+        county: customerAccounts.county,
+      })
+      .from(customerAccounts)
+      .where(eq(customerAccounts.id, customerId))
+      .limit(1)
+
+    if (!account) {
+      redirect('/admin/invoicing/new?error=' + encodeURIComponent('Customer account not found.'))
+    }
+
+    const productIds = manualLineItems.map((item) => item.productId)
+    const [productRows, pricingRules] = await Promise.all([
+      db
+        .select({
+          id: products.id,
+          name: products.name,
+          sku: products.sku,
+          price: products.price,
+          bottlePrice: products.bottlePrice,
+          bottlesPerCase: products.bottlesPerCase,
+        })
+        .from(products)
+        .where(inArray(products.id, productIds)),
+      getPricingRulesForProducts(productIds),
+    ])
+
+    const productMap = new Map(productRows.map((product) => [product.id, product]))
+    const pricingAccount = normalizeAccountGeography(account)
+
+    for (const item of manualLineItems) {
+      const product = productMap.get(item.productId)
+      if (!product) {
+        redirect('/admin/invoicing/new?error=' + encodeURIComponent('One or more selected products no longer exist.'))
+      }
+
+      const resolved = resolveProductUnitPrice({
+        product,
+        account: pricingAccount,
+        rules: pricingRules,
+        purchaseUnit: item.unit as 'case' | 'bottle',
+        quantity: item.quantity,
+        asOf: new Date(),
+      })
+
+      item.description = item.description || product.name
+      item.sku = product.sku ?? ''
+      item.unitPrice = resolved.unitPrice
+    }
+
+    amount = Number(
+      manualLineItems
+        .reduce((sum, item) => sum + item.quantity * item.unitPrice, 0)
+        .toFixed(2),
+    )
+  }
+
   const total = amount + tax
-  const dueDate = formData.get('dueDate') as string | null
-
-  // Generate sequential invoice number
-  const [{ count }] = await db.select({ count: sql<number>`COUNT(*)` }).from(invoices)
-  const invoiceNumber = generateInvoiceNumber(Number(count) + 1)
 
   const [invoice] = await db.insert(invoices).values({
     customerId,
     orderId: orderId || null,
-    invoiceNumber,
+    invoiceNumber: generateInvoiceNumber(),
     amount: amount.toFixed(2),
     tax: tax.toFixed(2),
     total: total.toFixed(2),
     status: 'draft',
-    dueDate: dueDate || null,
+    dueDate,
   }).returning()
+
+  if (!orderId && manualLineItems.length > 0) {
+    await db.insert(invoiceItems).values(
+      manualLineItems.map((item) => ({
+        invoiceId: invoice.id,
+        productId: item.productId,
+        description: item.description,
+        sku: item.sku || null,
+        quantity: item.quantity.toFixed(2),
+        unit: item.unit,
+        unitPrice: item.unitPrice.toFixed(2),
+        total: (item.quantity * item.unitPrice).toFixed(2),
+      })),
+    )
+  }
 
   revalidatePath('/admin/invoicing')
   redirect(`/admin/invoicing/${invoice.id}`)
@@ -104,11 +373,14 @@ export async function sendInvoiceEmail(invoiceId: string) {
     .from(invoices)
     .leftJoin(customerAccounts, eq(invoices.customerId, customerAccounts.id))
     .where(eq(invoices.id, invoiceId))
+    .limit(1)
 
-  if (!invoice) return
+  if (!invoice || !invoice.customerEmail) {
+    redirect(`/admin/invoicing/${invoiceId}?error=${encodeURIComponent('Customer email is required before sending an invoice.')}`)
+  }
 
   await notify('invoice.created', {
-    customerEmail: invoice.customerEmail ?? '',
+    customerEmail: invoice.customerEmail,
     invoiceNumber: invoice.invoiceNumber,
     companyName: invoice.companyName ?? '',
     total: invoice.total,
@@ -116,77 +388,22 @@ export async function sendInvoiceEmail(invoiceId: string) {
   })
 
   await db.update(invoices).set({ status: 'sent' }).where(eq(invoices.id, invoiceId))
+  revalidatePath('/admin/invoicing')
   revalidatePath(`/admin/invoicing/${invoiceId}`)
 }
 
 export async function markInvoicePaid(invoiceId: string) {
   const session = await requireAdminOrStaff()
-
-  const [invoice] = await db
-    .select({
-      id: invoices.id,
-      invoiceNumber: invoices.invoiceNumber,
-      orderId: invoices.orderId,
-      total: invoices.total,
-      customerId: invoices.customerId,
-      companyName: customerAccounts.companyName,
-      email: customerAccounts.email,
-      businessEmail: customerAccounts.businessEmail,
-      pocEmail: customerAccounts.pocEmail,
-    })
-    .from(invoices)
-    .leftJoin(customerAccounts, eq(invoices.customerId, customerAccounts.id))
-    .where(eq(invoices.id, invoiceId))
-  if (!invoice) return
-
-  await db.update(invoices).set({ status: 'paid', paidAt: new Date() }).where(eq(invoices.id, invoiceId))
-
-  if (invoice.orderId) {
-    await logActivityEvent({
-      entityType: 'order',
-      entityId: invoice.orderId,
-      actorUserId: session.user.id,
-      kind: 'invoice_paid',
-      title: 'Invoice marked paid',
-      body: `${invoice.invoiceNumber} was marked paid for $${Number(invoice.total).toFixed(2)}.`,
-    })
-  }
-
-  // Auto-create journal entry: DR Cash / CR Accounts Receivable
-  const { cashAccount, arAccount } = await getFinanceAccounts()
-
-  if (cashAccount && arAccount) {
-    await createJournalEntryForLines({
-      description: `Payment received for ${invoice.invoiceNumber}`,
-      reference: invoice.invoiceNumber,
-      createdBy: session.user.id,
-      lines: [
-        { accountId: cashAccount.id, debit: invoice.total, credit: '0', description: 'Cash received' },
-        { accountId: arAccount.id, debit: '0', credit: invoice.total, description: 'AR cleared' },
-      ],
-    })
-  }
-
-  const invoiceEmails = Array.from(new Set(
-    [invoice.pocEmail, invoice.businessEmail, invoice.email]
-      .map((value) => value?.trim())
-      .filter(Boolean) as string[],
-  ))
-
-  await notify('invoice.paid', {
-    companyName: invoice.companyName ?? '',
-    invoiceNumber: invoice.invoiceNumber,
-    total: invoice.total,
-    notifyEmails: invoiceEmails,
+  await applyInvoicePaid(invoiceId, {
+    actorUserId: session.user.id,
+    paymentReference: 'manual_mark_paid',
+    journalReference: invoiceId,
   })
-
-  revalidatePath(`/admin/invoicing/${invoiceId}`)
-  revalidatePath('/admin/accounts/journal')
 }
 
 export async function recordOfflineInvoicePayment(formData: FormData) {
   const session = await requireAdminOrStaff()
-  const invoiceId = formData.get('invoiceId') as string
+  const invoiceId = (formData.get('invoiceId') as string) || ''
   const amount = Number(formData.get('amount') as string)
   const note = (formData.get('note') as string) || 'Offline payment recorded.'
 
@@ -194,21 +411,17 @@ export async function recordOfflineInvoicePayment(formData: FormData) {
     redirect('/admin/invoicing?error=' + encodeURIComponent('Enter a valid offline payment amount.'))
   }
 
-  const [invoice] = await db
-    .select({
-      id: invoices.id,
-      invoiceNumber: invoices.invoiceNumber,
-      total: invoices.total,
-      status: invoices.status,
-      customerId: invoices.customerId,
-      orderId: invoices.orderId,
-    })
-    .from(invoices)
-    .where(eq(invoices.id, invoiceId))
-    .limit(1)
-
+  const invoice = await getInvoiceSettlementContext(invoiceId)
   if (!invoice) {
     redirect('/admin/invoicing?error=' + encodeURIComponent('Invoice not found.'))
+  }
+
+  if (invoice.status === 'paid') {
+    redirect(`/admin/invoicing/${invoice.id}?success=${encodeURIComponent('That invoice is already marked paid.')}`)
+  }
+
+  if (amount !== Number(invoice.total)) {
+    redirect(`/admin/invoicing/${invoice.id}?error=${encodeURIComponent('Partial offline payments are not supported in the current invoice model. Record the exact invoice total or use a journal-only entry outside the invoice flow.')}`)
   }
 
   const { cashAccount, arAccount } = await getFinanceAccounts()
@@ -234,19 +447,19 @@ export async function recordOfflineInvoicePayment(formData: FormData) {
     metadata: { amount, note },
   })
 
-  if (amount >= Number(invoice.total) && invoice.status !== 'paid') {
-    await db.update(invoices).set({ status: 'paid', paidAt: new Date() }).where(eq(invoices.id, invoice.id))
-  }
+  await applyInvoicePaid(invoice.id, {
+    actorUserId: session.user.id,
+    paymentReference: note,
+    journalReference: invoice.invoiceNumber,
+    skipJournalEntry: true,
+  })
 
-  revalidatePath(`/admin/invoicing/${invoice.id}`)
-  revalidatePath('/admin/invoicing')
-  revalidatePath('/admin/accounts/journal')
   redirect(`/admin/invoicing/${invoice.id}?success=${encodeURIComponent('Offline payment recorded.')}`)
 }
 
 export async function createInvoiceAdjustment(formData: FormData) {
   const session = await requireAdminOrStaff()
-  const invoiceId = formData.get('invoiceId') as string
+  const invoiceId = (formData.get('invoiceId') as string) || ''
   const adjustmentType = (formData.get('adjustmentType') as string) || 'credit_memo'
   const note = (formData.get('note') as string) || null
   const amountRaw = formData.get('amount') as string
@@ -273,7 +486,6 @@ export async function createInvoiceAdjustment(formData: FormData) {
   }
 
   const { arAccount, revenueAccount, expenseAccount } = await getFinanceAccounts()
-
   if (arAccount && (revenueAccount || expenseAccount)) {
     const contraAccountId = adjustmentType === 'write_off'
       ? (expenseAccount?.id ?? revenueAccount?.id)
@@ -314,21 +526,35 @@ export async function createInvoiceAdjustment(formData: FormData) {
   redirect(`/admin/invoicing/${invoice.id}?success=${encodeURIComponent('Invoice adjustment recorded.')}`)
 }
 
-export async function createPublicPaymentIntent(invoiceId: string, paymentMethod: CustomerPaymentMethod) {
-  // No auth required — invoice ID acts as an unguessable token for public pay links
-  return _createPaymentIntent(invoiceId, paymentMethod)
+export async function createPublicPaymentIntent(token: string, paymentMethod: CustomerPaymentMethod) {
+  const invoiceId = resolveInvoiceIdFromPublicToken(token)
+  if (!invoiceId) throw new Error('Invalid payment link')
+  return _createPaymentIntent(invoiceId, paymentMethod, null)
 }
 
 export async function createPaymentIntent(invoiceId: string, paymentMethod: CustomerPaymentMethod) {
-  await requireAuth()
-  return _createPaymentIntent(invoiceId, paymentMethod)
+  const session = await requireAuth()
+  return _createPaymentIntent(invoiceId, paymentMethod, session)
 }
 
-async function _createPaymentIntent(invoiceId: string, paymentMethod: CustomerPaymentMethod) {
-
-  const [invoice] = await db.select().from(invoices).where(eq(invoices.id, invoiceId))
+async function _createPaymentIntent(
+  invoiceId: string,
+  paymentMethod: CustomerPaymentMethod,
+  session: Awaited<ReturnType<typeof requireAuth>> | null,
+) {
+  const invoice = await getInvoiceSettlementContext(invoiceId)
   if (!invoice) throw new Error('Invoice not found')
-  const baseAmountCents = Math.round(parseFloat(invoice.total) * 100)
+  if (!isInvoicePayable(invoice.status)) throw new Error('Invoice is not payable')
+
+  if (session) {
+    const roles = session.user.roles ?? [session.user.role]
+    const isAdminOrStaff = roles.some(role => role === 'admin' || role === 'staff')
+    if (!isAdminOrStaff && invoice.accountUserId !== session.user.id) {
+      throw new Error('Unauthorized')
+    }
+  }
+
+  const baseAmountCents = Math.round(Number(invoice.total) * 100)
   const breakdown = getCustomerPaymentBreakdown(baseAmountCents, paymentMethod)
 
   const paymentIntent = await stripe.paymentIntents.create({

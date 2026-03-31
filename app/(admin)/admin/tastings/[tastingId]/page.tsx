@@ -195,7 +195,6 @@ export default async function AdminTastingDetailPage({
                 {[
                   { label: 'Hours Worked', value: invoice.hoursWorked },
                   { label: 'Hourly Rate', value: invoice.hourlyRate ? `$${invoice.hourlyRate}` : null },
-                  { label: 'Mileage', value: invoice.mileage ? `$${invoice.mileage}` : null },
                   { label: 'Expenses', value: invoice.expenseAmount ? `$${invoice.expenseAmount}` : null },
                   { label: 'Total', value: invoice.totalAmount ? `$${invoice.totalAmount}` : null },
                 ].map(({ label, value }) => value != null && (

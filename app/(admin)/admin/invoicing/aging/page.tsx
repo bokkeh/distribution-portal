@@ -1,7 +1,7 @@
 import { db } from '@/db'
 import { invoices, customerAccounts } from '@/db/schema'
 import { requireFeature } from '@/lib/auth/session'
-import { and, eq, isNotNull, ne } from 'drizzle-orm'
+import { and, eq, ne } from 'drizzle-orm'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { CopyPaymentLinkButton } from '@/components/invoices/CopyPaymentLinkButton'
+import { getInvoicePublicPaymentPath } from '@/lib/invoices/public-token'
 
 type AgingBucket = 'current' | '1-30' | '31-60' | '61-90' | '90+'
 
@@ -164,7 +165,7 @@ export default async function InvoiceAgingPage() {
                         </Badge>
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <CopyPaymentLinkButton invoiceId={inv.id} />
+                        <CopyPaymentLinkButton paymentPath={getInvoicePublicPaymentPath(inv.id)} />
                       </td>
                     </tr>
                   ))}

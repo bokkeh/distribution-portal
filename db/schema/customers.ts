@@ -29,6 +29,7 @@ export const customerAccounts = pgTable('customer_accounts', {
   businessEmail: text('business_email'),
   businessPhone: text('business_phone'),
   notificationPreference: text('notification_preference').default('email'),
+  notificationPhone: text('notification_phone'),
   pocName: text('poc_name'),
   pocPhone: text('poc_phone'),
   pocEmail: text('poc_email'),

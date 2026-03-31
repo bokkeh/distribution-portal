@@ -291,6 +291,7 @@ async function syncScheduledOrderStatuses(input: Array<{
   companyName: string | null
   userId: string | null
   phone: string | null
+  notificationPhone: string | null
   email: string | null
   businessEmail: string | null
   pocPhone: string | null
@@ -312,7 +313,7 @@ async function syncScheduledOrderStatuses(input: Array<{
         orderId: order.id,
         status: 'scheduled',
         customerEmails: uniqueEmails(order.pocEmail, order.businessEmail, order.email),
-        customerPhone: order.notificationPreference === 'email' ? null : (order.pocPhone || order.phone || null),
+        customerPhone: order.notificationPreference === 'email' ? null : (order.notificationPhone || order.pocPhone || order.phone || null),
         userId: order.userId,
       }),
     ),
@@ -360,6 +361,7 @@ export async function createDelivery(formData: FormData) {
         state: customerAccounts.state,
         zip: customerAccounts.zip,
         phone: customerAccounts.phone,
+        notificationPhone: customerAccounts.notificationPhone,
         email: customerAccounts.email,
         businessEmail: customerAccounts.businessEmail,
         notificationPreference: customerAccounts.notificationPreference,
@@ -406,6 +408,7 @@ export async function createDelivery(formData: FormData) {
         companyName: order.companyName,
         userId: order.userId,
         phone: order.phone,
+        notificationPhone: order.notificationPhone,
         email: order.email,
         businessEmail: order.businessEmail,
         pocPhone: order.pocPhone,
@@ -1247,6 +1250,7 @@ export async function addDeliveryStop(deliveryId: string, formData: FormData) {
         state: customerAccounts.state,
         zip: customerAccounts.zip,
         phone: customerAccounts.phone,
+        notificationPhone: customerAccounts.notificationPhone,
         email: customerAccounts.email,
         businessEmail: customerAccounts.businessEmail,
         notificationPreference: customerAccounts.notificationPreference,
@@ -1317,6 +1321,7 @@ export async function addDeliveryStop(deliveryId: string, formData: FormData) {
         companyName: account.companyName,
         userId: account.userId,
         phone: account.phone,
+        notificationPhone: account.notificationPhone,
         email: account.email,
         businessEmail: account.businessEmail,
         pocPhone: account.pocPhone,

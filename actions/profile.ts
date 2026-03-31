@@ -91,6 +91,7 @@ export async function updateProfile(
       const phone = (formData.get('phone') as string) || null
       const businessEmail = (formData.get('businessEmail') as string) || null
       const businessPhone = (formData.get('businessPhone') as string) || null
+      const notificationPhone = (formData.get('notificationPhone') as string) || null
       const pocName = (formData.get('pocName') as string) || null
       const pocPhone = (formData.get('pocPhone') as string) || null
       const pocEmail = (formData.get('pocEmail') as string) || null
@@ -113,6 +114,7 @@ export async function updateProfile(
         businessEmail,
         businessPhone,
         notificationPreference: (formData.get('notificationPreference') as string) || 'email',
+        notificationPhone,
         pocName,
         pocPhone,
         pocEmail,

@@ -4,11 +4,11 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Link2, Check } from 'lucide-react'
 
-export function CopyPaymentLinkButton({ invoiceId }: { invoiceId: string }) {
+export function CopyPaymentLinkButton({ paymentPath }: { paymentPath: string }) {
   const [copied, setCopied] = useState(false)
 
   function handleCopy() {
-    const url = `${window.location.origin}/pay/${invoiceId}`
+    const url = paymentPath.startsWith('http') ? paymentPath : `${window.location.origin}${paymentPath}`
     navigator.clipboard.writeText(url).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)

@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { db } from '@/db'
-import { customerAccounts, invoices, orderItems, orders, products } from '@/db/schema'
+import { customerAccounts, invoiceItems, invoices, orderItems, orders, products } from '@/db/schema'
 
 export type InvoiceLineItem = {
   id: string
@@ -62,9 +62,31 @@ export async function getInvoiceDetailData(invoiceId: string): Promise<InvoiceDe
 
   if (!invoice) return null
 
-  let lineItems: InvoiceLineItem[] = []
+  let lineItems: InvoiceLineItem[] = await db
+    .select({
+      id: invoiceItems.id,
+      description: invoiceItems.description,
+      sku: invoiceItems.sku,
+      quantity: invoiceItems.quantity,
+      unit: invoiceItems.unit,
+      unitPrice: invoiceItems.unitPrice,
+      total: invoiceItems.total,
+    })
+    .from(invoiceItems)
+    .where(eq(invoiceItems.invoiceId, invoice.id))
+    .then((rows) =>
+      rows.map((row) => ({
+        id: row.id,
+        description: row.description,
+        sku: row.sku ?? null,
+        quantity: Number(row.quantity),
+        unitLabel: row.unit,
+        unitPrice: Number(row.unitPrice),
+        total: Number(row.total),
+      })),
+    )
 
-  if (invoice.orderId) {
+  if (lineItems.length === 0 && invoice.orderId) {
     lineItems = await db
       .select({
         id: orderItems.id,

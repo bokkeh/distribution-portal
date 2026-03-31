@@ -1,6 +1,6 @@
 import { db } from '@/db'
-import { inventory, inventoryTransactions, inventorySampleHolders, products, users } from '@/db/schema'
-import { asc, desc, eq, inArray } from 'drizzle-orm'
+import { geographicPricingRules, inventory, inventoryTransactions, inventorySampleHolders, products, users } from '@/db/schema'
+import { asc, desc, eq, inArray, sql } from 'drizzle-orm'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -37,6 +37,17 @@ export default async function InventoryPage() {
     .innerJoin(users, eq(inventorySampleHolders.userId, users.id))
     .orderBy(asc(products.name), asc(users.name))
 
+  const maxRulePrices = await db
+    .select({
+      productId: geographicPricingRules.productId,
+      maxCasePrice: sql<string>`max(${geographicPricingRules.casePrice})`,
+    })
+    .from(geographicPricingRules)
+    .where(eq(geographicPricingRules.isActive, true))
+    .groupBy(geographicPricingRules.productId)
+
+  const maxRulePriceMap = new Map(maxRulePrices.map((row) => [row.productId, Number(row.maxCasePrice)]))
+
   const items = await db
     .select({
       id: products.id,
@@ -51,6 +62,8 @@ export default async function InventoryPage() {
       brand: products.brand,
       price: products.price,
       samplePrice: products.samplePrice,
+      bottlePrice: products.bottlePrice,
+      bottlesPerCase: products.bottlesPerCase,
       active: products.active,
     })
     .from(products)
@@ -111,12 +124,34 @@ export default async function InventoryPage() {
     (item.quantityPaid ?? 0) <= (item.reorderLevel ?? 0)
   )
 
+  const totalPotentialRevenue = items.reduce((sum, item) => {
+    if (!item.active) return sum
+
+    const maxCasePrice = Math.max(
+      Number(item.price ?? 0),
+      maxRulePriceMap.get(item.id) ?? 0,
+    )
+    const bottlesPerCase = item.bottlesPerCase ?? 12
+    const derivedBottlePrice = bottlesPerCase > 0 ? maxCasePrice / bottlesPerCase : 0
+    const explicitBottlePrice = Number(item.bottlePrice ?? 0)
+    const maxBottlePrice = explicitBottlePrice > 0 ? Math.max(explicitBottlePrice, derivedBottlePrice) : derivedBottlePrice
+
+    return sum
+      + (Number(item.quantityPaid ?? 0) * maxCasePrice)
+      + (Number(item.looseBottlePaid ?? 0) * maxBottlePrice)
+  }, 0)
+
   return (
     <div className="p-4 sm:p-8 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Inventory</h1>
-          <p className="text-muted-foreground mt-1">{items.length} products available</p>
+          <div className="mt-1 space-y-1">
+            <p className="text-muted-foreground">{items.length} products available</p>
+            <p className="text-sm font-medium text-slate-700">
+              Total inventory potential revenue at max price point: <span className="font-semibold text-slate-900">{formatCurrency(totalPotentialRevenue)}</span>
+            </p>
+          </div>
         </div>
         <Link href="/admin/inventory/new">
           <Button><Plus className="w-4 h-4 mr-2" />Add Product</Button>
