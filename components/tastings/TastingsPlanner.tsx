@@ -222,6 +222,14 @@ export function TastingsPlanner({ mode, tastings, accounts, tasters, success, er
                   <Input id="endTime" name="endTime" type="time" defaultValue="19:00" />
                 </div>
 
+                <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                  <input type="checkbox" name="trainingDay" className="mt-0.5 accent-blue-600" />
+                  <span>
+                    <span className="block font-medium text-slate-900">Training day</span>
+                    <span className="block text-xs text-slate-500">Allows a second taster at the same store on the same date for onboarding or shadowing.</span>
+                  </span>
+                </label>
+
                 <div className="space-y-2">
                   <Label htmlFor="notes">Notes</Label>
                   <textarea

@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
+import { boolean, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
 import { customerAccounts } from './customers'
 import { users } from './users'
 
@@ -17,6 +17,7 @@ export const tastings = pgTable('tastings', {
   storeState: text('store_state'),
   storeZip: text('store_zip'),
   storePhone: text('store_phone'),
+  trainingDay: boolean('training_day').notNull().default(false),
   notes: text('notes'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })

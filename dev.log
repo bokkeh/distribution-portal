@@ -7708,3 +7708,1118 @@ Caused by:
 Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
 Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
 Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+⨯ Error: ENOENT: no such file or directory, open 'C:\Users\alext\OneDrive\Desktop\distribution-portal\.next\dev\server\middleware-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\alext\\OneDrive\\Desktop\\distribution-portal\\.next\\dev\\server\\middleware-manifest.json'
+}
+
+-----
+[1m[31mFATAL[39m[0m: An unexpected Turbopack error occurred. A panic log has been written to C:\Users\alext\AppData\Local\Temp\next-panic-52b09ac08e075106f8f25e62a9ed95d0.log.
+
+To help make Turbopack better, report this error by clicking here: https://github.com/vercel/next.js/discussions/new?category=turbopack-error-report&title=Turbopack%20Error%3A%20Failed%20to%20write%20page%20endpoint%20%2F_app&body=Turbopack%20version%3A%20%6023c46498%60%0ANext.js%20version%3A%20%600.0.0%60%0A%0AError%20message%3A%0A%60%60%60%0ATurbopack%20Error%3A%20Failed%20to%20write%20page%20endpoint%20%2F_app%0A%60%60%60&labels=Turbopack,Turbopack%20Panic%20Backtrace
+-----
+
+Error [TurbopackInternalError]: Failed to write page endpoint /_app
+
+Caused by:
+- content is not available as task execution failed
+- content is not available as task execution failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+
+Debug info:
+- Execution of get_written_endpoint_with_issues_operation failed
+- Execution of endpoint_write_to_disk failed
+- Execution of <PageEndpoint as Endpoint>::output failed
+- Failed to write page endpoint /_app
+- Execution of PageEndpoint::output failed
+- Execution of *ChunkGroupResult::all_assets failed
+- Execution of PageEndpoint::client_chunk_group failed
+- Execution of PageEndpoint::client_evaluatable_assets failed
+- content is not available as task execution failed
+- Execution of PageEndpoint::client_module failed
+- content is not available as task execution failed
+- Execution of *create_page_loader_entry_module failed
+- Execution of PagesProject::client_module_context failed
+- Execution of *ModuleAssetContext::new failed
+- Execution of get_client_module_options_context failed
+- Execution of get_jsx_transform_options failed
+- Execution of assert_can_resolve_react_refresh failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+  
+  Caused by:
+      0: Looking up data for TaskId 441051 from database failed
+      1: Unable to open static sorted file referenced from 00001043.meta
+      2: Unable to open static sorted file 00001038.sst
+      3: The system cannot find the path specified. (os error 3)
+    at <unknown> (TurbopackInternalError: Failed to write page endpoint /_app) {
+  location: 'C:\\actions-runner\\_work\\next.js\\next.js\\turbopack\\crates\\turbo-tasks-backend\\src\\backend\\operation\\mod.rs:156:17'
+}
+Error [TurbopackInternalError]: Failed to write page endpoint /_app
+
+Caused by:
+- content is not available as task execution failed
+- content is not available as task execution failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+
+Debug info:
+- Execution of get_written_endpoint_with_issues_operation failed
+- Execution of endpoint_write_to_disk failed
+- Execution of <PageEndpoint as Endpoint>::output failed
+- Failed to write page endpoint /_app
+- Execution of PageEndpoint::output failed
+- Execution of *ChunkGroupResult::all_assets failed
+- Execution of PageEndpoint::client_chunk_group failed
+- Execution of PageEndpoint::client_evaluatable_assets failed
+- content is not available as task execution failed
+- Execution of PageEndpoint::client_module failed
+- content is not available as task execution failed
+- Execution of *create_page_loader_entry_module failed
+- Execution of PagesProject::client_module_context failed
+- Execution of *ModuleAssetContext::new failed
+- Execution of get_client_module_options_context failed
+- Execution of get_jsx_transform_options failed
+- Execution of assert_can_resolve_react_refresh failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+  
+  Caused by:
+      0: Looking up data for TaskId 441051 from database failed
+      1: Unable to open static sorted file referenced from 00001043.meta
+      2: Unable to open static sorted file 00001038.sst
+      3: The system cannot find the path specified. (os error 3)
+    at <unknown> (TurbopackInternalError: Failed to write page endpoint /_app) {
+  location: 'C:\\actions-runner\\_work\\next.js\\next.js\\turbopack\\crates\\turbo-tasks-backend\\src\\backend\\operation\\mod.rs:156:17'
+}
+Error [TurbopackInternalError]: Failed to write page endpoint /_app
+
+Caused by:
+- content is not available as task execution failed
+- content is not available as task execution failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+
+Debug info:
+- Execution of get_written_endpoint_with_issues_operation failed
+- Execution of endpoint_write_to_disk failed
+- Execution of <PageEndpoint as Endpoint>::output failed
+- Failed to write page endpoint /_app
+- Execution of PageEndpoint::output failed
+- Execution of *ChunkGroupResult::all_assets failed
+- Execution of PageEndpoint::client_chunk_group failed
+- Execution of PageEndpoint::client_evaluatable_assets failed
+- content is not available as task execution failed
+- Execution of PageEndpoint::client_module failed
+- content is not available as task execution failed
+- Execution of *create_page_loader_entry_module failed
+- Execution of PagesProject::client_module_context failed
+- Execution of *ModuleAssetContext::new failed
+- Execution of get_client_module_options_context failed
+- Execution of get_jsx_transform_options failed
+- Execution of assert_can_resolve_react_refresh failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+  
+  Caused by:
+      0: Looking up data for TaskId 441051 from database failed
+      1: Unable to open static sorted file referenced from 00001043.meta
+      2: Unable to open static sorted file 00001038.sst
+      3: The system cannot find the path specified. (os error 3)
+    at <unknown> (TurbopackInternalError: Failed to write page endpoint /_app) {
+  location: 'C:\\actions-runner\\_work\\next.js\\next.js\\turbopack\\crates\\turbo-tasks-backend\\src\\backend\\operation\\mod.rs:156:17'
+}
+⨯ Error: ENOENT: no such file or directory, open 'C:\Users\alext\OneDrive\Desktop\distribution-portal\.next\dev\server\app\track\delivery\[token]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\alext\\OneDrive\\Desktop\\distribution-portal\\.next\\dev\\server\\app\\track\\delivery\\[token]\\page\\build-manifest.json'
+}
+
+-----
+[1m[31mFATAL[39m[0m: An unexpected Turbopack error occurred. A panic log has been written to C:\Users\alext\AppData\Local\Temp\next-panic-52b09ac08e075106f8f25e62a9ed95d0.log.
+
+To help make Turbopack better, report this error by clicking here: https://github.com/vercel/next.js/discussions/new?category=turbopack-error-report&title=Turbopack%20Error%3A%20Failed%20to%20write%20page%20endpoint%20%2F_app&body=Turbopack%20version%3A%20%6023c46498%60%0ANext.js%20version%3A%20%600.0.0%60%0A%0AError%20message%3A%0A%60%60%60%0ATurbopack%20Error%3A%20Failed%20to%20write%20page%20endpoint%20%2F_app%0A%60%60%60&labels=Turbopack,Turbopack%20Panic%20Backtrace
+-----
+
+Error: ENOENT: no such file or directory, open 'C:\Users\alext\OneDrive\Desktop\distribution-portal\.next\dev\server\app\track\delivery\[token]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\alext\\OneDrive\\Desktop\\distribution-portal\\.next\\dev\\server\\app\\track\\delivery\\[token]\\page\\build-manifest.json'
+}
+Error [TurbopackInternalError]: Failed to write page endpoint /_app
+
+Caused by:
+- content is not available as task execution failed
+- content is not available as task execution failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+
+Debug info:
+- Execution of get_written_endpoint_with_issues_operation failed
+- Execution of endpoint_write_to_disk failed
+- Execution of <PageEndpoint as Endpoint>::output failed
+- Failed to write page endpoint /_app
+- Execution of PageEndpoint::output failed
+- Execution of *ChunkGroupResult::all_assets failed
+- Execution of PageEndpoint::client_chunk_group failed
+- Execution of PageEndpoint::client_evaluatable_assets failed
+- content is not available as task execution failed
+- Execution of PageEndpoint::client_module failed
+- content is not available as task execution failed
+- Execution of *create_page_loader_entry_module failed
+- Execution of PagesProject::client_module_context failed
+- Execution of *ModuleAssetContext::new failed
+- Execution of get_client_module_options_context failed
+- Execution of get_jsx_transform_options failed
+- Execution of assert_can_resolve_react_refresh failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+  
+  Caused by:
+      0: Looking up data for TaskId 441051 from database failed
+      1: Unable to open static sorted file referenced from 00001043.meta
+      2: Unable to open static sorted file 00001038.sst
+      3: The system cannot find the path specified. (os error 3)
+    at <unknown> (TurbopackInternalError: Failed to write page endpoint /_app) {
+  location: 'C:\\actions-runner\\_work\\next.js\\next.js\\turbopack\\crates\\turbo-tasks-backend\\src\\backend\\operation\\mod.rs:156:17'
+}
+⨯ Error: ENOENT: no such file or directory, open 'C:\Users\alext\OneDrive\Desktop\distribution-portal\.next\dev\server\app\track\delivery\[token]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\alext\\OneDrive\\Desktop\\distribution-portal\\.next\\dev\\server\\app\\track\\delivery\\[token]\\page\\build-manifest.json'
+}
+Error: ENOENT: no such file or directory, open 'C:\Users\alext\OneDrive\Desktop\distribution-portal\.next\dev\server\app\track\delivery\[token]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\alext\\OneDrive\\Desktop\\distribution-portal\\.next\\dev\\server\\app\\track\\delivery\\[token]\\page\\build-manifest.json'
+}
+Error [TurbopackInternalError]: Failed to write page endpoint /_app
+
+Caused by:
+- content is not available as task execution failed
+- content is not available as task execution failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+
+Debug info:
+- Execution of get_written_endpoint_with_issues_operation failed
+- Execution of endpoint_write_to_disk failed
+- Execution of <PageEndpoint as Endpoint>::output failed
+- Failed to write page endpoint /_app
+- Execution of PageEndpoint::output failed
+- Execution of *ChunkGroupResult::all_assets failed
+- Execution of PageEndpoint::client_chunk_group failed
+- Execution of PageEndpoint::client_evaluatable_assets failed
+- content is not available as task execution failed
+- Execution of PageEndpoint::client_module failed
+- content is not available as task execution failed
+- Execution of *create_page_loader_entry_module failed
+- Execution of PagesProject::client_module_context failed
+- Execution of *ModuleAssetContext::new failed
+- Execution of get_client_module_options_context failed
+- Execution of get_jsx_transform_options failed
+- Execution of assert_can_resolve_react_refresh failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+  
+  Caused by:
+      0: Looking up data for TaskId 441051 from database failed
+      1: Unable to open static sorted file referenced from 00001043.meta
+      2: Unable to open static sorted file 00001038.sst
+      3: The system cannot find the path specified. (os error 3)
+    at <unknown> (TurbopackInternalError: Failed to write page endpoint /_app) {
+  location: 'C:\\actions-runner\\_work\\next.js\\next.js\\turbopack\\crates\\turbo-tasks-backend\\src\\backend\\operation\\mod.rs:156:17'
+}
+⨯ Error: ENOENT: no such file or directory, open 'C:\Users\alext\OneDrive\Desktop\distribution-portal\.next\dev\server\app\track\delivery\[token]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\alext\\OneDrive\\Desktop\\distribution-portal\\.next\\dev\\server\\app\\track\\delivery\\[token]\\page\\build-manifest.json'
+}
+
+-----
+[1m[31mFATAL[39m[0m: An unexpected Turbopack error occurred. A panic log has been written to C:\Users\alext\AppData\Local\Temp\next-panic-52b09ac08e075106f8f25e62a9ed95d0.log.
+
+To help make Turbopack better, report this error by clicking here: https://github.com/vercel/next.js/discussions/new?category=turbopack-error-report&title=Turbopack%20Error%3A%20Failed%20to%20write%20page%20endpoint%20%2F_app&body=Turbopack%20version%3A%20%6023c46498%60%0ANext.js%20version%3A%20%600.0.0%60%0A%0AError%20message%3A%0A%60%60%60%0ATurbopack%20Error%3A%20Failed%20to%20write%20page%20endpoint%20%2F_app%0A%60%60%60&labels=Turbopack,Turbopack%20Panic%20Backtrace
+-----
+
+Error: ENOENT: no such file or directory, open 'C:\Users\alext\OneDrive\Desktop\distribution-portal\.next\dev\server\app\track\delivery\[token]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\alext\\OneDrive\\Desktop\\distribution-portal\\.next\\dev\\server\\app\\track\\delivery\\[token]\\page\\build-manifest.json'
+}
+Error [TurbopackInternalError]: Failed to write page endpoint /_app
+
+Caused by:
+- content is not available as task execution failed
+- content is not available as task execution failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+
+Debug info:
+- Execution of get_written_endpoint_with_issues_operation failed
+- Execution of endpoint_write_to_disk failed
+- Execution of <PageEndpoint as Endpoint>::output failed
+- Failed to write page endpoint /_app
+- Execution of PageEndpoint::output failed
+- Execution of *ChunkGroupResult::all_assets failed
+- Execution of PageEndpoint::client_chunk_group failed
+- Execution of PageEndpoint::client_evaluatable_assets failed
+- content is not available as task execution failed
+- Execution of PageEndpoint::client_module failed
+- content is not available as task execution failed
+- Execution of *create_page_loader_entry_module failed
+- Execution of PagesProject::client_module_context failed
+- Execution of *ModuleAssetContext::new failed
+- Execution of get_client_module_options_context failed
+- Execution of get_jsx_transform_options failed
+- Execution of assert_can_resolve_react_refresh failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+  
+  Caused by:
+      0: Looking up data for TaskId 441051 from database failed
+      1: Unable to open static sorted file referenced from 00001043.meta
+      2: Unable to open static sorted file 00001038.sst
+      3: The system cannot find the path specified. (os error 3)
+    at <unknown> (TurbopackInternalError: Failed to write page endpoint /_app) {
+  location: 'C:\\actions-runner\\_work\\next.js\\next.js\\turbopack\\crates\\turbo-tasks-backend\\src\\backend\\operation\\mod.rs:156:17'
+}
+⨯ Error: ENOENT: no such file or directory, open 'C:\Users\alext\OneDrive\Desktop\distribution-portal\.next\dev\server\app\track\delivery\[token]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\alext\\OneDrive\\Desktop\\distribution-portal\\.next\\dev\\server\\app\\track\\delivery\\[token]\\page\\build-manifest.json'
+}
+Error: ENOENT: no such file or directory, open 'C:\Users\alext\OneDrive\Desktop\distribution-portal\.next\dev\server\app\track\delivery\[token]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\alext\\OneDrive\\Desktop\\distribution-portal\\.next\\dev\\server\\app\\track\\delivery\\[token]\\page\\build-manifest.json'
+}
+Error [TurbopackInternalError]: Failed to write page endpoint /_app
+
+Caused by:
+- content is not available as task execution failed
+- content is not available as task execution failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+
+Debug info:
+- Execution of get_written_endpoint_with_issues_operation failed
+- Execution of endpoint_write_to_disk failed
+- Execution of <PageEndpoint as Endpoint>::output failed
+- Failed to write page endpoint /_app
+- Execution of PageEndpoint::output failed
+- Execution of *ChunkGroupResult::all_assets failed
+- Execution of PageEndpoint::client_chunk_group failed
+- Execution of PageEndpoint::client_evaluatable_assets failed
+- content is not available as task execution failed
+- Execution of PageEndpoint::client_module failed
+- content is not available as task execution failed
+- Execution of *create_page_loader_entry_module failed
+- Execution of PagesProject::client_module_context failed
+- Execution of *ModuleAssetContext::new failed
+- Execution of get_client_module_options_context failed
+- Execution of get_jsx_transform_options failed
+- Execution of assert_can_resolve_react_refresh failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+  
+  Caused by:
+      0: Looking up data for TaskId 441051 from database failed
+      1: Unable to open static sorted file referenced from 00001043.meta
+      2: Unable to open static sorted file 00001038.sst
+      3: The system cannot find the path specified. (os error 3)
+    at <unknown> (TurbopackInternalError: Failed to write page endpoint /_app) {
+  location: 'C:\\actions-runner\\_work\\next.js\\next.js\\turbopack\\crates\\turbo-tasks-backend\\src\\backend\\operation\\mod.rs:156:17'
+}
+⨯ Error: ENOENT: no such file or directory, open 'C:\Users\alext\OneDrive\Desktop\distribution-portal\.next\dev\server\app\track\delivery\[token]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\alext\\OneDrive\\Desktop\\distribution-portal\\.next\\dev\\server\\app\\track\\delivery\\[token]\\page\\build-manifest.json'
+}
+Error: ENOENT: no such file or directory, open 'C:\Users\alext\OneDrive\Desktop\distribution-portal\.next\dev\server\app\track\delivery\[token]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\alext\\OneDrive\\Desktop\\distribution-portal\\.next\\dev\\server\\app\\track\\delivery\\[token]\\page\\build-manifest.json'
+}
+Error [TurbopackInternalError]: Failed to write page endpoint /_app
+
+Caused by:
+- content is not available as task execution failed
+- content is not available as task execution failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+
+Debug info:
+- Execution of get_written_endpoint_with_issues_operation failed
+- Execution of endpoint_write_to_disk failed
+- Execution of <PageEndpoint as Endpoint>::output failed
+- Failed to write page endpoint /_app
+- Execution of PageEndpoint::output failed
+- Execution of *ChunkGroupResult::all_assets failed
+- Execution of PageEndpoint::client_chunk_group failed
+- Execution of PageEndpoint::client_evaluatable_assets failed
+- content is not available as task execution failed
+- Execution of PageEndpoint::client_module failed
+- content is not available as task execution failed
+- Execution of *create_page_loader_entry_module failed
+- Execution of PagesProject::client_module_context failed
+- Execution of *ModuleAssetContext::new failed
+- Execution of get_client_module_options_context failed
+- Execution of get_jsx_transform_options failed
+- Execution of assert_can_resolve_react_refresh failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+  
+  Caused by:
+      0: Looking up data for TaskId 441051 from database failed
+      1: Unable to open static sorted file referenced from 00001043.meta
+      2: Unable to open static sorted file 00001038.sst
+      3: The system cannot find the path specified. (os error 3)
+    at <unknown> (TurbopackInternalError: Failed to write page endpoint /_app) {
+  location: 'C:\\actions-runner\\_work\\next.js\\next.js\\turbopack\\crates\\turbo-tasks-backend\\src\\backend\\operation\\mod.rs:156:17'
+}
+⨯ Error: ENOENT: no such file or directory, open 'C:\Users\alext\OneDrive\Desktop\distribution-portal\.next\dev\server\app\track\delivery\[token]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\alext\\OneDrive\\Desktop\\distribution-portal\\.next\\dev\\server\\app\\track\\delivery\\[token]\\page\\build-manifest.json'
+}
+
+-----
+[1m[31mFATAL[39m[0m: An unexpected Turbopack error occurred. A panic log has been written to C:\Users\alext\AppData\Local\Temp\next-panic-52b09ac08e075106f8f25e62a9ed95d0.log.
+
+To help make Turbopack better, report this error by clicking here: https://github.com/vercel/next.js/discussions/new?category=turbopack-error-report&title=Turbopack%20Error%3A%20Failed%20to%20write%20page%20endpoint%20%2F_app&body=Turbopack%20version%3A%20%6023c46498%60%0ANext.js%20version%3A%20%600.0.0%60%0A%0AError%20message%3A%0A%60%60%60%0ATurbopack%20Error%3A%20Failed%20to%20write%20page%20endpoint%20%2F_app%0A%60%60%60&labels=Turbopack,Turbopack%20Panic%20Backtrace
+-----
+
+Error: ENOENT: no such file or directory, open 'C:\Users\alext\OneDrive\Desktop\distribution-portal\.next\dev\server\app\track\delivery\[token]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\alext\\OneDrive\\Desktop\\distribution-portal\\.next\\dev\\server\\app\\track\\delivery\\[token]\\page\\build-manifest.json'
+}
+Error [TurbopackInternalError]: Failed to write page endpoint /_app
+
+Caused by:
+- content is not available as task execution failed
+- content is not available as task execution failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+
+Debug info:
+- Execution of get_written_endpoint_with_issues_operation failed
+- Execution of endpoint_write_to_disk failed
+- Execution of <PageEndpoint as Endpoint>::output failed
+- Failed to write page endpoint /_app
+- Execution of PageEndpoint::output failed
+- Execution of *ChunkGroupResult::all_assets failed
+- Execution of PageEndpoint::client_chunk_group failed
+- Execution of PageEndpoint::client_evaluatable_assets failed
+- content is not available as task execution failed
+- Execution of PageEndpoint::client_module failed
+- content is not available as task execution failed
+- Execution of *create_page_loader_entry_module failed
+- Execution of PagesProject::client_module_context failed
+- Execution of *ModuleAssetContext::new failed
+- Execution of get_client_module_options_context failed
+- Execution of get_jsx_transform_options failed
+- Execution of assert_can_resolve_react_refresh failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+  
+  Caused by:
+      0: Looking up data for TaskId 441051 from database failed
+      1: Unable to open static sorted file referenced from 00001043.meta
+      2: Unable to open static sorted file 00001038.sst
+      3: The system cannot find the path specified. (os error 3)
+    at <unknown> (TurbopackInternalError: Failed to write page endpoint /_app) {
+  location: 'C:\\actions-runner\\_work\\next.js\\next.js\\turbopack\\crates\\turbo-tasks-backend\\src\\backend\\operation\\mod.rs:156:17'
+}
+⨯ Error: ENOENT: no such file or directory, open 'C:\Users\alext\OneDrive\Desktop\distribution-portal\.next\dev\server\app\track\delivery\[token]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\alext\\OneDrive\\Desktop\\distribution-portal\\.next\\dev\\server\\app\\track\\delivery\\[token]\\page\\build-manifest.json'
+}
+Error: ENOENT: no such file or directory, open 'C:\Users\alext\OneDrive\Desktop\distribution-portal\.next\dev\server\app\track\delivery\[token]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\alext\\OneDrive\\Desktop\\distribution-portal\\.next\\dev\\server\\app\\track\\delivery\\[token]\\page\\build-manifest.json'
+}
+Error [TurbopackInternalError]: Failed to write page endpoint /_app
+
+Caused by:
+- content is not available as task execution failed
+- content is not available as task execution failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+
+Debug info:
+- Execution of get_written_endpoint_with_issues_operation failed
+- Execution of endpoint_write_to_disk failed
+- Execution of <PageEndpoint as Endpoint>::output failed
+- Failed to write page endpoint /_app
+- Execution of PageEndpoint::output failed
+- Execution of *ChunkGroupResult::all_assets failed
+- Execution of PageEndpoint::client_chunk_group failed
+- Execution of PageEndpoint::client_evaluatable_assets failed
+- content is not available as task execution failed
+- Execution of PageEndpoint::client_module failed
+- content is not available as task execution failed
+- Execution of *create_page_loader_entry_module failed
+- Execution of PagesProject::client_module_context failed
+- Execution of *ModuleAssetContext::new failed
+- Execution of get_client_module_options_context failed
+- Execution of get_jsx_transform_options failed
+- Execution of assert_can_resolve_react_refresh failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+  
+  Caused by:
+      0: Looking up data for TaskId 441051 from database failed
+      1: Unable to open static sorted file referenced from 00001043.meta
+      2: Unable to open static sorted file 00001038.sst
+      3: The system cannot find the path specified. (os error 3)
+    at <unknown> (TurbopackInternalError: Failed to write page endpoint /_app) {
+  location: 'C:\\actions-runner\\_work\\next.js\\next.js\\turbopack\\crates\\turbo-tasks-backend\\src\\backend\\operation\\mod.rs:156:17'
+}
+⨯ Error: ENOENT: no such file or directory, open 'C:\Users\alext\OneDrive\Desktop\distribution-portal\.next\dev\server\app\track\delivery\[token]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\alext\\OneDrive\\Desktop\\distribution-portal\\.next\\dev\\server\\app\\track\\delivery\\[token]\\page\\build-manifest.json'
+}
+Error: ENOENT: no such file or directory, open 'C:\Users\alext\OneDrive\Desktop\distribution-portal\.next\dev\server\app\track\delivery\[token]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\alext\\OneDrive\\Desktop\\distribution-portal\\.next\\dev\\server\\app\\track\\delivery\\[token]\\page\\build-manifest.json'
+}
+Error [TurbopackInternalError]: Failed to write page endpoint /_app
+
+Caused by:
+- content is not available as task execution failed
+- content is not available as task execution failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+
+Debug info:
+- Execution of get_written_endpoint_with_issues_operation failed
+- Execution of endpoint_write_to_disk failed
+- Execution of <PageEndpoint as Endpoint>::output failed
+- Failed to write page endpoint /_app
+- Execution of PageEndpoint::output failed
+- Execution of *ChunkGroupResult::all_assets failed
+- Execution of PageEndpoint::client_chunk_group failed
+- Execution of PageEndpoint::client_evaluatable_assets failed
+- content is not available as task execution failed
+- Execution of PageEndpoint::client_module failed
+- content is not available as task execution failed
+- Execution of *create_page_loader_entry_module failed
+- Execution of PagesProject::client_module_context failed
+- Execution of *ModuleAssetContext::new failed
+- Execution of get_client_module_options_context failed
+- Execution of get_jsx_transform_options failed
+- Execution of assert_can_resolve_react_refresh failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+  
+  Caused by:
+      0: Looking up data for TaskId 441051 from database failed
+      1: Unable to open static sorted file referenced from 00001043.meta
+      2: Unable to open static sorted file 00001038.sst
+      3: The system cannot find the path specified. (os error 3)
+    at <unknown> (TurbopackInternalError: Failed to write page endpoint /_app) {
+  location: 'C:\\actions-runner\\_work\\next.js\\next.js\\turbopack\\crates\\turbo-tasks-backend\\src\\backend\\operation\\mod.rs:156:17'
+}
+⨯ Error: ENOENT: no such file or directory, open 'C:\Users\alext\OneDrive\Desktop\distribution-portal\.next\dev\server\app\track\delivery\[token]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\alext\\OneDrive\\Desktop\\distribution-portal\\.next\\dev\\server\\app\\track\\delivery\\[token]\\page\\build-manifest.json'
+}
+
+-----
+[1m[31mFATAL[39m[0m: An unexpected Turbopack error occurred. A panic log has been written to C:\Users\alext\AppData\Local\Temp\next-panic-52b09ac08e075106f8f25e62a9ed95d0.log.
+
+To help make Turbopack better, report this error by clicking here: https://github.com/vercel/next.js/discussions/new?category=turbopack-error-report&title=Turbopack%20Error%3A%20Failed%20to%20write%20page%20endpoint%20%2F_app&body=Turbopack%20version%3A%20%6023c46498%60%0ANext.js%20version%3A%20%600.0.0%60%0A%0AError%20message%3A%0A%60%60%60%0ATurbopack%20Error%3A%20Failed%20to%20write%20page%20endpoint%20%2F_app%0A%60%60%60&labels=Turbopack,Turbopack%20Panic%20Backtrace
+-----
+
+Error: ENOENT: no such file or directory, open 'C:\Users\alext\OneDrive\Desktop\distribution-portal\.next\dev\server\app\track\delivery\[token]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\alext\\OneDrive\\Desktop\\distribution-portal\\.next\\dev\\server\\app\\track\\delivery\\[token]\\page\\build-manifest.json'
+}
+Error [TurbopackInternalError]: Failed to write page endpoint /_app
+
+Caused by:
+- content is not available as task execution failed
+- content is not available as task execution failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+
+Debug info:
+- Execution of get_written_endpoint_with_issues_operation failed
+- Execution of endpoint_write_to_disk failed
+- Execution of <PageEndpoint as Endpoint>::output failed
+- Failed to write page endpoint /_app
+- Execution of PageEndpoint::output failed
+- Execution of *ChunkGroupResult::all_assets failed
+- Execution of PageEndpoint::client_chunk_group failed
+- Execution of PageEndpoint::client_evaluatable_assets failed
+- content is not available as task execution failed
+- Execution of PageEndpoint::client_module failed
+- content is not available as task execution failed
+- Execution of *create_page_loader_entry_module failed
+- Execution of PagesProject::client_module_context failed
+- Execution of *ModuleAssetContext::new failed
+- Execution of get_client_module_options_context failed
+- Execution of get_jsx_transform_options failed
+- Execution of assert_can_resolve_react_refresh failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+  
+  Caused by:
+      0: Looking up data for TaskId 441051 from database failed
+      1: Unable to open static sorted file referenced from 00001043.meta
+      2: Unable to open static sorted file 00001038.sst
+      3: The system cannot find the path specified. (os error 3)
+    at <unknown> (TurbopackInternalError: Failed to write page endpoint /_app) {
+  location: 'C:\\actions-runner\\_work\\next.js\\next.js\\turbopack\\crates\\turbo-tasks-backend\\src\\backend\\operation\\mod.rs:156:17'
+}
+⨯ Error: ENOENT: no such file or directory, open 'C:\Users\alext\OneDrive\Desktop\distribution-portal\.next\dev\server\app\track\delivery\[token]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\alext\\OneDrive\\Desktop\\distribution-portal\\.next\\dev\\server\\app\\track\\delivery\\[token]\\page\\build-manifest.json'
+}
+
+-----
+[1m[31mFATAL[39m[0m: An unexpected Turbopack error occurred. A panic log has been written to C:\Users\alext\AppData\Local\Temp\next-panic-52b09ac08e075106f8f25e62a9ed95d0.log.
+
+To help make Turbopack better, report this error by clicking here: https://github.com/vercel/next.js/discussions/new?category=turbopack-error-report&title=Turbopack%20Error%3A%20Failed%20to%20write%20page%20endpoint%20%2F_app&body=Turbopack%20version%3A%20%6023c46498%60%0ANext.js%20version%3A%20%600.0.0%60%0A%0AError%20message%3A%0A%60%60%60%0ATurbopack%20Error%3A%20Failed%20to%20write%20page%20endpoint%20%2F_app%0A%60%60%60&labels=Turbopack,Turbopack%20Panic%20Backtrace
+-----
+
+Error: ENOENT: no such file or directory, open 'C:\Users\alext\OneDrive\Desktop\distribution-portal\.next\dev\server\app\track\delivery\[token]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\alext\\OneDrive\\Desktop\\distribution-portal\\.next\\dev\\server\\app\\track\\delivery\\[token]\\page\\build-manifest.json'
+}
+Error [TurbopackInternalError]: Failed to write page endpoint /_app
+
+Caused by:
+- content is not available as task execution failed
+- content is not available as task execution failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+
+Debug info:
+- Execution of get_written_endpoint_with_issues_operation failed
+- Execution of endpoint_write_to_disk failed
+- Execution of <PageEndpoint as Endpoint>::output failed
+- Failed to write page endpoint /_app
+- Execution of PageEndpoint::output failed
+- Execution of *ChunkGroupResult::all_assets failed
+- Execution of PageEndpoint::client_chunk_group failed
+- Execution of PageEndpoint::client_evaluatable_assets failed
+- content is not available as task execution failed
+- Execution of PageEndpoint::client_module failed
+- content is not available as task execution failed
+- Execution of *create_page_loader_entry_module failed
+- Execution of PagesProject::client_module_context failed
+- Execution of *ModuleAssetContext::new failed
+- Execution of get_client_module_options_context failed
+- Execution of get_jsx_transform_options failed
+- Execution of assert_can_resolve_react_refresh failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+  
+  Caused by:
+      0: Looking up data for TaskId 441051 from database failed
+      1: Unable to open static sorted file referenced from 00001043.meta
+      2: Unable to open static sorted file 00001038.sst
+      3: The system cannot find the path specified. (os error 3)
+    at <unknown> (TurbopackInternalError: Failed to write page endpoint /_app) {
+  location: 'C:\\actions-runner\\_work\\next.js\\next.js\\turbopack\\crates\\turbo-tasks-backend\\src\\backend\\operation\\mod.rs:156:17'
+}
+⨯ Error: ENOENT: no such file or directory, open 'C:\Users\alext\OneDrive\Desktop\distribution-portal\.next\dev\server\app\track\delivery\[token]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\alext\\OneDrive\\Desktop\\distribution-portal\\.next\\dev\\server\\app\\track\\delivery\\[token]\\page\\build-manifest.json'
+}
+Error: ENOENT: no such file or directory, open 'C:\Users\alext\OneDrive\Desktop\distribution-portal\.next\dev\server\app\track\delivery\[token]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\alext\\OneDrive\\Desktop\\distribution-portal\\.next\\dev\\server\\app\\track\\delivery\\[token]\\page\\build-manifest.json'
+}
+Error [TurbopackInternalError]: Failed to write page endpoint /_app
+
+Caused by:
+- content is not available as task execution failed
+- content is not available as task execution failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+
+Debug info:
+- Execution of get_written_endpoint_with_issues_operation failed
+- Execution of endpoint_write_to_disk failed
+- Execution of <PageEndpoint as Endpoint>::output failed
+- Failed to write page endpoint /_app
+- Execution of PageEndpoint::output failed
+- Execution of *ChunkGroupResult::all_assets failed
+- Execution of PageEndpoint::client_chunk_group failed
+- Execution of PageEndpoint::client_evaluatable_assets failed
+- content is not available as task execution failed
+- Execution of PageEndpoint::client_module failed
+- content is not available as task execution failed
+- Execution of *create_page_loader_entry_module failed
+- Execution of PagesProject::client_module_context failed
+- Execution of *ModuleAssetContext::new failed
+- Execution of get_client_module_options_context failed
+- Execution of get_jsx_transform_options failed
+- Execution of assert_can_resolve_react_refresh failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+  
+  Caused by:
+      0: Looking up data for TaskId 441051 from database failed
+      1: Unable to open static sorted file referenced from 00001043.meta
+      2: Unable to open static sorted file 00001038.sst
+      3: The system cannot find the path specified. (os error 3)
+    at <unknown> (TurbopackInternalError: Failed to write page endpoint /_app) {
+  location: 'C:\\actions-runner\\_work\\next.js\\next.js\\turbopack\\crates\\turbo-tasks-backend\\src\\backend\\operation\\mod.rs:156:17'
+}
+⨯ Error: ENOENT: no such file or directory, open 'C:\Users\alext\OneDrive\Desktop\distribution-portal\.next\dev\server\app\track\delivery\[token]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\alext\\OneDrive\\Desktop\\distribution-portal\\.next\\dev\\server\\app\\track\\delivery\\[token]\\page\\build-manifest.json'
+}
+
+-----
+[1m[31mFATAL[39m[0m: An unexpected Turbopack error occurred. A panic log has been written to C:\Users\alext\AppData\Local\Temp\next-panic-52b09ac08e075106f8f25e62a9ed95d0.log.
+
+To help make Turbopack better, report this error by clicking here: https://github.com/vercel/next.js/discussions/new?category=turbopack-error-report&title=Turbopack%20Error%3A%20Failed%20to%20write%20page%20endpoint%20%2F_app&body=Turbopack%20version%3A%20%6023c46498%60%0ANext.js%20version%3A%20%600.0.0%60%0A%0AError%20message%3A%0A%60%60%60%0ATurbopack%20Error%3A%20Failed%20to%20write%20page%20endpoint%20%2F_app%0A%60%60%60&labels=Turbopack,Turbopack%20Panic%20Backtrace
+-----
+
+Error: ENOENT: no such file or directory, open 'C:\Users\alext\OneDrive\Desktop\distribution-portal\.next\dev\server\app\track\delivery\[token]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\alext\\OneDrive\\Desktop\\distribution-portal\\.next\\dev\\server\\app\\track\\delivery\\[token]\\page\\build-manifest.json'
+}
+Error [TurbopackInternalError]: Failed to write page endpoint /_app
+
+Caused by:
+- content is not available as task execution failed
+- content is not available as task execution failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+
+Debug info:
+- Execution of get_written_endpoint_with_issues_operation failed
+- Execution of endpoint_write_to_disk failed
+- Execution of <PageEndpoint as Endpoint>::output failed
+- Failed to write page endpoint /_app
+- Execution of PageEndpoint::output failed
+- Execution of *ChunkGroupResult::all_assets failed
+- Execution of PageEndpoint::client_chunk_group failed
+- Execution of PageEndpoint::client_evaluatable_assets failed
+- content is not available as task execution failed
+- Execution of PageEndpoint::client_module failed
+- content is not available as task execution failed
+- Execution of *create_page_loader_entry_module failed
+- Execution of PagesProject::client_module_context failed
+- Execution of *ModuleAssetContext::new failed
+- Execution of get_client_module_options_context failed
+- Execution of get_jsx_transform_options failed
+- Execution of assert_can_resolve_react_refresh failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+  
+  Caused by:
+      0: Looking up data for TaskId 441051 from database failed
+      1: Unable to open static sorted file referenced from 00001043.meta
+      2: Unable to open static sorted file 00001038.sst
+      3: The system cannot find the path specified. (os error 3)
+    at <unknown> (TurbopackInternalError: Failed to write page endpoint /_app) {
+  location: 'C:\\actions-runner\\_work\\next.js\\next.js\\turbopack\\crates\\turbo-tasks-backend\\src\\backend\\operation\\mod.rs:156:17'
+}
+⨯ Error: ENOENT: no such file or directory, open 'C:\Users\alext\OneDrive\Desktop\distribution-portal\.next\dev\server\app\track\delivery\[token]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\alext\\OneDrive\\Desktop\\distribution-portal\\.next\\dev\\server\\app\\track\\delivery\\[token]\\page\\build-manifest.json'
+}
+
+-----
+[1m[31mFATAL[39m[0m: An unexpected Turbopack error occurred. A panic log has been written to C:\Users\alext\AppData\Local\Temp\next-panic-52b09ac08e075106f8f25e62a9ed95d0.log.
+
+To help make Turbopack better, report this error by clicking here: https://github.com/vercel/next.js/discussions/new?category=turbopack-error-report&title=Turbopack%20Error%3A%20Failed%20to%20write%20page%20endpoint%20%2F_app&body=Turbopack%20version%3A%20%6023c46498%60%0ANext.js%20version%3A%20%600.0.0%60%0A%0AError%20message%3A%0A%60%60%60%0ATurbopack%20Error%3A%20Failed%20to%20write%20page%20endpoint%20%2F_app%0A%60%60%60&labels=Turbopack,Turbopack%20Panic%20Backtrace
+-----
+
+Error: ENOENT: no such file or directory, open 'C:\Users\alext\OneDrive\Desktop\distribution-portal\.next\dev\server\app\track\delivery\[token]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\alext\\OneDrive\\Desktop\\distribution-portal\\.next\\dev\\server\\app\\track\\delivery\\[token]\\page\\build-manifest.json'
+}
+Error [TurbopackInternalError]: Failed to write page endpoint /_app
+
+Caused by:
+- content is not available as task execution failed
+- content is not available as task execution failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+
+Debug info:
+- Execution of get_written_endpoint_with_issues_operation failed
+- Execution of endpoint_write_to_disk failed
+- Execution of <PageEndpoint as Endpoint>::output failed
+- Failed to write page endpoint /_app
+- Execution of PageEndpoint::output failed
+- Execution of *ChunkGroupResult::all_assets failed
+- Execution of PageEndpoint::client_chunk_group failed
+- Execution of PageEndpoint::client_evaluatable_assets failed
+- content is not available as task execution failed
+- Execution of PageEndpoint::client_module failed
+- content is not available as task execution failed
+- Execution of *create_page_loader_entry_module failed
+- Execution of PagesProject::client_module_context failed
+- Execution of *ModuleAssetContext::new failed
+- Execution of get_client_module_options_context failed
+- Execution of get_jsx_transform_options failed
+- Execution of assert_can_resolve_react_refresh failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+  
+  Caused by:
+      0: Looking up data for TaskId 441051 from database failed
+      1: Unable to open static sorted file referenced from 00001043.meta
+      2: Unable to open static sorted file 00001038.sst
+      3: The system cannot find the path specified. (os error 3)
+    at <unknown> (TurbopackInternalError: Failed to write page endpoint /_app) {
+  location: 'C:\\actions-runner\\_work\\next.js\\next.js\\turbopack\\crates\\turbo-tasks-backend\\src\\backend\\operation\\mod.rs:156:17'
+}
+⨯ Error: ENOENT: no such file or directory, open 'C:\Users\alext\OneDrive\Desktop\distribution-portal\.next\dev\server\app\track\delivery\[token]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\alext\\OneDrive\\Desktop\\distribution-portal\\.next\\dev\\server\\app\\track\\delivery\\[token]\\page\\build-manifest.json'
+}
+
+-----
+[1m[31mFATAL[39m[0m: An unexpected Turbopack error occurred. A panic log has been written to C:\Users\alext\AppData\Local\Temp\next-panic-52b09ac08e075106f8f25e62a9ed95d0.log.
+
+To help make Turbopack better, report this error by clicking here: https://github.com/vercel/next.js/discussions/new?category=turbopack-error-report&title=Turbopack%20Error%3A%20Failed%20to%20write%20page%20endpoint%20%2F_app&body=Turbopack%20version%3A%20%6023c46498%60%0ANext.js%20version%3A%20%600.0.0%60%0A%0AError%20message%3A%0A%60%60%60%0ATurbopack%20Error%3A%20Failed%20to%20write%20page%20endpoint%20%2F_app%0A%60%60%60&labels=Turbopack,Turbopack%20Panic%20Backtrace
+-----
+
+Error: ENOENT: no such file or directory, open 'C:\Users\alext\OneDrive\Desktop\distribution-portal\.next\dev\server\app\track\delivery\[token]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\alext\\OneDrive\\Desktop\\distribution-portal\\.next\\dev\\server\\app\\track\\delivery\\[token]\\page\\build-manifest.json'
+}
+Error [TurbopackInternalError]: Failed to write page endpoint /_app
+
+Caused by:
+- content is not available as task execution failed
+- content is not available as task execution failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+
+Debug info:
+- Execution of get_written_endpoint_with_issues_operation failed
+- Execution of endpoint_write_to_disk failed
+- Execution of <PageEndpoint as Endpoint>::output failed
+- Failed to write page endpoint /_app
+- Execution of PageEndpoint::output failed
+- Execution of *ChunkGroupResult::all_assets failed
+- Execution of PageEndpoint::client_chunk_group failed
+- Execution of PageEndpoint::client_evaluatable_assets failed
+- content is not available as task execution failed
+- Execution of PageEndpoint::client_module failed
+- content is not available as task execution failed
+- Execution of *create_page_loader_entry_module failed
+- Execution of PagesProject::client_module_context failed
+- Execution of *ModuleAssetContext::new failed
+- Execution of get_client_module_options_context failed
+- Execution of get_jsx_transform_options failed
+- Execution of assert_can_resolve_react_refresh failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+  
+  Caused by:
+      0: Looking up data for TaskId 441051 from database failed
+      1: Unable to open static sorted file referenced from 00001043.meta
+      2: Unable to open static sorted file 00001038.sst
+      3: The system cannot find the path specified. (os error 3)
+    at <unknown> (TurbopackInternalError: Failed to write page endpoint /_app) {
+  location: 'C:\\actions-runner\\_work\\next.js\\next.js\\turbopack\\crates\\turbo-tasks-backend\\src\\backend\\operation\\mod.rs:156:17'
+}
+⨯ Error: ENOENT: no such file or directory, open 'C:\Users\alext\OneDrive\Desktop\distribution-portal\.next\dev\server\app\track\delivery\[token]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\alext\\OneDrive\\Desktop\\distribution-portal\\.next\\dev\\server\\app\\track\\delivery\\[token]\\page\\build-manifest.json'
+}
+Error: ENOENT: no such file or directory, open 'C:\Users\alext\OneDrive\Desktop\distribution-portal\.next\dev\server\app\track\delivery\[token]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\alext\\OneDrive\\Desktop\\distribution-portal\\.next\\dev\\server\\app\\track\\delivery\\[token]\\page\\build-manifest.json'
+}
+Error [TurbopackInternalError]: Failed to write page endpoint /_app
+
+Caused by:
+- content is not available as task execution failed
+- content is not available as task execution failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+
+Debug info:
+- Execution of get_written_endpoint_with_issues_operation failed
+- Execution of endpoint_write_to_disk failed
+- Execution of <PageEndpoint as Endpoint>::output failed
+- Failed to write page endpoint /_app
+- Execution of PageEndpoint::output failed
+- Execution of *ChunkGroupResult::all_assets failed
+- Execution of PageEndpoint::client_chunk_group failed
+- Execution of PageEndpoint::client_evaluatable_assets failed
+- content is not available as task execution failed
+- Execution of PageEndpoint::client_module failed
+- content is not available as task execution failed
+- Execution of *create_page_loader_entry_module failed
+- Execution of PagesProject::client_module_context failed
+- Execution of *ModuleAssetContext::new failed
+- Execution of get_client_module_options_context failed
+- Execution of get_jsx_transform_options failed
+- Execution of assert_can_resolve_react_refresh failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+  
+  Caused by:
+      0: Looking up data for TaskId 441051 from database failed
+      1: Unable to open static sorted file referenced from 00001043.meta
+      2: Unable to open static sorted file 00001038.sst
+      3: The system cannot find the path specified. (os error 3)
+    at <unknown> (TurbopackInternalError: Failed to write page endpoint /_app) {
+  location: 'C:\\actions-runner\\_work\\next.js\\next.js\\turbopack\\crates\\turbo-tasks-backend\\src\\backend\\operation\\mod.rs:156:17'
+}
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+⨯ Error: ENOENT: no such file or directory, open 'C:\Users\alext\OneDrive\Desktop\distribution-portal\.next\dev\server\app\track\delivery\[token]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\alext\\OneDrive\\Desktop\\distribution-portal\\.next\\dev\\server\\app\\track\\delivery\\[token]\\page\\build-manifest.json'
+}
+
+-----
+[1m[31mFATAL[39m[0m: An unexpected Turbopack error occurred. A panic log has been written to C:\Users\alext\AppData\Local\Temp\next-panic-52b09ac08e075106f8f25e62a9ed95d0.log.
+
+To help make Turbopack better, report this error by clicking here: https://github.com/vercel/next.js/discussions/new?category=turbopack-error-report&title=Turbopack%20Error%3A%20Failed%20to%20write%20page%20endpoint%20%2F_app&body=Turbopack%20version%3A%20%6023c46498%60%0ANext.js%20version%3A%20%600.0.0%60%0A%0AError%20message%3A%0A%60%60%60%0ATurbopack%20Error%3A%20Failed%20to%20write%20page%20endpoint%20%2F_app%0A%60%60%60&labels=Turbopack,Turbopack%20Panic%20Backtrace
+-----
+
+Error: ENOENT: no such file or directory, open 'C:\Users\alext\OneDrive\Desktop\distribution-portal\.next\dev\server\app\track\delivery\[token]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\alext\\OneDrive\\Desktop\\distribution-portal\\.next\\dev\\server\\app\\track\\delivery\\[token]\\page\\build-manifest.json'
+}
+Error [TurbopackInternalError]: Failed to write page endpoint /_app
+
+Caused by:
+- content is not available as task execution failed
+- content is not available as task execution failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+
+Debug info:
+- Execution of get_written_endpoint_with_issues_operation failed
+- Execution of endpoint_write_to_disk failed
+- Execution of <PageEndpoint as Endpoint>::output failed
+- Failed to write page endpoint /_app
+- Execution of PageEndpoint::output failed
+- Execution of *ChunkGroupResult::all_assets failed
+- Execution of PageEndpoint::client_chunk_group failed
+- Execution of PageEndpoint::client_evaluatable_assets failed
+- content is not available as task execution failed
+- Execution of PageEndpoint::client_module failed
+- content is not available as task execution failed
+- Execution of *create_page_loader_entry_module failed
+- Execution of PagesProject::client_module_context failed
+- Execution of *ModuleAssetContext::new failed
+- Execution of get_client_module_options_context failed
+- Execution of get_jsx_transform_options failed
+- Execution of assert_can_resolve_react_refresh failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+  
+  Caused by:
+      0: Looking up data for TaskId 441051 from database failed
+      1: Unable to open static sorted file referenced from 00001043.meta
+      2: Unable to open static sorted file 00001038.sst
+      3: The system cannot find the path specified. (os error 3)
+    at <unknown> (TurbopackInternalError: Failed to write page endpoint /_app) {
+  location: 'C:\\actions-runner\\_work\\next.js\\next.js\\turbopack\\crates\\turbo-tasks-backend\\src\\backend\\operation\\mod.rs:156:17'
+}
+
+thread 'tokio-runtime-worker' (63580) panicked at C:\actions-runner\_work\next.js\next.js\turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:156:17:
+Failed to restore task data (corrupted database or bug): Meta for <EsmAssetReference as ChunkableModuleReference>::chunking_type (TaskId 442357))
+
+Caused by:
+    0: Looking up data for TaskId 442357 from database failed
+    1: Unable to open static sorted file referenced from 00001033.meta
+    2: Unable to open static sorted file 00001028.sst
+    3: The system cannot find the file specified. (os error 2)
+
+-----
+[1m[31mFATAL[39m[0m: An unexpected Turbopack error occurred. A panic log has been written to C:\Users\alext\AppData\Local\Temp\next-panic-52b09ac08e075106f8f25e62a9ed95d0.log.
+
+To help make Turbopack better, report this error by clicking here: https://github.com/vercel/next.js/discussions/new?category=turbopack-error-report&title=Turbopack%20Error%3A%20Failed%20to%20write%20app%20endpoint%20%2F%28auth%29%2Flogin%2Fpage&body=Turbopack%20version%3A%20%6023c46498%60%0ANext.js%20version%3A%20%600.0.0%60%0A%0AError%20message%3A%0A%60%60%60%0ATurbopack%20Error%3A%20Failed%20to%20write%20app%20endpoint%20%2F%28auth%29%2Flogin%2Fpage%0A%60%60%60&labels=Turbopack,Turbopack%20Panic%20Backtrace
+-----
+
+Error [TurbopackInternalError]: Failed to write app endpoint /(auth)/login/page
+
+Caused by:
+- Failed to restore task data (corrupted database or bug): Meta for <EsmAssetReference as ChunkableModuleReference>::chunking_type (TaskId 442357))
+
+Debug info:
+- Execution of get_written_endpoint_with_issues_operation failed
+- Execution of endpoint_write_to_disk failed
+- Execution of <AppEndpoint as Endpoint>::output failed
+- Failed to write app endpoint /(auth)/login/page
+- Execution of AppEndpoint::output failed
+- Execution of AppProject::app_module_graphs failed
+- Execution of find_server_entries failed
+- Execution of primary_chunkable_referenced_modules failed
+- Failed to restore task data (corrupted database or bug): Meta for <EsmAssetReference as ChunkableModuleReference>::chunking_type (TaskId 442357))
+  
+  Caused by:
+      0: Looking up data for TaskId 442357 from database failed
+      1: Unable to open static sorted file referenced from 00001033.meta
+      2: Unable to open static sorted file 00001028.sst
+      3: The system cannot find the file specified. (os error 2)
+    at <unknown> (TurbopackInternalError: Failed to write app endpoint /(auth)/login/page) {
+  location: 'C:\\actions-runner\\_work\\next.js\\next.js\\turbopack\\crates\\turbo-tasks-backend\\src\\backend\\operation\\mod.rs:156:17'
+}
+Error [TurbopackInternalError]: Failed to write page endpoint /_app
+
+Caused by:
+- content is not available as task execution failed
+- content is not available as task execution failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+
+Debug info:
+- Execution of get_written_endpoint_with_issues_operation failed
+- Execution of endpoint_write_to_disk failed
+- Execution of <PageEndpoint as Endpoint>::output failed
+- Failed to write page endpoint /_app
+- Execution of PageEndpoint::output failed
+- Execution of *ChunkGroupResult::all_assets failed
+- Execution of PageEndpoint::client_chunk_group failed
+- Execution of PageEndpoint::client_evaluatable_assets failed
+- content is not available as task execution failed
+- Execution of PageEndpoint::client_module failed
+- content is not available as task execution failed
+- Execution of *create_page_loader_entry_module failed
+- Execution of PagesProject::client_module_context failed
+- Execution of *ModuleAssetContext::new failed
+- Execution of get_client_module_options_context failed
+- Execution of get_jsx_transform_options failed
+- Execution of assert_can_resolve_react_refresh failed
+- Failed to restore task data (corrupted database or bug): Meta for resolve_options (TaskId 441051))
+  
+  Caused by:
+      0: Looking up data for TaskId 441051 from database failed
+      1: Unable to open static sorted file referenced from 00001043.meta
+      2: Unable to open static sorted file 00001038.sst
+      3: The system cannot find the path specified. (os error 3)
+    at <unknown> (TurbopackInternalError: Failed to write page endpoint /_app) {
+  location: 'C:\\actions-runner\\_work\\next.js\\next.js\\turbopack\\crates\\turbo-tasks-backend\\src\\backend\\operation\\mod.rs:156:17'
+}
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+
+thread 'tokio-runtime-worker' (50984) panicked at C:\actions-runner\_work\next.js\next.js\turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:156:17:
+Failed to restore task data (corrupted database or bug): Meta for Request::parse_inner (TaskId 442415))
+
+Caused by:
+    0: Looking up data for TaskId 442415 from database failed
+    1: Unable to open static sorted file referenced from 00001043.meta
+    2: Unable to open static sorted file 00001038.sst
+    3: The system cannot find the file specified. (os error 2)
+
+thread 'tokio-runtime-worker' (66508) panicked at C:\actions-runner\_work\next.js\next.js\turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:156:17:
+Failed to restore task data (corrupted database or bug): Data for AfterResolvePluginCondition::matches (TaskId 442603))
+
+Caused by:
+    0: Looking up data for TaskId 442603 from database failed
+    1: Unable to open static sorted file referenced from 00001019.meta
+    2: Unable to open static sorted file 00001018.sst
+    3: The system cannot find the file specified. (os error 2)
+
+thread 'tokio-runtime-worker' (63456) panicked at C:\actions-runner\_work\next.js\next.js\turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:156:17:
+Failed to restore task data (corrupted database or bug): Meta for AssetIdent::new_inner (TaskId 442680))
+
+Caused by:
+    0: Looking up data for TaskId 442680 from database failed
+    1: Unable to open static sorted file referenced from 00001043.meta
+    2: Unable to open static sorted file 00001038.sst
+    3: The system cannot find the file specified. (os error 2)
+
+thread 'tokio-runtime-worker' (44684) panicked at C:\actions-runner\_work\next.js\next.js\turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:156:17:
+Failed to restore task data (corrupted database or bug): Data for AssetIdent::path (TaskId 442694))
+
+Caused by:
+    0: Looking up data for TaskId 442694 from database failed
+    1: Unable to open static sorted file referenced from 00001019.meta
+    2: Unable to open static sorted file 00001017.sst
+    3: The system cannot find the file specified. (os error 2)
+
+thread 'tokio-runtime-worker' (64940) panicked at C:\actions-runner\_work\next.js\next.js\turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:156:17:
+Failed to restore task data (corrupted database or bug): Meta for resolve (TaskId 442743))
+
+Caused by:
+    0: Looking up data for TaskId 442743 from database failed
+    1: Unable to open static sorted file referenced from 00001043.meta
+    2: Unable to open static sorted file 00001038.sst
+    3: The system cannot find the file specified. (os error 2)
+
+thread 'tokio-runtime-worker' (81748) panicked at C:\actions-runner\_work\next.js\next.js\turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:156:17:
+Failed to restore task data (corrupted database or bug): Meta for parse (TaskId 442768))
+
+Caused by:
+    0: Looking up data for TaskId 442768 from database failed
+    1: Unable to open static sorted file referenced from 00001033.meta
+    2: Unable to open static sorted file 00001028.sst
+    3: The system cannot find the file specified. (os error 2)
+
+thread 'tokio-runtime-worker' (50984) panicked at C:\actions-runner\_work\next.js\next.js\turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:156:17:
+Failed to restore task data (corrupted database or bug): Meta for analyze_ecmascript_module (TaskId 442807))
+
+Caused by:
+    0: Looking up data for TaskId 442807 from database failed
+    1: Unable to open static sorted file referenced from 00001033.meta
+    2: Unable to open static sorted file 00001028.sst
+    3: The system cannot find the file specified. (os error 2)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)

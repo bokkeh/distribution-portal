@@ -10,6 +10,7 @@ function isMissingTastingColumn(error: unknown) {
   return code === '42703'
     || message.includes('end_at')
     || message.includes('checked_in_at')
+    || message.includes('training_day')
 }
 
 export async function getTastingById(tastingId: string) {
@@ -27,6 +28,7 @@ export async function getTastingById(tastingId: string) {
         createdByUserId: tastings.createdByUserId,
         eventName: tastings.eventName,
         scheduledAt: tastings.scheduledAt,
+        trainingDay: tastings.trainingDay,
         status: tastings.status,
         storeAddress: tastings.storeAddress,
         storeCity: tastings.storeCity,
@@ -40,7 +42,7 @@ export async function getTastingById(tastingId: string) {
       .where(eq(tastings.id, tastingId))
       .limit(1)
 
-    return tasting ? { ...tasting, endAt: null, checkedInAt: null } : null
+    return tasting ? { ...tasting, endAt: null, checkedInAt: null, trainingDay: false } : null
   }
 }
 
@@ -54,6 +56,7 @@ export async function getTastingsForViewWithFallback({ assignedUserId }: { assig
       eventName: tastings.eventName,
       scheduledAt: tastings.scheduledAt,
       endAt: tastings.endAt,
+      trainingDay: tastings.trainingDay,
       status: tastings.status,
       storeAddress: tastings.storeAddress,
       storeCity: tastings.storeCity,
@@ -90,6 +93,7 @@ export async function getTastingsForViewWithFallback({ assignedUserId }: { assig
         createdByUserId: tastings.createdByUserId,
         eventName: tastings.eventName,
         scheduledAt: tastings.scheduledAt,
+        trainingDay: tastings.trainingDay,
         status: tastings.status,
         storeAddress: tastings.storeAddress,
         storeCity: tastings.storeCity,
@@ -113,7 +117,7 @@ export async function getTastingsForViewWithFallback({ assignedUserId }: { assig
       ? await base.where(eq(tastings.assignedUserId, assignedUserId)).orderBy(desc(tastings.scheduledAt))
       : await base.orderBy(desc(tastings.scheduledAt))
 
-    const hydratedRows = rows.map(row => ({ ...row, endAt: null }))
+    const hydratedRows = rows.map(row => ({ ...row, endAt: null, trainingDay: false }))
     return assignedUserId ? hydratedRows.filter((row) => row.status !== 'requested') : hydratedRows
   }
 }

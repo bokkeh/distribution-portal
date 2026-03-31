@@ -195,15 +195,18 @@ export function MarketingPage() {
               <span className="ml-1 text-xs text-slate-500">4.0 · 12 reviews</span>
             </div>
 
-            <p className="mt-5 text-4xl font-bold text-slate-900">
-              $44.99 <span className="text-base font-normal text-slate-500">/ bottle</span>
-            </p>
-            <p className="mt-1 text-sm text-slate-500">
-              Wholesale pricing available -{' '}
-              <button onClick={openLogin} className="font-medium text-slate-700 underline underline-offset-2">
-                sign in to see case pricing
-              </button>
-            </p>
+            <div className="mt-5 space-y-2">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Suggested Retail Price (SRP)</p>
+                <p className="text-4xl font-bold text-slate-900">
+                  $44.99 <span className="text-base font-normal text-slate-500">/ bottle</span>
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Wholesale Price</p>
+                <p className="mt-1 text-lg font-semibold text-slate-900">$130.00 per case</p>
+              </div>
+            </div>
 
             <p className="mt-5 text-sm leading-relaxed text-slate-600 sm:text-base">
               Made from gluten and grain-free beets and distilled 9 times. Every batch is lab tested for quality assurance. Sip with confidence knowing that we use only vegan ingredients and processes. Proudly crafted in the USA by a pioneering women-owned brand.

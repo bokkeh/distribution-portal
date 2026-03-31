@@ -111,6 +111,10 @@ export default async function AdminTastingDetailPage({
                   <span className="text-xs text-slate-400">Created</span>
                   <p className="font-medium">{new Date(tasting.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
                 </div>
+                <div>
+                  <span className="text-xs text-slate-400">Training Day</span>
+                  <p className="font-medium">{tasting.trainingDay ? 'Yes' : 'No'}</p>
+                </div>
               </div>
 
               {(tasting.storeAddress || tasting.storeCity) && (

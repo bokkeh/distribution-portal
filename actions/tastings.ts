@@ -77,12 +77,14 @@ async function validateTastingWindow({
   assignedUserId,
   scheduledAt,
   endAt,
+  trainingDay,
   excludeTastingId,
 }: {
   customerId: string
   assignedUserId: string
   scheduledAt: Date
   endAt: Date | null
+  trainingDay?: boolean
   excludeTastingId?: string
 }) {
   const requestedDateKey = getEasternDateKey(scheduledAt)
@@ -112,6 +114,7 @@ async function validateTastingWindow({
       .select({
         id: tastings.id,
         scheduledAt: tastings.scheduledAt,
+        trainingDay: tastings.trainingDay,
         status: tastings.status,
       })
       .from(tastings)
@@ -135,11 +138,15 @@ async function validateTastingWindow({
     }
   }
 
-  for (const tasting of accountTastings) {
-    if (tasting.id === excludeTastingId) continue
-    if (!ACTIVE_TASTING_STATUSES.has((tasting.status as TastingStatus) ?? 'scheduled')) continue
+  const activeSameDayAccountTastings = accountTastings.filter((tasting) => {
+    if (tasting.id === excludeTastingId) return false
+    if (!ACTIVE_TASTING_STATUSES.has((tasting.status as TastingStatus) ?? 'scheduled')) return false
+    return getEasternDateKey(new Date(tasting.scheduledAt)) === requestedDateKey
+  })
 
-    if (getEasternDateKey(new Date(tasting.scheduledAt)) === requestedDateKey) {
+  if (activeSameDayAccountTastings.length > 0) {
+    const existingTrainingDay = activeSameDayAccountTastings.some((tasting) => tasting.trainingDay)
+    if (activeSameDayAccountTastings.length >= 2 || (!trainingDay && !existingTrainingDay)) {
       return 'This account already has an active tasting or request on that date.'
     }
   }
@@ -156,6 +163,7 @@ export async function createTasting(formData: FormData) {
   const date = formData.get('date') as string
   const time = ((formData.get('time') as string) || '17:00').trim()
   const endTime = ((formData.get('endTime') as string) || '').trim()
+  const trainingDay = formData.get('trainingDay') === 'on'
   const notes = ((formData.get('notes') as string) || '').trim() || null
 
   if (!customerId || !assignedUserId || !date) {
@@ -199,6 +207,7 @@ export async function createTasting(formData: FormData) {
     assignedUserId: assignedUser.id,
     scheduledAt,
     endAt,
+    trainingDay,
   })
   if (schedulingError) {
     redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent(schedulingError)}`)
@@ -217,6 +226,7 @@ export async function createTasting(formData: FormData) {
     storeState: account.state,
     storeZip: account.zip,
     storePhone: account.phone,
+    trainingDay,
     notes,
   }).returning({ id: tastings.id })
 
@@ -519,6 +529,7 @@ export async function reassignTasting(formData: FormData) {
       storeCity: tastings.storeCity,
       storeState: tastings.storeState,
       storeZip: tastings.storeZip,
+      trainingDay: tastings.trainingDay,
       customerId: tastings.customerId,
       assignedUserId: tastings.assignedUserId,
       status: tastings.status,
@@ -557,6 +568,7 @@ export async function reassignTasting(formData: FormData) {
     assignedUserId: nextTaster.id,
     scheduledAt: new Date(tasting.scheduledAt),
     endAt: tasting.endAt ? new Date(tasting.endAt) : null,
+    trainingDay: tasting.trainingDay,
     excludeTastingId: tastingId,
   })
   if (reassignmentError) {
