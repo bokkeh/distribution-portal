@@ -40,24 +40,24 @@ function formatEventType(value: string) {
 }
 
 function getActivityVisual(item: AccountActivityItem) {
-  if (item.category === 'orders') return { icon: ShoppingCart, chipClassName: 'border-emerald-200 bg-emerald-50 text-emerald-700' }
-  if (item.category === 'deliveries') return { icon: Truck, chipClassName: 'border-blue-200 bg-blue-50 text-blue-700' }
-  if (item.category === 'tastings') return { icon: Wine, chipClassName: 'border-amber-200 bg-amber-50 text-amber-700' }
-  if (item.category === 'calls') return { icon: Phone, chipClassName: 'border-violet-200 bg-violet-50 text-violet-700' }
-  if (item.category === 'emails') return { icon: Mail, chipClassName: 'border-sky-200 bg-sky-50 text-sky-700' }
-  if (item.category === 'sms') return { icon: MessageSquare, chipClassName: 'border-cyan-200 bg-cyan-50 text-cyan-700' }
-  if (item.category === 'notes') return { icon: NotebookPen, chipClassName: 'border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700' }
-  if (item.category === 'profile_updates') return { icon: Settings2, chipClassName: 'border-slate-300 bg-slate-100 text-slate-700' }
-  if (item.category === 'inventory') return { icon: Boxes, chipClassName: 'border-orange-200 bg-orange-50 text-orange-700' }
+  if (item.category === 'orders') return { icon: ShoppingCart, chipClassName: 'border-emerald-600 bg-emerald-500 text-white' }
+  if (item.category === 'deliveries') return { icon: Truck, chipClassName: 'border-blue-600 bg-blue-500 text-white' }
+  if (item.category === 'tastings') return { icon: Wine, chipClassName: 'border-amber-600 bg-amber-500 text-white' }
+  if (item.category === 'calls') return { icon: Phone, chipClassName: 'border-violet-600 bg-violet-500 text-white' }
+  if (item.category === 'emails') return { icon: Mail, chipClassName: 'border-sky-600 bg-sky-500 text-white' }
+  if (item.category === 'sms') return { icon: MessageSquare, chipClassName: 'border-cyan-600 bg-cyan-500 text-white' }
+  if (item.category === 'notes') return { icon: NotebookPen, chipClassName: 'border-fuchsia-600 bg-fuchsia-500 text-white' }
+  if (item.category === 'profile_updates') return { icon: Settings2, chipClassName: 'border-slate-600 bg-slate-500 text-white' }
+  if (item.category === 'inventory') return { icon: Boxes, chipClassName: 'border-orange-600 bg-orange-500 text-white' }
 
-  if (item.eventType.includes('delivery')) return { icon: Truck, chipClassName: 'border-blue-200 bg-blue-50 text-blue-700' }
-  if (item.eventType.includes('order')) return { icon: Package, chipClassName: 'border-emerald-200 bg-emerald-50 text-emerald-700' }
-  if (item.eventType.includes('inventory')) return { icon: Boxes, chipClassName: 'border-orange-200 bg-orange-50 text-orange-700' }
-  if (item.eventType.includes('note')) return { icon: NotebookPen, chipClassName: 'border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700' }
-  if (item.eventType.includes('email')) return { icon: Mail, chipClassName: 'border-sky-200 bg-sky-50 text-sky-700' }
-  if (item.eventType.includes('sms') || item.eventType.includes('text')) return { icon: MessageSquare, chipClassName: 'border-cyan-200 bg-cyan-50 text-cyan-700' }
+  if (item.eventType.includes('delivery')) return { icon: Truck, chipClassName: 'border-blue-600 bg-blue-500 text-white' }
+  if (item.eventType.includes('order')) return { icon: Package, chipClassName: 'border-emerald-600 bg-emerald-500 text-white' }
+  if (item.eventType.includes('inventory')) return { icon: Boxes, chipClassName: 'border-orange-600 bg-orange-500 text-white' }
+  if (item.eventType.includes('note')) return { icon: NotebookPen, chipClassName: 'border-fuchsia-600 bg-fuchsia-500 text-white' }
+  if (item.eventType.includes('email')) return { icon: Mail, chipClassName: 'border-sky-600 bg-sky-500 text-white' }
+  if (item.eventType.includes('sms') || item.eventType.includes('text')) return { icon: MessageSquare, chipClassName: 'border-cyan-600 bg-cyan-500 text-white' }
 
-  return { icon: ClipboardList, chipClassName: 'border-slate-300 bg-slate-100 text-slate-700' }
+  return { icon: ClipboardList, chipClassName: 'border-slate-600 bg-slate-500 text-white' }
 }
 
 function renderMetadata(metadata: Record<string, unknown>) {

@@ -38,6 +38,9 @@ export type CRMAccountDetail = {
   creditLimit: string
   balance: string
   paymentTerms: string | null
+  assignedRegionId: string | null
+  lat: number | null
+  lng: number | null
   createdAt: Date
 }
 
@@ -63,6 +66,9 @@ const DEFAULT_ACCOUNT_DETAIL = {
   preferredDeliveryDays: null,
   preferredDeliveryTimes: null,
   additionalLocations: null,
+  assignedRegionId: null,
+  lat: null,
+  lng: null,
 }
 
 function getErrorText(error: unknown) {
@@ -116,6 +122,9 @@ export async function getCRMAccountDetail(accountId: string): Promise<CRMAccount
     creditLimit: customerAccounts.creditLimit,
     balance: customerAccounts.balance,
     paymentTerms: customerAccounts.paymentTerms,
+    assignedRegionId: customerAccounts.assignedRegionId,
+    lat: customerAccounts.lat,
+    lng: customerAccounts.lng,
     createdAt: customerAccounts.createdAt,
   }).from(customerAccounts).where(eq(customerAccounts.id, accountId)).limit(1)
 
@@ -150,6 +159,9 @@ export async function getCRMAccountDetail(accountId: string): Promise<CRMAccount
     'preferredDeliveryDays',
     'preferredDeliveryTimes',
     'additionalLocations',
+    'assignedRegionId',
+    'lat',
+    'lng',
   ]
 
   const columnMap: Record<(typeof optionalFields)[number], string> = {
@@ -174,6 +186,9 @@ export async function getCRMAccountDetail(accountId: string): Promise<CRMAccount
     preferredDeliveryDays: 'preferred_delivery_days',
     preferredDeliveryTimes: 'preferred_delivery_times',
     additionalLocations: 'additional_locations',
+    assignedRegionId: 'assigned_region_id',
+    lat: 'lat',
+    lng: 'lng',
   }
 
   const selectedOptionalFields = optionalFields.filter((field) => availableColumns.has(columnMap[field]))

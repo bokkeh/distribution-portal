@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { count, desc, eq, inArray } from 'drizzle-orm'
 import { db } from '@/db'
-import { contacts, deliveries, deliveryStops, invoices, orders, smsMessages, tastings } from '@/db/schema'
+import { contacts, deliveries, deliveryStops, invoices, orders, salesRegions, smsMessages, tastings } from '@/db/schema'
 import { syncToHubSpot } from '@/actions/crm'
 import { getCRMAccountDetail } from '@/lib/crm/account-read'
 import {
@@ -22,6 +22,7 @@ import { AccountDetailsCard } from '@/components/crm/AccountDetailsCard'
 import { AccountEditForm } from '@/components/crm/AccountEditForm'
 import { AccountInventoryOnHandCard } from '@/components/crm/AccountInventoryOnHandCard'
 import { AccountInventorySummaryCard } from '@/components/crm/AccountInventorySummaryCard'
+import { AccountMapCard } from '@/components/crm/AccountMapCard'
 import { AccountMediaGalleryCard } from '@/components/crm/AccountMediaGalleryCard'
 import { AccountNotesCard } from '@/components/crm/AccountNotesCard'
 import { AccountRecordTabs } from '@/components/crm/AccountRecordTabs'
@@ -72,6 +73,14 @@ export async function AccountRecordPage({
 
   const account = await getCRMAccountDetail(accountId)
   if (!account) notFound()
+
+  const [assignedRegion] = account.assignedRegionId
+    ? await db
+        .select({ id: salesRegions.id, name: salesRegions.name })
+        .from(salesRegions)
+        .where(eq(salesRegions.id, account.assignedRegionId))
+        .limit(1)
+    : []
 
   const accountPhones = Array.from(new Set([account.phone, account.businessPhone, account.pocPhone].filter(Boolean) as string[]))
 
@@ -422,6 +431,17 @@ export async function AccountRecordPage({
                     )}
                   </CardContent>
                 </Card>
+
+                <AccountMapCard
+                  companyName={account.companyName}
+                  address={account.address}
+                  city={account.city}
+                  state={account.state}
+                  zip={account.zip}
+                  lat={account.lat}
+                  lng={account.lng}
+                  regionName={assignedRegion?.name ?? null}
+                />
 
                 <AccountInventorySummaryCard items={overviewData.inventoryItems.slice(0, 5)} totalUnits={inventoryTotal} href={getTabHref(basePath, 'inventory')} />
 
