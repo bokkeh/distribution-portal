@@ -8971,3 +8971,135 @@ Caused by:
     3: The system cannot find the path specified. (os error 3)
 Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
 Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+
+thread 'tokio-runtime-worker' (96184) panicked at C:\actions-runner\_work\next.js\next.js\turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:156:17:
+Failed to restore task data (corrupted database or bug): Data for resolve_internal (TaskId 443989))
+
+Caused by:
+    0: Looking up data for TaskId 443989 from database failed
+    1: Unable to open static sorted file referenced from 00001019.meta
+    2: Unable to open static sorted file 00001017.sst
+    3: The system cannot find the path specified. (os error 3)
+
+thread 'tokio-runtime-worker' (44684) panicked at C:\actions-runner\_work\next.js\next.js\turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:156:17:
+Failed to restore task data (corrupted database or bug): Data for resolve_internal (TaskId 443995))
+
+Caused by:
+    0: Looking up data for TaskId 443995 from database failed
+    1: Unable to open static sorted file referenced from 00001019.meta
+    2: Unable to open static sorted file 00001017.sst
+    3: The system cannot find the path specified. (os error 3)
+
+thread 'tokio-runtime-worker' (50984) panicked at C:\actions-runner\_work\next.js\next.js\turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:156:17:
+Failed to restore task data (corrupted database or bug): Meta for AssetIdent::from_path (TaskId 444061))
+
+Caused by:
+    0: Looking up data for TaskId 444061 from database failed
+    1: Unable to open static sorted file referenced from 00001043.meta
+    2: Unable to open static sorted file 00001038.sst
+    3: The system cannot find the path specified. (os error 3)
+
+thread 'tokio-runtime-worker' (81748) panicked at C:\actions-runner\_work\next.js\next.js\turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:156:17:
+Failed to restore task data (corrupted database or bug): Data for AfterResolvePluginCondition::matches (TaskId 444103))
+
+Caused by:
+    0: Looking up data for TaskId 444103 from database failed
+    1: Unable to open static sorted file referenced from 00001019.meta
+    2: Unable to open static sorted file 00001017.sst
+    3: The system cannot find the path specified. (os error 3)
+
+thread 'tokio-runtime-worker' (63580) panicked at C:\actions-runner\_work\next.js\next.js\turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:156:17:
+Failed to restore task data (corrupted database or bug): Data for AfterResolvePluginCondition::matches (TaskId 444115))
+
+Caused by:
+    0: Looking up data for TaskId 444115 from database failed
+    1: Unable to open static sorted file referenced from 00001019.meta
+    2: Unable to open static sorted file 00001017.sst
+    3: The system cannot find the path specified. (os error 3)
+
+thread 'tokio-runtime-worker' (62148) panicked at C:\actions-runner\_work\next.js\next.js\turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:156:17:
+Failed to restore task data (corrupted database or bug): Meta for AfterResolvePluginCondition::matches (TaskId 444126))
+
+Caused by:
+    0: Looking up data for TaskId 444126 from database failed
+    1: Unable to open static sorted file referenced from 00001043.meta
+    2: Unable to open static sorted file 00001038.sst
+    3: The system cannot find the path specified. (os error 3)
+
+thread 'tokio-runtime-worker' (27136) panicked at C:\actions-runner\_work\next.js\next.js\turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:156:17:
+Failed to restore task data (corrupted database or bug): Meta for <EcmascriptModuleAsset as EcmascriptParsable>::failsafe_parse (TaskId 444201))
+
+Caused by:
+    0: Looking up data for TaskId 444201 from database failed
+    1: Unable to open static sorted file referenced from 00001043.meta
+    2: Unable to open static sorted file 00001038.sst
+    3: The system cannot find the path specified. (os error 3)
+
+thread 'tokio-runtime-worker' (27136) panicked at C:\actions-runner\_work\next.js\next.js\turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:156:17:
+Failed to restore task data (corrupted database or bug): Meta for get_side_effect_free_declaration (TaskId 444282))
+
+Caused by:
+    0: Looking up data for TaskId 444282 from database failed
+    1: Unable to open static sorted file referenced from 00001053.meta
+    2: Unable to open static sorted file 00001047.sst
+    3: The system cannot find the path specified. (os error 3)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+
+thread 'tokio-runtime-worker' (27136) panicked at C:\actions-runner\_work\next.js\next.js\turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:156:17:
+Failed to restore task data (corrupted database or bug): Meta for <EcmascriptModuleAsset as EcmascriptChunkPlaceable>::get_exports (TaskId 444409))
+
+Caused by:
+    0: Looking up data for TaskId 444409 from database failed
+    1: Unable to open static sorted file referenced from 00001053.meta
+    2: Unable to open static sorted file 00001047.sst
+    3: The system cannot find the path specified. (os error 3)
+
+thread 'tokio-runtime-worker' (52316) panicked at C:\actions-runner\_work\next.js\next.js\turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:156:17:
+Failed to restore task data (corrupted database or bug): Meta for Pattern::new_internal (TaskId 444435))
+
+Caused by:
+    0: Looking up data for TaskId 444435 from database failed
+    1: Unable to open static sorted file referenced from 00001043.meta
+    2: Unable to open static sorted file 00001038.sst
+    3: The system cannot find the path specified. (os error 3)
+
+thread 'tokio-runtime-worker' (91992) panicked at C:\actions-runner\_work\next.js\next.js\turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:156:17:
+Failed to restore task data (corrupted database or bug): Meta for AfterResolvePluginCondition::matches (TaskId 444560))
+
+Caused by:
+    0: Looking up data for TaskId 444560 from database failed
+    1: Unable to open static sorted file referenced from 00001043.meta
+    2: Unable to open static sorted file 00001038.sst
+    3: The system cannot find the path specified. (os error 3)
+
+thread 'tokio-runtime-worker' (91992) panicked at C:\actions-runner\_work\next.js\next.js\turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:156:17:
+Failed to restore task data (corrupted database or bug): Meta for DataUriSource::new (TaskId 444575))
+
+Caused by:
+    0: Looking up data for TaskId 444575 from database failed
+    1: Unable to open static sorted file referenced from 00001043.meta
+    2: Unable to open static sorted file 00001038.sst
+    3: The system cannot find the path specified. (os error 3)
+
+thread 'tokio-runtime-worker' (62148) panicked at C:\actions-runner\_work\next.js\next.js\turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:156:17:
+Failed to restore task data (corrupted database or bug): Meta for <EcmascriptModuleAsset as ResolveOrigin>::origin_path (TaskId 444643))
+
+Caused by:
+    0: Looking up data for TaskId 444643 from database failed
+    1: Unable to open static sorted file referenced from 00001033.meta
+    2: Unable to open static sorted file 00001028.sst
+    3: The system cannot find the path specified. (os error 3)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)

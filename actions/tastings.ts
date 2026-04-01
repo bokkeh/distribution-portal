@@ -66,6 +66,25 @@ function isMissingTrainingDayColumn(error: unknown) {
   return code === '42703' || message.includes('training_day')
 }
 
+function isMissingTastingSchedulingColumn(error: unknown) {
+  const code = (error as { code?: string; cause?: { code?: string } } | null)?.code
+    ?? (error as { cause?: { code?: string } } | null)?.cause?.code
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+
+  return code === '42703'
+    || message.includes('training_day')
+    || message.includes('end_at')
+    || message.includes('checked_in_at')
+}
+
+function isMissingTasterAvailabilityTable(error: unknown) {
+  const code = (error as { code?: string; cause?: { code?: string } } | null)?.code
+    ?? (error as { cause?: { code?: string } } | null)?.cause?.code
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+
+  return code === '42p01' || message.includes('taster_availability')
+}
+
 async function getSalesMemberIdForUser(userId: string) {
   const [member] = await db
     .select({ id: salesMembers.id, status: salesMembers.status })
@@ -108,7 +127,11 @@ async function validateTastingWindow({
         eq(tasterAvailability.userId, assignedUserId),
         gte(tasterAvailability.availableDate, monthStart),
         lte(tasterAvailability.availableDate, monthEnd),
-      )),
+      ))
+      .catch((error) => {
+        if (!isMissingTasterAvailabilityTable(error)) throw error
+        return []
+      }),
     db
       .select({
         id: tastings.id,
@@ -117,7 +140,21 @@ async function validateTastingWindow({
         status: tastings.status,
       })
       .from(tastings)
-      .where(eq(tastings.assignedUserId, assignedUserId)),
+      .where(eq(tastings.assignedUserId, assignedUserId))
+      .catch(async (error) => {
+        if (!isMissingTastingSchedulingColumn(error)) throw error
+
+        const rows = await db
+          .select({
+            id: tastings.id,
+            scheduledAt: tastings.scheduledAt,
+            status: tastings.status,
+          })
+          .from(tastings)
+          .where(eq(tastings.assignedUserId, assignedUserId))
+
+        return rows.map((row) => ({ ...row, endAt: null }))
+      }),
     db
       .select({
         id: tastings.id,
@@ -128,7 +165,7 @@ async function validateTastingWindow({
       .from(tastings)
       .where(eq(tastings.customerId, customerId))
       .catch(async (error) => {
-        if (!isMissingTrainingDayColumn(error)) throw error
+        if (!isMissingTastingSchedulingColumn(error)) throw error
 
         const rows = await db
           .select({
@@ -255,8 +292,23 @@ export async function createTasting(formData: FormData) {
     ...baseTastingValues,
     trainingDay,
   }).returning({ id: tastings.id }).catch(async (error) => {
-    if (!isMissingTrainingDayColumn(error)) throw error
-    return db.insert(tastings).values(baseTastingValues).returning({ id: tastings.id })
+    if (!isMissingTastingSchedulingColumn(error)) throw error
+
+    const legacyValues = {
+      customerId: account.id,
+      assignedUserId: assignedUser.id,
+      createdByUserId: session.user.id,
+      eventName: account.companyName,
+      scheduledAt,
+      storeAddress: account.address,
+      storeCity: account.city,
+      storeState: account.state,
+      storeZip: account.zip,
+      storePhone: account.phone,
+      notes,
+    }
+
+    return db.insert(tastings).values(legacyValues).returning({ id: tastings.id })
   })
 
   const storeAddress = [account.address, account.city, account.state, account.zip].filter(Boolean).join(', ') || 'Store address not provided'
