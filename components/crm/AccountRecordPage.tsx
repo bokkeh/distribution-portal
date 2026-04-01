@@ -303,43 +303,48 @@ export async function AccountRecordPage({
 
   return (
     <div className="space-y-6 p-4 sm:p-8">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0 flex-1">
-          <div className="mb-3 flex items-center gap-3">
-            <Link href={`/${mode}/crm`}>
-              <Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
-            </Link>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="truncate text-2xl font-bold text-slate-900">{account.companyName}</h1>
-                {headerBadges.map((badge) => (
-                  <Badge key={badge.label} variant={badge.variant}>{badge.label}</Badge>
-                ))}
+      <div className="space-y-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-3">
+              <Link href={`/${mode}/crm`}>
+                <Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
+              </Link>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="truncate text-2xl font-bold text-slate-900">{account.companyName}</h1>
+                  {headerBadges.map((badge) => (
+                    <Badge key={badge.label} variant={badge.variant}>{badge.label}</Badge>
+                  ))}
+                </div>
+                {(account.city || account.state) ? (
+                  <p className="mt-1 text-sm text-muted-foreground">{[account.city, account.state].filter(Boolean).join(', ')}</p>
+                ) : null}
               </div>
-              {(account.city || account.state) ? (
-                <p className="mt-1 text-sm text-muted-foreground">{[account.city, account.state].filter(Boolean).join(', ')}</p>
-              ) : null}
             </div>
           </div>
-          <AccountRecordTabs tabs={tabLinks} currentTab={tab} />
+
+          <div className="flex flex-wrap items-center gap-2">
+            {showViewAs ? <ViewAsAccountButton accountId={account.id} companyName={account.companyName} /> : null}
+            {showSyncAction ? (
+              <form action={syncToHubSpot.bind(null, account.id)}>
+                <Button variant="outline" size="sm" type="submit">
+                  <RefreshCw className="mr-2 h-4 w-4" />Sync HubSpot
+                </Button>
+              </form>
+            ) : null}
+            {quickActions.map((action) => (
+              <Link key={action.label} href={action.href}>
+                <Button variant="outline" size="sm">
+                  <action.icon className="mr-2 h-4 w-4" />{action.label}
+                </Button>
+              </Link>
+            ))}
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {showViewAs ? <ViewAsAccountButton accountId={account.id} companyName={account.companyName} /> : null}
-          {showSyncAction ? (
-            <form action={syncToHubSpot.bind(null, account.id)}>
-              <Button variant="outline" size="sm" type="submit">
-                <RefreshCw className="mr-2 h-4 w-4" />Sync HubSpot
-              </Button>
-            </form>
-          ) : null}
-          {quickActions.map((action) => (
-            <Link key={action.label} href={action.href}>
-              <Button variant="outline" size="sm">
-                <action.icon className="mr-2 h-4 w-4" />{action.label}
-              </Button>
-            </Link>
-          ))}
+        <div className="w-full">
+          <AccountRecordTabs tabs={tabLinks} currentTab={tab} />
         </div>
       </div>
 

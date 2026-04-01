@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { ImageIcon } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { formatDate } from '@/lib/utils'
 
 export type AccountMediaItem = {
   id: string
@@ -46,6 +47,9 @@ export function AccountMediaGalleryCard({
                   <div className="space-y-1 px-3 py-3">
                     <p className="text-sm font-medium text-slate-900">{item.label}</p>
                     <p className="text-xs text-slate-500">{item.sourceLabel}</p>
+                    <p className="text-[11px] uppercase tracking-wide text-slate-400" suppressHydrationWarning>
+                      {formatDate(item.createdAt)}
+                    </p>
                     {item.caption ? <p className="line-clamp-2 text-xs text-slate-600">{item.caption}</p> : null}
                   </div>
                 </div>
