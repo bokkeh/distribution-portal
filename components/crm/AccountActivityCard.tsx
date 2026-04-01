@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import {
-  Bell,
   Boxes,
   ClipboardList,
   Mail,
@@ -41,24 +40,24 @@ function formatEventType(value: string) {
 }
 
 function getActivityVisual(item: AccountActivityItem) {
-  if (item.category === 'orders') return { icon: ShoppingCart, color: 'bg-emerald-500 text-emerald-700' }
-  if (item.category === 'deliveries') return { icon: Truck, color: 'bg-blue-500 text-blue-700' }
-  if (item.category === 'tastings') return { icon: Wine, color: 'bg-amber-500 text-amber-700' }
-  if (item.category === 'calls') return { icon: Phone, color: 'bg-violet-500 text-violet-700' }
-  if (item.category === 'emails') return { icon: Mail, color: 'bg-sky-500 text-sky-700' }
-  if (item.category === 'sms') return { icon: MessageSquare, color: 'bg-cyan-500 text-cyan-700' }
-  if (item.category === 'notes') return { icon: NotebookPen, color: 'bg-fuchsia-500 text-fuchsia-700' }
-  if (item.category === 'profile_updates') return { icon: Settings2, color: 'bg-slate-500 text-slate-700' }
-  if (item.category === 'inventory') return { icon: Boxes, color: 'bg-orange-500 text-orange-700' }
+  if (item.category === 'orders') return { icon: ShoppingCart, chipClassName: 'border-emerald-200 bg-emerald-50 text-emerald-700' }
+  if (item.category === 'deliveries') return { icon: Truck, chipClassName: 'border-blue-200 bg-blue-50 text-blue-700' }
+  if (item.category === 'tastings') return { icon: Wine, chipClassName: 'border-amber-200 bg-amber-50 text-amber-700' }
+  if (item.category === 'calls') return { icon: Phone, chipClassName: 'border-violet-200 bg-violet-50 text-violet-700' }
+  if (item.category === 'emails') return { icon: Mail, chipClassName: 'border-sky-200 bg-sky-50 text-sky-700' }
+  if (item.category === 'sms') return { icon: MessageSquare, chipClassName: 'border-cyan-200 bg-cyan-50 text-cyan-700' }
+  if (item.category === 'notes') return { icon: NotebookPen, chipClassName: 'border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700' }
+  if (item.category === 'profile_updates') return { icon: Settings2, chipClassName: 'border-slate-300 bg-slate-100 text-slate-700' }
+  if (item.category === 'inventory') return { icon: Boxes, chipClassName: 'border-orange-200 bg-orange-50 text-orange-700' }
 
-  if (item.eventType.includes('delivery')) return { icon: Truck, color: 'bg-blue-500 text-blue-700' }
-  if (item.eventType.includes('order')) return { icon: Package, color: 'bg-emerald-500 text-emerald-700' }
-  if (item.eventType.includes('inventory')) return { icon: Boxes, color: 'bg-orange-500 text-orange-700' }
-  if (item.eventType.includes('note')) return { icon: NotebookPen, color: 'bg-fuchsia-500 text-fuchsia-700' }
-  if (item.eventType.includes('email')) return { icon: Mail, color: 'bg-sky-500 text-sky-700' }
-  if (item.eventType.includes('sms') || item.eventType.includes('text')) return { icon: MessageSquare, color: 'bg-cyan-500 text-cyan-700' }
+  if (item.eventType.includes('delivery')) return { icon: Truck, chipClassName: 'border-blue-200 bg-blue-50 text-blue-700' }
+  if (item.eventType.includes('order')) return { icon: Package, chipClassName: 'border-emerald-200 bg-emerald-50 text-emerald-700' }
+  if (item.eventType.includes('inventory')) return { icon: Boxes, chipClassName: 'border-orange-200 bg-orange-50 text-orange-700' }
+  if (item.eventType.includes('note')) return { icon: NotebookPen, chipClassName: 'border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700' }
+  if (item.eventType.includes('email')) return { icon: Mail, chipClassName: 'border-sky-200 bg-sky-50 text-sky-700' }
+  if (item.eventType.includes('sms') || item.eventType.includes('text')) return { icon: MessageSquare, chipClassName: 'border-cyan-200 bg-cyan-50 text-cyan-700' }
 
-  return { icon: ClipboardList, color: 'bg-slate-500 text-slate-700' }
+  return { icon: ClipboardList, chipClassName: 'border-slate-300 bg-slate-100 text-slate-700' }
 }
 
 function renderMetadata(metadata: Record<string, unknown>) {
@@ -133,11 +132,11 @@ export function AccountActivityCard({
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <CardTitle>Activity</CardTitle>
-            <p className="text-sm text-slate-500">Complete account history, newest first.</p>
+            <p className="text-sm text-slate-600">Complete account history, newest first.</p>
           </div>
           <div className="flex items-center gap-3">
             {href ? <Link href={href} className="text-xs font-medium text-blue-600 hover:underline">View full tab</Link> : null}
-            <span className="text-xs uppercase tracking-wide text-slate-400">{filteredItems.length} events</span>
+            <span className="text-xs uppercase tracking-wide text-slate-500">{filteredItems.length} events</span>
           </div>
         </div>
         {showFilters ? (
@@ -153,7 +152,7 @@ export function AccountActivityCard({
                 className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                   filter === option.value
                     ? 'border-slate-900 bg-slate-900 text-white'
-                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'
+                    : 'border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:text-slate-900'
                 }`}
               >
                 {option.label}
@@ -164,7 +163,7 @@ export function AccountActivityCard({
       </CardHeader>
       <CardContent>
         {visibleItems.length === 0 ? (
-          <p className="text-sm text-slate-500">No activity recorded for this filter yet.</p>
+          <p className="text-sm text-slate-600">No activity recorded for this filter yet.</p>
         ) : (
           <div className="space-y-4">
             {visibleItems.map((item) => (
@@ -173,25 +172,25 @@ export function AccountActivityCard({
                   const visual = getActivityVisual(item)
                   const Icon = visual.icon
                   return (
-                    <span className={`absolute left-0 top-1 flex h-8 w-8 items-center justify-center rounded-full ${visual.color.replace('text-', 'bg-').replace('-700', '-100')}`}>
-                      <Icon className={`h-4 w-4 ${visual.color.split(' ')[1] ?? 'text-slate-700'}`} />
+                    <span className={`absolute left-0 top-1 flex h-9 w-9 items-center justify-center rounded-full border shadow-sm ${visual.chipClassName}`}>
+                      <Icon className="h-4 w-4" />
                     </span>
                   )
                 })()}
-                <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
+                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-sm font-semibold text-slate-900">{item.title}</p>
-                      <Badge variant="outline" className="text-[10px] uppercase">
+                      <Badge variant="outline" className="border-slate-300 bg-slate-50 text-[10px] font-semibold uppercase text-slate-700">
                         {formatEventType(item.eventType)}
                       </Badge>
                     </div>
-                    <p className="text-[11px] uppercase tracking-wide text-slate-400" suppressHydrationWarning>
+                    <p className="text-[11px] uppercase tracking-wide text-slate-500" suppressHydrationWarning>
                       {formatDate(item.createdAt)}
                     </p>
                   </div>
-                  {item.description ? <p className="mt-2 text-sm text-slate-600">{item.description}</p> : null}
-                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                  {item.description ? <p className="mt-2 text-sm text-slate-700">{item.description}</p> : null}
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-600">
                     <span>{item.actorName ? `${item.actorName}${item.actorRole ? ` (${item.actorRole})` : ''}` : 'System'}</span>
                     <span>•</span>
                     <span>{item.sourceLabel}</span>
