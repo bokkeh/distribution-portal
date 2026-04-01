@@ -64,6 +64,10 @@ function isMissingReport(tasting: Pick<TastingRow, 'reportSubmittedAt' | 'status
   return tasting.status === 'completed' && !tasting.reportSubmittedAt
 }
 
+function isCalendarVisibleStatus(status: string) {
+  return status !== 'cancelled' && status !== 'declined'
+}
+
 export function TastingsPlanner({ mode, tastings, accounts, tasters, success, error }: Props) {
   const [visibleMonth, setVisibleMonth] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState(new Date())
@@ -78,9 +82,10 @@ export function TastingsPlanner({ mode, tastings, accounts, tasters, success, er
     return eachDayOfInterval({ start, end })
   }, [visibleMonth])
 
-  const dayTastings = tastings.filter(tasting => isSameDay(new Date(tasting.scheduledAt), selectedDate))
+  const calendarVisibleTastings = tastings.filter((tasting) => isCalendarVisibleStatus(tasting.status))
+  const dayTastings = calendarVisibleTastings.filter(tasting => isSameDay(new Date(tasting.scheduledAt), selectedDate))
   const now = new Date()
-  const upcomingTastings = tastings.filter(tasting => !isBefore(new Date(tasting.scheduledAt), now))
+  const upcomingTastings = calendarVisibleTastings.filter(tasting => !isBefore(new Date(tasting.scheduledAt), now))
   const previousTastings = tastings.filter(tasting => isBefore(new Date(tasting.scheduledAt), now))
   const filteredPreviousTastings = useMemo(() => {
     return previousTastings.filter((tasting) => {
@@ -124,7 +129,7 @@ export function TastingsPlanner({ mode, tastings, accounts, tasters, success, er
             </div>
             <div className="grid grid-cols-7 gap-2">
               {calendarDays.map(day => {
-                const events = tastings.filter(tasting => isSameDay(new Date(tasting.scheduledAt), day))
+                const events = calendarVisibleTastings.filter(tasting => isSameDay(new Date(tasting.scheduledAt), day))
                 const isSelected = isSameDay(day, selectedDate)
                 return (
                   <button
