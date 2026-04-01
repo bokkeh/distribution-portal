@@ -143,6 +143,13 @@ export default async function StaffAccountDetailPage({ params }: { params: Promi
           {/* Read-only summary */}
           <AccountDetailsCard account={account} mode="staff" />
 
+          <AccountNotesCard
+            accountId={account.id}
+            notes={notes}
+            currentUserId={session?.user?.id}
+            currentUserRoles={currentUserRoles}
+          />
+
           {/* Edit Form */}
           <Card id="edit-account">
             <CardHeader className="pb-3">
@@ -152,13 +159,6 @@ export default async function StaffAccountDetailPage({ params }: { params: Promi
               <AccountEditForm account={account} mode="staff" />
             </CardContent>
           </Card>
-
-          <AccountNotesCard
-            accountId={account.id}
-            notes={notes}
-            currentUserId={session?.user?.id}
-            currentUserRoles={currentUserRoles}
-          />
 
           <Card>
             <CardHeader className="pb-3">

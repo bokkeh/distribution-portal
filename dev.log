@@ -9209,3 +9209,5 @@ Caused by:
     2: Unable to open static sorted file 00001047.sst
     3: The system cannot find the path specified. (os error 3)
 Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)

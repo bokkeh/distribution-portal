@@ -190,6 +190,13 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
           {/* Read-only summary */}
           <AccountDetailsCard account={account} mode="admin" />
 
+          <AccountNotesCard
+            accountId={account.id}
+            notes={notes}
+            currentUserId={session?.user?.id}
+            currentUserRoles={currentUserRoles}
+          />
+
           {/* Edit Form */}
           <Card id="edit-account">
             <CardHeader className="pb-3">
@@ -199,13 +206,6 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
               <AccountEditForm account={account} mode="admin" />
             </CardContent>
           </Card>
-
-          <AccountNotesCard
-            accountId={account.id}
-            notes={notes}
-            currentUserId={session?.user?.id}
-            currentUserRoles={currentUserRoles}
-          />
 
           <Card>
             <CardHeader className="pb-3">
