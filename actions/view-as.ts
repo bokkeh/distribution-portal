@@ -8,19 +8,19 @@ import { eq } from 'drizzle-orm'
 import { auth } from '@/lib/auth/config'
 
 const COOKIE_NAME = '__portal_view_as'
-const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL ?? ''
 
-async function requireSuperAdmin() {
+async function requireAdmin() {
   const session = await auth()
   if (!session) redirect('/login')
-  if (session.user.email?.toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase()) {
+  const roles = session.user.roles ?? (session.user.role ? [session.user.role] : [])
+  if (!roles.includes('admin')) {
     redirect('/unauthorized')
   }
   return session
 }
 
 export async function startViewAsUser(targetUserId: string): Promise<{ error?: string }> {
-  await requireSuperAdmin()
+  await requireAdmin()
 
   const [target] = await db
     .select({ id: users.id, name: users.name, email: users.email, roles: users.roles })
@@ -71,10 +71,10 @@ export async function getViewAsUserId(): Promise<string | null> {
 }
 
 export async function searchAccountsForViewAs(query: string) {
-  await requireSuperAdmin()
+  await requireAdmin()
   const { db } = await import('@/db')
   const { customerAccounts } = await import('@/db/schema')
-  const { ilike, isNotNull } = await import('drizzle-orm')
+  const { ilike } = await import('drizzle-orm')
 
   if (!query.trim()) return []
 
@@ -86,7 +86,7 @@ export async function searchAccountsForViewAs(query: string) {
 }
 
 export async function startViewAsAccount(accountId: string): Promise<{ error?: string }> {
-  await requireSuperAdmin()
+  await requireAdmin()
 
   const { db } = await import('@/db')
   const { customerAccounts } = await import('@/db/schema')

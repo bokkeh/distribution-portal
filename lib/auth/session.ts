@@ -9,11 +9,10 @@ import { eq } from 'drizzle-orm'
 import type { Session } from 'next-auth'
 
 const VIEW_AS_COOKIE = '__portal_view_as'
-const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL ?? ''
 
 async function applyViewAs(session: Session): Promise<Session> {
-  // Only superadmin can use view-as
-  if (session.user.email?.toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase()) return session
+  const roles = mergeRoles(session.user.role as string, session.user.roles)
+  if (!roles.includes('admin')) return session
 
   try {
     const jar = await cookies()

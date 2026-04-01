@@ -24,7 +24,8 @@ function isMissingUserFeatureTable(error: unknown) {
 export default async function UserDetailPage({ params }: { params: Promise<{ userId: string }> }) {
   const { userId } = await params
   const session = await auth()
-  const isSuperAdmin = session?.user.email?.toLowerCase() === (process.env.SUPER_ADMIN_EMAIL ?? '').toLowerCase()
+  const currentUserRoles = session?.user?.roles ?? (session?.user?.role ? [session.user.role] : [])
+  const canSwitchView = currentUserRoles.includes('admin')
 
   const [user] = await db.select({
     id: users.id,
@@ -69,7 +70,7 @@ export default async function UserDetailPage({ params }: { params: Promise<{ use
         </div>
         <div className="flex items-center gap-2">
           <Badge variant={user.active ? 'success' : 'secondary'}>{user.active ? 'Active' : 'Inactive'}</Badge>
-          {isSuperAdmin && <ViewAsButton userId={user.id} userName={user.name} />}
+          {canSwitchView && <ViewAsButton userId={user.id} userName={user.name} />}
         </div>
       </div>
 

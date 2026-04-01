@@ -31,8 +31,8 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
   const { accountId } = await params
 
   const session = await auth()
-  const isSuperAdmin = session?.user?.email?.toLowerCase() === (process.env.SUPER_ADMIN_EMAIL ?? '').toLowerCase()
   const currentUserRoles = session?.user?.roles ?? (session?.user?.role ? [session.user.role] : [])
+  const canSwitchView = currentUserRoles.includes('admin')
 
   const account = await getCRMAccountDetail(accountId)
   if (!account) notFound()
@@ -141,7 +141,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
           )}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {isSuperAdmin && (
+          {canSwitchView && (
             <ViewAsAccountButton accountId={account.id} companyName={account.companyName} />
           )}
           <form action={syncToHubSpot.bind(null, account.id)}>
