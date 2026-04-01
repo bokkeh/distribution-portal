@@ -12,8 +12,7 @@ import { syncToHubSpot } from '@/actions/crm'
 import { getCRMAccountDetail } from '@/lib/crm/account-read'
 import Link from 'next/link'
 import {
-  ArrowLeft, RefreshCw, Phone, Mail, MapPin,
-  Clock, User, CreditCard, Building2, FileText, Hash, Truck, MessageSquare, CalendarDays, RefreshCcw, Bell,
+  ArrowLeft, RefreshCw, FileText, Truck, MessageSquare, CalendarDays, RefreshCcw,
 } from 'lucide-react'
 import { auth } from '@/lib/auth/config'
 import { ViewAsAccountButton } from '@/components/admin/ViewAsAccountButton'
@@ -24,6 +23,7 @@ import {
   getAvailableInventoryProducts,
 } from '@/lib/crm/account-detail-data'
 import { AccountActivityCard } from '@/components/crm/AccountActivityCard'
+import { AccountDetailsCard } from '@/components/crm/AccountDetailsCard'
 import { AccountInventoryOnHandCard } from '@/components/crm/AccountInventoryOnHandCard'
 import { AccountNotesCard } from '@/components/crm/AccountNotesCard'
 
@@ -188,81 +188,10 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
         {/* Left: Account Details + Edit Form */}
         <div className="lg:col-span-3 space-y-6">
           {/* Read-only summary */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2">
-                <Building2 className="w-4 h-4" />Account Details
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-              {account.address && (
-                <div className="flex gap-2 sm:col-span-2">
-                  <MapPin className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
-                  <div>
-                    <p>{account.address}</p>
-                    <p className="text-muted-foreground">{[account.city, account.state, account.zip].filter(Boolean).join(', ')}</p>
-                  </div>
-                </div>
-              )}
-              {account.phone && (
-                <div className="flex gap-2 items-center">
-                  <Phone className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <PhoneSmsButton phone={account.phone} recipientName={account.companyName} accountId={account.id} showIcon={false} className="text-sm" />
-                </div>
-              )}
-              {account.email && (
-                <div className="flex gap-2 items-center">
-                  <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <span className="truncate">{account.email}</span>
-                </div>
-              )}
-              {account.businessEmail && (
-                <div className="flex gap-2 items-center">
-                  <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <span className="truncate text-muted-foreground">{account.businessEmail}</span>
-                </div>
-              )}
-              {account.hoursOfOperation && (
-                <div className="flex gap-2 items-center">
-                  <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <span>{account.hoursOfOperation}</span>
-                </div>
-              )}
-              {account.dcAbraNumber && (
-                <div className="flex gap-2 items-center">
-                  <Hash className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <span>DC ABRA: {account.dcAbraNumber}</span>
-                </div>
-              )}
-              {(account.pocName || account.pocEmail || account.pocPhone) && (
-                <div className="flex gap-2 sm:col-span-2">
-                  <User className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
-                  <div>
-                    <p className="font-medium">{account.pocName ?? 'POC'}</p>
-                    {account.pocEmail && <p className="text-muted-foreground">{account.pocEmail}</p>}
-                    {account.pocPhone && <p className="text-muted-foreground">{account.pocPhone}</p>}
-                  </div>
-                </div>
-              )}
-              <div className="flex gap-2 items-center">
-                <CreditCard className="w-4 h-4 text-muted-foreground shrink-0" />
-                <span>Credit Limit: <span className="font-medium">{formatCurrency(account.creditLimit ?? '0')}</span></span>
-              </div>
-              <div className="flex gap-2 items-center sm:col-span-2">
-                <Bell className="w-4 h-4 text-muted-foreground shrink-0" />
-                <span className="text-muted-foreground">Notification preference:</span>
-                {(() => {
-                  const pref = account.notificationPreference ?? 'email'
-                  if (pref === 'sms') return <Badge variant="info">SMS only</Badge>
-                  if (pref === 'both') return <><Badge variant="info">SMS</Badge><Badge variant="secondary">Email</Badge></>
-                  return <Badge variant="secondary">Email only</Badge>
-                })()}
-              </div>
-            </CardContent>
-          </Card>
+          <AccountDetailsCard account={account} mode="admin" />
 
           {/* Edit Form */}
-          <Card>
+          <Card id="edit-account">
             <CardHeader className="pb-3">
               <CardTitle>Edit Account</CardTitle>
             </CardHeader>
