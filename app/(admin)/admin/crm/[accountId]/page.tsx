@@ -15,23 +15,31 @@ import {
   ArrowLeft, RefreshCw, Phone, Mail, MapPin,
   Clock, User, CreditCard, Building2, FileText, Hash, Truck, MessageSquare, CalendarDays, RefreshCcw, Bell,
 } from 'lucide-react'
-import { getActivityTimeline } from '@/lib/activity/read'
-import { ActivityTimeline } from '@/components/activity/ActivityTimeline'
 import { auth } from '@/lib/auth/config'
 import { ViewAsAccountButton } from '@/components/admin/ViewAsAccountButton'
+import {
+  getAccountActivityFeed,
+  getAccountInventoryOnHand,
+  getAccountNotes,
+  getAvailableInventoryProducts,
+} from '@/lib/crm/account-detail-data'
+import { AccountActivityCard } from '@/components/crm/AccountActivityCard'
+import { AccountInventoryOnHandCard } from '@/components/crm/AccountInventoryOnHandCard'
+import { AccountNotesCard } from '@/components/crm/AccountNotesCard'
 
 export default async function AccountDetailPage({ params }: { params: Promise<{ accountId: string }> }) {
   const { accountId } = await params
 
   const session = await auth()
   const isSuperAdmin = session?.user?.email?.toLowerCase() === (process.env.SUPER_ADMIN_EMAIL ?? '').toLowerCase()
+  const currentUserRoles = session?.user?.roles ?? (session?.user?.role ? [session.user.role] : [])
 
   const account = await getCRMAccountDetail(accountId)
   if (!account) notFound()
 
   const accountPhones = [account.phone, account.businessPhone, account.pocPhone].filter(Boolean) as string[]
 
-  const [accountContactsResult, recentOrdersResult, recentInvoicesResult, orderCountResult, recentDeliveriesResult, recentTextsResult, recentTastingsResult] = await Promise.allSettled([
+  const [accountContactsResult, recentOrdersResult, recentInvoicesResult, orderCountResult, recentDeliveriesResult, recentTextsResult, recentTastingsResult, accountNotes, inventoryOnHand, inventoryProducts, activityFeed] = await Promise.allSettled([
     db.select({
       id: contacts.id,
       name: contacts.name,
@@ -82,6 +90,10 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
       scheduledAt: tastings.scheduledAt,
       endAt: tastings.endAt,
     }).from(tastings).where(eq(tastings.customerId, accountId)).orderBy(desc(tastings.scheduledAt)).limit(6),
+    getAccountNotes(accountId),
+    getAccountInventoryOnHand(accountId),
+    getAvailableInventoryProducts(),
+    getAccountActivityFeed(accountId, 'admin'),
   ])
 
   const accountContacts = accountContactsResult.status === 'fulfilled' ? accountContactsResult.value : []
@@ -91,16 +103,10 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
   const recentDeliveries = recentDeliveriesResult.status === 'fulfilled' ? recentDeliveriesResult.value : []
   const recentTexts = recentTextsResult.status === 'fulfilled' ? recentTextsResult.value : []
   const recentTastings = recentTastingsResult.status === 'fulfilled' ? recentTastingsResult.value : []
-  const timeline = await getActivityTimeline('account', account.id, [
-    {
-      id: `account-created-${account.id}`,
-      kind: 'account_created',
-      title: 'Account created',
-      body: `${account.companyName} was added to the CRM.`,
-      createdAt: account.createdAt,
-      actorName: null,
-    },
-  ])
+  const notes = accountNotes.status === 'fulfilled' ? accountNotes.value : []
+  const inventoryItems = inventoryOnHand.status === 'fulfilled' ? inventoryOnHand.value : []
+  const productOptions = inventoryProducts.status === 'fulfilled' ? inventoryProducts.value : []
+  const activityItems = activityFeed.status === 'fulfilled' ? activityFeed.value : []
 
   const creditAvailable = Math.max(0, Number(account.creditLimit ?? 0) - Number(account.balance ?? 0))
   const accountHealthSignals = [
@@ -174,6 +180,8 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
           </CardContent>
         </Card>
       </div>
+
+      <AccountInventoryOnHandCard accountId={account.id} items={inventoryItems} products={productOptions} />
 
       {/* Main Content */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
@@ -262,6 +270,13 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
               <AccountEditForm account={account} mode="admin" />
             </CardContent>
           </Card>
+
+          <AccountNotesCard
+            accountId={account.id}
+            notes={notes}
+            currentUserId={session?.user?.id}
+            currentUserRoles={currentUserRoles}
+          />
 
           <Card>
             <CardHeader className="pb-3">
@@ -528,7 +543,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
         </div>
       </div>
 
-      <ActivityTimeline items={timeline} title="Account Timeline" />
+      <AccountActivityCard items={activityItems} />
     </div>
   )
 }

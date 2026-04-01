@@ -15,14 +15,26 @@ import {
   ArrowLeft, Phone, Mail, MapPin,
   Clock, User, CreditCard, Building2, FileText, Hash, TrendingUp,
 } from 'lucide-react'
+import { auth } from '@/lib/auth/config'
+import {
+  getAccountActivityFeed,
+  getAccountInventoryOnHand,
+  getAccountNotes,
+  getAvailableInventoryProducts,
+} from '@/lib/crm/account-detail-data'
+import { AccountActivityCard } from '@/components/crm/AccountActivityCard'
+import { AccountInventoryOnHandCard } from '@/components/crm/AccountInventoryOnHandCard'
+import { AccountNotesCard } from '@/components/crm/AccountNotesCard'
 
 export default async function StaffAccountDetailPage({ params }: { params: Promise<{ accountId: string }> }) {
   const { accountId } = await params
+  const session = await auth()
+  const currentUserRoles = session?.user?.roles ?? (session?.user?.role ? [session.user.role] : [])
 
   const account = await getCRMAccountDetail(accountId)
   if (!account) notFound()
 
-  const [accountContactsResult, recentOrdersResult, recentInvoicesResult, orderCountResult] = await Promise.allSettled([
+  const [accountContactsResult, recentOrdersResult, recentInvoicesResult, orderCountResult, accountNotes, inventoryOnHand, inventoryProducts, activityFeed] = await Promise.allSettled([
     db.select({
       id: contacts.id,
       name: contacts.name,
@@ -45,12 +57,20 @@ export default async function StaffAccountDetailPage({ params }: { params: Promi
       status: invoices.status,
     }).from(invoices).where(eq(invoices.customerId, accountId)).orderBy(desc(invoices.createdAt)).limit(5),
     db.select({ total: count() }).from(orders).where(eq(orders.customerId, accountId)),
+    getAccountNotes(accountId),
+    getAccountInventoryOnHand(accountId),
+    getAvailableInventoryProducts(),
+    getAccountActivityFeed(accountId, 'staff'),
   ])
 
   const accountContacts = accountContactsResult.status === 'fulfilled' ? accountContactsResult.value : []
   const recentOrders = recentOrdersResult.status === 'fulfilled' ? recentOrdersResult.value : []
   const recentInvoices = recentInvoicesResult.status === 'fulfilled' ? recentInvoicesResult.value : []
   const orderCount = orderCountResult.status === 'fulfilled' ? orderCountResult.value[0] : { total: 0 }
+  const notes = accountNotes.status === 'fulfilled' ? accountNotes.value : []
+  const inventoryItems = inventoryOnHand.status === 'fulfilled' ? inventoryOnHand.value : []
+  const productOptions = inventoryProducts.status === 'fulfilled' ? inventoryProducts.value : []
+  const activityItems = activityFeed.status === 'fulfilled' ? activityFeed.value : []
 
   const creditAvailable = Math.max(0, Number(account.creditLimit ?? 0) - Number(account.balance ?? 0))
   const accountHealthSignals = [
@@ -113,6 +133,8 @@ export default async function StaffAccountDetailPage({ params }: { params: Promi
           </CardContent>
         </Card>
       </div>
+
+      <AccountInventoryOnHandCard accountId={account.id} items={inventoryItems} products={productOptions} />
 
       {/* Main Content */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
@@ -191,6 +213,13 @@ export default async function StaffAccountDetailPage({ params }: { params: Promi
               <AccountEditForm account={account} mode="staff" />
             </CardContent>
           </Card>
+
+          <AccountNotesCard
+            accountId={account.id}
+            notes={notes}
+            currentUserId={session?.user?.id}
+            currentUserRoles={currentUserRoles}
+          />
 
           <Card>
             <CardHeader className="pb-3">
@@ -327,6 +356,8 @@ export default async function StaffAccountDetailPage({ params }: { params: Promi
           </Card>
         </div>
       </div>
+
+      <AccountActivityCard items={activityItems} />
     </div>
   )
 }

@@ -222,7 +222,7 @@ function revalidateContactPaths(customerId: string) {
 }
 
 export async function addContact(formData: FormData) {
-  await requireAdminOrStaff()
+  const session = await requireAdminOrStaff()
 
   const customerId = formData.get('customerId') as string
   const name = formData.get('name') as string
@@ -243,11 +243,27 @@ export async function addContact(formData: FormData) {
     isPrimary,
   })
 
+  await logActivityEvent({
+    entityType: 'account',
+    entityId: customerId,
+    actorUserId: session.user.id,
+    kind: 'contact_added',
+    title: 'Contact added',
+    body: `${name} was added to the account contacts.`,
+    metadata: {
+      contactName: name,
+      email,
+      phone,
+      preferredContact,
+      isPrimary,
+    },
+  })
+
   revalidateContactPaths(customerId)
 }
 
 export async function updateContact(contactId: string, formData: FormData) {
-  await requireAdminOrStaff()
+  const session = await requireAdminOrStaff()
 
   const name = (formData.get('name') as string)?.trim()
   const email = (formData.get('email') as string)?.trim() || null
@@ -257,8 +273,18 @@ export async function updateContact(contactId: string, formData: FormData) {
   const title = (formData.get('title') as string)?.trim() || null
   const isPrimary = formData.get('isPrimary') === 'on'
 
-  const [contact] = await db.select({ customerId: contacts.customerId }).from(contacts).where(eq(contacts.id, contactId))
+  const [contact] = await db.select().from(contacts).where(eq(contacts.id, contactId))
   if (!contact) return { error: 'Contact not found' }
+
+  const changedFields = [
+    ['name', contact.name, name],
+    ['email', contact.email, email],
+    ['phone', contact.phone, phone],
+    ['phoneType', contact.phoneType, phoneType],
+    ['preferredContact', contact.preferredContact, preferredContact],
+    ['title', contact.title, title],
+    ['isPrimary', String(contact.isPrimary), String(isPrimary)],
+  ].filter(([, previousValue, nextValue]) => (previousValue ?? null) !== (nextValue ?? null)).map(([field]) => field as string)
 
   await db.update(contacts).set({
     name,
@@ -270,17 +296,66 @@ export async function updateContact(contactId: string, formData: FormData) {
     isPrimary,
   }).where(eq(contacts.id, contactId))
 
+  await logActivityEvent({
+    entityType: 'account',
+    entityId: contact.customerId,
+    actorUserId: session.user.id,
+    kind: 'contact_updated',
+    title: 'Contact updated',
+    body: changedFields.length
+      ? `${contact.name} was updated. Changed: ${changedFields.join(', ')}.`
+      : `${contact.name} was updated.`,
+    metadata: {
+      contactId,
+      changedFields,
+      before: {
+        name: contact.name,
+        email: contact.email,
+        phone: contact.phone,
+        phoneType: contact.phoneType,
+        preferredContact: contact.preferredContact,
+        title: contact.title,
+        isPrimary: contact.isPrimary,
+      },
+      after: {
+        name,
+        email,
+        phone,
+        phoneType,
+        preferredContact,
+        title,
+        isPrimary,
+      },
+    },
+  })
+
   revalidateContactPaths(contact.customerId)
   return { success: true }
 }
 
 export async function deleteContact(contactId: string) {
-  await requireAdminOrStaff()
+  const session = await requireAdminOrStaff()
 
-  const [contact] = await db.select({ customerId: contacts.customerId }).from(contacts).where(eq(contacts.id, contactId))
+  const [contact] = await db.select().from(contacts).where(eq(contacts.id, contactId))
   if (!contact) return { error: 'Contact not found' }
 
   await db.delete(contacts).where(eq(contacts.id, contactId))
+
+  await logActivityEvent({
+    entityType: 'account',
+    entityId: contact.customerId,
+    actorUserId: session.user.id,
+    kind: 'contact_deleted',
+    title: 'Contact removed',
+    body: `${contact.name} was removed from the account contacts.`,
+    metadata: {
+      contactId,
+      contactName: contact.name,
+      email: contact.email,
+      phone: contact.phone,
+    },
+  })
+
   revalidateContactPaths(contact.customerId)
   return { success: true }
 }
