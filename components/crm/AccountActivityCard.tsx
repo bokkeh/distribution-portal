@@ -70,9 +70,20 @@ function renderMetadata(metadata: Record<string, unknown>) {
   )
 }
 
-export function AccountActivityCard({ items }: { items: AccountActivityItem[] }) {
+export function AccountActivityCard({
+  items,
+  showFilters = true,
+  maxItems,
+  href,
+}: {
+  items: AccountActivityItem[]
+  showFilters?: boolean
+  maxItems?: number
+  href?: string
+}) {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]['value']>('all')
-  const [visibleCount, setVisibleCount] = useState(15)
+  const initialCount = maxItems ?? 15
+  const [visibleCount, setVisibleCount] = useState(initialCount)
 
   const filteredItems = useMemo(
     () => items.filter((item) => filter === 'all' || item.category === filter),
@@ -89,27 +100,32 @@ export function AccountActivityCard({ items }: { items: AccountActivityItem[] })
             <CardTitle>Activity</CardTitle>
             <p className="text-sm text-slate-500">Complete account history, newest first.</p>
           </div>
-          <span className="text-xs uppercase tracking-wide text-slate-400">{filteredItems.length} events</span>
+          <div className="flex items-center gap-3">
+            {href ? <Link href={href} className="text-xs font-medium text-blue-600 hover:underline">View full tab</Link> : null}
+            <span className="text-xs uppercase tracking-wide text-slate-400">{filteredItems.length} events</span>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {FILTERS.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => {
-                setFilter(option.value)
-                setVisibleCount(15)
-              }}
-              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                filter === option.value
-                  ? 'border-slate-900 bg-slate-900 text-white'
-                  : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'
-              }`}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
+        {showFilters ? (
+          <div className="flex flex-wrap gap-2">
+            {FILTERS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => {
+                  setFilter(option.value)
+                  setVisibleCount(initialCount)
+                }}
+                className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                  filter === option.value
+                    ? 'border-slate-900 bg-slate-900 text-white'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-900'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
       </CardHeader>
       <CardContent>
         {visibleItems.length === 0 ? (

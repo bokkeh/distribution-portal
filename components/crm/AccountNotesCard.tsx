@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Pencil, Pin, Trash2, X } from 'lucide-react'
@@ -32,11 +33,15 @@ export function AccountNotesCard({
   notes,
   currentUserId,
   currentUserRoles,
+  maxItems,
+  href,
 }: {
   accountId: string
   notes: AccountNoteItem[]
   currentUserId: string | undefined
   currentUserRoles: string[]
+  maxItems?: number
+  href?: string
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -46,6 +51,7 @@ export function AccountNotesCard({
   const [editing, setEditing] = useState<EditingState>(null)
 
   const canManageAll = currentUserRoles.includes('admin') || currentUserRoles.includes('staff')
+  const visibleNotes = typeof maxItems === 'number' ? notes.slice(0, maxItems) : notes
 
   function canManageNote(note: AccountNoteItem) {
     return canManageAll || (currentUserId && note.authorUserId === currentUserId)
@@ -111,7 +117,10 @@ export function AccountNotesCard({
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle>Notes</CardTitle>
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle>Notes</CardTitle>
+          {href ? <Link href={href} className="text-xs font-medium text-blue-600 hover:underline">View full tab</Link> : null}
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -143,11 +152,11 @@ export function AccountNotesCard({
           </div>
         </div>
 
-        {notes.length === 0 ? (
+        {visibleNotes.length === 0 ? (
           <p className="text-sm text-slate-500">No internal notes yet.</p>
         ) : (
           <div className="space-y-3">
-            {notes.map((note) => {
+            {visibleNotes.map((note) => {
               const isEditing = editing?.id === note.id
               return (
                 <div key={note.id} className="rounded-2xl border border-slate-100 bg-white px-4 py-4 shadow-sm">

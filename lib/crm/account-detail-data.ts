@@ -10,9 +10,13 @@ import {
   invoices,
   orders,
   products,
+  smsMessages,
+  tastingReports,
   tastings,
   users,
 } from '@/db/schema'
+import { signedPhotoUrl } from '@/lib/gcs/photo-url'
+import type { AccountMediaItem } from '@/components/crm/AccountMediaGalleryCard'
 
 export type AccountNoteItem = {
   id: string
@@ -55,6 +59,8 @@ export type AccountActivityItem = {
   relatedHref: string | null
   metadata: Record<string, unknown>
 }
+
+export type AccountMediaFeedItem = AccountMediaItem
 
 function isMissingTable(error: unknown, tableName: string) {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
@@ -291,4 +297,153 @@ export async function getAccountActivityFeed(accountId: string, mode: 'admin' | 
       metadata: {},
     }]
   }
+}
+
+export async function getAccountMediaFeed(accountId: string, accountPhones: string[], mode: 'admin' | 'staff', limit?: number) {
+  const items: AccountMediaFeedItem[] = []
+
+  try {
+    const deliveryRows = await db
+      .select({
+        id: deliveryStops.id,
+        proofOfDeliveryUrl: deliveryStops.proofOfDeliveryUrl,
+        shelfPhotoUrl: deliveryStops.shelfPhotoUrl,
+        additionalPhotoUrl: deliveryStops.additionalPhotoUrl,
+        additionalPhotoUrl2: deliveryStops.additionalPhotoUrl2,
+        additionalPhotoUrl3: deliveryStops.additionalPhotoUrl3,
+        additionalPhotoUrl4: deliveryStops.additionalPhotoUrl4,
+        additionalPhotoUrl5: deliveryStops.additionalPhotoUrl5,
+        completedAt: deliveryStops.completedAt,
+        deliveryId: deliveries.id,
+      })
+      .from(deliveryStops)
+      .innerJoin(deliveries, eq(deliveryStops.deliveryId, deliveries.id))
+      .where(eq(deliveryStops.customerId, accountId))
+      .orderBy(desc(deliveryStops.completedAt), desc(deliveries.createdAt))
+
+    for (const row of deliveryRows) {
+      const urls = [
+        { key: 'proof', label: 'Proof of delivery', url: row.proofOfDeliveryUrl },
+        { key: 'shelf', label: 'Shelf photo', url: row.shelfPhotoUrl },
+        { key: 'extra-1', label: 'Additional photo', url: row.additionalPhotoUrl },
+        { key: 'extra-2', label: 'Additional photo', url: row.additionalPhotoUrl2 },
+        { key: 'extra-3', label: 'Additional photo', url: row.additionalPhotoUrl3 },
+        { key: 'extra-4', label: 'Additional photo', url: row.additionalPhotoUrl4 },
+        { key: 'extra-5', label: 'Additional photo', url: row.additionalPhotoUrl5 },
+      ]
+
+      for (const media of urls) {
+        const safeUrl = signedPhotoUrl(media.url)
+        if (!safeUrl) continue
+        items.push({
+          id: `${row.id}-${media.key}`,
+          url: safeUrl,
+          thumbnailUrl: safeUrl,
+          label: media.label,
+          sourceType: 'delivery',
+          sourceLabel: `Delivery ${String(row.deliveryId).slice(-8).toUpperCase()}`,
+          caption: null,
+          createdAt: row.completedAt ?? new Date(),
+          relatedHref: mode === 'admin' ? `/admin/deliveries/${row.deliveryId}` : null,
+        })
+      }
+    }
+  } catch (error) {
+    if (!isMissingTable(error, 'delivery_stops')) {
+      console.error('Failed to load account delivery media:', error)
+    }
+  }
+
+  try {
+    const tastingRows = await db
+      .select({
+        tastingId: tastings.id,
+        eventName: tastings.eventName,
+        submittedAt: tastingReports.submittedAt,
+        setupPhotoUrl: tastingReports.setupPhotoUrl,
+        shelfPhotoUrls: tastingReports.shelfPhotoUrls,
+      })
+      .from(tastings)
+      .innerJoin(tastingReports, eq(tastingReports.tastingId, tastings.id))
+      .where(eq(tastings.customerId, accountId))
+      .orderBy(desc(tastingReports.submittedAt))
+
+    for (const row of tastingRows) {
+      const setupUrl = signedPhotoUrl(row.setupPhotoUrl)
+      if (setupUrl) {
+        items.push({
+          id: `${row.tastingId}-setup`,
+          url: setupUrl,
+          thumbnailUrl: setupUrl,
+          label: 'Tasting setup',
+          sourceType: 'tasting',
+          sourceLabel: row.eventName,
+          caption: null,
+          createdAt: row.submittedAt,
+          relatedHref: mode === 'admin' ? `/admin/tastings/${row.tastingId}` : null,
+        })
+      }
+
+      const shelfPhotos = Array.isArray(row.shelfPhotoUrls) ? row.shelfPhotoUrls : []
+      shelfPhotos.forEach((photoUrl, index) => {
+        const safeUrl = signedPhotoUrl(photoUrl)
+        if (!safeUrl) return
+        items.push({
+          id: `${row.tastingId}-shelf-${index}`,
+          url: safeUrl,
+          thumbnailUrl: safeUrl,
+          label: `Tasting shelf photo ${index + 1}`,
+          sourceType: 'tasting',
+          sourceLabel: row.eventName,
+          caption: null,
+          createdAt: row.submittedAt,
+          relatedHref: mode === 'admin' ? `/admin/tastings/${row.tastingId}` : null,
+        })
+      })
+    }
+  } catch (error) {
+    if (!isMissingTable(error, 'tasting_reports')) {
+      console.error('Failed to load account tasting media:', error)
+    }
+  }
+
+  try {
+    if (accountPhones.length > 0) {
+      const smsRows = await db
+        .select({
+          id: smsMessages.id,
+          mediaUrls: smsMessages.mediaUrls,
+          body: smsMessages.body,
+          createdAt: smsMessages.createdAt,
+          direction: smsMessages.direction,
+        })
+        .from(smsMessages)
+        .where(inArray(smsMessages.phoneNumber, accountPhones))
+        .orderBy(desc(smsMessages.createdAt))
+
+      for (const row of smsRows) {
+        const urls = Array.isArray(row.mediaUrls) ? row.mediaUrls : []
+        urls.forEach((url, index) => {
+          items.push({
+            id: `${row.id}-${index}`,
+            url,
+            thumbnailUrl: url,
+            label: row.direction === 'inbound' ? 'Inbound MMS' : 'Outbound MMS',
+            sourceType: 'sms',
+            sourceLabel: row.direction === 'inbound' ? 'Customer text' : 'Team text',
+            caption: row.body || null,
+            createdAt: row.createdAt,
+            relatedHref: null,
+          })
+        })
+      }
+    }
+  } catch (error) {
+    if (!isMissingTable(error, 'sms_messages')) {
+      console.error('Failed to load account SMS media:', error)
+    }
+  }
+
+  const sorted = items.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+  return typeof limit === 'number' ? sorted.slice(0, limit) : sorted
 }
