@@ -2,6 +2,20 @@
 
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
+import {
+  Bell,
+  Boxes,
+  ClipboardList,
+  Mail,
+  MessageSquare,
+  NotebookPen,
+  Package,
+  Phone,
+  Settings2,
+  ShoppingCart,
+  Truck,
+  Wine,
+} from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -24,6 +38,27 @@ const FILTERS = [
 
 function formatEventType(value: string) {
   return value.replace(/_/g, ' ')
+}
+
+function getActivityVisual(item: AccountActivityItem) {
+  if (item.category === 'orders') return { icon: ShoppingCart, color: 'bg-emerald-500 text-emerald-700' }
+  if (item.category === 'deliveries') return { icon: Truck, color: 'bg-blue-500 text-blue-700' }
+  if (item.category === 'tastings') return { icon: Wine, color: 'bg-amber-500 text-amber-700' }
+  if (item.category === 'calls') return { icon: Phone, color: 'bg-violet-500 text-violet-700' }
+  if (item.category === 'emails') return { icon: Mail, color: 'bg-sky-500 text-sky-700' }
+  if (item.category === 'sms') return { icon: MessageSquare, color: 'bg-cyan-500 text-cyan-700' }
+  if (item.category === 'notes') return { icon: NotebookPen, color: 'bg-fuchsia-500 text-fuchsia-700' }
+  if (item.category === 'profile_updates') return { icon: Settings2, color: 'bg-slate-500 text-slate-700' }
+  if (item.category === 'inventory') return { icon: Boxes, color: 'bg-orange-500 text-orange-700' }
+
+  if (item.eventType.includes('delivery')) return { icon: Truck, color: 'bg-blue-500 text-blue-700' }
+  if (item.eventType.includes('order')) return { icon: Package, color: 'bg-emerald-500 text-emerald-700' }
+  if (item.eventType.includes('inventory')) return { icon: Boxes, color: 'bg-orange-500 text-orange-700' }
+  if (item.eventType.includes('note')) return { icon: NotebookPen, color: 'bg-fuchsia-500 text-fuchsia-700' }
+  if (item.eventType.includes('email')) return { icon: Mail, color: 'bg-sky-500 text-sky-700' }
+  if (item.eventType.includes('sms') || item.eventType.includes('text')) return { icon: MessageSquare, color: 'bg-cyan-500 text-cyan-700' }
+
+  return { icon: ClipboardList, color: 'bg-slate-500 text-slate-700' }
 }
 
 function renderMetadata(metadata: Record<string, unknown>) {
@@ -133,8 +168,16 @@ export function AccountActivityCard({
         ) : (
           <div className="space-y-4">
             {visibleItems.map((item) => (
-              <div key={item.id} className="relative pl-5">
-                <span className="absolute left-0 top-1.5 h-2.5 w-2.5 rounded-full bg-blue-600" />
+              <div key={item.id} className="relative pl-12">
+                {(() => {
+                  const visual = getActivityVisual(item)
+                  const Icon = visual.icon
+                  return (
+                    <span className={`absolute left-0 top-1 flex h-8 w-8 items-center justify-center rounded-full ${visual.color.replace('text-', 'bg-').replace('-700', '-100')}`}>
+                      <Icon className={`h-4 w-4 ${visual.color.split(' ')[1] ?? 'text-slate-700'}`} />
+                    </span>
+                  )
+                })()}
                 <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex flex-wrap items-center gap-2">
