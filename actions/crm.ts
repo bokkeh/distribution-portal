@@ -4,9 +4,9 @@ import { db } from '@/db'
 import { accountPreferences, activityEvents, contacts, customerAccounts, deliveryStops, invoices, orders, salesMembers, salesRouteStops, smsThreads, tastings } from '@/db/schema'
 import { requireAdminOrStaff, requireRole } from '@/lib/auth/session'
 import { geocodeAddress } from '@/lib/maps/geocode'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
-import { upsertHubSpotContact, getHubSpotCompanies, updateHubSpotCompany } from '@/lib/hubspot/client'
+import { getHubSpotCompanyContacts, upsertHubSpotContact, getHubSpotCompanies, updateHubSpotCompany } from '@/lib/hubspot/client'
 import { logActivityEvent } from '@/lib/activity/log'
 import { normalizeAccountGeography } from '@/lib/pricing/geographic-service'
 
@@ -24,6 +24,70 @@ function combineTextValues(...values: Array<string | null | undefined>) {
     .map((value) => value?.trim())
     .filter((value): value is string => Boolean(value))
   return parts.length ? Array.from(new Set(parts)).join('\n') : null
+}
+
+function combineContactName(firstname: string | null, lastname: string | null) {
+  return [firstname?.trim(), lastname?.trim()].filter(Boolean).join(' ').trim()
+}
+
+function validateWebsiteUrl(value: string | null): string | null {
+  if (!value) return null
+  try {
+    const url = new URL(value)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      throw new Error('Website must use http or https.')
+    }
+    return value
+  } catch {
+    throw new Error('Website must be a valid http or https URL.')
+  }
+}
+
+async function syncHubSpotCompanyContactsToLocalAccount(accountId: string, hubspotCompanyId: string) {
+  const hubspotContacts = await getHubSpotCompanyContacts(hubspotCompanyId)
+  if (!hubspotContacts.length) return { imported: 0, updated: 0 }
+
+  const existingContacts = await db.select().from(contacts).where(eq(contacts.customerId, accountId))
+  const hasPrimaryContact = existingContacts.some(c => c.isPrimary)
+  const byEmail = new Map(existingContacts.filter(c => c.email).map(c => [c.email!, c]))
+  const byHubspotId = new Map(existingContacts.filter(c => c.hubspotContactId).map(c => [c.hubspotContactId!, c]))
+
+  const toInsert: (typeof contacts.$inferInsert)[] = []
+  const toUpdate: { id: string; values: Partial<typeof contacts.$inferInsert> }[] = []
+
+  for (const hubspotContact of hubspotContacts) {
+    const name = combineContactName(hubspotContact.firstname, hubspotContact.lastname) || 'HubSpot contact'
+    const existingContact = (hubspotContact.email ? byEmail.get(hubspotContact.email) : null)
+      ?? byHubspotId.get(hubspotContact.id)
+
+    if (existingContact) {
+      toUpdate.push({
+        id: existingContact.id,
+        values: { name, email: hubspotContact.email, phone: hubspotContact.phone, title: hubspotContact.jobtitle, hubspotContactId: hubspotContact.id },
+      })
+    } else {
+      toInsert.push({
+        customerId: accountId,
+        name,
+        email: hubspotContact.email,
+        phone: hubspotContact.phone,
+        title: hubspotContact.jobtitle,
+        isPrimary: !hasPrimaryContact && toInsert.length === 0,
+        hubspotContactId: hubspotContact.id,
+      })
+    }
+  }
+
+  if (toInsert.length > 0) {
+    await db.insert(contacts).values(toInsert)
+  }
+  if (toUpdate.length > 0) {
+    await Promise.all(
+      toUpdate.map(({ id, values }) => db.update(contacts).set(values).where(eq(contacts.id, id)))
+    )
+  }
+
+  return { imported: toInsert.length, updated: toUpdate.length }
 }
 
 export async function mergeCustomerAccounts(formData: FormData) {
@@ -82,6 +146,7 @@ export async function mergeCustomerAccounts(formData: FormData) {
     preferredDeliveryDays: combineTextValues(targetAccount.preferredDeliveryDays, sourceAccount.preferredDeliveryDays),
     preferredDeliveryTimes: combineTextValues(targetAccount.preferredDeliveryTimes, sourceAccount.preferredDeliveryTimes),
     additionalLocations: combineTextValues(targetAccount.additionalLocations, sourceAccount.additionalLocations),
+    website: targetAccount.website ?? sourceAccount.website,
   }
 
   await db.update(customerAccounts).set(mergedFields).where(eq(customerAccounts.id, targetAccountId))
@@ -210,8 +275,14 @@ export async function syncToHubSpot(accountId: string) {
       .where(eq(customerAccounts.id, accountId))
   }
 
+  if (account.hubspotCompanyId) {
+    await syncHubSpotCompanyContactsToLocalAccount(accountId, account.hubspotCompanyId)
+  }
+
   revalidatePath(`/admin/crm/${accountId}`)
   revalidatePath(`/staff/crm/${accountId}`)
+  revalidatePath(`/admin/crm/${accountId}/contacts`)
+  revalidatePath(`/staff/crm/${accountId}/contacts`)
 }
 
 function revalidateContactPaths(customerId: string) {
@@ -373,6 +444,8 @@ export async function importHubSpotCompany(hubspotCompanyId: string) {
   const company = companies.find(c => c.id === hubspotCompanyId)
   if (!company) return { error: 'Company not found' }
 
+  const safeWebsite = (() => { try { return validateWebsiteUrl(company.website) } catch { return null } })()
+
   await db.insert(customerAccounts).values({
     companyName: company.name,
     contactName: null,
@@ -381,12 +454,19 @@ export async function importHubSpotCompany(hubspotCompanyId: string) {
     state: company.state,
     zip: company.zip,
     phone: company.phone,
+    website: safeWebsite,
     dcAbraNumber: null,
     hubspotCompanyId: company.id,
     creditLimit: '0',
     balance: '0',
     paymentTerms: 'NET30',
   })
+
+  const [createdAccount] = await db.select({ id: customerAccounts.id }).from(customerAccounts).where(eq(customerAccounts.hubspotCompanyId, company.id)).limit(1)
+  if (createdAccount) {
+    await syncHubSpotCompanyContactsToLocalAccount(createdAccount.id, company.id)
+    revalidateContactPaths(createdAccount.id)
+  }
 
   revalidatePath('/admin/crm')
   return { success: true }
@@ -420,6 +500,7 @@ export async function updateHubSpotCompanyAction(
       city: data.city || null,
       state: data.state || null,
       zip: data.zip || null,
+      website: (() => { try { return validateWebsiteUrl(data.website || null) } catch { return null } })(),
     }).where(eq(customerAccounts.id, localAccountId))
   }
 
@@ -452,6 +533,7 @@ export async function updateCustomerAccount(
     const pocEmail = (formData.get('pocEmail') as string) || null
     const contactName = (formData.get('contactName') as string) || null
     const hoursOfOperation = (formData.get('hoursOfOperation') as string) || null
+    const website = validateWebsiteUrl((formData.get('website') as string) || null)
     const dcAbraNumber = (formData.get('dcAbraNumber') as string) || null
     const businessType = (formData.get('businessType') as string) || null
     const creditLimit = formData.get('creditLimit') as string
@@ -479,6 +561,7 @@ export async function updateCustomerAccount(
       ['pocPhone', existingAccount.pocPhone, pocPhone],
       ['pocEmail', existingAccount.pocEmail, pocEmail],
       ['hoursOfOperation', existingAccount.hoursOfOperation, hoursOfOperation],
+      ['website', existingAccount.website, website],
       ['dcAbraNumber', existingAccount.dcAbraNumber, dcAbraNumber],
       ['businessType', existingAccount.businessType, businessType],
       ['creditLimit', existingAccount.creditLimit, creditLimit],
@@ -501,6 +584,7 @@ export async function updateCustomerAccount(
       pocPhone,
       pocEmail,
       hoursOfOperation,
+      website,
       dcAbraNumber,
       businessType,
       creditLimit,
@@ -529,6 +613,7 @@ export async function updateCustomerAccount(
         city: city ?? '',
         state: normalizedGeography.state ?? '',
         zip: zip ?? '',
+        website: website ?? '',
       }).catch(() => false)
     }
 
@@ -558,7 +643,6 @@ export async function updateCustomerAccount(
     revalidatePath('/staff/crm')
     revalidatePath(`/staff/crm/${id}`)
     revalidatePath(`/staff/crm/${id}/contacts`)
-    revalidatePath(`/${mode}/crm/${id}`)
     return { success: true, changedFields }
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Failed to update account.' }
@@ -587,6 +671,7 @@ export async function createCustomerAccount(
     const pocEmail = ((formData.get('pocEmail') as string) || '').trim() || null
     const contactName = ((formData.get('contactName') as string) || '').trim() || null
     const hoursOfOperation = ((formData.get('hoursOfOperation') as string) || '').trim() || null
+    const website = validateWebsiteUrl(((formData.get('website') as string) || '').trim() || null)
     const dcAbraNumber = ((formData.get('dcAbraNumber') as string) || '').trim() || null
     const creditLimit = ((formData.get('creditLimit') as string) || '0').trim() || '0'
     const paymentTerms = ((formData.get('paymentTerms') as string) || 'NET30').trim() || 'NET30'
@@ -612,6 +697,7 @@ export async function createCustomerAccount(
       pocPhone,
       pocEmail,
       hoursOfOperation,
+      website,
       dcAbraNumber,
       creditLimit,
       paymentTerms,

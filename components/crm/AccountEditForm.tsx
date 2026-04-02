@@ -27,6 +27,7 @@ type Account = {
   pocPhone?: string | null
   pocEmail?: string | null
   hoursOfOperation?: string | null
+  website?: string | null
   dcAbraNumber: string | null
   businessType?: string | null
   creditLimit: string | null
@@ -104,6 +105,11 @@ export function AccountEditForm({ account, mode }: { account: Account; mode: 'ad
           <Label htmlFor={`${mode}-hoursOfOperation`}>Hours of Operation</Label>
           <Input id={`${mode}-hoursOfOperation`} name="hoursOfOperation" defaultValue={account.hoursOfOperation ?? ''} placeholder="Mon-Fri 9am-6pm" />
         </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor={`${mode}-website`}>Website</Label>
+        <Input id={`${mode}-website`} name="website" type="url" defaultValue={account.website ?? ''} placeholder="https://example.com" />
       </div>
 
       <div className="space-y-2">

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { PhoneSmsButton } from '@/components/crm/PhoneSmsButton'
 import { formatCurrency } from '@/lib/utils'
-import { Bell, Building2, Clock, CreditCard, Mail, MapPin, Phone, User } from 'lucide-react'
+import { Bell, Building2, Clock, CreditCard, Globe, Mail, MapPin, Phone, User } from 'lucide-react'
 
 type AccountDetails = {
   id: string
@@ -19,6 +19,7 @@ type AccountDetails = {
   pocName?: string | null
   pocEmail?: string | null
   hoursOfOperation?: string | null
+  website?: string | null
   creditLimit: string | null
   notificationPreference?: string | null
 }
@@ -43,6 +44,12 @@ function NotificationPreferenceBadge({ value }: { value: string | null | undefin
   return <Badge variant="secondary">Email only</Badge>
 }
 
+function normalizeWebsiteUrl(value: string | null | undefined) {
+  const website = value?.trim()
+  if (!website) return null
+  return /^https?:\/\//i.test(website) ? website : `https://${website}`
+}
+
 export function AccountDetailsCard({
   account,
   mode,
@@ -52,6 +59,7 @@ export function AccountDetailsCard({
 }) {
   const mapUrl = directionsUrl(account)
   const cityLine = [account.city, account.state, account.zip].filter(Boolean).join(', ')
+  const websiteUrl = normalizeWebsiteUrl(account.website)
 
   return (
     <Card>
@@ -156,13 +164,29 @@ export function AccountDetailsCard({
 
         <div className="grid gap-5 md:grid-cols-2">
           <div className="flex items-start gap-3">
+            <Globe className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Website</p>
+              {websiteUrl ? (
+                <a href={websiteUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block truncate text-blue-600 hover:underline">
+                  {account.website}
+                </a>
+              ) : (
+                <p className="mt-1 text-muted-foreground">No website on file</p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-start gap-3">
             <CreditCard className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
             <div className="min-w-0 flex-1">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Credit Limit</p>
               <p className="mt-1 text-slate-900">{formatCurrency(account.creditLimit ?? '0')}</p>
             </div>
           </div>
+        </div>
 
+        <div className="grid gap-5 md:grid-cols-2">
           <div className="flex items-start gap-3">
             <Bell className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
             <div className="min-w-0 flex-1">

@@ -37,6 +37,7 @@ export const customerAccounts = pgTable('customer_accounts', {
   preferredDeliveryDays: text('preferred_delivery_days'),
   preferredDeliveryTimes: text('preferred_delivery_times'),
   additionalLocations: text('additional_locations'), // JSON: [{address,city,state,zip}]
+  website: text('website'),
   creditLimit: numeric('credit_limit', { precision: 12, scale: 2 }).notNull().default('0'),
   balance: numeric('balance', { precision: 12, scale: 2 }).notNull().default('0'),
   paymentTerms: text('payment_terms').default('NET30'),

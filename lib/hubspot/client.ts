@@ -118,6 +118,15 @@ export interface HubSpotContactRecord {
   lastmodifieddate: string | null
 }
 
+export interface HubSpotCompanyContactRecord {
+  id: string
+  email: string | null
+  firstname: string | null
+  lastname: string | null
+  phone: string | null
+  jobtitle: string | null
+}
+
 export async function fetchHubSpotContactsUpdatedSince(sinceMs: number): Promise<HubSpotContactRecord[]> {
   const apiKey = process.env.HUBSPOT_API_KEY
   if (!apiKey) return []
@@ -164,6 +173,71 @@ export async function fetchHubSpotContactsUpdatedSince(sinceMs: number): Promise
   } while (after)
 
   return all
+}
+
+export async function getHubSpotCompanyContacts(companyId: string): Promise<HubSpotCompanyContactRecord[]> {
+  const apiKey = process.env.HUBSPOT_API_KEY
+  if (!apiKey) return []
+
+  const { headers, keyParam } = buildHubSpotHeaders(apiKey)
+  const associatedIds: string[] = []
+  let after: string | undefined
+
+  do {
+    const url = new URL(`${HUBSPOT_API_URL}/crm/v3/objects/companies/${companyId}/associations/contacts`)
+    url.searchParams.set('limit', '100')
+    if (after) url.searchParams.set('after', after)
+    if (keyParam) url.searchParams.set('hapikey', keyParam)
+
+    const res = await fetch(url.toString(), {
+      headers,
+      cache: 'no-store',
+    })
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      console.error('HubSpot company contacts fetch failed:', res.status, err)
+      return []
+    }
+
+    const data = await res.json()
+    associatedIds.push(
+      ...(data.results ?? [])
+        .map((result: { id?: string }) => (typeof result.id === 'string' ? result.id : null))
+        .filter((id: string | null): id is string => Boolean(id))
+    )
+    after = data.paging?.next?.after
+  } while (after)
+
+  if (!associatedIds.length) return []
+
+  const batchUrl = new URL(`${HUBSPOT_API_URL}/crm/v3/objects/contacts/batch/read`)
+  if (keyParam) batchUrl.searchParams.set('hapikey', keyParam)
+
+  const res = await fetch(batchUrl.toString(), {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      properties: ['email', 'firstname', 'lastname', 'phone', 'jobtitle'],
+      inputs: associatedIds.map((id) => ({ id })),
+    }),
+  })
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    console.error('HubSpot contact batch read failed:', res.status, err)
+    return []
+  }
+
+  const data = await res.json()
+  return (data.results ?? []).map((result: { id: string; properties?: Record<string, string> }) => ({
+    id: result.id,
+    email: result.properties?.email ?? null,
+    firstname: result.properties?.firstname ?? null,
+    lastname: result.properties?.lastname ?? null,
+    phone: result.properties?.phone ?? null,
+    jobtitle: result.properties?.jobtitle ?? null,
+  }))
 }
 
 interface HubSpotContactProps {

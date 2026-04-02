@@ -35,6 +35,7 @@ export type CRMAccountDetail = {
   preferredDeliveryDays: string | null
   preferredDeliveryTimes: string | null
   additionalLocations: string | null
+  website: string | null
   creditLimit: string
   balance: string
   paymentTerms: string | null
@@ -66,6 +67,7 @@ const DEFAULT_ACCOUNT_DETAIL = {
   preferredDeliveryDays: null,
   preferredDeliveryTimes: null,
   additionalLocations: null,
+  website: null,
   assignedRegionId: null,
   lat: null,
   lng: null,
@@ -159,6 +161,7 @@ export async function getCRMAccountDetail(accountId: string): Promise<CRMAccount
     'preferredDeliveryDays',
     'preferredDeliveryTimes',
     'additionalLocations',
+    'website',
     'assignedRegionId',
     'lat',
     'lng',
@@ -186,6 +189,7 @@ export async function getCRMAccountDetail(accountId: string): Promise<CRMAccount
     preferredDeliveryDays: 'preferred_delivery_days',
     preferredDeliveryTimes: 'preferred_delivery_times',
     additionalLocations: 'additional_locations',
+    website: 'website',
     assignedRegionId: 'assigned_region_id',
     lat: 'lat',
     lng: 'lng',
