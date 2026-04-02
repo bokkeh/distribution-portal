@@ -1,5 +1,61 @@
 # AHAWC Distribution Portal — Changes Log
 
+## Session Summary (April 2026)
+
+### CRM Module: Website Field & Performance Optimizations
+
+**Database Changes:**
+- Migration 0039: Added `website: text` column to `customer_accounts` table
+- Migration 0040: Added 4 indexes on frequently-filtered columns:
+  - `customer_accounts_user_id_idx` on `user_id`
+  - `customer_accounts_hubspot_company_id_idx` on `hubspot_company_id`
+  - `customer_accounts_assigned_sales_rep_id_idx` on `assigned_sales_rep_id`
+  - `customer_accounts_assigned_region_id_idx` on `assigned_region_id`
+
+**lib/crm/account-read.ts Changes:**
+- Removed dynamic column-detection fallback (`getCustomerAccountColumns`, `DEFAULT_ACCOUNT_DETAIL`)
+- `getCRMAccountDetail()` now a single direct query returning full `CRMAccountDetail` type
+- Simplified codebase, improved maintainability
+
+**actions/crm.ts Changes:**
+- **New:** `validateWebsiteUrl()` helper validates http/https URLs, throws on invalid
+- **Website field added to:**
+  - `createCustomerAccount()` — validates and stores website on create
+  - `updateCustomerAccount()` — validates website on update, changed field tracked
+  - `mergeCustomerAccounts()` — includes website in field merge
+  - `importHubSpotCompany()` — safely imports website with validation fallback
+  - `updateHubSpotCompanyAction()` — returns `{ error: string }` on invalid website URL
+- **N+1 Query Fix:** `syncHubSpotCompanyContactsToLocalAccount()` refactored:
+  - Pre-fetch all contacts once (indexed by email + hubspotContactId)
+  - Batch insert new contacts in single query
+  - Promise.all() bulk update existing contacts in parallel
+  - Returns `{ imported, updated }` counts
+- **Optimizations:**
+  - Fixed `isPrimary` logic using `hasPrimaryContact` guard (prevents duplicates)
+  - Used `.returning()` in `importHubSpotCompany` and `updateCustomerAccount` (eliminated redundant SELECTs)
+  - Narrowed SELECT * to projected columns in `syncToHubSpot` and `deleteContact`
+  - Removed duplicate `revalidatePath` call
+
+**lib/hubspot/client.ts Changes:**
+- `getHubSpotCompanyContacts()` now uses `cache: 'no-store'` instead of `revalidate: 300`
+- Ensures fresh contact data on every sync, critical for batch operations
+
+**UI Changes:**
+- `components/crm/AccountDetailsCard.tsx`:
+  - Added website section with Globe icon
+  - URL normalized with https:// if protocol missing
+  - Clickable link opens in new tab
+- `components/crm/AccountEditForm.tsx`:
+  - Added website input field with validation feedback
+
+**Documentation:**
+- Created `docs/CODEMAPS/crm.md` — comprehensive CRM module documentation
+  - Architecture diagram, data models, data flows
+  - Migration documentation, optimization notes
+  - Integration points with HubSpot, activity logging, geocoding
+
+---
+
 ## Session Summary (March 2026)
 
 ---
