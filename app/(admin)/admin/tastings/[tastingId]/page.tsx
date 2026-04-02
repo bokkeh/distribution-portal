@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ConfirmSubmitButton } from '@/components/ui/confirm-submit-button'
 import { Button } from '@/components/ui/button'
+import { ViewAsButton } from '@/components/admin/ViewAsButton'
 import Link from 'next/link'
 import { ArrowLeft, Calendar, MapPin, Phone, User, FileText, Receipt, StickyNote } from 'lucide-react'
 
@@ -320,6 +321,14 @@ export default async function AdminTastingDetailPage({
                     <a href={`mailto:${taster.email}`} className="hover:text-blue-600 truncate">{taster.email}</a>
                   </div>
                 )}
+                <div className="pt-2">
+                  <ViewAsButton
+                    userId={taster.id}
+                    userName={taster.name}
+                    label="View taster portal"
+                    className="flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-700 transition-colors hover:bg-violet-100 disabled:opacity-50"
+                  />
+                </div>
 
                 {/* Reassign */}
                 {canChangeStatus && (

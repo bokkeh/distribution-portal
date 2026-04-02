@@ -54,3 +54,40 @@ export async function getAvailabilityForUsers(userIds: string[]) {
     .from(tasterAvailability)
     .where(inArray(tasterAvailability.userId, userIds))
 }
+
+export async function addAvailabilityForUser(input: {
+  userId: string
+  availableDate: string
+}) {
+  await requireFeature('tastings', 'admin')
+
+  if (!input.userId || !input.availableDate) {
+    return { error: 'Taster and date are required.' }
+  }
+
+  const [existing] = await db
+    .select({ userId: tasterAvailability.userId })
+    .from(tasterAvailability)
+    .where(
+      and(
+        eq(tasterAvailability.userId, input.userId),
+        eq(tasterAvailability.availableDate, input.availableDate),
+      ),
+    )
+    .limit(1)
+
+  if (existing) {
+    return { error: 'Availability already exists for that taster and date.' }
+  }
+
+  await db.insert(tasterAvailability).values({
+    userId: input.userId,
+    availableDate: input.availableDate,
+  })
+
+  revalidatePath('/admin/tastings')
+  revalidatePath('/staff/tastings')
+  revalidatePath('/taster/availability')
+
+  return { success: true as const }
+}

@@ -2,12 +2,17 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { addMonths, eachDayOfInterval, endOfMonth, format, getDay, isSameDay, startOfMonth } from 'date-fns'
+import { addAvailabilityForUser } from '@/actions/taster-availability'
+import { ViewAsButton } from '@/components/admin/ViewAsButton'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatEasternTimeRange } from '@/lib/tastings/time'
 import { toDisplayAvatarUrl } from '@/lib/users/avatar'
+import { toast } from 'sonner'
 
 type TeamTaster = {
   id: string
@@ -82,8 +87,12 @@ export function TasterTeamPanel({
   tastings: TastingRow[]
   availability: AvailabilityRow[]
 }) {
+  const router = useRouter()
   const [view, setView] = useState<'roster' | 'availability'>('roster')
   const [monthOffset, setMonthOffset] = useState(0)
+  const [selectedTasterId, setSelectedTasterId] = useState<string>('')
+  const [selectedDate, setSelectedDate] = useState<string>('')
+  const [isPending, startTransition] = useTransition()
 
   const selectedMonth = useMemo(() => startOfMonth(addMonths(new Date(), monthOffset)), [monthOffset])
   const monthOptions = useMemo(
@@ -150,6 +159,28 @@ export function TasterTeamPanel({
     })
   }, [availabilitySet, bookedTastings, tasters, tastingDays])
 
+  function addManualAvailability() {
+    if (!selectedTasterId || !selectedDate) {
+      toast.error('Choose a taster and date first.')
+      return
+    }
+
+    startTransition(async () => {
+      const result = await addAvailabilityForUser({
+        userId: selectedTasterId,
+        availableDate: selectedDate,
+      })
+
+      if (result?.error) {
+        toast.error(result.error)
+        return
+      }
+
+      toast.success('Availability added')
+      router.refresh()
+    })
+  }
+
   return (
     <Card>
       <CardHeader className="space-y-4">
@@ -197,6 +228,7 @@ export function TasterTeamPanel({
                   <th className="px-3 py-3 font-medium">{format(selectedMonth, 'MMM')} Booked</th>
                   <th className="px-3 py-3 font-medium">Open Tasting Days</th>
                   <th className="px-3 py-3 font-medium">Next Tasting</th>
+                  {mode === 'admin' ? <th className="px-3 py-3 font-medium">Actions</th> : null}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -216,6 +248,16 @@ export function TasterTeamPanel({
                     <td className="px-3 py-4 text-sm font-medium text-slate-900">{taster.bookedCount}</td>
                     <td className="px-3 py-4 text-sm text-emerald-700">{taster.openDays} open</td>
                     <td className="px-3 py-4 text-sm text-slate-600">{taster.nextTasting ? format(taster.nextTasting, 'EEE, MMM d') : 'No upcoming tasting'}</td>
+                    {mode === 'admin' ? (
+                      <td className="px-3 py-4">
+                        <ViewAsButton
+                          userId={taster.id}
+                          userName={taster.name}
+                          label="View taster portal"
+                          className="flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-xs font-semibold text-violet-700 transition-colors hover:bg-violet-100 disabled:opacity-50"
+                        />
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
               </tbody>
@@ -223,6 +265,49 @@ export function TasterTeamPanel({
           </div>
         ) : (
           <div className="space-y-4">
+            {mode === 'admin' ? (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">Add Availability Manually</p>
+                    <p className="mt-1 text-sm text-slate-500">Pick a taster and tasting day in the selected month to mark them available.</p>
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-[1fr_220px_auto]">
+                  <Select value={selectedTasterId} onValueChange={setSelectedTasterId}>
+                    <SelectTrigger className="h-10 bg-white">
+                      <SelectValue placeholder="Select taster" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {tasters.map((taster) => (
+                        <SelectItem key={taster.id} value={taster.id}>
+                          {taster.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={selectedDate} onValueChange={setSelectedDate}>
+                    <SelectTrigger className="h-10 bg-white">
+                      <SelectValue placeholder="Select date" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {tastingDays.map((day) => {
+                        const value = format(day, 'yyyy-MM-dd')
+                        return (
+                          <SelectItem key={value} value={value}>
+                            {format(day, 'EEE, MMM d')}
+                          </SelectItem>
+                        )
+                      })}
+                    </SelectContent>
+                  </Select>
+                  <Button type="button" onClick={addManualAvailability} disabled={isPending || !selectedTasterId || !selectedDate}>
+                    {isPending ? 'Adding...' : 'Add Availability'}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
             <div className="flex flex-wrap gap-2">
               {monthOptions.map((option) => (
                 <button
