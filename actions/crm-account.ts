@@ -1,6 +1,6 @@
 'use server'
 
-import { and, eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { db } from '@/db'
 import { accountInventoryOnHand, accountNotes, customerAccounts, products } from '@/db/schema'
@@ -22,6 +22,33 @@ function revalidateAccountPaths(accountId: string) {
 function getPrimaryRole(session: Awaited<ReturnType<typeof requireRole>>) {
   const roles = session.user.roles ?? []
   return roles.find((role) => INTERNAL_ACCOUNT_ROLES.includes(role as typeof INTERNAL_ACCOUNT_ROLES[number])) ?? session.user.role ?? 'system'
+}
+
+function getErrorText(error: unknown) {
+  return error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+}
+
+function isMissingInventoryColumn(error: unknown) {
+  const message = getErrorText(error)
+  return message.includes('account_inventory_on_hand') && message.includes('column')
+}
+
+async function getInventoryOnHandColumns() {
+  const rows = await db.execute(sql`
+    select column_name
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'account_inventory_on_hand'
+  `)
+
+  return new Set(
+    rows.rows
+      .map((row) => {
+        const value = row as Record<string, unknown>
+        return typeof value.column_name === 'string' ? value.column_name : null
+      })
+      .filter((columnName): columnName is string => Boolean(columnName))
+  )
 }
 
 export async function addAccountNote(formData: FormData) {
@@ -171,10 +198,9 @@ export async function upsertAccountInventoryItem(formData: FormData) {
     return { error: 'Cases and bottles must be zero or greater.' }
   }
 
-  const [[account], [product], [existingItem]] = await Promise.all([
+  const [[account], [product]] = await Promise.all([
     db.select({ companyName: customerAccounts.companyName }).from(customerAccounts).where(eq(customerAccounts.id, accountId)).limit(1),
     db.select({ id: products.id, sku: products.sku, name: products.name, unit: products.unit }).from(products).where(eq(products.id, productId)).limit(1),
-    db.select().from(accountInventoryOnHand).where(and(eq(accountInventoryOnHand.accountId, accountId), eq(accountInventoryOnHand.productId, productId))).limit(1),
   ])
 
   if (!account) return { error: 'Account not found.' }
@@ -183,17 +209,90 @@ export async function upsertAccountInventoryItem(formData: FormData) {
   const casesValue = cases.toFixed(2)
   const bottlesValue = bottles.toFixed(2)
 
+  let existingItem:
+    | (typeof accountInventoryOnHand.$inferSelect & { casesOnHand?: string; bottlesOnHand?: string })
+    | undefined
+
+  try {
+    ;[existingItem] = await db
+      .select()
+      .from(accountInventoryOnHand)
+      .where(and(eq(accountInventoryOnHand.accountId, accountId), eq(accountInventoryOnHand.productId, productId)))
+      .limit(1)
+  } catch (error) {
+    if (!isMissingInventoryColumn(error)) throw error
+
+    const legacyRows = await db.execute(sql`
+      select
+        id,
+        account_id,
+        product_id,
+        sku,
+        product_name,
+        unit_type,
+        quantity_on_hand,
+        updated_by_user_id,
+        created_at,
+        updated_at
+      from account_inventory_on_hand
+      where account_id = ${accountId}::uuid
+        and product_id = ${productId}::uuid
+      limit 1
+    `)
+
+    const row = legacyRows.rows[0] as Record<string, unknown> | undefined
+    if (row) {
+      existingItem = {
+        id: String(row.id),
+        accountId: String(row.account_id),
+        productId: String(row.product_id),
+        sku: String(row.sku ?? ''),
+        productName: String(row.product_name ?? ''),
+        unitType: typeof row.unit_type === 'string' ? row.unit_type : null,
+        quantityOnHand: String(row.quantity_on_hand ?? '0'),
+        casesOnHand: String(row.quantity_on_hand ?? '0'),
+        bottlesOnHand: '0',
+        updatedByUserId: typeof row.updated_by_user_id === 'string' ? row.updated_by_user_id : null,
+        createdAt: row.created_at instanceof Date ? row.created_at : new Date(),
+        updatedAt: row.updated_at instanceof Date ? row.updated_at : new Date(),
+      } as typeof accountInventoryOnHand.$inferSelect & { casesOnHand?: string; bottlesOnHand?: string }
+    }
+  }
+
+  const beforeCases = existingItem?.casesOnHand ?? existingItem?.quantityOnHand ?? '0'
+  const beforeBottles = existingItem?.bottlesOnHand ?? '0'
+
   if (existingItem) {
-    await db.update(accountInventoryOnHand).set({
-      sku: product.sku,
-      productName: product.name,
-      unitType: product.unit,
-      casesOnHand: casesValue,
-      bottlesOnHand: bottlesValue,
-      quantityOnHand: casesValue,
-      updatedByUserId: session.user.id,
-      updatedAt: new Date(),
-    }).where(eq(accountInventoryOnHand.id, existingItem.id))
+    try {
+      await db.update(accountInventoryOnHand).set({
+        sku: product.sku,
+        productName: product.name,
+        unitType: product.unit,
+        casesOnHand: casesValue,
+        bottlesOnHand: bottlesValue,
+        quantityOnHand: casesValue,
+        updatedByUserId: session.user.id,
+        updatedAt: new Date(),
+      }).where(eq(accountInventoryOnHand.id, existingItem.id))
+    } catch (error) {
+      if (!isMissingInventoryColumn(error)) throw error
+
+      if (bottles > 0) {
+        return { error: 'Bottle tracking is not enabled in this database yet. Run npm run db:push, then try again.' }
+      }
+
+      await db.execute(sql`
+        update account_inventory_on_hand
+        set
+          sku = ${product.sku},
+          product_name = ${product.name},
+          unit_type = ${product.unit},
+          quantity_on_hand = ${casesValue},
+          updated_by_user_id = ${session.user.id}::uuid,
+          updated_at = now()
+        where id = ${existingItem.id}::uuid
+      `)
+    }
 
     await logActivityEvent({
       entityType: 'account',
@@ -201,14 +300,14 @@ export async function upsertAccountInventoryItem(formData: FormData) {
       actorUserId: session.user.id,
       kind: 'account_inventory_updated',
       title: 'Inventory quantity updated',
-      body: `${product.name} changed from ${existingItem.casesOnHand} cases / ${existingItem.bottlesOnHand} bottles to ${casesValue} cases / ${bottlesValue} bottles.`,
+      body: `${product.name} changed from ${beforeCases} cases / ${beforeBottles} bottles to ${casesValue} cases / ${bottlesValue} bottles.`,
       metadata: {
         productId,
         sku: product.sku,
         productName: product.name,
         before: {
-          casesOnHand: existingItem.casesOnHand,
-          bottlesOnHand: existingItem.bottlesOnHand,
+          casesOnHand: beforeCases,
+          bottlesOnHand: beforeBottles,
         },
         after: {
           casesOnHand: casesValue,
@@ -217,17 +316,45 @@ export async function upsertAccountInventoryItem(formData: FormData) {
       },
     })
   } else {
-    await db.insert(accountInventoryOnHand).values({
-      accountId,
-      productId,
-      sku: product.sku,
-      productName: product.name,
-      unitType: product.unit,
-      casesOnHand: casesValue,
-      bottlesOnHand: bottlesValue,
-      quantityOnHand: casesValue,
-      updatedByUserId: session.user.id,
-    })
+    try {
+      await db.insert(accountInventoryOnHand).values({
+        accountId,
+        productId,
+        sku: product.sku,
+        productName: product.name,
+        unitType: product.unit,
+        casesOnHand: casesValue,
+        bottlesOnHand: bottlesValue,
+        quantityOnHand: casesValue,
+        updatedByUserId: session.user.id,
+      })
+    } catch (error) {
+      if (!isMissingInventoryColumn(error)) throw error
+
+      if (bottles > 0) {
+        return { error: 'Bottle tracking is not enabled in this database yet. Run npm run db:push, then try again.' }
+      }
+
+      await db.execute(sql`
+        insert into account_inventory_on_hand (
+          account_id,
+          product_id,
+          sku,
+          product_name,
+          unit_type,
+          quantity_on_hand,
+          updated_by_user_id
+        ) values (
+          ${accountId}::uuid,
+          ${productId}::uuid,
+          ${product.sku},
+          ${product.name},
+          ${product.unit},
+          ${casesValue},
+          ${session.user.id}::uuid
+        )
+      `)
+    }
 
     await logActivityEvent({
       entityType: 'account',

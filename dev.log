@@ -9325,3 +9325,56 @@ Persisting failed: Another write batch or compaction is already active (Only a s
 Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
 Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
 Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+
+thread 'tokio-runtime-worker' (53360) panicked at C:\actions-runner\_work\next.js\next.js\turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:156:17:
+Failed to restore task data (corrupted database or bug): Data for <EsmAssetReference as ChunkableModuleReference>::chunking_type (TaskId 445401))
+
+Caused by:
+    0: Looking up data for TaskId 445401 from database failed
+    1: Unable to open static sorted file referenced from 00001019.meta
+    2: Unable to open static sorted file 00001017.sst
+    3: The system cannot find the path specified. (os error 3)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+
+thread 'tokio-runtime-worker' (70028) panicked at C:\actions-runner\_work\next.js\next.js\turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:156:17:
+Failed to restore task data (corrupted database or bug): Data for parse (TaskId 445465))
+
+Caused by:
+    0: Looking up data for TaskId 445465 from database failed
+    1: Unable to open static sorted file referenced from 00001019.meta
+    2: Unable to open static sorted file 00001018.sst
+    3: The system cannot find the path specified. (os error 3)
+
+thread 'tokio-runtime-worker' (62148) panicked at C:\actions-runner\_work\next.js\next.js\turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:156:17:
+Failed to restore task data (corrupted database or bug): Meta for <ModuleAssetContext as AssetContext>::resolve_asset (TaskId 445480))
+
+Caused by:
+    0: Looking up data for TaskId 445480 from database failed
+    1: Unable to open static sorted file referenced from 00001033.meta
+    2: Unable to open static sorted file 00001028.sst
+    3: The system cannot find the path specified. (os error 3)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+
+thread 'tokio-runtime-worker' (48796) panicked at C:\actions-runner\_work\next.js\next.js\turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:156:17:
+Failed to restore task data (corrupted database or bug): Meta for <EsmAssetReference as ModuleReference>::resolve_reference (TaskId 445549))
+
+Caused by:
+    0: Looking up data for TaskId 445549 from database failed
+    1: Unable to open static sorted file referenced from 00001033.meta
+    2: Unable to open static sorted file 00001028.sst
+    3: The system cannot find the path specified. (os error 3)
+
+thread 'tokio-runtime-worker' (27136) panicked at C:\actions-runner\_work\next.js\next.js\turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:156:17:
+Failed to restore task data (corrupted database or bug): Meta for <EsmAssetReference as ChunkableModuleReference>::chunking_type (TaskId 445551))
+
+Caused by:
+    0: Looking up data for TaskId 445551 from database failed
+    1: Unable to open static sorted file referenced from 00001043.meta
+    2: Unable to open static sorted file 00001038.sst
+    3: The system cannot find the path specified. (os error 3)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)
+Persisting failed: Another write batch or compaction is already active (Only a single write operations is allowed at a time)

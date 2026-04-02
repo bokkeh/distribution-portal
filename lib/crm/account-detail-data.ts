@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from 'drizzle-orm'
+import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { db } from '@/db'
 import {
   accountInventoryOnHand,
@@ -66,6 +66,11 @@ export type AccountMediaFeedItem = AccountMediaItem
 function isMissingTable(error: unknown, tableName: string) {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
   return message.includes(tableName.toLowerCase()) && message.includes('does not exist')
+}
+
+function isMissingInventoryColumn(error: unknown) {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+  return message.includes('account_inventory_on_hand') && message.includes('column')
 }
 
 function toRecord(value: unknown): Record<string, unknown> {
@@ -218,6 +223,46 @@ export async function getAccountInventoryOnHand(accountId: string) {
       .where(eq(accountInventoryOnHand.accountId, accountId))
       .orderBy(desc(accountInventoryOnHand.updatedAt), accountInventoryOnHand.productName)
   } catch (error) {
+    if (isMissingInventoryColumn(error)) {
+      const legacyRows = await db.execute(sql`
+        select
+          account_inventory_on_hand.id,
+          account_inventory_on_hand.account_id,
+          account_inventory_on_hand.product_id,
+          account_inventory_on_hand.sku,
+          account_inventory_on_hand.product_name,
+          account_inventory_on_hand.unit_type,
+          account_inventory_on_hand.quantity_on_hand,
+          account_inventory_on_hand.updated_by_user_id,
+          account_inventory_on_hand.updated_at,
+          users.name as updated_by_name,
+          users.role as updated_by_role
+        from account_inventory_on_hand
+        left join users on users.id = account_inventory_on_hand.updated_by_user_id
+        where account_inventory_on_hand.account_id = ${accountId}::uuid
+        order by account_inventory_on_hand.updated_at desc, account_inventory_on_hand.product_name asc
+      `)
+
+      return legacyRows.rows.map((row) => {
+        const value = row as Record<string, unknown>
+        const updatedAt = value.updated_at
+        return {
+          id: String(value.id),
+          accountId: String(value.account_id),
+          productId: String(value.product_id),
+          sku: String(value.sku ?? ''),
+          productName: String(value.product_name ?? ''),
+          unitType: typeof value.unit_type === 'string' ? value.unit_type : null,
+          casesOnHand: String(value.quantity_on_hand ?? '0'),
+          bottlesOnHand: '0',
+          updatedByUserId: typeof value.updated_by_user_id === 'string' ? value.updated_by_user_id : null,
+          updatedByName: typeof value.updated_by_name === 'string' ? value.updated_by_name : null,
+          updatedByRole: typeof value.updated_by_role === 'string' ? value.updated_by_role : null,
+          updatedAt: updatedAt instanceof Date ? updatedAt : new Date(updatedAt ? String(updatedAt) : Date.now()),
+        } satisfies AccountInventoryItem
+      })
+    }
+
     if (!isMissingTable(error, 'account_inventory_on_hand')) {
       console.error('Failed to load account inventory on hand:', error)
     }

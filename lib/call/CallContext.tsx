@@ -23,6 +23,7 @@ interface CallContextType {
   toggleMute: () => void
   sendDtmf: (digit: string) => void
   setNotes: (notes: string) => void
+  setLinkedAccount: (accountId: string | null, accountName: string | null) => void
 }
 
 const CallContext = createContext<CallContextType | null>(null)
@@ -46,6 +47,10 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
   const openDrawer = useCallback(() => setDrawerOpen(true), [])
   const closeDrawer = useCallback(() => setDrawerOpen(false), [])
+  const setLinkedAccount = useCallback((nextAccountId: string | null, nextAccountName: string | null) => {
+    setAccountId(nextAccountId)
+    setAccountName(nextAccountName)
+  }, [])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const clientRef = useRef<any>(null)
@@ -193,7 +198,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     <CallContext.Provider value={{
       callState, phone, accountName, accountId, duration, isMuted, notes, error,
       drawerOpen, openDrawer, closeDrawer,
-      startCall, endCall, toggleMute, sendDtmf, setNotes,
+      startCall, endCall, toggleMute, sendDtmf, setNotes, setLinkedAccount,
     }}>
       {children}
     </CallContext.Provider>
