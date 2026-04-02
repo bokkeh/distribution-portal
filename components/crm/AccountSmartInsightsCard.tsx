@@ -38,19 +38,24 @@ export function AccountSmartInsightsCard({ insights }: { insights: SmartInsights
           <p className="mt-2 text-sm leading-6 text-slate-800">{insights.summary}</p>
         </div>
 
-        <div className="grid gap-5 xl:grid-cols-2">
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Lightbulb className="h-4 w-4 text-amber-600" />
-              <p className="text-sm font-semibold text-slate-900">Recommended Actions</p>
-            </div>
-            {insights.recommendations.length === 0 ? (
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
-                No specific next-step recommendations were generated from the current account data.
+        <div className="grid gap-4 xl:grid-cols-2">
+          <details className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4">
+              <div className="flex items-center gap-2">
+                <Lightbulb className="h-4 w-4 text-amber-600" />
+                <p className="text-sm font-semibold text-slate-900">Recommended Actions</p>
               </div>
-            ) : (
-              <div className="space-y-3">
-                {insights.recommendations.map((item) => (
+              <div className="flex items-center gap-2">
+                <Badge variant="outline">{insights.recommendations.length} items</Badge>
+              </div>
+            </summary>
+            <div className="space-y-3 border-t border-slate-200 px-4 py-4">
+              {insights.recommendations.length === 0 ? (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                  No specific next-step recommendations were generated from the current account data.
+                </div>
+              ) : (
+                insights.recommendations.map((item) => (
                   <div key={item.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
@@ -80,23 +85,28 @@ export function AccountSmartInsightsCard({ insights }: { insights: SmartInsights
                       </div>
                     ) : null}
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+                ))
+              )}
+            </div>
+          </details>
 
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-red-600" />
-              <p className="text-sm font-semibold text-slate-900">Missing Info / Alerts</p>
-            </div>
-            {insights.alerts.length === 0 ? (
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
-                No major account data gaps were flagged from the current record.
+          <details className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-red-600" />
+                <p className="text-sm font-semibold text-slate-900">Missing Info / Alerts</p>
               </div>
-            ) : (
-              <div className="space-y-3">
-                {insights.alerts.map((item) => (
+              <div className="flex items-center gap-2">
+                <Badge variant="outline">{insights.alerts.length} items</Badge>
+              </div>
+            </summary>
+            <div className="space-y-3 border-t border-slate-200 px-4 py-4">
+              {insights.alerts.length === 0 ? (
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+                  No major account data gaps were flagged from the current record.
+                </div>
+              ) : (
+                insights.alerts.map((item) => (
                   <div key={item.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
@@ -126,10 +136,10 @@ export function AccountSmartInsightsCard({ insights }: { insights: SmartInsights
                       </div>
                     ) : null}
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+                ))
+              )}
+            </div>
+          </details>
         </div>
 
         <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
