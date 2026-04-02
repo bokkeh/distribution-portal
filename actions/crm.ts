@@ -250,7 +250,19 @@ export async function toggleStarAccount(accountId: string, starred: boolean) {
 export async function syncToHubSpot(accountId: string) {
   await requireAdminOrStaff()
 
-  const [account] = await db.select().from(customerAccounts).where(eq(customerAccounts.id, accountId))
+  const [account] = await db.select({
+    hubspotCompanyId: customerAccounts.hubspotCompanyId,
+    email: customerAccounts.email,
+    phone: customerAccounts.phone,
+    companyName: customerAccounts.companyName,
+    contactName: customerAccounts.contactName,
+    hubspotContactId: customerAccounts.hubspotContactId,
+    creditLimit: customerAccounts.creditLimit,
+    paymentTerms: customerAccounts.paymentTerms,
+    balance: customerAccounts.balance,
+    city: customerAccounts.city,
+    state: customerAccounts.state,
+  }).from(customerAccounts).where(eq(customerAccounts.id, accountId))
   if (!account) return
 
   const accountContacts = await db.select().from(contacts).where(eq(contacts.customerId, accountId))
@@ -407,7 +419,13 @@ export async function updateContact(contactId: string, formData: FormData) {
 export async function deleteContact(contactId: string) {
   const session = await requireAdminOrStaff()
 
-  const [contact] = await db.select().from(contacts).where(eq(contacts.id, contactId))
+  const [contact] = await db.select({
+    id: contacts.id,
+    customerId: contacts.customerId,
+    name: contacts.name,
+    email: contacts.email,
+    phone: contacts.phone,
+  }).from(contacts).where(eq(contacts.id, contactId))
   if (!contact) return { error: 'Contact not found' }
 
   await db.delete(contacts).where(eq(contacts.id, contactId))
@@ -446,7 +464,7 @@ export async function importHubSpotCompany(hubspotCompanyId: string) {
 
   const safeWebsite = (() => { try { return validateWebsiteUrl(company.website) } catch { return null } })()
 
-  await db.insert(customerAccounts).values({
+  const [createdAccount] = await db.insert(customerAccounts).values({
     companyName: company.name,
     contactName: null,
     address: company.address,
@@ -460,9 +478,8 @@ export async function importHubSpotCompany(hubspotCompanyId: string) {
     creditLimit: '0',
     balance: '0',
     paymentTerms: 'NET30',
-  })
+  }).returning({ id: customerAccounts.id })
 
-  const [createdAccount] = await db.select({ id: customerAccounts.id }).from(customerAccounts).where(eq(customerAccounts.hubspotCompanyId, company.id)).limit(1)
   if (createdAccount) {
     await syncHubSpotCompanyContactsToLocalAccount(createdAccount.id, company.id)
     revalidateContactPaths(createdAccount.id)
@@ -485,8 +502,15 @@ export async function updateHubSpotCompanyAction(
     website: string
     industry: string
   }
-) {
+): Promise<{ success: true } | { error: string }> {
   await requireAdminOrStaff()
+
+  let safeWebsite: string | null
+  try {
+    safeWebsite = validateWebsiteUrl(data.website || null)
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Invalid website URL.' }
+  }
 
   // Sync to HubSpot
   await updateHubSpotCompany(hubspotId, data)
@@ -500,7 +524,7 @@ export async function updateHubSpotCompanyAction(
       city: data.city || null,
       state: data.state || null,
       zip: data.zip || null,
-      website: (() => { try { return validateWebsiteUrl(data.website || null) } catch { return null } })(),
+      website: safeWebsite,
     }).where(eq(customerAccounts.id, localAccountId))
   }
 
@@ -568,7 +592,7 @@ export async function updateCustomerAccount(
       ['paymentTerms', existingAccount.paymentTerms, paymentTerms],
     ].filter(([, previousValue, nextValue]) => (previousValue ?? null) !== (nextValue ?? null)).map(([field]) => field as string)
 
-    await db.update(customerAccounts).set({
+    const [account] = await db.update(customerAccounts).set({
       companyName,
       contactName,
       address,
@@ -589,7 +613,7 @@ export async function updateCustomerAccount(
       businessType,
       creditLimit,
       paymentTerms,
-    }).where(eq(customerAccounts.id, id))
+    }).where(eq(customerAccounts.id, id)).returning()
 
     await logActivityEvent({
       entityType: 'account',
@@ -617,7 +641,6 @@ export async function updateCustomerAccount(
       }).catch(() => false)
     }
 
-    const [account] = await db.select().from(customerAccounts).where(eq(customerAccounts.id, id)).limit(1)
     if (account) {
       const hubspotContactId = await upsertHubSpotContact({
         email: pocEmail || businessEmail || email || '',
