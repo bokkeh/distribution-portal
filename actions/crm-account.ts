@@ -160,13 +160,15 @@ export async function upsertAccountInventoryItem(formData: FormData) {
   const session = await requireRole(...INTERNAL_ACCOUNT_ROLES)
   const accountId = normalizeWhitespace(formData.get('accountId'))
   const productId = normalizeWhitespace(formData.get('productId'))
-  const quantityInput = normalizeWhitespace(formData.get('quantityOnHand'))
+  const casesInput = normalizeWhitespace(formData.get('casesOnHand'))
+  const bottlesInput = normalizeWhitespace(formData.get('bottlesOnHand'))
 
   if (!accountId || !productId) return { error: 'Account and product are required.' }
 
-  const quantity = Number(quantityInput)
-  if (!Number.isFinite(quantity) || quantity < 0) {
-    return { error: 'Quantity must be zero or greater.' }
+  const cases = Number(casesInput || '0')
+  const bottles = Number(bottlesInput || '0')
+  if (!Number.isFinite(cases) || cases < 0 || !Number.isFinite(bottles) || bottles < 0) {
+    return { error: 'Cases and bottles must be zero or greater.' }
   }
 
   const [[account], [product], [existingItem]] = await Promise.all([
@@ -178,14 +180,17 @@ export async function upsertAccountInventoryItem(formData: FormData) {
   if (!account) return { error: 'Account not found.' }
   if (!product) return { error: 'Product not found.' }
 
-  const quantityValue = quantity.toFixed(2)
+  const casesValue = cases.toFixed(2)
+  const bottlesValue = bottles.toFixed(2)
 
   if (existingItem) {
     await db.update(accountInventoryOnHand).set({
       sku: product.sku,
       productName: product.name,
       unitType: product.unit,
-      quantityOnHand: quantityValue,
+      casesOnHand: casesValue,
+      bottlesOnHand: bottlesValue,
+      quantityOnHand: casesValue,
       updatedByUserId: session.user.id,
       updatedAt: new Date(),
     }).where(eq(accountInventoryOnHand.id, existingItem.id))
@@ -196,13 +201,19 @@ export async function upsertAccountInventoryItem(formData: FormData) {
       actorUserId: session.user.id,
       kind: 'account_inventory_updated',
       title: 'Inventory quantity updated',
-      body: `${product.name} changed from ${existingItem.quantityOnHand} to ${quantityValue}.`,
+      body: `${product.name} changed from ${existingItem.casesOnHand} cases / ${existingItem.bottlesOnHand} bottles to ${casesValue} cases / ${bottlesValue} bottles.`,
       metadata: {
         productId,
         sku: product.sku,
         productName: product.name,
-        before: existingItem.quantityOnHand,
-        after: quantityValue,
+        before: {
+          casesOnHand: existingItem.casesOnHand,
+          bottlesOnHand: existingItem.bottlesOnHand,
+        },
+        after: {
+          casesOnHand: casesValue,
+          bottlesOnHand: bottlesValue,
+        },
       },
     })
   } else {
@@ -212,7 +223,9 @@ export async function upsertAccountInventoryItem(formData: FormData) {
       sku: product.sku,
       productName: product.name,
       unitType: product.unit,
-      quantityOnHand: quantityValue,
+      casesOnHand: casesValue,
+      bottlesOnHand: bottlesValue,
+      quantityOnHand: casesValue,
       updatedByUserId: session.user.id,
     })
 
@@ -222,12 +235,13 @@ export async function upsertAccountInventoryItem(formData: FormData) {
       actorUserId: session.user.id,
       kind: 'account_inventory_added',
       title: 'Inventory item added',
-      body: `${product.name} was added with quantity ${quantityValue}.`,
+      body: `${product.name} was added with ${casesValue} cases and ${bottlesValue} bottles.`,
       metadata: {
         productId,
         sku: product.sku,
         productName: product.name,
-        quantity: quantityValue,
+        casesOnHand: casesValue,
+        bottlesOnHand: bottlesValue,
       },
     })
   }
@@ -259,7 +273,8 @@ export async function removeAccountInventoryItem(itemId: string) {
       productId: existingItem.productId,
       sku: existingItem.sku,
       productName: existingItem.productName,
-      quantity: existingItem.quantityOnHand,
+      casesOnHand: existingItem.casesOnHand,
+      bottlesOnHand: existingItem.bottlesOnHand,
     },
   })
 

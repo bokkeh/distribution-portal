@@ -6,16 +6,19 @@ type InventoryPreviewItem = {
   id: string
   productName: string
   sku: string
-  quantityOnHand: string
+  casesOnHand: string
+  bottlesOnHand: string
 }
 
 export function AccountInventorySummaryCard({
   items,
-  totalUnits,
+  totalCases,
+  totalBottles,
   href,
 }: {
   items: InventoryPreviewItem[]
-  totalUnits: number
+  totalCases: number
+  totalBottles: number
   href: string
 }) {
   return (
@@ -30,7 +33,8 @@ export function AccountInventorySummaryCard({
       <CardContent className="space-y-3">
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
           <p className="text-xs uppercase tracking-wide text-slate-500">Total inventory on hand</p>
-          <p className="mt-1 text-2xl font-bold text-slate-900">{totalUnits.toFixed(2)}</p>
+          <p className="mt-1 text-2xl font-bold text-slate-900">{totalCases.toFixed(2)} cases</p>
+          <p className="mt-1 text-sm font-medium text-slate-600">{totalBottles.toFixed(2)} bottles</p>
         </div>
         {items.length === 0 ? (
           <p className="text-sm text-slate-500">No account inventory tracked yet.</p>
@@ -42,7 +46,10 @@ export function AccountInventorySummaryCard({
                   <p className="font-medium text-slate-900">{item.productName}</p>
                   <p className="text-xs text-slate-500">{item.sku}</p>
                 </div>
-                <p className="font-semibold text-slate-900">{item.quantityOnHand}</p>
+                <div className="text-right">
+                  <p className="font-semibold text-slate-900">{item.casesOnHand} cases</p>
+                  <p className="text-xs text-slate-500">{item.bottlesOnHand} bottles</p>
+                </div>
               </div>
             ))}
           </div>

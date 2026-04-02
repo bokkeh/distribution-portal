@@ -10,6 +10,8 @@ export const accountInventoryOnHand = pgTable('account_inventory_on_hand', {
   sku: text('sku').notNull(),
   productName: text('product_name').notNull(),
   unitType: text('unit_type'),
+  casesOnHand: numeric('cases_on_hand', { precision: 10, scale: 2 }).notNull().default('0'),
+  bottlesOnHand: numeric('bottles_on_hand', { precision: 10, scale: 2 }).notNull().default('0'),
   quantityOnHand: numeric('quantity_on_hand', { precision: 10, scale: 2 }).notNull().default('0'),
   updatedByUserId: uuid('updated_by_user_id').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

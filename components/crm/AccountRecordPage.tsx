@@ -26,7 +26,9 @@ import { AccountMapCard } from '@/components/crm/AccountMapCard'
 import { AccountMediaGalleryCard } from '@/components/crm/AccountMediaGalleryCard'
 import { AccountNotesCard } from '@/components/crm/AccountNotesCard'
 import { AccountRecordTabs } from '@/components/crm/AccountRecordTabs'
+import { AccountSmartInsightsCard } from '@/components/crm/AccountSmartInsightsCard'
 import { ViewAsAccountButton } from '@/components/admin/ViewAsAccountButton'
+import { generateAccountSmartInsights } from '@/lib/crm/smart-insights'
 import { ArrowLeft, CalendarDays, FileText, MessageSquare, Plus, Receipt, RefreshCcw, RefreshCw, Truck } from 'lucide-react'
 
 const ACCOUNT_TABS = [
@@ -109,6 +111,7 @@ export async function AccountRecordPage({
         inventoryItems: Awaited<ReturnType<typeof getAccountInventoryOnHand>>
         activityItems: Awaited<ReturnType<typeof getAccountActivityFeed>>
         mediaItems: Awaited<ReturnType<typeof getAccountMediaFeed>>
+        smartInsights: Awaited<ReturnType<typeof generateAccountSmartInsights>>
       }
     | null = null
 
@@ -209,7 +212,7 @@ export async function AccountRecordPage({
       getAccountMediaFeed(accountId, accountPhones, mode, 6),
     ])
 
-    overviewData = {
+    const resolvedOverviewData = {
       accountContacts: accountContactsResult.status === 'fulfilled' ? accountContactsResult.value : [],
       recentOrders: recentOrdersResult.status === 'fulfilled' ? recentOrdersResult.value : [],
       recentInvoices: recentInvoicesResult.status === 'fulfilled' ? recentInvoicesResult.value : [],
@@ -221,6 +224,25 @@ export async function AccountRecordPage({
       inventoryItems: inventoryItems.status === 'fulfilled' ? inventoryItems.value : [],
       activityItems: activityItems.status === 'fulfilled' ? activityItems.value : [],
       mediaItems: mediaItems.status === 'fulfilled' ? mediaItems.value : [],
+    }
+
+    const smartInsights = await generateAccountSmartInsights({
+      account,
+      accountContacts: resolvedOverviewData.accountContacts,
+      recentOrders: resolvedOverviewData.recentOrders,
+      recentDeliveries: resolvedOverviewData.recentDeliveries,
+      recentTastings: resolvedOverviewData.recentTastings,
+      recentTexts: resolvedOverviewData.recentTexts,
+      notes: resolvedOverviewData.notes,
+      inventoryItems: resolvedOverviewData.inventoryItems,
+      activityItems: resolvedOverviewData.activityItems,
+      mode,
+      regionName: assignedRegion?.name ?? null,
+    })
+
+    overviewData = {
+      ...resolvedOverviewData,
+      smartInsights,
     }
   }
 
@@ -359,7 +381,8 @@ export async function AccountRecordPage({
 
       {tab === 'overview' && overviewData ? (() => {
         const creditAvailable = Math.max(0, Number(account.creditLimit ?? 0) - Number(account.balance ?? 0))
-        const inventoryTotal = overviewData.inventoryItems.reduce((sum, item) => sum + Number(item.quantityOnHand || 0), 0)
+        const inventoryCasesTotal = overviewData.inventoryItems.reduce((sum, item) => sum + Number(item.casesOnHand || 0), 0)
+        const inventoryBottlesTotal = overviewData.inventoryItems.reduce((sum, item) => sum + Number(item.bottlesOnHand || 0), 0)
         const accountHealthSignals = [
           Number(account.balance ?? 0) > 0 ? { label: 'Outstanding balance', ok: false } : { label: 'No outstanding balance', ok: true },
           overviewData.recentTexts.some((message) => message.direction === 'inbound') ? { label: 'Open text activity', ok: false } : { label: 'No open text activity', ok: true },
@@ -376,8 +399,10 @@ export async function AccountRecordPage({
               <Card><CardContent className="p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Credit Available</p><p className="mt-1 text-2xl font-bold">{formatCurrency(creditAvailable.toFixed(2))}</p><p className="mt-0.5 text-xs text-muted-foreground">of {formatCurrency(account.creditLimit ?? '0')} limit</p></CardContent></Card>
               <Card><CardContent className="p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Total Orders</p><p className="mt-1 text-2xl font-bold">{overviewData.orderCount.total}</p></CardContent></Card>
               <Card><CardContent className="p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Member Since</p><p className="mt-1 text-lg font-bold" suppressHydrationWarning>{formatDate(account.createdAt)}</p></CardContent></Card>
-              <Card><CardContent className="p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Inventory On Hand</p><p className="mt-1 text-2xl font-bold">{inventoryTotal.toFixed(2)}</p><p className="mt-0.5 text-xs text-muted-foreground">Across {overviewData.inventoryItems.length} items</p></CardContent></Card>
+              <Card><CardContent className="p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Inventory On Hand</p><p className="mt-1 text-2xl font-bold">{inventoryCasesTotal.toFixed(2)} cases</p><p className="mt-0.5 text-xs text-muted-foreground">{inventoryBottlesTotal.toFixed(2)} bottles across {overviewData.inventoryItems.length} items</p></CardContent></Card>
             </div>
+
+            <AccountSmartInsightsCard insights={overviewData.smartInsights} />
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
               <div className="space-y-6 lg:col-span-3">
@@ -443,7 +468,12 @@ export async function AccountRecordPage({
                   regionName={assignedRegion?.name ?? null}
                 />
 
-                <AccountInventorySummaryCard items={overviewData.inventoryItems.slice(0, 5)} totalUnits={inventoryTotal} href={getTabHref(basePath, 'inventory')} />
+                <AccountInventorySummaryCard
+                  items={overviewData.inventoryItems.slice(0, 5)}
+                  totalCases={inventoryCasesTotal}
+                  totalBottles={inventoryBottlesTotal}
+                  href={getTabHref(basePath, 'inventory')}
+                />
 
                 {overviewData.recentInvoices.length > 0 ? (
                   <Card>

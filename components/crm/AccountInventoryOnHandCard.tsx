@@ -29,29 +29,32 @@ export function AccountInventoryOnHandCard({
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [draftQuantities, setDraftQuantities] = useState<Record<string, string>>(
-    Object.fromEntries(items.map((item) => [item.id, item.quantityOnHand]))
+  const [draftCounts, setDraftCounts] = useState<Record<string, { casesOnHand: string; bottlesOnHand: string }>>(
+    Object.fromEntries(items.map((item) => [item.id, { casesOnHand: item.casesOnHand, bottlesOnHand: item.bottlesOnHand }]))
   )
   const [selectedProductId, setSelectedProductId] = useState('')
-  const [newQuantity, setNewQuantity] = useState('0')
+  const [newCases, setNewCases] = useState('0')
+  const [newBottles, setNewBottles] = useState('0')
 
   const existingProductIds = new Set(items.map((item) => item.productId))
   const addableProducts = useMemo(
     () => products.filter((product) => !existingProductIds.has(product.id)),
     [products, items]
   )
-  const totalUnits = items.reduce((sum, item) => sum + Number(item.quantityOnHand || 0), 0)
+  const totalCases = items.reduce((sum, item) => sum + Number(item.casesOnHand || 0), 0)
+  const totalBottles = items.reduce((sum, item) => sum + Number(item.bottlesOnHand || 0), 0)
 
   function refreshWithToast(message: string) {
     toast.success(message)
     router.refresh()
   }
 
-  function saveProduct(productId: string, quantityOnHand: string) {
+  function saveProduct(productId: string, casesOnHand: string, bottlesOnHand: string) {
     const formData = new FormData()
     formData.append('accountId', accountId)
     formData.append('productId', productId)
-    formData.append('quantityOnHand', quantityOnHand)
+    formData.append('casesOnHand', casesOnHand)
+    formData.append('bottlesOnHand', bottlesOnHand)
 
     startTransition(async () => {
       const result = await upsertAccountInventoryItem(formData)
@@ -69,9 +72,10 @@ export function AccountInventoryOnHandCard({
       return
     }
 
-    saveProduct(selectedProductId, newQuantity)
+    saveProduct(selectedProductId, newCases, newBottles)
     setSelectedProductId('')
-    setNewQuantity('0')
+    setNewCases('0')
+    setNewBottles('0')
   }
 
   function removeItem(itemId: string) {
@@ -95,8 +99,9 @@ export function AccountInventoryOnHandCard({
           <p className="mt-1 text-sm text-slate-500">Update account-held inventory directly from the CRM record.</p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-right">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Tracked units</p>
-          <p className="mt-1 text-2xl font-bold text-slate-900">{totalUnits.toFixed(2)}</p>
+          <p className="text-xs uppercase tracking-wide text-slate-500">Tracked inventory</p>
+          <p className="mt-1 text-lg font-bold text-slate-900">{totalCases.toFixed(2)} cases</p>
+          <p className="text-sm font-medium text-slate-600">{totalBottles.toFixed(2)} bottles</p>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -107,7 +112,8 @@ export function AccountInventoryOnHandCard({
                 <th className="pb-2 pr-3 font-medium">Product</th>
                 <th className="pb-2 pr-3 font-medium">SKU</th>
                 <th className="pb-2 pr-3 font-medium">Unit</th>
-                <th className="pb-2 pr-3 font-medium">Qty on hand</th>
+                <th className="pb-2 pr-3 font-medium">Cases on hand</th>
+                <th className="pb-2 pr-3 font-medium">Bottles on hand</th>
                 <th className="pb-2 pr-3 font-medium">Last updated</th>
                 <th className="pb-2 pr-3 font-medium">By</th>
                 <th className="pb-2 font-medium">Actions</th>
@@ -116,7 +122,7 @@ export function AccountInventoryOnHandCard({
             <tbody>
               {items.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-4 text-sm text-slate-500">No account inventory tracked yet.</td>
+                  <td colSpan={8} className="py-4 text-sm text-slate-500">No account inventory tracked yet.</td>
                 </tr>
               ) : (
                 items.map((item) => (
@@ -131,8 +137,30 @@ export function AccountInventoryOnHandCard({
                         type="number"
                         min="0"
                         step="0.01"
-                        value={draftQuantities[item.id] ?? item.quantityOnHand}
-                        onChange={(event) => setDraftQuantities((current) => ({ ...current, [item.id]: event.target.value }))}
+                        value={draftCounts[item.id]?.casesOnHand ?? item.casesOnHand}
+                        onChange={(event) => setDraftCounts((current) => ({
+                          ...current,
+                          [item.id]: {
+                            casesOnHand: event.target.value,
+                            bottlesOnHand: current[item.id]?.bottlesOnHand ?? item.bottlesOnHand,
+                          },
+                        }))}
+                        className="h-9 w-28 rounded-md border border-input bg-white px-3 py-1 text-sm shadow-sm"
+                      />
+                    </td>
+                    <td className="py-3 pr-3">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={draftCounts[item.id]?.bottlesOnHand ?? item.bottlesOnHand}
+                        onChange={(event) => setDraftCounts((current) => ({
+                          ...current,
+                          [item.id]: {
+                            casesOnHand: current[item.id]?.casesOnHand ?? item.casesOnHand,
+                            bottlesOnHand: event.target.value,
+                          },
+                        }))}
                         className="h-9 w-28 rounded-md border border-input bg-white px-3 py-1 text-sm shadow-sm"
                       />
                     </td>
@@ -145,7 +173,11 @@ export function AccountInventoryOnHandCard({
                           size="sm"
                           variant="outline"
                           disabled={isPending}
-                          onClick={() => saveProduct(item.productId, draftQuantities[item.id] ?? item.quantityOnHand)}
+                          onClick={() => saveProduct(
+                            item.productId,
+                            draftCounts[item.id]?.casesOnHand ?? item.casesOnHand,
+                            draftCounts[item.id]?.bottlesOnHand ?? item.bottlesOnHand,
+                          )}
                         >
                           <Save className="mr-1.5 h-3.5 w-3.5" />Save
                         </Button>
@@ -167,7 +199,7 @@ export function AccountInventoryOnHandCard({
         </div>
 
         <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4">
-          <div className="grid gap-3 md:grid-cols-[1fr_140px_auto]">
+          <div className="grid gap-3 md:grid-cols-[1fr_140px_140px_auto]">
             <select
               value={selectedProductId}
               onChange={(event) => setSelectedProductId(event.target.value)}
@@ -184,10 +216,19 @@ export function AccountInventoryOnHandCard({
               type="number"
               min="0"
               step="0.01"
-              value={newQuantity}
-              onChange={(event) => setNewQuantity(event.target.value)}
+              value={newCases}
+              onChange={(event) => setNewCases(event.target.value)}
               className="h-10 rounded-md border border-input bg-white px-3 py-2 text-sm shadow-sm"
-              placeholder="Quantity"
+              placeholder="Cases"
+            />
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={newBottles}
+              onChange={(event) => setNewBottles(event.target.value)}
+              className="h-10 rounded-md border border-input bg-white px-3 py-2 text-sm shadow-sm"
+              placeholder="Bottles"
             />
             <Button type="button" disabled={isPending || !selectedProductId} onClick={addProduct}>
               <Plus className="mr-2 h-4 w-4" />Add Product

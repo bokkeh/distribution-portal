@@ -38,7 +38,8 @@ export type AccountInventoryItem = {
   sku: string
   productName: string
   unitType: string | null
-  quantityOnHand: string
+  casesOnHand: string
+  bottlesOnHand: string
   updatedByUserId: string | null
   updatedByName: string | null
   updatedByRole: string | null
@@ -205,7 +206,8 @@ export async function getAccountInventoryOnHand(accountId: string) {
         sku: accountInventoryOnHand.sku,
         productName: accountInventoryOnHand.productName,
         unitType: accountInventoryOnHand.unitType,
-        quantityOnHand: accountInventoryOnHand.quantityOnHand,
+        casesOnHand: accountInventoryOnHand.casesOnHand,
+        bottlesOnHand: accountInventoryOnHand.bottlesOnHand,
         updatedByUserId: accountInventoryOnHand.updatedByUserId,
         updatedByName: users.name,
         updatedByRole: users.role,
