@@ -562,6 +562,10 @@ export async function updateCustomerAccount(
     const businessType = (formData.get('businessType') as string) || null
     const creditLimit = formData.get('creditLimit') as string
     const paymentTerms = formData.get('paymentTerms') as string
+    const liquorLicenseNumber = (formData.get('liquorLicenseNumber') as string) || null
+    const liquorLicenseState = (formData.get('liquorLicenseState') as string) || null
+    const liquorLicenseExpiration = (formData.get('liquorLicenseExpiration') as string) || null
+    const liquorLicenseUrl = (formData.get('liquorLicenseUrl') as string) || null
     const normalizedGeography = normalizeAccountGeography({ state, county })
 
     const [existingAccount] = await db.select().from(customerAccounts).where(eq(customerAccounts.id, id)).limit(1)
@@ -590,6 +594,10 @@ export async function updateCustomerAccount(
       ['businessType', existingAccount.businessType, businessType],
       ['creditLimit', existingAccount.creditLimit, creditLimit],
       ['paymentTerms', existingAccount.paymentTerms, paymentTerms],
+      ['liquorLicenseNumber', existingAccount.liquorLicenseNumber, liquorLicenseNumber],
+      ['liquorLicenseState', existingAccount.liquorLicenseState, liquorLicenseState],
+      ['liquorLicenseExpiration', existingAccount.liquorLicenseExpiration, liquorLicenseExpiration],
+      ['liquorLicenseUrl', existingAccount.liquorLicenseUrl, liquorLicenseUrl],
     ].filter(([, previousValue, nextValue]) => (previousValue ?? null) !== (nextValue ?? null)).map(([field]) => field as string)
 
     const [account] = await db.update(customerAccounts).set({
@@ -613,6 +621,10 @@ export async function updateCustomerAccount(
       businessType,
       creditLimit,
       paymentTerms,
+      liquorLicenseNumber,
+      liquorLicenseState,
+      liquorLicenseExpiration,
+      liquorLicenseUrl,
     }).where(eq(customerAccounts.id, id)).returning()
 
     await logActivityEvent({

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useActionState, useEffect, useRef } from 'react'
+import { useActionState, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { updateCustomerAccount } from '@/actions/crm'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useFormDraftAutosave } from '@/hooks/useFormDraftAutosave'
 import { AddressAutocomplete } from '@/components/shared/AddressAutocomplete'
+import { DocumentUploadField } from '@/components/shared/DocumentUploadField'
 
 type Account = {
   id: string
@@ -33,6 +34,10 @@ type Account = {
   creditLimit: string | null
   paymentTerms: string | null
   hubspotCompanyId?: string | null
+  liquorLicenseNumber?: string | null
+  liquorLicenseState?: string | null
+  liquorLicenseExpiration?: string | null
+  liquorLicenseUrl?: string | null
 }
 
 export function AccountEditForm({ account, mode }: { account: Account; mode: 'admin' | 'staff' }) {
@@ -40,6 +45,7 @@ export function AccountEditForm({ account, mode }: { account: Account; mode: 'ad
   const formRef = useRef<HTMLFormElement | null>(null)
   const [state, action, pending] = useActionState(updateCustomerAccount, null)
   const { statusText, clearDraft } = useFormDraftAutosave(formRef, `account-edit:${mode}:${account.id}`)
+  const [licenseUrl, setLicenseUrl] = useState(account.liquorLicenseUrl ?? '')
 
   useEffect(() => {
     if (!state) return
@@ -189,6 +195,34 @@ export function AccountEditForm({ account, mode }: { account: Account; mode: 'ad
         <div className="space-y-2">
           <Label htmlFor={`${mode}-dcAbraNumber`}>DC ABRA Number</Label>
           <Input id={`${mode}-dcAbraNumber`} name="dcAbraNumber" defaultValue={account.dcAbraNumber ?? ''} />
+        </div>
+      </div>
+
+      <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <p className="text-sm font-semibold text-slate-800">Liquor License</p>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="space-y-2">
+            <Label htmlFor={`${mode}-liquorLicenseNumber`}>License Number</Label>
+            <Input id={`${mode}-liquorLicenseNumber`} name="liquorLicenseNumber" defaultValue={account.liquorLicenseNumber ?? ''} placeholder="ABC-123456" />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor={`${mode}-liquorLicenseState`}>Issuing State</Label>
+            <Input id={`${mode}-liquorLicenseState`} name="liquorLicenseState" defaultValue={account.liquorLicenseState ?? ''} maxLength={2} placeholder="DC" />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor={`${mode}-liquorLicenseExpiration`}>Expiration Date</Label>
+            <Input id={`${mode}-liquorLicenseExpiration`} name="liquorLicenseExpiration" type="date" defaultValue={account.liquorLicenseExpiration ?? ''} />
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label>License Document</Label>
+          <input type="hidden" name="liquorLicenseUrl" value={licenseUrl} />
+          <DocumentUploadField
+            name={`license-${account.id}`}
+            value={licenseUrl}
+            onChange={setLicenseUrl}
+            label="Upload license image or PDF"
+          />
         </div>
       </div>
 

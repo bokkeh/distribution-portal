@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { PhoneSmsButton } from '@/components/crm/PhoneSmsButton'
 import { formatCurrency } from '@/lib/utils'
-import { Bell, Building2, Clock, CreditCard, Globe, Mail, MapPin, Phone, User } from 'lucide-react'
+import { Bell, Building2, Clock, CreditCard, FileText, Globe, Mail, MapPin, Phone, ShieldCheck, User } from 'lucide-react'
 
 type AccountDetails = {
   id: string
@@ -22,6 +22,10 @@ type AccountDetails = {
   website?: string | null
   creditLimit: string | null
   notificationPreference?: string | null
+  liquorLicenseNumber?: string | null
+  liquorLicenseState?: string | null
+  liquorLicenseExpiration?: string | null
+  liquorLicenseUrl?: string | null
 }
 
 function directionsUrl(account: AccountDetails) {
@@ -50,6 +54,18 @@ function normalizeWebsiteUrl(value: string | null | undefined) {
   return /^https?:\/\//i.test(website) ? website : `https://${website}`
 }
 
+function LicenseExpiryBadge({ expiration }: { expiration: string | null | undefined }) {
+  if (!expiration) return null
+  const exp = new Date(expiration)
+  if (isNaN(exp.getTime())) return <span className="text-slate-900">{expiration}</span>
+  const now = new Date()
+  const daysUntil = Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+  const formatted = exp.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  if (daysUntil < 0) return <span className="font-semibold text-red-600">{formatted} — EXPIRED</span>
+  if (daysUntil <= 30) return <span className="font-semibold text-amber-600">{formatted} — expires in {daysUntil}d</span>
+  return <span className="text-slate-900">{formatted}</span>
+}
+
 export function AccountDetailsCard({
   account,
   mode,
@@ -60,6 +76,7 @@ export function AccountDetailsCard({
   const mapUrl = directionsUrl(account)
   const cityLine = [account.city, account.state, account.zip].filter(Boolean).join(', ')
   const websiteUrl = normalizeWebsiteUrl(account.website)
+  const hasLicense = account.liquorLicenseNumber || account.liquorLicenseState || account.liquorLicenseExpiration || account.liquorLicenseUrl
 
   return (
     <Card>
@@ -195,6 +212,40 @@ export function AccountDetailsCard({
                 <NotificationPreferenceBadge value={account.notificationPreference} />
               </div>
             </div>
+          </div>
+        </div>
+
+        <div className="flex items-start gap-3">
+          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Liquor License</p>
+            {hasLicense ? (
+              <div className="mt-1 space-y-1">
+                {account.liquorLicenseNumber ? (
+                  <p className="text-slate-900">
+                    <span className="text-muted-foreground">No.&nbsp;</span>{account.liquorLicenseNumber}
+                    {account.liquorLicenseState ? <span className="ml-1 text-muted-foreground">({account.liquorLicenseState})</span> : null}
+                  </p>
+                ) : null}
+                {account.liquorLicenseExpiration ? (
+                  <p className="text-sm">
+                    <span className="text-muted-foreground">Expires&nbsp;</span>
+                    <LicenseExpiryBadge expiration={account.liquorLicenseExpiration} />
+                  </p>
+                ) : null}
+                {account.liquorLicenseUrl ? (
+                  <a href={account.liquorLicenseUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:underline">
+                    <FileText className="h-3.5 w-3.5" />
+                    View license document
+                  </a>
+                ) : null}
+              </div>
+            ) : (
+              <div className="mt-1 flex items-center gap-2">
+                <p className="text-muted-foreground">No license on file</p>
+                <Link href={`/${mode}/crm/${account.id}#edit-account`} className="text-xs font-medium text-blue-600 hover:underline">Add</Link>
+              </div>
+            )}
           </div>
         </div>
       </CardContent>
