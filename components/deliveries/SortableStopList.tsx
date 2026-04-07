@@ -6,7 +6,7 @@ import { DndContext, DragOverlay, PointerSensor, closestCenter, useSensor, useSe
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { toast } from 'sonner'
-import { reorderDeliveryStops, removeDeliveryStop, updateDeliveryStop, setDeliveryOrigin, syncDeliveryStopFromAccount } from '@/actions/deliveries'
+import { reorderDeliveryStops, removeDeliveryStop, setDeliveryOrigin, startDeliveryForStop, syncDeliveryStopFromAccount, updateDeliveryStop } from '@/actions/deliveries'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,7 +15,7 @@ import { getDeliveryStopAdditionalPhotos } from '@/lib/deliveries/photos'
 import { signedPhotoUrl } from '@/lib/gcs/photo-url'
 import { formatDate } from '@/lib/utils'
 import Image from 'next/image'
-import { CheckCircle, Check, ChevronDown, ChevronUp, Clock, GripVertical, Home, MapPin, Pencil, RefreshCw, X, XCircle } from 'lucide-react'
+import { CheckCircle, Check, ChevronDown, ChevronUp, Clock, GripVertical, Home, Loader2, MapPin, Pencil, RefreshCw, Send, X, XCircle } from 'lucide-react'
 import GetDirectionsButton from '@/components/shared/GetDirectionsButton'
 
 type Stop = {
@@ -107,11 +107,16 @@ function SortableStopCard({
   const [isSaving, setIsSaving] = useState(false)
   const [isSyncing, setIsSyncing] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
+  const [isStartingForDriver, startStartingForDriver] = useTransition()
   const [address, setAddress] = useState(stop.address)
   const [contactName, setContactName] = useState(stop.contactName ?? '')
   const [contactPhone, setContactPhone] = useState(stop.contactPhone ?? '')
   const [notes, setNotes] = useState(stop.notes ?? '')
   const canReorder = mode === 'admin' || mode === 'driver'
+  const router = useRouter()
+  const stopTrackingActive = stop.status === 'pending' && ['out_for_delivery', 'arriving_soon', 'arrived'].includes(stop.customerStatus ?? 'not_started')
+  const adminCanStartForDriver = mode === 'admin' && stop.status === 'pending' && !stopTrackingActive
+  const adminStartBlockedByOtherStop = adminCanStartForDriver && routeHasActiveStop
 
   const style = { transform: CSS.Transform.toString(transform), transition }
 
@@ -153,6 +158,22 @@ function SortableStopCard({
     } finally {
       setIsSyncing(false)
     }
+  }
+
+  function handleAdminStartForDriver() {
+    startStartingForDriver(async () => {
+      try {
+        await startDeliveryForStop(stop.id)
+        onUpdate(stop.id, {
+          customerStatus: 'out_for_delivery',
+          trackingEnabled: true,
+        })
+        toast.success('Delivery started for assigned driver')
+        router.refresh()
+      } catch (error) {
+        toast.error('Unable to start delivery', { description: error instanceof Error ? error.message : undefined })
+      }
+    })
   }
 
   return (
@@ -297,6 +318,19 @@ function SortableStopCard({
         {mode === 'admin' && !editing && (
           <div className="flex items-start gap-1">
             <StopStatusIcon status={stop.status} />
+            {adminCanStartForDriver ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isStartingForDriver || adminStartBlockedByOtherStop}
+                onClick={handleAdminStartForDriver}
+                title={adminStartBlockedByOtherStop ? 'Another stop is already active on this route.' : 'Start delivery on behalf of the assigned driver'}
+              >
+                {isStartingForDriver ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Send className="mr-1.5 h-3.5 w-3.5" />}
+                Start for Driver
+              </Button>
+            ) : null}
             <button
               type="button"
               onClick={() => setEditing(true)}
@@ -497,11 +531,15 @@ export default function SortableStopList({
 
   const pendingStops = useMemo(() => stops.filter((stop) => stop.status === 'pending'), [stops])
   const completedStops = useMemo(() => stops.filter((stop) => stop.status !== 'pending'), [stops])
+  const routeTrackedStop = useMemo(
+    () => pendingStops.find((stop) => ['out_for_delivery', 'arriving_soon', 'arrived'].includes(stop.customerStatus ?? 'not_started')) ?? null,
+    [pendingStops],
+  )
   const activeTrackedStop = useMemo(
     () => mode === 'driver'
-      ? pendingStops.find((stop) => ['out_for_delivery', 'arriving_soon', 'arrived'].includes(stop.customerStatus ?? 'not_started')) ?? null
+      ? routeTrackedStop
       : null,
-    [mode, pendingStops],
+    [mode, routeTrackedStop],
   )
   const leadStop = useMemo(
     () => mode === 'driver' ? activeTrackedStop ?? pendingStops[0] ?? null : null,
@@ -659,7 +697,7 @@ export default function SortableStopList({
                 canMoveUp={index > 0}
                 canMoveDown={index < sortableStops.length - 1}
                 isRemoving={isPending}
-                routeHasActiveStop={Boolean(activeTrackedStop)}
+                routeHasActiveStop={Boolean(routeTrackedStop && routeTrackedStop.id !== stop.id)}
                 emphasis={mode === 'driver' && stop.id === leadStop?.id ? (activeTrackedStop ? 'active' : 'next') : 'default'}
                 onCompleted={() => handleStopCompleted(stop.id)}
                 cardRef={(el) => {
