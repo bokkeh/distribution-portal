@@ -566,35 +566,43 @@ export async function startDeliveryForStop(stopId: string) {
     await db.update(orders).set({ shippingStatus: 'out_for_delivery' }).where(eq(orders.id, stop.orderId))
   }
 
-  const [existing] = await db
-    .select({ id: deliveryNotifications.id })
-    .from(deliveryNotifications)
-    .where(and(eq(deliveryNotifications.stopId, stopId), eq(deliveryNotifications.notificationType, 'out_for_delivery')))
-    .limit(1)
+  try {
+    const [existing] = await db
+      .select({ id: deliveryNotifications.id })
+      .from(deliveryNotifications)
+      .where(and(eq(deliveryNotifications.stopId, stopId), eq(deliveryNotifications.notificationType, 'out_for_delivery')))
+      .limit(1)
 
-  if (!existing) {
-    await sendStopTrackingNotification({
-      stopId,
-      deliveryId: stop.deliveryId,
-      customerId: stop.customerId,
-      phoneNumber: stop.contactPhone || stop.accountPhone,
-      companyName: stop.companyName ?? stop.address,
-      driverName: stop.driverName ?? 'Your driver',
-      driverAvatarUrl: toDisplayAvatarUrl(stop.driverAvatarUrl),
-      trackingToken,
-      notificationType: 'out_for_delivery',
-      supportPhone,
-      actorUserId: session.user.id,
-    })
+    if (!existing) {
+      await sendStopTrackingNotification({
+        stopId,
+        deliveryId: stop.deliveryId,
+        customerId: stop.customerId,
+        phoneNumber: stop.contactPhone || stop.accountPhone,
+        companyName: stop.companyName ?? stop.address,
+        driverName: stop.driverName ?? 'Your driver',
+        driverAvatarUrl: toDisplayAvatarUrl(stop.driverAvatarUrl),
+        trackingToken,
+        notificationType: 'out_for_delivery',
+        supportPhone,
+        actorUserId: session.user.id,
+      })
+    }
+  } catch (notifyError) {
+    console.error('Failed to send delivery notification:', notifyError)
   }
 
-  await recordTrackingEvent({
-    deliveryId: stop.deliveryId,
-    stopId,
-    eventType: 'delivery_started',
-    eventData: { trackingToken },
-    createdBy: session.user.id,
-  })
+  try {
+    await recordTrackingEvent({
+      deliveryId: stop.deliveryId,
+      stopId,
+      eventType: 'delivery_started',
+      eventData: { trackingToken },
+      createdBy: session.user.id,
+    })
+  } catch (trackingError) {
+    console.error('Failed to record tracking event:', trackingError)
+  }
 
   await logActivityEvent({
     entityType: 'delivery',
@@ -622,35 +630,43 @@ export async function markDeliveryStopArrived(stopId: string) {
   }).where(eq(deliveryStops.id, stopId))
 
   if (stop.trackingToken) {
-    const [existing] = await db
-      .select({ id: deliveryNotifications.id })
-      .from(deliveryNotifications)
-      .where(and(eq(deliveryNotifications.stopId, stopId), eq(deliveryNotifications.notificationType, 'arrived')))
-      .limit(1)
+    try {
+      const [existing] = await db
+        .select({ id: deliveryNotifications.id })
+        .from(deliveryNotifications)
+        .where(and(eq(deliveryNotifications.stopId, stopId), eq(deliveryNotifications.notificationType, 'arrived')))
+        .limit(1)
 
-    if (!existing) {
-      await sendStopTrackingNotification({
-        stopId,
-        deliveryId: stop.deliveryId,
-        customerId: stop.customerId,
-        phoneNumber: stop.contactPhone || stop.accountPhone,
-        companyName: stop.companyName ?? stop.address,
-        driverName: stop.driverName ?? 'Your driver',
-        driverAvatarUrl: toDisplayAvatarUrl(stop.driverAvatarUrl),
-        trackingToken: stop.trackingToken,
-        notificationType: 'arrived',
-        supportPhone: process.env.ADMIN_NOTIFICATION_PHONE ?? process.env.TELNYX_FROM_NUMBER ?? null,
-        actorUserId: session.user.id,
-      })
+      if (!existing) {
+        await sendStopTrackingNotification({
+          stopId,
+          deliveryId: stop.deliveryId,
+          customerId: stop.customerId,
+          phoneNumber: stop.contactPhone || stop.accountPhone,
+          companyName: stop.companyName ?? stop.address,
+          driverName: stop.driverName ?? 'Your driver',
+          driverAvatarUrl: toDisplayAvatarUrl(stop.driverAvatarUrl),
+          trackingToken: stop.trackingToken,
+          notificationType: 'arrived',
+          supportPhone: process.env.ADMIN_NOTIFICATION_PHONE ?? process.env.TELNYX_FROM_NUMBER ?? null,
+          actorUserId: session.user.id,
+        })
+      }
+    } catch (notifyError) {
+      console.error('Failed to send arrived notification:', notifyError)
     }
   }
 
-  await recordTrackingEvent({
-    deliveryId: stop.deliveryId,
-    stopId,
-    eventType: 'driver_arrived',
-    createdBy: session.user.id,
-  })
+  try {
+    await recordTrackingEvent({
+      deliveryId: stop.deliveryId,
+      stopId,
+      eventType: 'driver_arrived',
+      createdBy: session.user.id,
+    })
+  } catch (trackingError) {
+    console.error('Failed to record tracking event:', trackingError)
+  }
 
   revalidatePath('/driver/deliveries')
   revalidatePath('/driver/map')
@@ -691,26 +707,30 @@ export async function updateDriverLocation(input: { stopId: string; lat: number;
   }).where(eq(deliveryStops.id, stop.id))
 
   if (nextStatus === 'arriving_soon' && stop.trackingToken && !stop.arrivingSoonAt) {
-    const [existing] = await db
-      .select({ id: deliveryNotifications.id })
-      .from(deliveryNotifications)
-      .where(and(eq(deliveryNotifications.stopId, stop.id), eq(deliveryNotifications.notificationType, 'arriving_soon')))
-      .limit(1)
+    try {
+      const [existing] = await db
+        .select({ id: deliveryNotifications.id })
+        .from(deliveryNotifications)
+        .where(and(eq(deliveryNotifications.stopId, stop.id), eq(deliveryNotifications.notificationType, 'arriving_soon')))
+        .limit(1)
 
-    if (!existing) {
-      await sendStopTrackingNotification({
-        stopId: stop.id,
-        deliveryId: stop.deliveryId,
-        customerId: stop.customerId,
-        phoneNumber: stop.contactPhone || stop.accountPhone,
-        companyName: stop.companyName ?? stop.address,
-        driverName: stop.driverName ?? 'Your driver',
-        driverAvatarUrl: toDisplayAvatarUrl(stop.driverAvatarUrl),
-        trackingToken: stop.trackingToken,
-        notificationType: 'arriving_soon',
-        supportPhone: process.env.ADMIN_NOTIFICATION_PHONE ?? process.env.TELNYX_FROM_NUMBER ?? null,
-        actorUserId: session.user.id,
-      })
+      if (!existing) {
+        await sendStopTrackingNotification({
+          stopId: stop.id,
+          deliveryId: stop.deliveryId,
+          customerId: stop.customerId,
+          phoneNumber: stop.contactPhone || stop.accountPhone,
+          companyName: stop.companyName ?? stop.address,
+          driverName: stop.driverName ?? 'Your driver',
+          driverAvatarUrl: toDisplayAvatarUrl(stop.driverAvatarUrl),
+          trackingToken: stop.trackingToken,
+          notificationType: 'arriving_soon',
+          supportPhone: process.env.ADMIN_NOTIFICATION_PHONE ?? process.env.TELNYX_FROM_NUMBER ?? null,
+          actorUserId: session.user.id,
+        })
+      }
+    } catch (notifyError) {
+      console.error('Failed to send arriving_soon notification:', notifyError)
     }
   }
 
@@ -838,19 +858,23 @@ export async function completeDeliveryStop(stopId: string, formData: FormData) {
   })
 
   if (stop.trackingToken) {
-    await sendStopTrackingNotification({
-      stopId,
-      deliveryId: stop.deliveryId,
-      customerId: stop.customerId,
-      phoneNumber: stop.contactPhone || stop.accountPhone,
-      companyName: stop.companyName ?? stop.address,
-      driverName: stop.driverName ?? 'Your driver',
-      driverAvatarUrl: toDisplayAvatarUrl(stop.driverAvatarUrl),
-      trackingToken: stop.trackingToken,
-      notificationType: 'delivered',
-      supportPhone: process.env.ADMIN_NOTIFICATION_PHONE ?? process.env.TELNYX_FROM_NUMBER ?? null,
-      actorUserId: null,
-    })
+    try {
+      await sendStopTrackingNotification({
+        stopId,
+        deliveryId: stop.deliveryId,
+        customerId: stop.customerId,
+        phoneNumber: stop.contactPhone || stop.accountPhone,
+        companyName: stop.companyName ?? stop.address,
+        driverName: stop.driverName ?? 'Your driver',
+        driverAvatarUrl: toDisplayAvatarUrl(stop.driverAvatarUrl),
+        trackingToken: stop.trackingToken,
+        notificationType: 'delivered',
+        supportPhone: process.env.ADMIN_NOTIFICATION_PHONE ?? process.env.TELNYX_FROM_NUMBER ?? null,
+        actorUserId: null,
+      })
+    } catch (notifyError) {
+      console.error('Failed to send delivered notification:', notifyError)
+    }
   }
 
   await logActivityEvent({
@@ -869,15 +893,19 @@ export async function completeDeliveryStop(stopId: string, formData: FormData) {
     sourceId: stop.id,
   })
 
-  await recordTrackingEvent({
-    deliveryId: stop.deliveryId,
-    stopId,
-    eventType: 'delivery_completed',
-    eventData: {
-      recipientSignedName,
-      recipientSignatureUrl,
-    },
-  })
+  try {
+    await recordTrackingEvent({
+      deliveryId: stop.deliveryId,
+      stopId,
+      eventType: 'delivery_completed',
+      eventData: {
+        recipientSignedName,
+        recipientSignatureUrl,
+      },
+    })
+  } catch (trackingError) {
+    console.error('Failed to record tracking event:', trackingError)
+  }
 
   revalidatePath('/driver/deliveries')
   revalidatePath('/driver/map')
@@ -939,12 +967,16 @@ export async function markDeliveryStopFailed(stopId: string) {
     })
   }
 
-  await recordTrackingEvent({
-    deliveryId: stop.deliveryId,
-    stopId,
-    eventType: 'delivery_failed',
-    createdBy: session.user.id,
-  })
+  try {
+    await recordTrackingEvent({
+      deliveryId: stop.deliveryId,
+      stopId,
+      eventType: 'delivery_failed',
+      createdBy: session.user.id,
+    })
+  } catch (trackingError) {
+    console.error('Failed to record tracking event:', trackingError)
+  }
 
   await logActivityEvent({
     entityType: 'delivery',
