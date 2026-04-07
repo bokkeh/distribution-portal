@@ -6,7 +6,7 @@ import { DndContext, DragOverlay, PointerSensor, closestCenter, useSensor, useSe
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { toast } from 'sonner'
-import { reorderDeliveryStops, removeDeliveryStop, updateDeliveryStop, setDeliveryOrigin } from '@/actions/deliveries'
+import { reorderDeliveryStops, removeDeliveryStop, updateDeliveryStop, setDeliveryOrigin, syncDeliveryStopFromAccount } from '@/actions/deliveries'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,7 +15,7 @@ import { getDeliveryStopAdditionalPhotos } from '@/lib/deliveries/photos'
 import { signedPhotoUrl } from '@/lib/gcs/photo-url'
 import { formatDate } from '@/lib/utils'
 import Image from 'next/image'
-import { CheckCircle, Check, ChevronDown, ChevronUp, Clock, GripVertical, Home, MapPin, Pencil, X, XCircle } from 'lucide-react'
+import { CheckCircle, Check, ChevronDown, ChevronUp, Clock, GripVertical, Home, MapPin, Pencil, RefreshCw, X, XCircle } from 'lucide-react'
 import GetDirectionsButton from '@/components/shared/GetDirectionsButton'
 
 type Stop = {
@@ -105,6 +105,7 @@ function SortableStopCard({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stop.id })
   const [editing, setEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isSyncing, setIsSyncing] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [address, setAddress] = useState(stop.address)
   const [contactName, setContactName] = useState(stop.contactName ?? '')
@@ -133,6 +134,24 @@ function SortableStopCard({
       toast.error('Failed to update stop')
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  async function handleSyncFromAccount() {
+    setIsSyncing(true)
+    try {
+      const result = await syncDeliveryStopFromAccount(deliveryId, stop.id)
+      if (result.error) {
+        toast.error(result.error)
+      } else {
+        setAddress(result.address ?? address)
+        onUpdate(stop.id, { address: result.address ?? address })
+        toast.success('Address synced from account')
+      }
+    } catch {
+      toast.error('Failed to sync address')
+    } finally {
+      setIsSyncing(false)
     }
   }
 
@@ -193,7 +212,19 @@ function SortableStopCard({
 
         {editing && mode === 'admin' ? (
           <div className="flex-1 space-y-2">
-            <Input value={address} onChange={e => setAddress(e.target.value)} placeholder="Address" className="h-8 text-sm" />
+            <div className="flex gap-1.5">
+              <Input value={address} onChange={e => setAddress(e.target.value)} placeholder="Address" className="h-8 text-sm" />
+              <button
+                type="button"
+                onClick={handleSyncFromAccount}
+                disabled={isSyncing}
+                className="shrink-0 flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                title="Pull address from linked account"
+              >
+                <RefreshCw className={`h-3 w-3 ${isSyncing ? 'animate-spin' : ''}`} />
+                Sync
+              </button>
+            </div>
             <div className="grid grid-cols-2 gap-2">
               <Input value={contactName} onChange={e => setContactName(e.target.value)} placeholder="Contact name" className="h-8 text-sm" />
               <Input value={contactPhone} onChange={e => setContactPhone(e.target.value)} placeholder="Contact phone" className="h-8 text-sm" />
@@ -215,7 +246,7 @@ function SortableStopCard({
             {mode === 'driver' ? <StopStatusBadge status={stop.status} /> : null}
             </div>
             {stop.companyName && (
-              <p className="mt-0.5 flex items-start gap-1 text-xs text-muted-foreground">
+              <p className={`mt-0.5 flex items-start gap-1 text-xs ${stop.address.startsWith('Address not') ? 'font-medium text-amber-600' : 'text-muted-foreground'}`}>
                 <MapPin className="h-3 w-3 shrink-0 mt-0.5" />{stop.address}
               </p>
             )}

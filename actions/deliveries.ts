@@ -376,23 +376,25 @@ export async function createDelivery(formData: FormData) {
 
     for (let i = 0; i < selectedOrders.length; i++) {
       const order = selectedOrders[i]
-      const fullAddress = [order.address, order.city, order.state, order.zip].filter(Boolean).join(', ') || 'Address not provided'
+      const fullAddress = [order.address, order.city, order.state, order.zip].filter(Boolean).join(', ')
       const contactName = order.pocName || order.contactName || order.companyName || null
       let lat: number | null = null
       let lng: number | null = null
 
-      try {
-        const coords = await geocodeAddress(fullAddress)
-        lat = coords?.lat ?? null
-        lng = coords?.lng ?? null
-      } catch {}
+      if (fullAddress) {
+        try {
+          const coords = await geocodeAddress(fullAddress)
+          lat = coords?.lat ?? null
+          lng = coords?.lng ?? null
+        } catch {}
+      }
 
       await db.insert(deliveryStops).values({
         deliveryId: delivery.id,
         orderId: order.id,
         customerId: order.customerId,
         sequenceNumber: i + 1,
-        address: fullAddress,
+        address: fullAddress || 'Address not on file — please update',
         contactName,
         contactPhone: order.pocPhone ?? null,
         contactEmail: order.pocEmail ?? null,
@@ -1072,6 +1074,64 @@ export async function updateDeliveryStop(
   revalidatePath('/driver/deliveries')
   revalidatePath('/driver/map')
   return { success: true }
+}
+
+export async function syncDeliveryStopFromAccount(deliveryId: string, stopId: string): Promise<{ success: boolean; address?: string; error?: string }> {
+  await requireAdmin()
+
+  const [stop] = await db
+    .select({
+      id: deliveryStops.id,
+      customerId: deliveryStops.customerId,
+    })
+    .from(deliveryStops)
+    .where(and(eq(deliveryStops.id, stopId), eq(deliveryStops.deliveryId, deliveryId)))
+    .limit(1)
+
+  if (!stop?.customerId) return { success: false, error: 'Stop is not linked to an account.' }
+
+  const [account] = await db
+    .select({
+      address: customerAccounts.address,
+      city: customerAccounts.city,
+      state: customerAccounts.state,
+      zip: customerAccounts.zip,
+      pocName: customerAccounts.pocName,
+      contactName: customerAccounts.contactName,
+      companyName: customerAccounts.companyName,
+      pocPhone: customerAccounts.pocPhone,
+      pocEmail: customerAccounts.pocEmail,
+    })
+    .from(customerAccounts)
+    .where(eq(customerAccounts.id, stop.customerId))
+    .limit(1)
+
+  if (!account) return { success: false, error: 'Linked account not found.' }
+
+  const fullAddress = [account.address, account.city, account.state, account.zip].filter(Boolean).join(', ')
+  if (!fullAddress) return { success: false, error: 'The linked account still has no address. Please add one first.' }
+
+  let lat: number | null = null
+  let lng: number | null = null
+  try {
+    const coords = await geocodeAddress(fullAddress)
+    lat = coords?.lat ?? null
+    lng = coords?.lng ?? null
+  } catch {}
+
+  await db.update(deliveryStops).set({
+    address: fullAddress,
+    contactName: account.pocName || account.contactName || account.companyName || null,
+    contactPhone: account.pocPhone ?? null,
+    contactEmail: account.pocEmail ?? null,
+    lat: lat?.toFixed(7) ?? null,
+    lng: lng?.toFixed(7) ?? null,
+  }).where(eq(deliveryStops.id, stopId))
+
+  revalidatePath(`/admin/deliveries/${deliveryId}`)
+  revalidatePath('/driver/deliveries')
+  revalidatePath('/driver/map')
+  return { success: true, address: fullAddress }
 }
 
 export async function removeDeliveryStop(deliveryId: string, stopId: string) {
