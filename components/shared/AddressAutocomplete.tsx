@@ -6,10 +6,12 @@ import { cn } from '@/lib/utils'
 const MAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ?? ''
 
 /** Ensures the Maps JS API + Places library are available, loading them if needed. */
-function usePlaces() {
+function usePlaces(enabled: boolean) {
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
+    if (!enabled) return
+
     let cancelled = false
 
     async function init() {
@@ -50,7 +52,7 @@ function usePlaces() {
 
     init()
     return () => { cancelled = true }
-  }, [])
+  }, [enabled])
 
   return ready
 }
@@ -78,7 +80,12 @@ export function AddressAutocomplete({
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
   const acRef = useRef<google.maps.places.Autocomplete | null>(null)
-  const placesReady = usePlaces()
+  const [placesRequested, setPlacesRequested] = useState(false)
+  const placesReady = usePlaces(placesRequested)
+
+  function requestPlaces() {
+    setPlacesRequested(true)
+  }
 
   useEffect(() => {
     if (!placesReady || !inputRef.current || acRef.current) return
@@ -141,6 +148,14 @@ export function AddressAutocomplete({
       autoComplete="off"
       className={cn(className)}
       {...inputProps}
+      onFocus={(event) => {
+        requestPlaces()
+        inputProps.onFocus?.(event)
+      }}
+      onClick={(event) => {
+        requestPlaces()
+        inputProps.onClick?.(event)
+      }}
     />
   )
 }

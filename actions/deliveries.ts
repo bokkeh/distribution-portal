@@ -38,9 +38,15 @@ function toMiles(meters: number) {
   return meters * 0.000621371
 }
 
-async function estimateTravelToStop(originLat: number, originLng: number, destinationLat: number, destinationLng: number) {
+async function estimateTravelToStop(
+  originLat: number,
+  originLng: number,
+  destinationLat: number,
+  destinationLng: number,
+  options?: { useGoogleDirections?: boolean }
+) {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY
-  if (apiKey) {
+  if (options?.useGoogleDirections !== false && apiKey) {
     try {
       const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${originLat},${originLng}&destination=${destinationLat},${destinationLng}&key=${apiKey}`
       const response = await fetch(url, { cache: 'no-store' })
@@ -678,7 +684,13 @@ export async function updateDriverLocation(input: { stopId: string; lat: number;
   if (!stop.trackingEnabled || !stop.lat || !stop.lng || !stop.driverId) return { success: true, skipped: true }
 
   const now = new Date()
-  const { etaMinutes, distanceMiles } = await estimateTravelToStop(input.lat, input.lng, Number(stop.lat), Number(stop.lng))
+  const { etaMinutes, distanceMiles } = await estimateTravelToStop(
+    input.lat,
+    input.lng,
+    Number(stop.lat),
+    Number(stop.lng),
+    { useGoogleDirections: false }
+  )
   const nextStatus =
     stop.customerStatus === 'arrived' || stop.customerStatus === 'delivered'
       ? stop.customerStatus
