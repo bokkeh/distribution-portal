@@ -28,6 +28,10 @@ type AccountDetails = {
   liquorLicenseUrl?: string | null
 }
 
+function settingsAnchorHref(mode: 'admin' | 'staff', accountId: string, anchor: string) {
+  return `/${mode}/crm/${accountId}?tab=settings#${anchor}`
+}
+
 function directionsUrl(account: AccountDetails) {
   const fullAddress = [account.address, account.city, account.state, account.zip].filter(Boolean).join(', ')
   if (!fullAddress) return null
@@ -147,7 +151,7 @@ export function AccountDetailsCard({
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Point of Contact</p>
               <p className="mt-1 text-slate-900">{account.pocName?.trim() || 'No POC assigned'}</p>
               {!account.pocName?.trim() ? (
-                <Link href={`/${mode}/crm/${account.id}#edit-account`} className="mt-1 inline-block text-xs font-medium text-blue-600 hover:underline">
+                <Link href={settingsAnchorHref(mode, account.id, 'poc-fields')} className="mt-1 inline-block text-xs font-medium text-blue-600 hover:underline">
                   Add POC
                 </Link>
               ) : null}
@@ -243,7 +247,7 @@ export function AccountDetailsCard({
             ) : (
               <div className="mt-1 flex items-center gap-2">
                 <p className="text-muted-foreground">No license on file</p>
-                <Link href={`/${mode}/crm/${account.id}#edit-account`} className="text-xs font-medium text-blue-600 hover:underline">Add</Link>
+                <Link href={settingsAnchorHref(mode, account.id, 'license-fields')} className="text-xs font-medium text-blue-600 hover:underline">Add</Link>
               </div>
             )}
           </div>

@@ -154,7 +154,7 @@ export function AccountEditForm({ account, mode }: { account: Account; mode: 'ad
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div id="poc-fields" className="grid grid-cols-1 gap-4 scroll-mt-24 sm:grid-cols-3">
         <div className="space-y-2">
           <Label htmlFor={`${mode}-pocName`}>POC Name</Label>
           <Input id={`${mode}-pocName`} name="pocName" defaultValue={account.pocName ?? ''} />
@@ -201,7 +201,7 @@ export function AccountEditForm({ account, mode }: { account: Account; mode: 'ad
         </div>
       </div>
 
-      <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <div id="license-fields" className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4 scroll-mt-24">
         <p className="text-sm font-semibold text-slate-800">Liquor License</p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div className="space-y-2">
