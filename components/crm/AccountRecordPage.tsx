@@ -11,6 +11,7 @@ import {
   getAccountNotes,
   getAvailableInventoryProducts,
 } from '@/lib/crm/account-detail-data'
+import { normalizePhone } from '@/lib/telnyx/compliance'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { notFound } from 'next/navigation'
 import { Badge } from '@/components/ui/badge'
@@ -51,6 +52,25 @@ function getTabHref(basePath: string, tab: TabId) {
   return tab === 'overview' ? basePath : `${basePath}?tab=${tab}`
 }
 
+function getAccountPhonesForInboxMatch(...values: Array<string | null | undefined>) {
+  const phones = new Set<string>()
+
+  for (const value of values) {
+    const phone = value?.trim()
+    if (!phone) continue
+
+    phones.add(phone)
+
+    try {
+      phones.add(normalizePhone(phone))
+    } catch {
+      // Keep the raw value for legacy rows even if the phone is not parseable.
+    }
+  }
+
+  return Array.from(phones)
+}
+
 type Props = {
   accountId: string
   mode: 'admin' | 'staff'
@@ -84,7 +104,7 @@ export async function AccountRecordPage({
         .limit(1)
     : []
 
-  const accountPhones = Array.from(new Set([account.phone, account.businessPhone, account.pocPhone].filter(Boolean) as string[]))
+  const accountPhones = getAccountPhonesForInboxMatch(account.phone, account.businessPhone, account.pocPhone)
 
   const quickActions = [
     { label: 'Create Order', href: `/${mode}/orders/new?customer=${account.id}`, icon: Plus },
