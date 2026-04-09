@@ -6,6 +6,7 @@ import { syncToHubSpot } from '@/actions/crm'
 import { getCRMAccountDetail } from '@/lib/crm/account-read'
 import {
   getAccountActivityFeed,
+  getAccountInventoryHistory,
   getAccountInventoryOnHand,
   getAccountMediaFeed,
   getAccountNotes,
@@ -195,6 +196,7 @@ export async function AccountRecordPage({
   let inventoryData:
     | {
         inventoryItems: Awaited<ReturnType<typeof getAccountInventoryOnHand>>
+        inventoryHistory: Awaited<ReturnType<typeof getAccountInventoryHistory>>
         productOptions: Awaited<ReturnType<typeof getAvailableInventoryProducts>>
       }
     | null = null
@@ -366,11 +368,12 @@ export async function AccountRecordPage({
   }
 
   if (tab === 'inventory') {
-    const [inventoryItems, productOptions] = await Promise.all([
+    const [inventoryItems, inventoryHistory, productOptions] = await Promise.all([
       getAccountInventoryOnHand(accountId),
+      getAccountInventoryHistory(accountId),
       getAvailableInventoryProducts(),
     ])
-    inventoryData = { inventoryItems, productOptions }
+    inventoryData = { inventoryItems, inventoryHistory, productOptions }
   }
 
   if (tab === 'notes-activity') {
@@ -677,7 +680,7 @@ export async function AccountRecordPage({
       ) : null}
 
       {tab === 'inventory' && inventoryData ? (
-        <AccountInventoryOnHandCard accountId={account.id} items={inventoryData.inventoryItems} products={inventoryData.productOptions} />
+        <AccountInventoryOnHandCard accountId={account.id} items={inventoryData.inventoryItems} historyEvents={inventoryData.inventoryHistory} products={inventoryData.productOptions} showHistory={mode === 'admin' || mode === 'sales'} />
       ) : null}
 
       {tab === 'notes-activity' && notesActivityData ? (

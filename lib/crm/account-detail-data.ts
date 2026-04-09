@@ -46,6 +46,17 @@ export type AccountInventoryItem = {
   updatedAt: Date
 }
 
+export type AccountInventoryHistoryEvent = {
+  id: string
+  kind: string
+  title: string
+  createdAt: Date
+  productId: string | null
+  productName: string | null
+  deltaCases: number
+  deltaBottles: number
+}
+
 export type AccountActivityItem = {
   id: string
   category: string
@@ -75,6 +86,15 @@ function isMissingInventoryColumn(error: unknown) {
 
 function toRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function toNumericValue(value: unknown) {
+  if (typeof value === 'number') return value
+  if (typeof value === 'string') {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : 0
+  }
+  return 0
 }
 
 function categorizeActivity(entityType: string, kind: string) {
@@ -281,6 +301,72 @@ export async function getAvailableInventoryProducts() {
     })
     .from(products)
     .orderBy(desc(products.active), products.name)
+}
+
+export async function getAccountInventoryHistory(accountId: string) {
+  try {
+    const rows = await db
+      .select({
+        id: activityEvents.id,
+        kind: activityEvents.kind,
+        title: activityEvents.title,
+        metadata: activityEvents.metadata,
+        createdAt: activityEvents.createdAt,
+      })
+      .from(activityEvents)
+      .where(and(
+        eq(activityEvents.entityType, 'account'),
+        eq(activityEvents.entityId, accountId),
+        inArray(activityEvents.kind, [
+          'account_inventory_added',
+          'account_inventory_updated',
+          'account_inventory_removed',
+        ]),
+      ))
+      .orderBy(activityEvents.createdAt)
+
+    return rows.flatMap((row) => {
+      const metadata = toRecord(row.metadata)
+      const before = toRecord(metadata.before)
+      const after = toRecord(metadata.after)
+      const productName = typeof metadata.productName === 'string' ? metadata.productName : null
+      const productId = typeof metadata.productId === 'string' ? metadata.productId : null
+
+      let deltaCases = 0
+      let deltaBottles = 0
+
+      if (row.kind === 'account_inventory_updated') {
+        deltaCases = toNumericValue(after.casesOnHand) - toNumericValue(before.casesOnHand)
+        deltaBottles = toNumericValue(after.bottlesOnHand) - toNumericValue(before.bottlesOnHand)
+      } else if (row.kind === 'account_inventory_added') {
+        deltaCases = toNumericValue(metadata.casesOnHand)
+        deltaBottles = toNumericValue(metadata.bottlesOnHand)
+      } else if (row.kind === 'account_inventory_removed') {
+        deltaCases = -toNumericValue(metadata.casesOnHand)
+        deltaBottles = -toNumericValue(metadata.bottlesOnHand)
+      }
+
+      if (deltaCases === 0 && deltaBottles === 0) {
+        return []
+      }
+
+      return [{
+        id: row.id,
+        kind: row.kind,
+        title: row.title,
+        createdAt: row.createdAt,
+        productId,
+        productName,
+        deltaCases,
+        deltaBottles,
+      } satisfies AccountInventoryHistoryEvent]
+    })
+  } catch (error) {
+    if (!isMissingTable(error, 'activity_events')) {
+      console.error('Failed to load account inventory history:', error)
+    }
+    return [] as AccountInventoryHistoryEvent[]
+  }
 }
 
 export async function getAccountActivityFeed(accountId: string, mode: 'admin' | 'staff' | 'sales') {
