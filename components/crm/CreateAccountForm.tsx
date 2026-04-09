@@ -124,7 +124,7 @@ export function CreateAccountForm() {
         </div>
         <div className="space-y-2">
           <Label htmlFor="new-paymentTerms">Payment Terms</Label>
-          <select id="new-paymentTerms" name="paymentTerms" defaultValue="NET30" className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+          <select id="new-paymentTerms" name="paymentTerms" defaultValue="PREPAID" className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
             <option value="PREPAID">Prepaid</option>
             <option value="DUE_ON_RECEIPT">Due on Receipt</option>
             <option value="NET7">Net 7</option>

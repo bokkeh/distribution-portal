@@ -5,6 +5,7 @@ import { customerAccounts } from '@/db/schema'
 export type CRMAccountDetail = {
   id: string
   userId: string | null
+  assignedSalesRepId: string | null
   companyName: string
   contactName: string | null
   address: string | null

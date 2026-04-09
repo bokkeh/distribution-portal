@@ -14,6 +14,7 @@ import { DocumentUploadField } from '@/components/shared/DocumentUploadField'
 
 type Account = {
   id: string
+  assignedSalesRepId?: string | null
   companyName: string
   contactName: string | null
   address: string | null
@@ -41,7 +42,20 @@ type Account = {
   liquorLicenseUrl?: string | null
 }
 
-export function AccountEditForm({ account, mode }: { account: Account; mode: 'admin' | 'staff' }) {
+type SalesLeadOption = {
+  id: string
+  name: string
+}
+
+export function AccountEditForm({
+  account,
+  mode,
+  salesLeadOptions = [],
+}: {
+  account: Account
+  mode: 'admin' | 'staff'
+  salesLeadOptions?: SalesLeadOption[]
+}) {
   const router = useRouter()
   const backPath = `/${mode}/crm/${account.id}`
   const formRef = useRef<HTMLFormElement | null>(null)
@@ -82,6 +96,26 @@ export function AccountEditForm({ account, mode }: { account: Account; mode: 'ad
         <Label htmlFor={`${mode}-companyName`}>Company Name</Label>
         <Input id={`${mode}-companyName`} name="companyName" defaultValue={account.companyName} required />
       </div>
+
+      {mode === 'admin' ? (
+        <div className="space-y-2">
+          <Label htmlFor={`${mode}-assignedSalesRepId`}>Sales Lead</Label>
+          <select
+            id={`${mode}-assignedSalesRepId`}
+            name="assignedSalesRepId"
+            defaultValue={account.assignedSalesRepId ?? ''}
+            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            <option value="">Unassigned</option>
+            {salesLeadOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.name}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-slate-500">Admins can assign a sales lead directly from the CRM settings tab.</p>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2">
@@ -236,7 +270,7 @@ export function AccountEditForm({ account, mode }: { account: Account; mode: 'ad
         </div>
         <div className="space-y-2">
           <Label htmlFor={`${mode}-paymentTerms`}>Payment Terms</Label>
-          <select id={`${mode}-paymentTerms`} name="paymentTerms" defaultValue={account.paymentTerms ?? 'NET30'} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+          <select id={`${mode}-paymentTerms`} name="paymentTerms" defaultValue={account.paymentTerms ?? 'PREPAID'} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
             <option value="PREPAID">Prepaid</option>
             <option value="DUE_ON_RECEIPT">Due on Receipt</option>
             <option value="NET7">Net 7</option>

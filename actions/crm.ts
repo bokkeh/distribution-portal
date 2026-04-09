@@ -1,13 +1,14 @@
 'use server'
 
 import { db } from '@/db'
-import { accountPreferences, activityEvents, contacts, customerAccounts, deliveryStops, invoices, orders, salesMembers, salesRouteStops, smsThreads, tastings } from '@/db/schema'
+import { accountPreferences, activityEvents, contacts, customerAccounts, deliveryStops, invoices, orders, salesMembers, salesRouteStops, smsThreads, tastings, users } from '@/db/schema'
 import { requireAdminOrStaff, requireRole } from '@/lib/auth/session'
 import { geocodeAddress } from '@/lib/maps/geocode'
 import { and, eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { getHubSpotCompanyContacts, upsertHubSpotContact, getHubSpotCompanies, updateHubSpotCompany } from '@/lib/hubspot/client'
 import { logActivityEvent } from '@/lib/activity/log'
+import { createUserNotification } from '@/lib/notifications/in-app'
 import { normalizeAccountGeography } from '@/lib/pricing/geographic-service'
 
 export async function updateDealStage(accountId: string, dealStage: string) {
@@ -277,7 +278,7 @@ export async function syncToHubSpot(accountId: string) {
     city: account.city ?? '',
     state: account.state ?? '',
     credit_limit: account.creditLimit ?? '0',
-    payment_terms: account.paymentTerms ?? 'NET30',
+    payment_terms: account.paymentTerms ?? 'PREPAID',
     account_balance: account.balance ?? '0',
   })
 
@@ -538,6 +539,8 @@ export async function updateCustomerAccount(
 ): Promise<{ error?: string; success?: boolean; changedFields?: string[] }> {
   try {
     const session = await requireAdminOrStaff()
+    const roles = session.user.roles ?? [session.user.role]
+    const canAssignSalesLead = roles.includes('admin')
 
     const id = formData.get('id') as string
     const mode = (formData.get('mode') as string) || 'admin'
@@ -562,6 +565,7 @@ export async function updateCustomerAccount(
     const businessType = (formData.get('businessType') as string) || null
     const creditLimit = formData.get('creditLimit') as string
     const paymentTerms = formData.get('paymentTerms') as string
+    const requestedAssignedSalesRepId = ((formData.get('assignedSalesRepId') as string) || '').trim() || null
     const liquorLicenseNumber = (formData.get('liquorLicenseNumber') as string) || null
     const liquorLicenseState = (formData.get('liquorLicenseState') as string) || null
     const liquorLicenseExpiration = (formData.get('liquorLicenseExpiration') as string) || null
@@ -571,6 +575,39 @@ export async function updateCustomerAccount(
     const [existingAccount] = await db.select().from(customerAccounts).where(eq(customerAccounts.id, id)).limit(1)
     if (!existingAccount) {
       return { error: 'Account not found.' }
+    }
+
+    if (!canAssignSalesLead && requestedAssignedSalesRepId !== null && requestedAssignedSalesRepId !== existingAccount.assignedSalesRepId) {
+      return { error: 'Only admins can assign a sales lead.' }
+    }
+
+    const assignedSalesRepId = canAssignSalesLead ? requestedAssignedSalesRepId : existingAccount.assignedSalesRepId
+    const assignmentChanged = assignedSalesRepId !== existingAccount.assignedSalesRepId
+    let nextAssignedRep:
+      | {
+          id: string
+          userId: string
+          name: string
+        }
+      | null = null
+
+    if (assignedSalesRepId) {
+      const [rep] = await db
+        .select({
+          id: salesMembers.id,
+          userId: salesMembers.userId,
+          name: users.name,
+        })
+        .from(salesMembers)
+        .innerJoin(users, eq(salesMembers.userId, users.id))
+        .where(eq(salesMembers.id, assignedSalesRepId))
+        .limit(1)
+
+      if (!rep) {
+        return { error: 'Selected sales lead was not found.' }
+      }
+
+      nextAssignedRep = rep
     }
 
     const changedFields = [
@@ -594,6 +631,7 @@ export async function updateCustomerAccount(
       ['businessType', existingAccount.businessType, businessType],
       ['creditLimit', existingAccount.creditLimit, creditLimit],
       ['paymentTerms', existingAccount.paymentTerms, paymentTerms],
+      ['salesLead', existingAccount.assignedSalesRepId, assignedSalesRepId],
       ['liquorLicenseNumber', existingAccount.liquorLicenseNumber, liquorLicenseNumber],
       ['liquorLicenseState', existingAccount.liquorLicenseState, liquorLicenseState],
       ['liquorLicenseExpiration', existingAccount.liquorLicenseExpiration, liquorLicenseExpiration],
@@ -621,6 +659,7 @@ export async function updateCustomerAccount(
       businessType,
       creditLimit,
       paymentTerms,
+      assignedSalesRepId,
       liquorLicenseNumber,
       liquorLicenseState,
       liquorLicenseExpiration,
@@ -638,6 +677,7 @@ export async function updateCustomerAccount(
         : `${companyName} account information was edited.`,
       metadata: {
         changedFields,
+        assignedSalesRepId,
       },
     })
 
@@ -663,7 +703,7 @@ export async function updateCustomerAccount(
         city: account.city ?? '',
         state: account.state ?? '',
         credit_limit: account.creditLimit ?? '0',
-        payment_terms: account.paymentTerms ?? 'NET30',
+    payment_terms: account.paymentTerms ?? 'PREPAID',
         account_balance: account.balance ?? '0',
       }).catch(() => null)
 
@@ -672,12 +712,24 @@ export async function updateCustomerAccount(
       }
     }
 
+    if (assignmentChanged && nextAssignedRep?.userId) {
+      await createUserNotification({
+        userId: nextAssignedRep.userId,
+        kind: 'crm_account_assigned',
+        title: 'CRM account assigned',
+        body: `${companyName} has been assigned to you as the sales lead.`,
+        href: `/sales/accounts/${id}`,
+      })
+    }
+
     revalidatePath('/admin/crm')
     revalidatePath(`/admin/crm/${id}`)
     revalidatePath(`/admin/crm/${id}/contacts`)
     revalidatePath('/staff/crm')
     revalidatePath(`/staff/crm/${id}`)
     revalidatePath(`/staff/crm/${id}/contacts`)
+    revalidatePath('/sales/accounts')
+    revalidatePath(`/sales/accounts/${id}`)
     return { success: true, changedFields }
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Failed to update account.' }
@@ -709,7 +761,7 @@ export async function createCustomerAccount(
     const website = validateWebsiteUrl(((formData.get('website') as string) || '').trim() || null)
     const dcAbraNumber = ((formData.get('dcAbraNumber') as string) || '').trim() || null
     const creditLimit = ((formData.get('creditLimit') as string) || '0').trim() || '0'
-    const paymentTerms = ((formData.get('paymentTerms') as string) || 'NET30').trim() || 'NET30'
+    const paymentTerms = ((formData.get('paymentTerms') as string) || 'PREPAID').trim() || 'PREPAID'
     const normalizedGeography = normalizeAccountGeography({ state, county })
 
     if (!companyName) {

@@ -141,10 +141,10 @@ export default function NewUserPage() {
                 <div className="space-y-2">
                   <Label htmlFor="paymentTerms">Payment Terms</Label>
                   <select name="paymentTerms" id="paymentTerms" className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                    <option value="PREPAID">Prepaid</option>
                     <option value="NET30">NET30</option>
                     <option value="NET15">NET15</option>
                     <option value="COD">COD</option>
-                    <option value="PREPAID">Prepaid</option>
                   </select>
                 </div>
               </div>

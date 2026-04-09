@@ -388,7 +388,7 @@ export function ProfileForm({ user, account }: Props) {
                 </div>
                 <div>
                   <p className="text-muted-foreground">Payment Terms</p>
-                  <Badge variant="secondary">{account.paymentTerms ?? 'NET30'}</Badge>
+                  <Badge variant="secondary">{account.paymentTerms ?? 'PREPAID'}</Badge>
                 </div>
               </div>
             </CardContent>

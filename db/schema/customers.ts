@@ -40,7 +40,7 @@ export const customerAccounts = pgTable('customer_accounts', {
   website: text('website'),
   creditLimit: numeric('credit_limit', { precision: 12, scale: 2 }).notNull().default('0'),
   balance: numeric('balance', { precision: 12, scale: 2 }).notNull().default('0'),
-  paymentTerms: text('payment_terms').default('NET30'),
+  paymentTerms: text('payment_terms').default('PREPAID'),
   // Sales assignment
   assignedSalesRepId: uuid('assigned_sales_rep_id').references(() => salesMembers.id, { onDelete: 'set null' }),
   assignedRegionId: uuid('assigned_region_id').references(() => salesRegions.id, { onDelete: 'set null' }),

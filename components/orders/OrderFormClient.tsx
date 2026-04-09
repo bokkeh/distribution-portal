@@ -72,7 +72,7 @@ export default function OrderFormClient({
   const [lineItems, setLineItems] = useState<LineItem[]>([])
   const [notes, setNotes] = useState('')
   const [search, setSearch] = useState('')
-  const [paymentTerms, setPaymentTerms] = useState('NET30')
+  const [paymentTerms, setPaymentTerms] = useState('PREPAID')
 
   const selectedCustomer = customers.find((customer) => customer.id === customerId) ?? null
 
@@ -199,7 +199,7 @@ export default function OrderFormClient({
                     const nextCustomerId = e.target.value
                     const nextCustomer = customers.find((customer) => customer.id === nextCustomerId) ?? null
                     setCustomerId(nextCustomerId)
-                    setPaymentTerms(nextCustomer?.paymentTerms ?? 'NET30')
+                    setPaymentTerms(nextCustomer?.paymentTerms ?? 'PREPAID')
                     repriceLineItems(nextCustomer, purchaseUnit)
                   }}
                   required

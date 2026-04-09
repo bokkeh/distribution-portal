@@ -165,7 +165,7 @@ export async function createOrder(formData: FormData) {
     const items: { productId: string; quantity: number }[] = JSON.parse(itemsJson)
 
     let customerBusinessType: string | null = null
-    let defaultPaymentTerms = 'NET30'
+    let defaultPaymentTerms = 'PREPAID'
     if (userRoles.includes('customer')) {
       const [account] = await db
         .select({
@@ -181,7 +181,7 @@ export async function createOrder(formData: FormData) {
         throw new Error('Unauthorized customer order')
       }
       customerBusinessType = account.businessType
-      defaultPaymentTerms = account.paymentTerms ?? 'NET30'
+      defaultPaymentTerms = account.paymentTerms ?? 'PREPAID'
     } else {
       const [account] = await db
         .select({
@@ -192,7 +192,7 @@ export async function createOrder(formData: FormData) {
         .where(eq(customerAccounts.id, customerId))
         .limit(1)
       customerBusinessType = account?.businessType ?? null
-      defaultPaymentTerms = account?.paymentTerms ?? 'NET30'
+      defaultPaymentTerms = account?.paymentTerms ?? 'PREPAID'
     }
 
     const paymentTerms = userRoles.includes('customer')

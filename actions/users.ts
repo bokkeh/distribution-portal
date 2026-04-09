@@ -70,7 +70,7 @@ export async function createUser(formData: FormData) {
         email,
         dcAbraNumber: formData.get('dcAbraNumber') as string || null,
         creditLimit: formData.get('creditLimit') as string || '0',
-        paymentTerms: formData.get('paymentTerms') as string || 'NET30',
+        paymentTerms: formData.get('paymentTerms') as string || 'PREPAID',
       })
     }
   }

@@ -1,7 +1,7 @@
 import Link from 'next/link'
-import { count, desc, eq, inArray } from 'drizzle-orm'
+import { and, asc, count, desc, eq, inArray } from 'drizzle-orm'
 import { db } from '@/db'
-import { contacts, deliveries, deliveryStops, invoices, orders, salesRegions, smsMessages, tastings } from '@/db/schema'
+import { contacts, deliveries, deliveryStops, invoices, orders, salesMembers, salesRegions, smsMessages, tastings, users } from '@/db/schema'
 import { syncToHubSpot } from '@/actions/crm'
 import { getCRMAccountDetail } from '@/lib/crm/account-read'
 import {
@@ -102,6 +102,18 @@ export async function AccountRecordPage({
         .from(salesRegions)
         .where(eq(salesRegions.id, account.assignedRegionId))
         .limit(1)
+    : []
+
+  const salesLeadOptions = mode === 'admin'
+    ? await db
+        .select({
+          id: salesMembers.id,
+          name: users.name,
+        })
+        .from(salesMembers)
+        .innerJoin(users, eq(salesMembers.userId, users.id))
+        .where(and(eq(salesMembers.status, 'active'), eq(users.active, true)))
+        .orderBy(asc(users.name))
     : []
 
   const accountPhones = getAccountPhonesForInboxMatch(account.phone, account.businessPhone, account.pocPhone)
@@ -346,7 +358,7 @@ export async function AccountRecordPage({
 
   const headerBadges = [
     { label: account.id.slice(-8).toUpperCase(), variant: 'outline' as const },
-    { label: account.paymentTerms ?? 'NET30', variant: 'secondary' as const },
+    { label: account.paymentTerms ?? 'PREPAID', variant: 'secondary' as const },
     account.hubspotContactId || account.hubspotCompanyId
       ? { label: 'HubSpot Synced', variant: 'success' as const }
       : { label: 'Not synced', variant: 'outline' as const },
@@ -649,7 +661,7 @@ export async function AccountRecordPage({
           <div className="xl:col-span-2">
             <Card id="edit-account">
               <CardHeader className="pb-3"><CardTitle>Account Setup / Edit</CardTitle></CardHeader>
-              <CardContent><AccountEditForm account={account} mode={mode} /></CardContent>
+              <CardContent><AccountEditForm account={account} mode={mode} salesLeadOptions={salesLeadOptions} /></CardContent>
             </Card>
           </div>
           <div className="space-y-6">
@@ -658,7 +670,7 @@ export async function AccountRecordPage({
               <CardContent className="space-y-3">
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs uppercase tracking-wide text-slate-500">HubSpot</p><p className="mt-2 text-sm font-semibold text-slate-900">{account.hubspotContactId || account.hubspotCompanyId ? 'Connected' : 'Needs sync'}</p><p className="mt-1 text-xs text-slate-500">{account.hubspotCompanyId ? `Company ${account.hubspotCompanyId}` : 'No HubSpot company linked'}</p></div>
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs uppercase tracking-wide text-slate-500">Notification preference</p><p className="mt-2 text-sm font-semibold text-slate-900">{account.notificationPreference ?? 'email'}</p></div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs uppercase tracking-wide text-slate-500">Payment terms</p><p className="mt-2 text-sm font-semibold text-slate-900">{account.paymentTerms ?? 'NET30'}</p></div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs uppercase tracking-wide text-slate-500">Payment terms</p><p className="mt-2 text-sm font-semibold text-slate-900">{account.paymentTerms ?? 'PREPAID'}</p></div>
               </CardContent>
             </Card>
           </div>

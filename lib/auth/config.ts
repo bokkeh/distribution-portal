@@ -273,7 +273,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           state: null,
           zip: null,
           creditLimit: '0',
-          paymentTerms: 'NET30',
+          paymentTerms: 'PREPAID',
         })
       }
 

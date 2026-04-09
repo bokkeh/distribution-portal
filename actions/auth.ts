@@ -89,7 +89,7 @@ export async function registerCustomerAccount(input: {
     businessEmail: email,
     businessPhone: phone,
     creditLimit: '0',
-    paymentTerms: 'NET30',
+    paymentTerms: 'PREPAID',
   })
 
   return { success: true as const, email }
