@@ -1,28 +1,91 @@
 'use server'
 
-import { or, ilike, eq } from 'drizzle-orm'
+import { and, ilike, inArray, or, eq } from 'drizzle-orm'
 import { requireAuth } from '@/lib/auth/session'
 import { db } from '@/db'
-import { activityEvents, customerAccounts } from '@/db/schema'
+import { accountNotes, customerAccounts, users } from '@/db/schema'
+import { logActivityEvent } from '@/lib/activity/log'
+import { createUserNotification } from '@/lib/notifications/in-app'
+
+const CRM_MENTION_ROLES = ['admin', 'staff', 'sales_rep', 'sales_manager'] as const
+
+function buildAccountReviewHref(userRoles: string[] | null | undefined, accountId: string) {
+  if (userRoles?.includes('sales_rep') || userRoles?.includes('sales_manager')) {
+    return `/sales/accounts/${accountId}`
+  }
+
+  if (userRoles?.includes('staff')) {
+    return `/staff/crm/${accountId}`
+  }
+
+  return `/admin/crm/${accountId}`
+}
 
 export async function saveCallNote(
   accountId: string,
   phone: string,
   accountName: string,
   notes: string,
+  taggedUserIds: string[] = [],
 ): Promise<void> {
   const session = await requireAuth()
-  if (!notes.trim()) return
+  const trimmedNotes = notes.trim()
+  if (!trimmedNotes) return
 
-  await db.insert(activityEvents).values({
+  const uniqueTaggedUserIds = Array.from(
+    new Set(
+      taggedUserIds
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .filter((value) => value !== session.user.id),
+    ),
+  )
+
+  await db.insert(accountNotes).values({
+    accountId,
+    noteBody: trimmedNotes,
+    noteType: 'call_note',
+    authorUserId: session.user.id,
+    authorRole: session.user.role ?? 'system',
+    isPinned: false,
+  })
+
+  await logActivityEvent({
     entityType: 'account',
     entityId: accountId,
     actorUserId: session.user.id,
     kind: 'call_note',
     title: `Call with ${accountName} (${phone})`,
-    body: notes.trim(),
-    metadata: { phone },
+    body: trimmedNotes,
+    metadata: {
+      phone,
+      taggedUserIds: uniqueTaggedUserIds,
+    },
   })
+
+  if (!uniqueTaggedUserIds.length) return
+
+  const taggedUsers = await db
+    .select({
+      id: users.id,
+      name: users.name,
+      roles: users.roles,
+      active: users.active,
+    })
+    .from(users)
+    .where(and(inArray(users.id, uniqueTaggedUserIds), eq(users.active, true)))
+
+  await Promise.all(
+    taggedUsers.map((user) =>
+      createUserNotification({
+        userId: user.id,
+        kind: 'account_note_mention',
+        title: `${session.user.name} tagged you in a call note`,
+        body: `${accountName}: ${trimmedNotes.length > 140 ? `${trimmedNotes.slice(0, 137)}...` : trimmedNotes}`,
+        href: buildAccountReviewHref(user.roles, accountId),
+      }),
+    ),
+  )
 }
 
 export async function searchAccountsForCallLink(input: {
@@ -66,4 +129,41 @@ export async function searchAccountsForCallLink(input: {
     .from(customerAccounts)
     .where(whereClause)
     .limit(8)
+}
+
+export async function searchInternalUsersForCallTag(query: string) {
+  await requireAuth()
+
+  const trimmedQuery = query.trim()
+  if (!trimmedQuery) return []
+
+  const matchedUsers = await db
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      role: users.role,
+      roles: users.roles,
+      active: users.active,
+    })
+    .from(users)
+    .where(
+      and(
+        eq(users.active, true),
+        or(
+          ilike(users.name, `%${trimmedQuery}%`),
+          ilike(users.email, `%${trimmedQuery}%`),
+        ),
+      ),
+    )
+    .limit(10)
+
+  return matchedUsers
+    .filter((user) => CRM_MENTION_ROLES.some((role) => user.roles.includes(role)))
+    .map((user) => ({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+    }))
 }

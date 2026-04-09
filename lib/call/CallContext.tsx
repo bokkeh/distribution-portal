@@ -14,6 +14,7 @@ interface CallContextType {
   duration: number
   isMuted: boolean
   notes: string
+  taggedUsers: Array<{ id: string; name: string; role: string }>
   error: string | null
   drawerOpen: boolean
   openDrawer: () => void
@@ -24,6 +25,7 @@ interface CallContextType {
   sendDtmf: (digit: string) => void
   setNotes: (notes: string) => void
   setLinkedAccount: (accountId: string | null, accountName: string | null) => void
+  setTaggedUsers: (users: Array<{ id: string; name: string; role: string }>) => void
 }
 
 const CallContext = createContext<CallContextType | null>(null)
@@ -42,6 +44,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const [duration, setDuration] = useState(0)
   const [isMuted, setIsMuted] = useState(false)
   const [notes, setNotes] = useState('')
+  const [taggedUsers, setTaggedUsers] = useState<Array<{ id: string; name: string; role: string }>>([])
   const [error, setError] = useState<string | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
 
@@ -59,12 +62,14 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const notesRef = useRef(notes)
+  const taggedUsersRef = useRef(taggedUsers)
   const accountIdRef = useRef(accountId)
   const phoneRef = useRef(phone)
   const accountNameRef = useRef(accountName)
 
   // Keep refs in sync so endCall closure has latest values
   useEffect(() => { notesRef.current = notes }, [notes])
+  useEffect(() => { taggedUsersRef.current = taggedUsers }, [taggedUsers])
   useEffect(() => { accountIdRef.current = accountId }, [accountId])
   useEffect(() => { phoneRef.current = phone }, [phone])
   useEffect(() => { accountNameRef.current = accountName }, [accountName])
@@ -92,6 +97,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     setAccountName(name)
     setAccountId(aId ?? null)
     setNotes('')
+    setTaggedUsers([])
     setCallState('connecting')
     setDrawerOpen(true)
 
@@ -126,12 +132,14 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
               phoneRef.current ?? '',
               accountNameRef.current ?? '',
               notesRef.current,
+              taggedUsersRef.current.map((user) => user.id),
             ).catch(() => null)
           }
           cleanUp()
           setCallState('idle')
           setDuration(0)
           setNotes('')
+          setTaggedUsers([])
         }
       })
 
@@ -168,6 +176,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
         phoneRef.current ?? '',
         accountNameRef.current ?? '',
         notesRef.current,
+        taggedUsersRef.current.map((user) => user.id),
       ).catch(() => null)
     }
 
@@ -176,6 +185,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       setCallState('idle')
       setDuration(0)
       setNotes('')
+      setTaggedUsers([])
     }, 500)
   }, [cleanUp])
 
@@ -196,9 +206,9 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <CallContext.Provider value={{
-      callState, phone, accountName, accountId, duration, isMuted, notes, error,
+      callState, phone, accountName, accountId, duration, isMuted, notes, taggedUsers, error,
       drawerOpen, openDrawer, closeDrawer,
-      startCall, endCall, toggleMute, sendDtmf, setNotes, setLinkedAccount,
+      startCall, endCall, toggleMute, sendDtmf, setNotes, setLinkedAccount, setTaggedUsers,
     }}>
       {children}
     </CallContext.Provider>

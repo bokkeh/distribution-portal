@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from 'react'
 import { Hash, Link2, Loader2, Mic, MicOff, Phone, PhoneOff, Search, Volume2, X } from 'lucide-react'
-import { searchAccountsForCallLink } from '@/actions/call-notes'
+import { searchAccountsForCallLink, searchInternalUsersForCallTag } from '@/actions/call-notes'
 import { useCall } from '@/lib/call/CallContext'
 
 const DIAL_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'] as const
@@ -22,6 +22,7 @@ export function CallDrawer() {
     duration,
     isMuted,
     notes,
+    taggedUsers,
     error,
     drawerOpen,
     openDrawer,
@@ -31,6 +32,7 @@ export function CallDrawer() {
     sendDtmf,
     setNotes,
     setLinkedAccount,
+    setTaggedUsers,
   } = useCall()
   const [showDialPad, setShowDialPad] = useState(false)
   const [linkQuery, setLinkQuery] = useState('')
@@ -44,6 +46,14 @@ export function CallDrawer() {
     state: string | null
   }>>([])
   const [isSearching, startSearchTransition] = useTransition()
+  const [tagQuery, setTagQuery] = useState('')
+  const [tagOptions, setTagOptions] = useState<Array<{
+    id: string
+    name: string
+    email: string
+    role: string
+  }>>([])
+  const [isSearchingTags, startTagSearchTransition] = useTransition()
 
   const isActive = callState !== 'idle' && callState !== 'error'
   const headerBg = isActive ? 'bg-green-50 border-green-100' : 'bg-slate-50 border-slate-200'
@@ -55,6 +65,20 @@ export function CallDrawer() {
       setAccountOptions(results)
     })
   }, [drawerOpen, phone, linkQuery])
+
+  useEffect(() => {
+    if (!drawerOpen) return
+    const trimmedQuery = tagQuery.trim()
+    if (!trimmedQuery) {
+      setTagOptions([])
+      return
+    }
+
+    startTagSearchTransition(async () => {
+      const results = await searchInternalUsersForCallTag(trimmedQuery)
+      setTagOptions(results.filter((option) => !taggedUsers.some((taggedUser) => taggedUser.id === option.id)))
+    })
+  }, [drawerOpen, tagQuery, taggedUsers])
 
   return (
     <>
@@ -235,6 +259,67 @@ export function CallDrawer() {
           </div>
 
           <p className="shrink-0 text-xs font-semibold uppercase tracking-wide text-slate-500">Call Notes</p>
+          <div className="shrink-0 rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tag Teammates</p>
+            <p className="mt-1 text-xs text-slate-500">Tag admins, staff, or sales teammates to send them an account notification to review this note.</p>
+            <div className="mt-3 space-y-3">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={tagQuery}
+                  onChange={(event) => setTagQuery(event.target.value)}
+                  placeholder="Search teammate name or email"
+                  className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 outline-none transition focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+                />
+              </div>
+              {taggedUsers.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {taggedUsers.map((user) => (
+                    <span key={user.id} className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
+                      {user.name}
+                      <span className="text-blue-500">({user.role})</span>
+                      <button
+                        type="button"
+                        onClick={() => setTaggedUsers(taggedUsers.filter((taggedUser) => taggedUser.id !== user.id))}
+                        className="rounded-full text-blue-500 transition hover:text-blue-700"
+                        title={`Remove ${user.name}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500">No teammates tagged yet.</p>
+              )}
+              {tagQuery.trim() ? (
+                <div className="max-h-32 space-y-2 overflow-y-auto">
+                  {isSearchingTags ? (
+                    <p className="text-xs text-slate-500">Searching teammates...</p>
+                  ) : tagOptions.length === 0 ? (
+                    <p className="text-xs text-slate-500">No matching CRM-access users found.</p>
+                  ) : (
+                    tagOptions.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => {
+                          setTaggedUsers([...taggedUsers, { id: option.id, name: option.name, role: option.role }])
+                          setTagQuery('')
+                          setTagOptions([])
+                        }}
+                        className="block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-left transition hover:border-blue-300 hover:bg-blue-50"
+                      >
+                        <p className="text-sm font-medium text-slate-900">{option.name}</p>
+                        <p className="text-xs text-slate-500">{option.email} • {option.role}</p>
+                      </button>
+                    ))
+                  )}
+                </div>
+              ) : null}
+            </div>
+          </div>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
