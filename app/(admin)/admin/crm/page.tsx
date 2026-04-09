@@ -1,5 +1,5 @@
 import { db } from '@/db'
-import { customerAccounts, orders, orderItems, contacts } from '@/db/schema'
+import { customerAccounts, orders, orderItems, contacts, salesMembers, users } from '@/db/schema'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { getHubSpotCompanies } from '@/lib/hubspot/client'
@@ -32,7 +32,7 @@ export default async function CRMPage({
     'use server'
     await mergeContacts(formData)
   }
-  const [accounts, people, hsResult] = await Promise.all([
+  const [accounts, people, hsResult, currentSalesMember] = await Promise.all([
     db.select({
       id: customerAccounts.id,
       companyName: customerAccounts.companyName,
@@ -48,10 +48,16 @@ export default async function CRMPage({
       creditLimit: customerAccounts.creditLimit,
       balance: customerAccounts.balance,
       paymentTerms: customerAccounts.paymentTerms,
+      assignedSalesRepId: customerAccounts.assignedSalesRepId,
+      salesLeadName: users.name,
       hubspotContactId: customerAccounts.hubspotContactId,
       hubspotCompanyId: customerAccounts.hubspotCompanyId,
       starred: customerAccounts.starred,
-    }).from(customerAccounts).orderBy(customerAccounts.companyName),
+    })
+      .from(customerAccounts)
+      .leftJoin(salesMembers, eq(customerAccounts.assignedSalesRepId, salesMembers.id))
+      .leftJoin(users, eq(salesMembers.userId, users.id))
+      .orderBy(customerAccounts.companyName),
     db.select({
       id: contacts.id,
       name: contacts.name,
@@ -68,6 +74,11 @@ export default async function CRMPage({
       .innerJoin(customerAccounts, eq(contacts.customerId, customerAccounts.id))
       .orderBy(contacts.name),
     getHubSpotCompanies(),
+    db.select({ id: salesMembers.id })
+      .from(salesMembers)
+      .where(eq(salesMembers.userId, session.user.id))
+      .limit(1)
+      .then((rows) => rows[0] ?? null),
   ])
 
   // Aggregate order stats per customer
@@ -148,6 +159,9 @@ export default async function CRMPage({
     totalCasesPurchased: totalMap.get(a.id) ?? 0,
     healthScore: computeHealthScore(a),
   }))
+  const assignedToMeRows = currentSalesMember
+    ? accountRows.filter((account) => account.assignedSalesRepId === currentSalesMember.id)
+    : []
 
   const localAccountIds = new Map<string, string>(
     accounts.filter(a => a.hubspotCompanyId).map(a => [a.hubspotCompanyId!, a.id])
@@ -269,17 +283,19 @@ export default async function CRMPage({
           />
         </CardContent>
         <CardContent className="p-0">
-          <CRMTabs
-            tabs={[
-              { id: 'local', label: 'Local Accounts', count: accounts.length },
-              { id: 'people', label: 'People', count: people.length },
-              { id: 'hubspot', label: 'HubSpot Companies', count: hsCompanies.length },
-            ]}
-          >
-            <LocalAccountsTable initialAccounts={accountRows} userId={session.user.id} />
-            <LocalPeopleTable people={people} basePath="/admin/crm" />
-            <HubSpotCompaniesTab
-              companies={hsCompanies}
+            <CRMTabs
+              tabs={[
+                { id: 'local', label: 'Local Accounts', count: accounts.length },
+                { id: 'assigned', label: 'Assigned To Me', count: assignedToMeRows.length },
+                { id: 'people', label: 'People', count: people.length },
+                { id: 'hubspot', label: 'HubSpot Companies', count: hsCompanies.length },
+              ]}
+            >
+              <LocalAccountsTable initialAccounts={accountRows} userId={session.user.id} />
+              <LocalAccountsTable initialAccounts={assignedToMeRows} userId={session.user.id} />
+              <LocalPeopleTable people={people} basePath="/admin/crm" />
+              <HubSpotCompaniesTab
+                companies={hsCompanies}
               importedIds={importedHsIds}
               localAccountIds={localAccountIds}
               error={hsError}

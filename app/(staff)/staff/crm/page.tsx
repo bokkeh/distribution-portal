@@ -1,5 +1,5 @@
 import { db } from '@/db'
-import { customerAccounts, orders, orderItems, contacts } from '@/db/schema'
+import { customerAccounts, orders, orderItems, contacts, salesMembers, users } from '@/db/schema'
 import { sql, eq, and, inArray } from 'drizzle-orm'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -34,7 +34,7 @@ export default async function StaffCRMPage({
   const { view } = await searchParams
   const isPipeline = view === 'pipeline'
 
-  const [accounts, people, hsResult] = await Promise.all([
+  const [accounts, people, hsResult, currentSalesMember] = await Promise.all([
     db.select({
       id: customerAccounts.id,
       companyName: customerAccounts.companyName,
@@ -50,10 +50,16 @@ export default async function StaffCRMPage({
       creditLimit: customerAccounts.creditLimit,
       balance: customerAccounts.balance,
       paymentTerms: customerAccounts.paymentTerms,
+      assignedSalesRepId: customerAccounts.assignedSalesRepId,
+      salesLeadName: users.name,
       hubspotContactId: customerAccounts.hubspotContactId,
       hubspotCompanyId: customerAccounts.hubspotCompanyId,
       starred: customerAccounts.starred,
-    }).from(customerAccounts).orderBy(customerAccounts.companyName),
+    })
+      .from(customerAccounts)
+      .leftJoin(salesMembers, eq(customerAccounts.assignedSalesRepId, salesMembers.id))
+      .leftJoin(users, eq(salesMembers.userId, users.id))
+      .orderBy(customerAccounts.companyName),
     db.select({
       id: contacts.id,
       name: contacts.name,
@@ -70,6 +76,11 @@ export default async function StaffCRMPage({
       .innerJoin(customerAccounts, eq(contacts.customerId, customerAccounts.id))
       .orderBy(contacts.name),
     getHubSpotCompanies(),
+    db.select({ id: salesMembers.id })
+      .from(salesMembers)
+      .where(eq(salesMembers.userId, session.user.id))
+      .limit(1)
+      .then((rows) => rows[0] ?? null),
   ])
 
   // Order stats per customer
@@ -104,6 +115,9 @@ export default async function StaffCRMPage({
     totalCasesPurchased: totalMap.get(a.id) ?? 0,
     healthScore: 0,
   }))
+  const assignedToMeRows = currentSalesMember
+    ? accountRows.filter((account) => account.assignedSalesRepId === currentSalesMember.id)
+    : []
 
   const localAccountIds = new Map<string, string>(
     accounts.filter(a => a.hubspotCompanyId).map(a => [a.hubspotCompanyId!, a.id])
@@ -220,11 +234,13 @@ export default async function StaffCRMPage({
             <CRMTabs
               tabs={[
                 { id: 'local', label: 'Local Accounts', count: accounts.length },
+                { id: 'assigned', label: 'Assigned To Me', count: assignedToMeRows.length },
                 { id: 'people', label: 'People', count: people.length },
                 { id: 'hubspot', label: 'HubSpot Companies', count: hsCompanies.length },
               ]}
             >
               <LocalAccountsTable initialAccounts={accountRows} basePath="/staff/crm" userId={session.user.id} />
+              <LocalAccountsTable initialAccounts={assignedToMeRows} basePath="/staff/crm" userId={session.user.id} />
               <LocalPeopleTable people={people} basePath="/staff/crm" />
               <HubSpotCompaniesTab
                 companies={hsCompanies}

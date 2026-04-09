@@ -24,6 +24,8 @@ export interface AccountRow {
   creditLimit: string
   balance: string
   paymentTerms: string | null
+  assignedSalesRepId?: string | null
+  salesLeadName?: string | null
   hubspotContactId: string | null
   hubspotCompanyId: string | null
   starred: boolean
@@ -42,6 +44,7 @@ const COLUMN_OPTIONS = [
   { key: 'contactName', label: 'Primary Contact' },
   { key: 'businessType', label: 'Business Type' },
   { key: 'dealStage', label: 'Deal Stage' },
+  { key: 'salesLead', label: 'Sales Lead' },
   { key: 'terms', label: 'Terms' },
   { key: 'creditLimit', label: 'Credit Limit' },
   { key: 'pendingCases', label: 'Pending Cases' },
@@ -94,6 +97,7 @@ function AccountTable({
           {visibleColumns.has('contactName') && <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Primary Contact</th>}
           {visibleColumns.has('businessType') && <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Business Type</th>}
           {visibleColumns.has('dealStage') && <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Deal Stage</th>}
+          {visibleColumns.has('salesLead') && <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Sales Lead</th>}
           {visibleColumns.has('terms') && <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Terms</th>}
           {visibleColumns.has('creditLimit') && <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Credit Limit</th>}
           {visibleColumns.has('pendingCases') && <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">Pending Cases</th>}
@@ -161,9 +165,12 @@ function AccountTable({
             {visibleColumns.has('dealStage') && (
               <td className="px-4 py-3 text-sm text-muted-foreground capitalize">{account.dealStage?.replace(/_/g, ' ') ?? '-'}</td>
             )}
+            {visibleColumns.has('salesLead') && (
+              <td className="px-4 py-3 text-sm text-muted-foreground">{account.salesLeadName ?? '-'}</td>
+            )}
             {visibleColumns.has('terms') && (
               <td className="px-4 py-3">
-                <Badge variant="secondary">{account.paymentTerms ?? 'NET30'}</Badge>
+                <Badge variant="secondary">{account.paymentTerms ?? 'PREPAID'}</Badge>
               </td>
             )}
             {visibleColumns.has('creditLimit') && (
@@ -311,6 +318,7 @@ export function LocalAccountsTable({
       account.contactName,
       account.businessType,
       account.paymentTerms,
+      account.salesLeadName,
     ].some(value => String(value ?? '').toLowerCase().includes(normalizedQuery))
   })
 
