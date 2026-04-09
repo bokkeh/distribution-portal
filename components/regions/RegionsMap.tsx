@@ -99,6 +99,7 @@ export function RegionsMap({ data, routes = [] }: { data: RegionMapData; routes?
   })
 
   const [hoveredRegionId, setHoveredRegionId] = useState<string | null>(null)
+  const [expandedRegionId, setExpandedRegionId] = useState<string | null>(null)
   const [selectedAccount, setSelectedAccount] = useState<RegionMapAccount | null>(null)
   const [managingRegion, setManagingRegion] = useState<RegionMapRegion | null>(null)
   const [routePickerAccount, setRoutePickerAccount] = useState<RegionMapAccount | null>(null)
@@ -185,15 +186,17 @@ export function RegionsMap({ data, routes = [] }: { data: RegionMapData; routes?
         {data.regions.map((region, i) => {
           const color = getRegionColor(i)
           const isHovered = hoveredRegionId === region.id
+          const isExpanded = expandedRegionId === region.id
           return (
             <div key={region.id}>
               <button
                 type="button"
                 className={`w-full rounded-lg px-3 py-2.5 text-left transition-colors ${
-                  isHovered ? 'bg-slate-100' : 'hover:bg-slate-50'
+                  isHovered || isExpanded ? 'bg-slate-100' : 'hover:bg-slate-50'
                 }`}
                 onMouseEnter={() => setHoveredRegionId(region.id)}
                 onMouseLeave={() => setHoveredRegionId(null)}
+                onClick={() => setExpandedRegionId((current) => current === region.id ? null : region.id)}
               >
                 <div className="flex items-center gap-2">
                   <span
@@ -212,8 +215,8 @@ export function RegionsMap({ data, routes = [] }: { data: RegionMapData; routes?
                 </p>
               </button>
 
-              {/* Expanded stats on hover */}
-              {isHovered && (
+              {/* Expanded stats stay open until another region is selected */}
+              {isExpanded && (
                 <div
                   className="mx-1 mb-1 rounded-lg border p-2.5 space-y-1.5"
                   style={{ borderColor: color + '44', backgroundColor: color + '0d' }}
