@@ -29,9 +29,10 @@ async function getPostLoginDestination() {
   return roles.includes('admin') ? '/admin/dashboard'
     : roles.includes('staff') ? '/staff/dashboard'
     : roles.includes('driver') ? '/driver/deliveries'
+    : roles.includes('sales_rep') || roles.includes('sales_manager') ? '/sales/dashboard'
     : roles.includes('taster') ? '/taster/welcome'
     : roles.includes('customer') ? '/customer/dashboard'
-    : '/admin/dashboard'
+    : '/'
 }
 
 export function LoginForm({ onSuccess }: Props) {

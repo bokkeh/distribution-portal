@@ -11,6 +11,7 @@ export default async function HomePage() {
     if (roles.includes('admin')) redirect('/admin/dashboard')
     if (roles.includes('staff')) redirect('/staff/dashboard')
     if (roles.includes('driver')) redirect('/driver/deliveries')
+    if (roles.includes('sales_rep') || roles.includes('sales_manager')) redirect('/sales/dashboard')
     if (roles.includes('taster')) redirect('/taster/welcome')
     if (roles.includes('customer')) redirect('/customer/dashboard')
   }
