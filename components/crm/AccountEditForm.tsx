@@ -53,11 +53,11 @@ export function AccountEditForm({
   salesLeadOptions = [],
 }: {
   account: Account
-  mode: 'admin' | 'staff'
+  mode: 'admin' | 'staff' | 'sales'
   salesLeadOptions?: SalesLeadOption[]
 }) {
   const router = useRouter()
-  const backPath = `/${mode}/crm/${account.id}`
+  const backPath = mode === 'sales' ? `/sales/accounts/${account.id}` : `/${mode}/crm/${account.id}`
   const formRef = useRef<HTMLFormElement | null>(null)
   const [state, action, pending] = useActionState(updateCustomerAccount, null)
   const { statusText, clearDraft } = useFormDraftAutosave(formRef, `account-edit:${mode}:${account.id}`)

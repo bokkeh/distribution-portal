@@ -43,6 +43,7 @@ const ACCOUNT_TABS = [
 ] as const
 
 type TabId = (typeof ACCOUNT_TABS)[number]['id']
+type AccountRecordMode = 'admin' | 'staff' | 'sales'
 
 function normalizeTab(value: string | undefined): TabId {
   return ACCOUNT_TABS.some((tab) => tab.id === value) ? (value as TabId) : 'overview'
@@ -50,6 +51,32 @@ function normalizeTab(value: string | undefined): TabId {
 
 function getTabHref(basePath: string, tab: TabId) {
   return tab === 'overview' ? basePath : `${basePath}?tab=${tab}`
+}
+
+function getAccountBasePath(mode: AccountRecordMode, accountId: string) {
+  return mode === 'sales' ? `/sales/accounts/${accountId}` : `/${mode}/crm/${accountId}`
+}
+
+function getAccountIndexPath(mode: AccountRecordMode) {
+  return mode === 'sales' ? '/sales/accounts' : `/${mode}/crm`
+}
+
+function getContactsPath(mode: AccountRecordMode, accountId: string) {
+  return mode === 'sales' ? `/sales/accounts/${accountId}/contacts` : `/${mode}/crm/${accountId}/contacts`
+}
+
+function getCreateOrderPath(mode: AccountRecordMode, accountId: string) {
+  return mode === 'sales' ? null : `/${mode}/orders/new?customer=${accountId}`
+}
+
+function getOrderDetailPath(mode: AccountRecordMode, orderId: string) {
+  return mode === 'sales' ? null : `/${mode}/orders/${orderId}`
+}
+
+function getInvoicingIndexPath(mode: AccountRecordMode) {
+  if (mode === 'admin') return '/admin/invoicing'
+  if (mode === 'staff') return '/staff/invoicing'
+  return null
 }
 
 function getAccountPhonesForInboxMatch(...values: Array<string | null | undefined>) {
@@ -73,7 +100,7 @@ function getAccountPhonesForInboxMatch(...values: Array<string | null | undefine
 
 type Props = {
   accountId: string
-  mode: 'admin' | 'staff'
+  mode: AccountRecordMode
   currentUserId?: string
   currentUserRoles: string[]
   selectedTab?: string
@@ -91,7 +118,7 @@ export async function AccountRecordPage({
   showViewAs = false,
 }: Props) {
   const tab = normalizeTab(selectedTab)
-  const basePath = `/${mode}/crm/${accountId}`
+  const basePath = getAccountBasePath(mode, accountId)
 
   const account = await getCRMAccountDetail(accountId)
   if (!account) notFound()
@@ -117,9 +144,11 @@ export async function AccountRecordPage({
     : []
 
   const accountPhones = getAccountPhonesForInboxMatch(account.phone, account.businessPhone, account.pocPhone)
+  const createOrderHref = getCreateOrderPath(mode, account.id)
+  const invoicingIndexHref = getInvoicingIndexPath(mode)
 
   const quickActions = [
-    { label: 'Create Order', href: `/${mode}/orders/new?customer=${account.id}`, icon: Plus },
+    ...(createOrderHref ? [{ label: 'Create Order', href: createOrderHref, icon: Plus }] : []),
     ...(mode === 'admin' ? [{ label: 'Add Delivery', href: '/admin/deliveries/new', icon: Truck }] : []),
     { label: 'Add Tasting', href: `/${mode}/tastings?account=${account.id}`, icon: CalendarDays },
     { label: 'Add Note', href: getTabHref(basePath, 'notes-activity'), icon: FileText },
@@ -370,7 +399,7 @@ export async function AccountRecordPage({
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-3">
-              <Link href={`/${mode}/crm`}>
+              <Link href={getAccountIndexPath(mode)}>
                 <Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
               </Link>
               <div className="min-w-0">
@@ -469,7 +498,7 @@ export async function AccountRecordPage({
               </div>
               <div className="space-y-6 lg:col-span-2">
                 <Card>
-                  <CardHeader className="flex flex-row items-center justify-between pb-3"><CardTitle>Contacts</CardTitle><Link href={`/${mode}/crm/${account.id}/contacts`} className="text-xs font-medium text-blue-600 hover:underline">Manage</Link></CardHeader>
+                  <CardHeader className="flex flex-row items-center justify-between pb-3"><CardTitle>Contacts</CardTitle><Link href={getContactsPath(mode, account.id)} className="text-xs font-medium text-blue-600 hover:underline">Manage</Link></CardHeader>
                   <CardContent>
                     {overviewData.accountContacts.length === 0 ? <p className="text-sm text-slate-500">No contacts yet.</p> : (
                       <div className="space-y-3">
@@ -509,7 +538,7 @@ export async function AccountRecordPage({
 
                 {overviewData.recentInvoices.length > 0 ? (
                   <Card>
-                    <CardHeader className="flex flex-row items-center justify-between pb-3"><CardTitle className="flex items-center gap-2"><Receipt className="h-4 w-4" />Invoices</CardTitle><Link href={mode === 'admin' ? '/admin/invoicing' : '/staff/invoicing'} className="text-xs font-medium text-blue-600 hover:underline">View all</Link></CardHeader>
+                    <CardHeader className="flex flex-row items-center justify-between pb-3"><CardTitle className="flex items-center gap-2"><Receipt className="h-4 w-4" />Invoices</CardTitle>{invoicingIndexHref ? <Link href={invoicingIndexHref} className="text-xs font-medium text-blue-600 hover:underline">View all</Link> : null}</CardHeader>
                     <CardContent className="space-y-2">
                       {overviewData.recentInvoices.map((invoice) => (
                         <div key={invoice.id} className="flex items-center justify-between border-b py-1.5 last:border-0">
@@ -526,14 +555,16 @@ export async function AccountRecordPage({
                   <CardContent>
                     {overviewData.recentOrders.length === 0 ? <p className="text-sm text-slate-500">No orders yet.</p> : (
                       <div className="space-y-2">
-                        {overviewData.recentOrders.map((order) => (
-                          <Link key={order.id} href={`/${mode}/orders/${order.id}`}>
-                            <div className="flex cursor-pointer items-center justify-between rounded px-2 py-2 transition-colors hover:bg-slate-50">
+                        {overviewData.recentOrders.map((order) => {
+                          const orderHref = getOrderDetailPath(mode, order.id)
+                          const content = (
+                            <div className={`flex items-center justify-between rounded px-2 py-2 transition-colors ${orderHref ? 'cursor-pointer hover:bg-slate-50' : ''}`}>
                               <div><p className="text-sm font-medium">#{order.id.slice(-8).toUpperCase()}</p><p className="text-xs text-muted-foreground" suppressHydrationWarning>{formatDate(order.createdAt)}</p></div>
                               <div className="text-right"><p className="text-sm font-semibold">{formatCurrency(order.total)}</p><Badge variant="secondary" className="text-xs">{order.status}</Badge></div>
                             </div>
-                          </Link>
-                        ))}
+                          )
+                          return orderHref ? <Link key={order.id} href={orderHref}>{content}</Link> : <div key={order.id}>{content}</div>
+                        })}
                       </div>
                     )}
                   </CardContent>
@@ -572,7 +603,7 @@ export async function AccountRecordPage({
                 </Card>
 
                 <Card>
-                  <CardHeader className="flex flex-row items-center justify-between pb-3"><CardTitle className="flex items-center gap-2"><MessageSquare className="h-4 w-4" />Recent Texts</CardTitle>{accountPhones[0] ? <Link href={`/${mode}/inbox?phone=${encodeURIComponent(accountPhones[0])}`} className="text-xs font-medium text-blue-600 hover:underline">Open thread</Link> : null}</CardHeader>
+                  <CardHeader className="flex flex-row items-center justify-between pb-3"><CardTitle className="flex items-center gap-2"><MessageSquare className="h-4 w-4" />Recent Texts</CardTitle>{mode !== 'sales' && accountPhones[0] ? <Link href={`/${mode}/inbox?phone=${encodeURIComponent(accountPhones[0])}`} className="text-xs font-medium text-blue-600 hover:underline">Open thread</Link> : null}</CardHeader>
                   <CardContent>
                     {overviewData.recentTexts.length === 0 ? <p className="text-sm text-slate-500">No inbox history found for this account yet.</p> : (
                       <div className="space-y-2">
@@ -601,7 +632,11 @@ export async function AccountRecordPage({
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
           <Card>
             <CardHeader className="pb-3"><CardTitle>Order History</CardTitle></CardHeader>
-            <CardContent>{ordersData.recentOrders.length === 0 ? <p className="text-sm text-slate-500">No orders yet.</p> : <div className="space-y-2">{ordersData.recentOrders.map((order) => <Link key={order.id} href={`/${mode}/orders/${order.id}`}><div className="flex items-center justify-between rounded-xl border border-slate-100 px-3 py-3 hover:bg-slate-50"><div><p className="text-sm font-medium">#{order.id.slice(-8).toUpperCase()}</p><p className="text-xs text-muted-foreground" suppressHydrationWarning>{formatDate(order.createdAt)}</p></div><div className="text-right"><p className="text-sm font-semibold">{formatCurrency(order.total)}</p><Badge variant="secondary" className="text-xs">{order.status}</Badge></div></div></Link>)}</div>}</CardContent>
+            <CardContent>{ordersData.recentOrders.length === 0 ? <p className="text-sm text-slate-500">No orders yet.</p> : <div className="space-y-2">{ordersData.recentOrders.map((order) => {
+              const orderHref = getOrderDetailPath(mode, order.id)
+              const content = <div className={`flex items-center justify-between rounded-xl border border-slate-100 px-3 py-3 ${orderHref ? 'hover:bg-slate-50' : ''}`}><div><p className="text-sm font-medium">#{order.id.slice(-8).toUpperCase()}</p><p className="text-xs text-muted-foreground" suppressHydrationWarning>{formatDate(order.createdAt)}</p></div><div className="text-right"><p className="text-sm font-semibold">{formatCurrency(order.total)}</p><Badge variant="secondary" className="text-xs">{order.status}</Badge></div></div>
+              return orderHref ? <Link key={order.id} href={orderHref}>{content}</Link> : <div key={order.id}>{content}</div>
+            })}</div>}</CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-3"><CardTitle>Invoices</CardTitle></CardHeader>
@@ -621,7 +656,7 @@ export async function AccountRecordPage({
       {tab === 'contacts' && contactsData ? (
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-3"><CardTitle>Contacts</CardTitle><Link href={`/${mode}/crm/${account.id}/contacts`} className="text-xs font-medium text-blue-600 hover:underline">Manage contacts</Link></CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between pb-3"><CardTitle>Contacts</CardTitle><Link href={getContactsPath(mode, account.id)} className="text-xs font-medium text-blue-600 hover:underline">Manage contacts</Link></CardHeader>
             <CardContent>{contactsData.accountContacts.length === 0 ? <p className="text-sm text-slate-500">No contacts yet.</p> : <div className="space-y-3">{contactsData.accountContacts.map((contact) => <div key={contact.id} className="rounded-xl border border-slate-100 px-3 py-3"><div className="flex items-center justify-between gap-2"><p className="text-sm font-medium">{contact.name}</p>{contact.isPrimary ? <Badge variant="info" className="text-xs">Primary</Badge> : null}</div>{contact.title ? <p className="text-xs text-muted-foreground">{contact.title}</p> : null}{contact.email ? <p className="text-xs text-muted-foreground">{contact.email}</p> : null}{contact.phone ? <PhoneSmsButton phone={contact.phone} recipientName={contact.name} accountId={account.id} className="text-xs" /> : null}</div>)}</div>}</CardContent>
           </Card>
           <Card>

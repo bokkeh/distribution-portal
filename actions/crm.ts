@@ -11,6 +11,61 @@ import { logActivityEvent } from '@/lib/activity/log'
 import { createUserNotification } from '@/lib/notifications/in-app'
 import { normalizeAccountGeography } from '@/lib/pricing/geographic-service'
 
+const CRM_EDITOR_ROLES = ['admin', 'staff', 'sales_rep', 'sales_manager'] as const
+
+function getSessionRoles(session: Awaited<ReturnType<typeof requireRole>>) {
+  return new Set((session.user.roles ?? [session.user.role]).filter(Boolean) as string[])
+}
+
+async function requireEditableAccountAccess(accountId: string) {
+  const session = await requireRole(...CRM_EDITOR_ROLES)
+  const roles = getSessionRoles(session)
+  const canManageAny = roles.has('admin') || roles.has('staff') || roles.has('sales_manager')
+
+  const [account] = await db
+    .select()
+    .from(customerAccounts)
+    .where(eq(customerAccounts.id, accountId))
+    .limit(1)
+
+  if (!account) {
+    throw new Error('Account not found.')
+  }
+
+  if (!canManageAny) {
+    const [member] = await db
+      .select({ id: salesMembers.id })
+      .from(salesMembers)
+      .where(eq(salesMembers.userId, session.user.id))
+      .limit(1)
+
+    if (!member) {
+      throw new Error('No sales member profile found.')
+    }
+
+    if (account.assignedSalesRepId !== member.id) {
+      throw new Error('You are not assigned to this account.')
+    }
+  }
+
+  return { session, roles, account, canManageAny }
+}
+
+async function requireEditableContactAccess(contactId: string) {
+  const [contact] = await db
+    .select()
+    .from(contacts)
+    .where(eq(contacts.id, contactId))
+    .limit(1)
+
+  if (!contact) {
+    throw new Error('Contact not found.')
+  }
+
+  const access = await requireEditableAccountAccess(contact.customerId)
+  return { ...access, contact }
+}
+
 export async function updateDealStage(accountId: string, dealStage: string) {
   await requireAdminOrStaff()
   await db.update(customerAccounts).set({ dealStage }).where(eq(customerAccounts.id, accountId))
@@ -303,12 +358,13 @@ function revalidateContactPaths(customerId: string) {
   revalidatePath(`/admin/crm/${customerId}/contacts`)
   revalidatePath(`/staff/crm/${customerId}`)
   revalidatePath(`/staff/crm/${customerId}/contacts`)
+  revalidatePath(`/sales/accounts/${customerId}`)
+  revalidatePath(`/sales/accounts/${customerId}/contacts`)
 }
 
 export async function addContact(formData: FormData) {
-  const session = await requireAdminOrStaff()
-
   const customerId = formData.get('customerId') as string
+  const { session } = await requireEditableAccountAccess(customerId)
   const name = formData.get('name') as string
   const email = (formData.get('email') as string)?.trim() || null
   const phone = (formData.get('phone') as string)?.trim() || null
@@ -347,107 +403,103 @@ export async function addContact(formData: FormData) {
 }
 
 export async function updateContact(contactId: string, formData: FormData) {
-  const session = await requireAdminOrStaff()
+  try {
+    const { session, contact } = await requireEditableContactAccess(contactId)
 
-  const name = (formData.get('name') as string)?.trim()
-  const email = (formData.get('email') as string)?.trim() || null
-  const phone = (formData.get('phone') as string)?.trim() || null
-  const phoneType = (formData.get('phoneType') as string) || null
-  const preferredContact = (formData.get('preferredContact') as string) || null
-  const title = (formData.get('title') as string)?.trim() || null
-  const isPrimary = formData.get('isPrimary') === 'on'
+    const name = (formData.get('name') as string)?.trim()
+    const email = (formData.get('email') as string)?.trim() || null
+    const phone = (formData.get('phone') as string)?.trim() || null
+    const phoneType = (formData.get('phoneType') as string) || null
+    const preferredContact = (formData.get('preferredContact') as string) || null
+    const title = (formData.get('title') as string)?.trim() || null
+    const isPrimary = formData.get('isPrimary') === 'on'
 
-  const [contact] = await db.select().from(contacts).where(eq(contacts.id, contactId))
-  if (!contact) return { error: 'Contact not found' }
+    const changedFields = [
+      ['name', contact.name, name],
+      ['email', contact.email, email],
+      ['phone', contact.phone, phone],
+      ['phoneType', contact.phoneType, phoneType],
+      ['preferredContact', contact.preferredContact, preferredContact],
+      ['title', contact.title, title],
+      ['isPrimary', String(contact.isPrimary), String(isPrimary)],
+    ].filter(([, previousValue, nextValue]) => (previousValue ?? null) !== (nextValue ?? null)).map(([field]) => field as string)
 
-  const changedFields = [
-    ['name', contact.name, name],
-    ['email', contact.email, email],
-    ['phone', contact.phone, phone],
-    ['phoneType', contact.phoneType, phoneType],
-    ['preferredContact', contact.preferredContact, preferredContact],
-    ['title', contact.title, title],
-    ['isPrimary', String(contact.isPrimary), String(isPrimary)],
-  ].filter(([, previousValue, nextValue]) => (previousValue ?? null) !== (nextValue ?? null)).map(([field]) => field as string)
+    await db.update(contacts).set({
+      name,
+      email,
+      phone,
+      phoneType: phoneType as 'mobile' | 'landline' | 'voip' | 'other' | null,
+      preferredContact: preferredContact as 'email' | 'sms' | 'call' | null,
+      title,
+      isPrimary,
+    }).where(eq(contacts.id, contactId))
 
-  await db.update(contacts).set({
-    name,
-    email,
-    phone,
-    phoneType: phoneType as 'mobile' | 'landline' | 'voip' | 'other' | null,
-    preferredContact: preferredContact as 'email' | 'sms' | 'call' | null,
-    title,
-    isPrimary,
-  }).where(eq(contacts.id, contactId))
-
-  await logActivityEvent({
-    entityType: 'account',
-    entityId: contact.customerId,
-    actorUserId: session.user.id,
-    kind: 'contact_updated',
-    title: 'Contact updated',
-    body: changedFields.length
-      ? `${contact.name} was updated. Changed: ${changedFields.join(', ')}.`
-      : `${contact.name} was updated.`,
-    metadata: {
-      contactId,
-      changedFields,
-      before: {
-        name: contact.name,
-        email: contact.email,
-        phone: contact.phone,
-        phoneType: contact.phoneType,
-        preferredContact: contact.preferredContact,
-        title: contact.title,
-        isPrimary: contact.isPrimary,
+    await logActivityEvent({
+      entityType: 'account',
+      entityId: contact.customerId,
+      actorUserId: session.user.id,
+      kind: 'contact_updated',
+      title: 'Contact updated',
+      body: changedFields.length
+        ? `${contact.name} was updated. Changed: ${changedFields.join(', ')}.`
+        : `${contact.name} was updated.`,
+      metadata: {
+        contactId,
+        changedFields,
+        before: {
+          name: contact.name,
+          email: contact.email,
+          phone: contact.phone,
+          phoneType: contact.phoneType,
+          preferredContact: contact.preferredContact,
+          title: contact.title,
+          isPrimary: contact.isPrimary,
+        },
+        after: {
+          name,
+          email,
+          phone,
+          phoneType,
+          preferredContact,
+          title,
+          isPrimary,
+        },
       },
-      after: {
-        name,
-        email,
-        phone,
-        phoneType,
-        preferredContact,
-        title,
-        isPrimary,
-      },
-    },
-  })
+    })
 
-  revalidateContactPaths(contact.customerId)
-  return { success: true }
+    revalidateContactPaths(contact.customerId)
+    return { success: true }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to update contact.' }
+  }
 }
 
 export async function deleteContact(contactId: string) {
-  const session = await requireAdminOrStaff()
+  try {
+    const { session, contact } = await requireEditableContactAccess(contactId)
 
-  const [contact] = await db.select({
-    id: contacts.id,
-    customerId: contacts.customerId,
-    name: contacts.name,
-    email: contacts.email,
-    phone: contacts.phone,
-  }).from(contacts).where(eq(contacts.id, contactId))
-  if (!contact) return { error: 'Contact not found' }
+    await db.delete(contacts).where(eq(contacts.id, contactId))
 
-  await db.delete(contacts).where(eq(contacts.id, contactId))
+    await logActivityEvent({
+      entityType: 'account',
+      entityId: contact.customerId,
+      actorUserId: session.user.id,
+      kind: 'contact_deleted',
+      title: 'Contact removed',
+      body: `${contact.name} was removed from the account contacts.`,
+      metadata: {
+        contactId,
+        contactName: contact.name,
+        email: contact.email,
+        phone: contact.phone,
+      },
+    })
 
-  await logActivityEvent({
-    entityType: 'account',
-    entityId: contact.customerId,
-    actorUserId: session.user.id,
-    kind: 'contact_deleted',
-    title: 'Contact removed',
-    body: `${contact.name} was removed from the account contacts.`,
-    metadata: {
-      contactId,
-      contactName: contact.name,
-      email: contact.email,
-      phone: contact.phone,
-    },
-  })
-
-  revalidateContactPaths(contact.customerId)
-  return { success: true }
+    revalidateContactPaths(contact.customerId)
+    return { success: true }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to delete contact.' }
+  }
 }
 
 export async function importHubSpotCompany(hubspotCompanyId: string) {
@@ -538,12 +590,9 @@ export async function updateCustomerAccount(
   formData: FormData
 ): Promise<{ error?: string; success?: boolean; changedFields?: string[] }> {
   try {
-    const session = await requireAdminOrStaff()
-    const roles = session.user.roles ?? [session.user.role]
-    const canAssignSalesLead = roles.includes('admin')
-
     const id = formData.get('id') as string
-    const mode = (formData.get('mode') as string) || 'admin'
+    const { session, roles, account: existingAccount } = await requireEditableAccountAccess(id)
+    const canAssignSalesLead = roles.has('admin')
     const hubspotCompanyId = (formData.get('hubspotCompanyId') as string) || null
     const companyName = formData.get('companyName') as string
     const phone = (formData.get('phone') as string) || null
@@ -571,11 +620,6 @@ export async function updateCustomerAccount(
     const liquorLicenseExpiration = (formData.get('liquorLicenseExpiration') as string) || null
     const liquorLicenseUrl = (formData.get('liquorLicenseUrl') as string) || null
     const normalizedGeography = normalizeAccountGeography({ state, county })
-
-    const [existingAccount] = await db.select().from(customerAccounts).where(eq(customerAccounts.id, id)).limit(1)
-    if (!existingAccount) {
-      return { error: 'Account not found.' }
-    }
 
     if (!canAssignSalesLead && requestedAssignedSalesRepId !== null && requestedAssignedSalesRepId !== existingAccount.assignedSalesRepId) {
       return { error: 'Only admins can assign a sales lead.' }

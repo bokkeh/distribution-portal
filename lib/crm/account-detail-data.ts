@@ -113,7 +113,7 @@ function mapActivityEvent(
     invoices: Map<string, string>
     tastingNames: Map<string, string>
   },
-  mode: 'admin' | 'staff'
+  mode: 'admin' | 'staff' | 'sales'
 ): AccountActivityItem {
   const metadata = toRecord(row.metadata)
   let relatedLabel: string | null = null
@@ -121,10 +121,10 @@ function mapActivityEvent(
 
   if (row.entityType === 'order') {
     relatedLabel = `Order #${row.entityId.slice(-8).toUpperCase()}`
-    relatedHref = `/${mode}/orders/${row.entityId}`
+    relatedHref = mode === 'sales' ? null : `/${mode}/orders/${row.entityId}`
   } else if (row.entityType === 'delivery') {
     relatedLabel = `Delivery #${row.entityId.slice(-8).toUpperCase()}`
-    relatedHref = `/${mode}/deliveries/${row.entityId}`
+    relatedHref = mode === 'sales' ? null : `/${mode}/deliveries/${row.entityId}`
   } else if (row.entityType === 'tasting') {
     relatedLabel = refs.tastingNames.get(row.entityId) ?? `Tasting #${row.entityId.slice(-8).toUpperCase()}`
     relatedHref = mode === 'admin' ? `/admin/tastings/${row.entityId}` : null
@@ -133,7 +133,7 @@ function mapActivityEvent(
     relatedHref = mode === 'admin' ? `/admin/invoicing/${row.entityId}` : null
   } else if (metadata.contactId) {
     relatedLabel = 'Contact record'
-    relatedHref = `/${mode}/crm/${row.entityId}/contacts`
+    relatedHref = mode === 'sales' ? `/sales/accounts/${row.entityId}/contacts` : `/${mode}/crm/${row.entityId}/contacts`
   }
 
   return {
@@ -283,7 +283,7 @@ export async function getAvailableInventoryProducts() {
     .orderBy(desc(products.active), products.name)
 }
 
-export async function getAccountActivityFeed(accountId: string, mode: 'admin' | 'staff') {
+export async function getAccountActivityFeed(accountId: string, mode: 'admin' | 'staff' | 'sales') {
   try {
     const [invoiceRefs, tastingRefs, orderRefs, deliveryRefs] = await Promise.all([
       db.select({ id: invoices.id, invoiceNumber: invoices.invoiceNumber }).from(invoices).where(eq(invoices.customerId, accountId)),
@@ -346,7 +346,7 @@ export async function getAccountActivityFeed(accountId: string, mode: 'admin' | 
   }
 }
 
-export async function getAccountMediaFeed(accountId: string, accountPhones: string[], mode: 'admin' | 'staff', limit?: number) {
+export async function getAccountMediaFeed(accountId: string, accountPhones: string[], mode: 'admin' | 'staff' | 'sales', limit?: number) {
   const items: AccountMediaFeedItem[] = []
 
   try {

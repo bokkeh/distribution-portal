@@ -35,7 +35,7 @@ type SmartInsightsInput = {
   notes: AccountNoteItem[]
   inventoryItems: AccountInventoryItem[]
   activityItems: AccountActivityItem[]
-  mode: 'admin' | 'staff'
+  mode: 'admin' | 'staff' | 'sales'
   regionName?: string | null
 }
 
@@ -60,8 +60,12 @@ function getDaysSince(date: Date | null | undefined) {
   return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)))
 }
 
-function buildBasePath(mode: 'admin' | 'staff', accountId: string) {
-  return `/${mode}/crm/${accountId}`
+function buildBasePath(mode: 'admin' | 'staff' | 'sales', accountId: string) {
+  return mode === 'sales' ? `/sales/accounts/${accountId}` : `/${mode}/crm/${accountId}`
+}
+
+function buildContactsPath(mode: 'admin' | 'staff' | 'sales', accountId: string) {
+  return mode === 'sales' ? `/sales/accounts/${accountId}/contacts` : `/${mode}/crm/${accountId}/contacts`
 }
 
 function dedupeInsights(items: SmartInsightItem[]) {
@@ -131,7 +135,7 @@ function buildRuleInsights(input: SmartInsightsInput) {
       category: 'Contact Gap',
       priority: hasAnyEmail ? 'medium' : 'high',
       actionLabel: hasPrimaryContact ? 'Manage Contacts' : 'Edit Account',
-      actionHref: hasPrimaryContact ? `/${mode}/crm/${account.id}/contacts` : `${basePath}?tab=settings#edit-account`,
+      actionHref: hasPrimaryContact ? buildContactsPath(mode, account.id) : `${basePath}?tab=settings#edit-account`,
       reasoning: [hasAnyEmail ? 'An account-level email exists, but no POC email is saved' : 'No usable email is available on the account or contact records'],
     })
   }
@@ -195,8 +199,8 @@ function buildRuleInsights(input: SmartInsightsInput) {
       description: 'This account has not placed an order yet. Confirm whether an opening order is needed.',
       category: 'Sales Opportunity',
       priority: 'high',
-      actionLabel: 'Create Order',
-      actionHref: `/${mode}/orders/new?customer=${account.id}`,
+      actionLabel: mode === 'sales' ? 'View Orders' : 'Create Order',
+      actionHref: mode === 'sales' ? `${basePath}?tab=orders` : `/${mode}/orders/new?customer=${account.id}`,
       reasoning: ['No orders were found for this account'],
     })
   } else if (daysSinceLastOrder >= 28) {
@@ -219,8 +223,8 @@ function buildRuleInsights(input: SmartInsightsInput) {
       description: 'Inventory on hand is low and there is no recent completed delivery tied to the account.',
       category: 'Inventory Nudge',
       priority: 'medium',
-      actionLabel: mode === 'admin' ? 'Add Delivery' : 'Create Order',
-      actionHref: mode === 'admin' ? '/admin/deliveries/new' : `/${mode}/orders/new?customer=${account.id}`,
+      actionLabel: mode === 'admin' ? 'Add Delivery' : mode === 'sales' ? 'View Orders' : 'Create Order',
+      actionHref: mode === 'admin' ? '/admin/deliveries/new' : mode === 'sales' ? `${basePath}?tab=orders` : `/${mode}/orders/new?customer=${account.id}`,
       reasoning: [`Inventory on hand is ${inventoryCases.toFixed(2)} cases and ${inventoryBottles.toFixed(2)} bottles`, 'No completed delivery was found in recent account activity'],
     })
   }
@@ -261,7 +265,7 @@ function buildRuleInsights(input: SmartInsightsInput) {
       category: 'Communication Gap',
       priority: 'medium',
       actionLabel: hasPrimaryContact ? 'Manage Contacts' : 'Edit Account',
-      actionHref: hasPrimaryContact ? `/${mode}/crm/${account.id}/contacts` : `${basePath}?tab=settings#edit-account`,
+      actionHref: hasPrimaryContact ? buildContactsPath(mode, account.id) : `${basePath}?tab=settings#edit-account`,
       reasoning: ['No recent text history was found', 'No email is saved on the account or contact records'],
     })
   }
@@ -486,7 +490,7 @@ export async function generateAccountSmartInsights(input: SmartInsightsInput): P
           /tasting/i.test(item.category) || /tasting/i.test(item.title)
             ? `/${input.mode}/tastings?account=${input.account.id}`
             : /contact|communication/i.test(item.category)
-              ? `/${input.mode}/crm/${input.account.id}/contacts`
+              ? buildContactsPath(input.mode, input.account.id)
               : /inventory|reorder/i.test(item.category)
                 ? `${basePath}?tab=inventory`
                 : /delivery/i.test(item.category)

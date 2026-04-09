@@ -28,8 +28,10 @@ type AccountDetails = {
   liquorLicenseUrl?: string | null
 }
 
-function settingsAnchorHref(mode: 'admin' | 'staff', accountId: string, anchor: string) {
-  return `/${mode}/crm/${accountId}?tab=settings#${anchor}`
+function settingsAnchorHref(mode: 'admin' | 'staff' | 'sales', accountId: string, anchor: string) {
+  return mode === 'sales'
+    ? `/sales/accounts/${accountId}?tab=settings#${anchor}`
+    : `/${mode}/crm/${accountId}?tab=settings#${anchor}`
 }
 
 function directionsUrl(account: AccountDetails) {
@@ -75,7 +77,7 @@ export function AccountDetailsCard({
   mode,
 }: {
   account: AccountDetails
-  mode: 'admin' | 'staff'
+  mode: 'admin' | 'staff' | 'sales'
 }) {
   const mapUrl = directionsUrl(account)
   const cityLine = [account.city, account.state, account.zip].filter(Boolean).join(', ')
