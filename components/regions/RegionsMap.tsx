@@ -91,6 +91,11 @@ function getAccountHealthColor(account: RegionMapAccount): string {
   return '#EF4444'                        // red    — relationship at risk
 }
 
+function getAccountRegionColor(account: RegionMapAccount, regionColorMap: Map<string, string>): string {
+  if (!account.regionId) return '#94A3B8'
+  return regionColorMap.get(account.regionId) ?? '#94A3B8'
+}
+
 type MyRoute = { id: string; name: string; description: string | null }
 
 export function RegionsMap({ data, routes = [] }: { data: RegionMapData; routes?: MyRoute[] }) {
@@ -281,21 +286,23 @@ export function RegionsMap({ data, routes = [] }: { data: RegionMapData; routes?
         })()}
 
         <div className="mt-auto border-t pt-2 space-y-1">
-          <p className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Dot Color — Health</p>
-          {([
-            ['#22C55E', 'Fresh — visited recently'],
-            ['#84CC16', 'Due soon'],
-            ['#F59E0B', 'Overdue'],
-            ['#F97316', 'Significantly overdue'],
-            ['#EF4444', 'At risk / never visited'],
-            ['#64748B', 'No rep assigned'],
-          ] as [string, string][]).map(([c, label]) => (
-            <div key={label} className="flex items-center gap-1.5 px-1">
-              <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: c }} />
-              <span className="text-xs text-slate-500">{label}</span>
+                    <p className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Dot Color - Region</p>
+          {data.regions.map((region, i) => {
+            const color = getRegionColor(i)
+            return (
+              <div key={region.id} className="flex items-center gap-1.5 px-1">
+                <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                <span className="text-xs text-slate-500 truncate">{region.name}</span>
+              </div>
+            )
+          })}
+          {data.accounts.some((account) => !account.regionId) ? (
+            <div className="flex items-center gap-1.5 px-1">
+              <span className="h-2.5 w-2.5 rounded-full shrink-0 bg-slate-400" />
+              <span className="text-xs text-slate-500">Unassigned</span>
             </div>
-          ))}
-          <p className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400 pt-2">Dot Label — Type</p>
+          ) : null}
+<p className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400 pt-2">Dot Label — Type</p>
           {[['L','Liquor Store'],['R','Restaurant / Group'],['H','Hotel / Group'],['V','Venue'],['B','Bar'],['N','Night Club'],['G','Grocery'],['C','Convenience'],['K','Country Club'],['$','Casino'],['W','Wholesaler'],['A','Other / Unknown']].map(([glyph, label]) => (
             <div key={glyph} className="flex items-center gap-1.5 px-1">
               <span className="flex h-4 w-4 items-center justify-center rounded-full bg-slate-400 text-[9px] font-bold text-white shrink-0">{glyph}</span>
@@ -353,7 +360,7 @@ export function RegionsMap({ data, routes = [] }: { data: RegionMapData; routes?
 
           {/* Account markers */}
           {mappedAccounts.map(account => {
-            const color = getAccountHealthColor(account)
+            const color = getAccountRegionColor(account, regionColorMap)
             const accountRegionId = account.regionId ?? '__unassigned__'
             const isActive = hoveredRegionId === null || hoveredRegionId === accountRegionId
             const isSelected = selectedAccount?.id === account.id || routePickerAccount?.id === account.id
