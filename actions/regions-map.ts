@@ -1,8 +1,8 @@
 'use server'
 
-import { eq, isNotNull, isNull, or, sql } from 'drizzle-orm'
+import { and, eq, isNotNull, isNull, ne, or, sql } from 'drizzle-orm'
 import { db } from '@/db'
-import { customerAccounts, deliveryStops, invoices, salesMembers, salesRegions, tastings, users } from '@/db/schema'
+import { customerAccounts, deliveryStops, orders, salesMembers, salesRegions, tastings, users } from '@/db/schema'
 import { requireAdmin } from '@/lib/auth/session'
 import { geocodeAddress } from '@/lib/maps/geocode'
 import { isBatchGeocodeRateLimited } from '@/lib/auth/rate-limit'
@@ -91,15 +91,19 @@ export async function getRegionMapData(): Promise<RegionMapData> {
     })
     .from(customerAccounts)
 
-  // Revenue per account (paid invoices)
+  // Revenue per account should match the rest of the portal:
+  // sum posted order totals, excluding cancelled orders.
   const revenueRows = await db
     .select({
-      customerId: invoices.customerId,
-      revenue: sql<number>`coalesce(sum(${invoices.total}::numeric), 0)::float`.as('revenue'),
+      customerId: orders.customerId,
+      revenue: sql<number>`coalesce(sum(${orders.total}::numeric), 0)::float`.as('revenue'),
     })
-    .from(invoices)
-    .where(eq(invoices.status, 'paid'))
-    .groupBy(invoices.customerId)
+    .from(orders)
+    .where(and(
+      isNotNull(orders.customerId),
+      ne(orders.status, 'cancelled'),
+    ))
+    .groupBy(orders.customerId)
 
   // Tasting count per account
   const tastingRows = await db
