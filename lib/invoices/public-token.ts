@@ -1,11 +1,17 @@
 import { createHmac, timingSafeEqual } from 'crypto'
 
 function getInvoiceTokenSecret() {
-  return process.env.INVOICE_PUBLIC_LINK_SECRET || process.env.NEXTAUTH_SECRET || 'invoice-public-link-secret'
+  const secret = process.env.INVOICE_PUBLIC_LINK_SECRET?.trim()
+  return secret ? secret : null
 }
 
 function signInvoiceId(invoiceId: string) {
-  return createHmac('sha256', getInvoiceTokenSecret()).update(invoiceId).digest('base64url')
+  const secret = getInvoiceTokenSecret()
+  if (!secret) {
+    throw new Error('INVOICE_PUBLIC_LINK_SECRET is required to create invoice payment tokens.')
+  }
+
+  return createHmac('sha256', secret).update(invoiceId).digest('base64url')
 }
 
 export function createInvoicePublicToken(invoiceId: string) {
@@ -17,6 +23,8 @@ export function getInvoicePublicPaymentPath(invoiceId: string) {
 }
 
 export function resolveInvoiceIdFromPublicToken(token: string) {
+  if (!getInvoiceTokenSecret()) return null
+
   const [invoiceId, signature] = token.split('.')
   if (!invoiceId || !signature) return null
 

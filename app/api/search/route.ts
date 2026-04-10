@@ -7,6 +7,10 @@ import { ilike, or, desc } from 'drizzle-orm'
 export async function GET(req: NextRequest) {
   const session = await auth()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const roles = session.user.roles ?? (session.user.role ? [session.user.role] : [])
+  if (!roles.some((role) => role === 'admin' || role === 'staff')) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const q = req.nextUrl.searchParams.get('q')?.trim() ?? ''
   if (q.length < 2) return NextResponse.json([])

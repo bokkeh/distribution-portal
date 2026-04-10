@@ -11,6 +11,7 @@ import {
   SMS_STOP_MESSAGE,
 } from '@/lib/telnyx/compliance'
 import { createNotificationsForRoles } from '@/lib/notifications/in-app'
+import { isTelnyxWebhookVerificationConfigured, verifyTelnyxWebhookSignature } from '@/lib/telnyx/webhook'
 
 type TelnyxWebhookPayload = {
   id?: string
@@ -70,7 +71,33 @@ function getEventType(body: any, payload: TelnyxWebhookPayload) {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json().catch(() => null)
+  const rawBody = await req.text().catch(() => null)
+  if (!rawBody) {
+    return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
+  }
+
+  if (!isTelnyxWebhookVerificationConfigured()) {
+    console.error('TELNYX_WEBHOOK_PUBLIC_KEY is not configured; rejecting webhook.')
+    return NextResponse.json({ error: 'Webhook verification is not configured' }, { status: 503 })
+  }
+
+  const isVerified = await verifyTelnyxWebhookSignature({
+    payload: rawBody,
+    signatureHeader: req.headers.get('telnyx-signature-ed25519'),
+    timestampHeader: req.headers.get('telnyx-timestamp'),
+  })
+
+  if (!isVerified) {
+    return NextResponse.json({ error: 'Invalid webhook signature' }, { status: 401 })
+  }
+
+  const body = await (async () => {
+    try {
+      return JSON.parse(rawBody) as Record<string, any>
+    } catch {
+      return null
+    }
+  })()
   if (!body) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
