@@ -17,6 +17,7 @@ import { formatDateInTimeZone } from '@/lib/timezones'
 import { logAccountNoteEvent } from '@/lib/crm/account-notes'
 import { sendSms } from '@/lib/telnyx/client'
 import { toDisplayAvatarUrl } from '@/lib/users/avatar'
+import { isDirectionsRateLimited, isGeocodeActionRateLimited } from '@/lib/auth/rate-limit'
 
 const TRACKING_TOKEN_BYTES = 18
 const TRACKING_EXPIRATION_HOURS = 48
@@ -1528,13 +1529,17 @@ export async function addManualDeliveryStop(deliveryId: string, formData: FormDa
 }
 
 export async function setDeliveryOrigin(deliveryId: string, formData: FormData) {
-  await requireAdminOrStaff()
+  const session = await requireAdminOrStaff()
 
   const address = (formData.get('originAddress') as string)?.trim()
   if (!address) {
     await db.update(deliveries).set({ originAddress: null, originLat: null, originLng: null }).where(eq(deliveries.id, deliveryId))
     revalidatePath(`/admin/deliveries/${deliveryId}`)
     return { success: true }
+  }
+
+  if (await isGeocodeActionRateLimited(session.user.id)) {
+    return { error: 'Geocode limit reached. Please wait before trying again.' }
   }
 
   let lat: string | null = null
@@ -1552,7 +1557,10 @@ export async function setDeliveryOrigin(deliveryId: string, formData: FormData) 
 }
 
 export async function optimizeDeliveryRoute(deliveryId: string): Promise<{ success?: boolean; error?: string }> {
-  await requireAdmin()
+  const session = await requireAdmin()
+  if (await isDirectionsRateLimited(session.user.id)) {
+    return { error: 'Directions limit reached. Please wait before optimizing again.' }
+  }
 
   const apiKey = process.env.GOOGLE_MAPS_API_KEY
   if (!apiKey) return { error: 'Google Maps API key not configured.' }

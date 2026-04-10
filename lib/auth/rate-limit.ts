@@ -53,6 +53,15 @@ export const isUploadRateLimited = makeLimiter('upload', 30, '1 h')
 /** Geocode: 60 / minute per user */
 export const isGeocodeRateLimited = makeLimiter('geocode', 60, '1 m')
 
+/** Manual geocode actions triggered inside the portal */
+export const isGeocodeActionRateLimited = makeLimiter('geocode-action', 30, '1 h')
+
+/** Batch geocoding is high-cost and should be infrequent */
+export const isBatchGeocodeRateLimited = makeLimiter('geocode-batch', 3, '15 m')
+
+/** Route optimization uses billable Directions API requests */
+export const isDirectionsRateLimited = makeLimiter('directions-action', 20, '1 h')
+
 /** Public delivery tracking token lookups: 60 / 15 min per token+viewer */
 export const isDeliveryTrackingRateLimited = makeLimiter('delivery-tracking', 60, '15 m')
 

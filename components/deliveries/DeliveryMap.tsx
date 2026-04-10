@@ -2,6 +2,8 @@
 
 import { GoogleMap, InfoWindow, Marker, Polyline, useJsApiLoader } from '@react-google-maps/api'
 import { useEffect, useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Route, TriangleAlert } from 'lucide-react'
 
 interface Stop {
   id: string
@@ -54,6 +56,7 @@ export default function DeliveryMap({
   const [selectedStop, setSelectedStop] = useState<Stop | null>(null)
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null)
   const [directionsAvailable, setDirectionsAvailable] = useState(true)
+  const [directionsEnabled, setDirectionsEnabled] = useState(false)
 
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ?? '',
@@ -104,7 +107,7 @@ export default function DeliveryMap({
   }, [estimatedTravelTime, onEstimateChange])
 
   useEffect(() => {
-    if (!directionsAvailable || !isLoaded || validStops.length === 0 || (!originPoint && validStops.length < 2)) return
+    if (!directionsEnabled || !directionsAvailable || !isLoaded || validStops.length === 0 || (!originPoint && validStops.length < 2)) return
 
     const directionsService = new google.maps.DirectionsService()
     const routeOrigin = originPoint
@@ -140,12 +143,36 @@ export default function DeliveryMap({
         setDirections(null)
       }
     )
-  }, [directionsAvailable, isLoaded, originPoint, routeKey, validStops])
+  }, [directionsAvailable, directionsEnabled, isLoaded, originPoint, routeKey, validStops])
 
   if (!isLoaded) return <div className="w-full h-full flex items-center justify-center bg-slate-100"><p className="text-sm text-muted-foreground">Loading map...</p></div>
 
   return (
     <div className="relative h-full w-full">
+      {!directionsEnabled && validStops.length > 1 ? (
+        <div className="absolute left-3 top-3 z-10 max-w-sm rounded-xl border border-red-200 bg-white/95 p-3 shadow-lg">
+          <div className="flex items-start gap-2">
+            <TriangleAlert className="mt-0.5 h-4 w-4 text-red-600" />
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-red-700">Live directions are billable</p>
+              <p className="text-xs text-slate-600">Loading a turn-by-turn route inside the portal uses Google Directions API requests.</p>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="border-red-200 text-red-700 hover:bg-red-50"
+                onClick={() => {
+                  const confirmed = window.confirm('Load live in-app directions? This will make a billable Google Directions API request.')
+                  if (confirmed) setDirectionsEnabled(true)
+                }}
+              >
+                <Route className="h-3.5 w-3.5" />
+                Load Live Directions
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <GoogleMap
         mapContainerStyle={{ width: '100%', height: '100%' }}
         center={center}

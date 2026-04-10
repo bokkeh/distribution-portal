@@ -5,6 +5,7 @@ import { db } from '@/db'
 import { customerAccounts, deliveryStops, invoices, salesMembers, salesRegions, tastings, users } from '@/db/schema'
 import { requireAdmin } from '@/lib/auth/session'
 import { geocodeAddress } from '@/lib/maps/geocode'
+import { isBatchGeocodeRateLimited } from '@/lib/auth/rate-limit'
 
 export type RegionMapAccount = {
   id: string
@@ -159,8 +160,11 @@ export async function getRegionMapData(): Promise<RegionMapData> {
   return { regions, accounts }
 }
 
-export async function geocodeAccountsBatch(): Promise<{ geocoded: number; failed: number }> {
-  await requireAdmin()
+export async function geocodeAccountsBatch(): Promise<{ geocoded: number; failed: number; error?: string }> {
+  const session = await requireAdmin()
+  if (await isBatchGeocodeRateLimited(session.user.id)) {
+    return { geocoded: 0, failed: 0, error: 'Batch geocode limit reached. Please wait before running another batch.' }
+  }
 
   const toGeocode = await db
     .select({
@@ -184,7 +188,7 @@ export async function geocodeAccountsBatch(): Promise<{ geocoded: number; failed
     const parts = [account.address, account.city, account.state, account.zip].filter(Boolean)
     const fullAddress = parts.join(', ')
 
-    const coords = await geocodeAddress(fullAddress)
+    const coords = await geocodeAddress(fullAddress, { forceRefresh: true })
 
     if (coords) {
       await db

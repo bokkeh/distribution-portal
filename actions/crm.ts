@@ -10,6 +10,7 @@ import { getHubSpotCompanyContacts, upsertHubSpotContact, getHubSpotCompanies, u
 import { logActivityEvent } from '@/lib/activity/log'
 import { createUserNotification } from '@/lib/notifications/in-app'
 import { normalizeAccountGeography } from '@/lib/pricing/geographic-service'
+import { isGeocodeActionRateLimited } from '@/lib/auth/rate-limit'
 
 const CRM_EDITOR_ROLES = ['admin', 'staff', 'sales_rep', 'sales_manager'] as const
 
@@ -930,7 +931,10 @@ export async function updateAccountBySalesRep(
 export async function geocodeAccount(
   accountId: string
 ): Promise<{ success: boolean; lat?: number; lng?: number; error?: string }> {
-  await requireRole('sales_rep', 'sales_manager', 'admin')
+  const session = await requireRole('sales_rep', 'sales_manager', 'admin')
+  if (await isGeocodeActionRateLimited(session.user.id)) {
+    return { success: false, error: 'Geocode limit reached. Please wait before trying again.' }
+  }
 
   const [account] = await db
     .select({

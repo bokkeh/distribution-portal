@@ -234,6 +234,13 @@ function HombaseRow({
 
   function handleSave() {
     startTransition(async () => {
+      if (value.trim() && value.trim() !== (currentAddress ?? '')) {
+        const confirmed = window.confirm(
+          'Saving a new starting location will make a billable Google Geocoding API request. Continue?'
+        )
+        if (!confirmed) return
+      }
+
       const formData = new FormData()
       formData.append('originAddress', value.trim())
       const result = await setRouteOrigin(routeId, formData)
@@ -276,6 +283,7 @@ function HombaseRow({
                 </Button>
               )}
             </div>
+            <p className="text-[11px] font-medium text-red-600">Warning: saving this address triggers a billable Google Geocoding API call.</p>
           </div>
         ) : (
           <div className="min-w-0 flex-1">
@@ -390,6 +398,11 @@ export default function SortableSalesStopList({
       return
     }
 
+    const confirmed = window.confirm(
+      'This will make a billable Google Directions API optimization request. Continue?'
+    )
+    if (!confirmed) return
+
     setIsOptimizing(true)
     const previousStops = stops
 
@@ -480,6 +493,7 @@ export default function SortableSalesStopList({
               originAddress={originAddress}
             />
           </div>
+          <p className="mt-[-4px] mb-3 text-[11px] font-medium text-red-600">Warning: route optimization and live in-app directions can trigger billable Google Directions API usage.</p>
           <SortableContext items={stops.map((s) => s.id)} strategy={verticalListSortingStrategy}>
             <div className="space-y-2 sm:space-y-3">
               {stops.map((stop, index) => (

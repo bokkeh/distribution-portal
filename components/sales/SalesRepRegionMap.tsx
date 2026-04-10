@@ -207,6 +207,11 @@ export function SalesRepRegionMap({ data }: { data: RepMapData }) {
             <div className="mt-2 flex gap-1.5">
               <button
                 onClick={() => {
+                  const confirmed = window.confirm(
+                    'This will make a billable Google Geocoding API request for this account. Continue?'
+                  )
+                  if (!confirmed) return
+
                   const id = selected.id
                   setGeocodeMsg(null)
                   startGeocode(async () => {
@@ -234,6 +239,7 @@ export function SalesRepRegionMap({ data }: { data: RepMapData }) {
                 <Building2 className="w-3 h-3" /> View Account
               </a>
             </div>
+            <p className="mt-1 text-[10px] font-medium text-red-600">Re-geocode uses a billable Google API call.</p>
           </div>
         </InfoWindow>
       )}

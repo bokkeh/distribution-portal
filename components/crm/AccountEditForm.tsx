@@ -59,12 +59,29 @@ export function AccountEditForm({
   const router = useRouter()
   const backPath = mode === 'sales' ? `/sales/accounts/${account.id}` : `/${mode}/crm/${account.id}`
   const formRef = useRef<HTMLFormElement | null>(null)
+  const lastHandledResultRef = useRef<string | null>(null)
+  const wasPendingRef = useRef(false)
   const [state, action, pending] = useActionState(updateCustomerAccount, null)
   const { statusText, clearDraft } = useFormDraftAutosave(formRef, `account-edit:${mode}:${account.id}`)
   const [licenseUrl, setLicenseUrl] = useState(account.liquorLicenseUrl ?? '')
 
   useEffect(() => {
+    if (pending && !wasPendingRef.current) {
+      lastHandledResultRef.current = null
+    }
+    wasPendingRef.current = pending
+  }, [pending])
+
+  useEffect(() => {
     if (!state) return
+    const resultKey = JSON.stringify({
+      success: Boolean(state.success),
+      error: state.error ?? null,
+      changedFields: state.changedFields ?? [],
+    })
+    if (lastHandledResultRef.current === resultKey) return
+    lastHandledResultRef.current = resultKey
+
     if (state.error) {
       toast.error('Failed to save account', { description: state.error })
       return

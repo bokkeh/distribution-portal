@@ -8,6 +8,7 @@ import { salesRoutes, salesRouteStops, customerAccounts } from '@/db/schema'
 import { requireAdminOrStaff, requireRole } from '@/lib/auth/session'
 import { geocodeAddress } from '@/lib/maps/geocode'
 import { logAccountNoteEvent } from '@/lib/crm/account-notes'
+import { isDirectionsRateLimited, isGeocodeActionRateLimited } from '@/lib/auth/rate-limit'
 
 export async function createSalesRoute(formData: FormData) {
   await requireAdminOrStaff()
@@ -354,12 +355,16 @@ export async function reorderSalesRouteStops(routeId: string, orderedIds: string
 }
 
 export async function setRouteOrigin(routeId: string, formData: FormData) {
-  await requireRole('admin', 'staff', 'sales_rep', 'sales_manager')
+  const session = await requireRole('admin', 'staff', 'sales_rep', 'sales_manager')
 
   const address = (formData.get('originAddress') as string)?.trim()
   if (!address) {
     await db.update(salesRoutes).set({ originAddress: null, originLat: null, originLng: null }).where(eq(salesRoutes.id, routeId))
     return { success: true }
+  }
+
+  if (await isGeocodeActionRateLimited(session.user.id)) {
+    return { error: 'Geocode limit reached. Please wait before trying again.' }
   }
 
   let lat: string | null = null
@@ -380,7 +385,10 @@ export async function optimizeSalesRouteOrder(
   stops: Array<{ id: string; lat: number; lng: number }>,
   origin?: { lat: number; lng: number } | null
 ): Promise<{ orderedIds: string[] }> {
-  await requireRole('admin', 'staff', 'sales_rep', 'sales_manager')
+  const session = await requireRole('admin', 'staff', 'sales_rep', 'sales_manager')
+  if (await isDirectionsRateLimited(session.user.id)) {
+    throw new Error('Directions limit reached. Please wait before optimizing again.')
+  }
 
   const geocoded = stops.filter((s) => s.lat !== 0 && s.lng !== 0)
   const ungeocodable = stops.filter((s) => s.lat === 0 && s.lng === 0)

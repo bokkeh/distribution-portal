@@ -10,6 +10,11 @@ export function OptimizeRouteButton({ deliveryId }: { deliveryId: string }) {
   const [result, setResult] = useState<{ success?: boolean; error?: string } | null>(null)
 
   function handleOptimize() {
+    const confirmed = window.confirm(
+      'This will make a billable Google Directions API optimization request. Continue?'
+    )
+    if (!confirmed) return
+
     setResult(null)
     startTransition(async () => {
       const res = await optimizeDeliveryRoute(deliveryId)
@@ -36,6 +41,7 @@ export function OptimizeRouteButton({ deliveryId }: { deliveryId: string }) {
       {result?.success && (
         <p className="text-xs text-emerald-600">Route optimized successfully.</p>
       )}
+      <p className="text-xs font-medium text-red-600">Warning: optimization uses a billable Google Directions API call.</p>
     </div>
   )
 }

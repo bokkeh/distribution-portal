@@ -3,6 +3,8 @@
 import { GoogleMap, InfoWindow, Marker, Polyline, useJsApiLoader } from '@react-google-maps/api'
 import { useEffect, useRef, useState } from 'react'
 import type { ShareStop } from './ShareRouteMap'
+import { Button } from '@/components/ui/button'
+import { Route, TriangleAlert } from 'lucide-react'
 
 const STATUS_COLORS: Record<string, string> = {
   pending: '#3B82F6',
@@ -14,6 +16,7 @@ export default function ShareRouteMapInner({ stops, origin }: { stops: ShareStop
   const [selectedStop, setSelectedStop] = useState<ShareStop | null>(null)
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null)
   const [directionsAvailable, setDirectionsAvailable] = useState(true)
+  const [directionsEnabled, setDirectionsEnabled] = useState(false)
   const mapRef = useRef<google.maps.Map | null>(null)
 
   const { isLoaded } = useJsApiLoader({
@@ -36,7 +39,7 @@ export default function ShareRouteMapInner({ stops, origin }: { stops: ShareStop
 
   // Fetch directions
   useEffect(() => {
-    if (!directionsAvailable || !isLoaded || validStops.length < 2) return
+    if (!directionsEnabled || !directionsAvailable || !isLoaded || validStops.length < 2) return
 
     const service = new google.maps.DirectionsService()
     const routeOrigin = origin
@@ -71,7 +74,7 @@ export default function ShareRouteMapInner({ stops, origin }: { stops: ShareStop
         }
       }
     )
-  }, [directionsAvailable, isLoaded, origin, originKey, routeKey, validStops])
+  }, [directionsAvailable, directionsEnabled, isLoaded, origin, originKey, routeKey, validStops])
 
   if (!isLoaded) {
     return (
@@ -88,6 +91,30 @@ export default function ShareRouteMapInner({ stops, origin }: { stops: ShareStop
 
   return (
     <div className="relative h-full w-full">
+      {!directionsEnabled && validStops.length > 1 ? (
+        <div className="absolute left-3 top-3 z-10 max-w-sm rounded-xl border border-red-200 bg-white/95 p-3 shadow-lg">
+          <div className="flex items-start gap-2">
+            <TriangleAlert className="mt-0.5 h-4 w-4 text-red-600" />
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-red-700">Live directions are billable</p>
+              <p className="text-xs text-slate-600">Loading a routed path on this shared map uses Google Directions API requests.</p>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="border-red-200 text-red-700 hover:bg-red-50"
+                onClick={() => {
+                  const confirmed = window.confirm('Load live directions for this shared route? This will make a billable Google Directions API request.')
+                  if (confirmed) setDirectionsEnabled(true)
+                }}
+              >
+                <Route className="h-3.5 w-3.5" />
+                Load Live Directions
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <GoogleMap
         mapContainerStyle={{ width: '100%', height: '100%' }}
         center={validStops[0] ? { lat: validStops[0].lat, lng: validStops[0].lng } : { lat: 29.7604, lng: -95.3698 }}
