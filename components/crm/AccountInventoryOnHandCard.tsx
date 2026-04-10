@@ -1,7 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useMemo, useState, useTransition } from 'react'
 import {
   Area,
   AreaChart,
@@ -309,8 +308,9 @@ export function AccountInventoryOnHandCard({
   products: ProductOption[]
   showHistory?: boolean
 }) {
-  const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const [inventoryItems, setInventoryItems] = useState(items)
+  const [inventoryHistory, setInventoryHistory] = useState(historyEvents)
   const [draftCounts, setDraftCounts] = useState<Record<string, { casesOnHand: string; bottlesOnHand: string }>>(
     Object.fromEntries(items.map((item) => [item.id, { casesOnHand: item.casesOnHand, bottlesOnHand: item.bottlesOnHand }]))
   )
@@ -319,22 +319,38 @@ export function AccountInventoryOnHandCard({
   const [newBottles, setNewBottles] = useState('0')
   const [historyRange, setHistoryRange] = useState<HistoryRangeKey>('30d')
 
-  const existingProductIds = new Set(items.map((item) => item.productId))
+  useEffect(() => {
+    setInventoryItems(items)
+  }, [items])
+
+  useEffect(() => {
+    setInventoryHistory(historyEvents)
+  }, [historyEvents])
+
+  useEffect(() => {
+    setDraftCounts(
+      Object.fromEntries(
+        inventoryItems.map((item) => [item.id, { casesOnHand: item.casesOnHand, bottlesOnHand: item.bottlesOnHand }])
+      )
+    )
+  }, [inventoryItems])
+
+  const existingProductIds = new Set(inventoryItems.map((item) => item.productId))
   const addableProducts = useMemo(
     () => products.filter((product) => !existingProductIds.has(product.id)),
-    [products, items]
+    [inventoryItems, products]
   )
-  const totalCases = items.reduce((sum, item) => sum + Number(item.casesOnHand || 0), 0)
-  const totalBottles = items.reduce((sum, item) => sum + Number(item.bottlesOnHand || 0), 0)
+  const totalCases = inventoryItems.reduce((sum, item) => sum + Number(item.casesOnHand || 0), 0)
+  const totalBottles = inventoryItems.reduce((sum, item) => sum + Number(item.bottlesOnHand || 0), 0)
   const historySeries = useMemo(
-    () => buildInventoryHistorySeries(historyEvents, totalCases, totalBottles, historyRange),
-    [historyEvents, historyRange, totalBottles, totalCases]
+    () => buildInventoryHistorySeries(inventoryHistory, totalCases, totalBottles, historyRange),
+    [historyRange, inventoryHistory, totalBottles, totalCases]
   )
   const totalAdjustmentsInView = historySeries.reduce((sum, point) => sum + point.adjustments, 0)
 
-  function refreshWithToast(message: string) {
-    toast.success(message)
-    router.refresh()
+  function appendHistoryEvent(event: AccountInventoryHistoryEvent | undefined) {
+    if (!event) return
+    setInventoryHistory((current) => [...current, event].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()))
   }
 
   function saveProduct(productId: string, casesOnHand: string, bottlesOnHand: string) {
@@ -350,7 +366,17 @@ export function AccountInventoryOnHandCard({
         toast.error(result.error)
         return
       }
-      refreshWithToast('Inventory updated')
+
+      if (result?.item) {
+        setInventoryItems((current) => {
+          const nextItems = current.some((item) => item.id === result.item.id)
+            ? current.map((item) => (item.id === result.item.id ? result.item : item))
+            : [...current, result.item]
+          return [...nextItems].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+        })
+      }
+      appendHistoryEvent(result?.historyEvent)
+      toast.success('Inventory updated')
     })
   }
 
@@ -375,7 +401,9 @@ export function AccountInventoryOnHandCard({
         toast.error(result.error)
         return
       }
-      refreshWithToast('Inventory item removed')
+      setInventoryItems((current) => current.filter((item) => item.id !== result?.removedItemId))
+      appendHistoryEvent(result?.historyEvent)
+      toast.success('Inventory item removed')
     })
   }
 
@@ -451,12 +479,12 @@ export function AccountInventoryOnHandCard({
               </tr>
             </thead>
             <tbody>
-              {items.length === 0 ? (
+              {inventoryItems.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="py-4 text-sm text-slate-500">No account inventory tracked yet.</td>
                 </tr>
               ) : (
-                items.map((item) => (
+                inventoryItems.map((item) => (
                   <tr key={item.id} className="border-b last:border-0">
                     <td className="py-3 pr-3">
                       <p className="font-medium text-slate-900">{item.productName}</p>

@@ -53,6 +53,7 @@ type AISmartInsightsPayload = {
 }
 
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null
+const CRM_AI_INSIGHTS_ENABLED = process.env.ENABLE_CRM_AI_INSIGHTS === 'true'
 
 function getDaysSince(date: Date | null | undefined) {
   if (!date) return null
@@ -411,7 +412,7 @@ function buildAiContext(input: SmartInsightsInput, ruleSummary: string, recommen
 }
 
 async function generateAiEnhancements(input: SmartInsightsInput, ruleSummary: string, recommendations: SmartInsightItem[], alerts: SmartInsightItem[]) {
-  if (!openai) return null
+  if (!openai || !CRM_AI_INSIGHTS_ENABLED) return null
 
   const context = buildAiContext(input, ruleSummary, recommendations, alerts)
   const prompt = `You are generating concise CRM account guidance for internal operations and sales users.

@@ -6,6 +6,7 @@ import { requireAdminOrStaff, requireRole } from '@/lib/auth/session'
 import { geocodeAddress } from '@/lib/maps/geocode'
 import { and, eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
+import { after } from 'next/server'
 import { getHubSpotCompanyContacts, upsertHubSpotContact, getHubSpotCompanies, updateHubSpotCompany } from '@/lib/hubspot/client'
 import { logActivityEvent } from '@/lib/activity/log'
 import { createUserNotification } from '@/lib/notifications/in-app'
@@ -13,9 +14,43 @@ import { normalizeAccountGeography } from '@/lib/pricing/geographic-service'
 import { isGeocodeActionRateLimited } from '@/lib/auth/rate-limit'
 
 const CRM_EDITOR_ROLES = ['admin', 'staff', 'sales_rep', 'sales_manager'] as const
+const HUBSPOT_COMPANY_SYNC_FIELDS = new Set<string>([
+  'companyName',
+  'phone',
+  'address',
+  'city',
+  'state',
+  'zip',
+  'businessPhone',
+  'website',
+] as const)
+const HUBSPOT_CONTACT_SYNC_FIELDS = new Set<string>([
+  'companyName',
+  'contactName',
+  'phone',
+  'email',
+  'city',
+  'state',
+  'businessEmail',
+  'businessPhone',
+  'pocName',
+  'pocPhone',
+  'pocEmail',
+  'creditLimit',
+  'paymentTerms',
+] as const)
 
 function getSessionRoles(session: Awaited<ReturnType<typeof requireRole>>) {
   return new Set((session.user.roles ?? [session.user.role]).filter(Boolean) as string[])
+}
+
+function revalidateCRMAccountPaths(accountId: string) {
+  revalidatePath('/admin/crm')
+  revalidatePath(`/admin/crm/${accountId}`)
+  revalidatePath('/staff/crm')
+  revalidatePath(`/staff/crm/${accountId}`)
+  revalidatePath('/sales/accounts')
+  revalidatePath(`/sales/accounts/${accountId}`)
 }
 
 async function requireEditableAccountAccess(accountId: string) {
@@ -683,6 +718,16 @@ export async function updateCustomerAccount(
       ['liquorLicenseUrl', existingAccount.liquorLicenseUrl, liquorLicenseUrl],
     ].filter(([, previousValue, nextValue]) => (previousValue ?? null) !== (nextValue ?? null)).map(([field]) => field as string)
 
+    if (changedFields.length === 0) {
+      return { success: true, changedFields: [] }
+    }
+
+    const shouldSyncHubSpotCompany = Boolean(
+      hubspotCompanyId
+      && changedFields.some((field) => HUBSPOT_COMPANY_SYNC_FIELDS.has(field))
+    )
+    const shouldSyncHubSpotContact = changedFields.some((field) => HUBSPOT_CONTACT_SYNC_FIELDS.has(field))
+
     const [account] = await db.update(customerAccounts).set({
       companyName,
       contactName,
@@ -726,37 +771,6 @@ export async function updateCustomerAccount(
       },
     })
 
-    if (hubspotCompanyId) {
-      await updateHubSpotCompany(hubspotCompanyId, {
-        name: companyName,
-        phone: businessPhone || phone || '',
-        address: address ?? '',
-        city: city ?? '',
-        state: normalizedGeography.state ?? '',
-        zip: zip ?? '',
-        website: website ?? '',
-      }).catch(() => false)
-    }
-
-    if (account) {
-      const hubspotContactId = await upsertHubSpotContact({
-        email: pocEmail || businessEmail || email || '',
-        firstname: (pocName || account.contactName || account.companyName).split(' ')[0] ?? account.companyName,
-        lastname: (pocName || account.contactName || '').split(' ').slice(1).join(' '),
-        company: account.companyName,
-        phone: pocPhone || businessPhone || phone || '',
-        city: account.city ?? '',
-        state: account.state ?? '',
-        credit_limit: account.creditLimit ?? '0',
-    payment_terms: account.paymentTerms ?? 'PREPAID',
-        account_balance: account.balance ?? '0',
-      }).catch(() => null)
-
-      if (hubspotContactId) {
-        await db.update(customerAccounts).set({ hubspotContactId }).where(eq(customerAccounts.id, id))
-      }
-    }
-
     if (assignmentChanged && nextAssignedRep?.userId) {
       await createUserNotification({
         userId: nextAssignedRep.userId,
@@ -767,14 +781,57 @@ export async function updateCustomerAccount(
       })
     }
 
-    revalidatePath('/admin/crm')
-    revalidatePath(`/admin/crm/${id}`)
-    revalidatePath(`/admin/crm/${id}/contacts`)
-    revalidatePath('/staff/crm')
-    revalidatePath(`/staff/crm/${id}`)
-    revalidatePath(`/staff/crm/${id}/contacts`)
-    revalidatePath('/sales/accounts')
-    revalidatePath(`/sales/accounts/${id}`)
+    if (account && (shouldSyncHubSpotCompany || shouldSyncHubSpotContact)) {
+      after(async () => {
+        const backgroundTasks: Promise<unknown>[] = []
+
+        if (shouldSyncHubSpotCompany && hubspotCompanyId) {
+          backgroundTasks.push(
+            updateHubSpotCompany(hubspotCompanyId, {
+              name: companyName,
+              phone: businessPhone || phone || '',
+              address: address ?? '',
+              city: city ?? '',
+              state: normalizedGeography.state ?? '',
+              zip: zip ?? '',
+              website: website ?? '',
+            })
+          )
+        }
+
+        if (shouldSyncHubSpotContact) {
+          backgroundTasks.push(
+            (async () => {
+              const hubspotContactId = await upsertHubSpotContact({
+                email: pocEmail || businessEmail || email || '',
+                firstname: (pocName || account.contactName || account.companyName).split(' ')[0] ?? account.companyName,
+                lastname: (pocName || account.contactName || '').split(' ').slice(1).join(' '),
+                company: account.companyName,
+                phone: pocPhone || businessPhone || phone || '',
+                city: account.city ?? '',
+                state: account.state ?? '',
+                credit_limit: account.creditLimit ?? '0',
+                payment_terms: account.paymentTerms ?? 'PREPAID',
+                account_balance: account.balance ?? '0',
+              })
+
+              if (hubspotContactId) {
+                await db.update(customerAccounts).set({ hubspotContactId }).where(eq(customerAccounts.id, id))
+              }
+            })()
+          )
+        }
+
+        const results = await Promise.allSettled(backgroundTasks)
+        for (const result of results) {
+          if (result.status === 'rejected') {
+            console.error('Background HubSpot sync failed after CRM account update:', result.reason)
+          }
+        }
+      })
+    }
+
+    revalidateCRMAccountPaths(id)
     return { success: true, changedFields }
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Failed to update account.' }

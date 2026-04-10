@@ -6,6 +6,7 @@ import { db } from '@/db'
 import { accountInventoryOnHand, accountNotes, customerAccounts, products } from '@/db/schema'
 import { requireRole } from '@/lib/auth/session'
 import { logActivityEvent } from '@/lib/activity/log'
+import type { AccountInventoryHistoryEvent, AccountInventoryItem } from '@/lib/crm/account-detail-data'
 
 const INTERNAL_ACCOUNT_ROLES = ['admin', 'staff', 'driver', 'taster', 'sales_rep', 'sales_manager'] as const
 
@@ -208,6 +209,9 @@ export async function upsertAccountInventoryItem(formData: FormData) {
 
   const casesValue = cases.toFixed(2)
   const bottlesValue = bottles.toFixed(2)
+  const updatedAt = new Date()
+  const updatedByName = session.user.name ?? null
+  const updatedByRole = getPrimaryRole(session)
 
   let existingItem:
     | (typeof accountInventoryOnHand.$inferSelect & { casesOnHand?: string; bottlesOnHand?: string })
@@ -272,7 +276,7 @@ export async function upsertAccountInventoryItem(formData: FormData) {
         bottlesOnHand: bottlesValue,
         quantityOnHand: casesValue,
         updatedByUserId: session.user.id,
-        updatedAt: new Date(),
+        updatedAt,
       }).where(eq(accountInventoryOnHand.id, existingItem.id))
     } catch (error) {
       if (!isMissingInventoryColumn(error)) throw error
@@ -315,6 +319,34 @@ export async function upsertAccountInventoryItem(formData: FormData) {
         },
       },
     })
+
+    const item: AccountInventoryItem = {
+      id: existingItem.id,
+      accountId,
+      productId,
+      sku: product.sku,
+      productName: product.name,
+      unitType: product.unit,
+      casesOnHand: casesValue,
+      bottlesOnHand: bottlesValue,
+      updatedByUserId: session.user.id,
+      updatedByName,
+      updatedByRole,
+      updatedAt,
+    }
+    const historyEvent: AccountInventoryHistoryEvent = {
+      id: `${existingItem.id}-${updatedAt.getTime()}`,
+      kind: 'account_inventory_updated',
+      title: 'Inventory quantity updated',
+      createdAt: updatedAt,
+      productId,
+      productName: product.name,
+      deltaCases: Number(casesValue) - Number(beforeCases),
+      deltaBottles: Number(bottlesValue) - Number(beforeBottles),
+    }
+
+    revalidateAccountPaths(accountId)
+    return { success: true, item, historyEvent }
   } else {
     try {
       await db.insert(accountInventoryOnHand).values({
@@ -327,6 +359,7 @@ export async function upsertAccountInventoryItem(formData: FormData) {
         bottlesOnHand: bottlesValue,
         quantityOnHand: casesValue,
         updatedByUserId: session.user.id,
+        updatedAt,
       })
     } catch (error) {
       if (!isMissingInventoryColumn(error)) throw error
@@ -356,6 +389,12 @@ export async function upsertAccountInventoryItem(formData: FormData) {
       `)
     }
 
+    const [insertedItem] = await db
+      .select({ id: accountInventoryOnHand.id })
+      .from(accountInventoryOnHand)
+      .where(and(eq(accountInventoryOnHand.accountId, accountId), eq(accountInventoryOnHand.productId, productId)))
+      .limit(1)
+
     await logActivityEvent({
       entityType: 'account',
       entityId: accountId,
@@ -371,10 +410,35 @@ export async function upsertAccountInventoryItem(formData: FormData) {
         bottlesOnHand: bottlesValue,
       },
     })
-  }
 
-  revalidateAccountPaths(accountId)
-  return { success: true }
+    const item: AccountInventoryItem = {
+      id: insertedItem?.id ?? `${accountId}-${productId}`,
+      accountId,
+      productId,
+      sku: product.sku,
+      productName: product.name,
+      unitType: product.unit,
+      casesOnHand: casesValue,
+      bottlesOnHand: bottlesValue,
+      updatedByUserId: session.user.id,
+      updatedByName,
+      updatedByRole,
+      updatedAt,
+    }
+    const historyEvent: AccountInventoryHistoryEvent = {
+      id: `${productId}-${updatedAt.getTime()}`,
+      kind: 'account_inventory_added',
+      title: 'Inventory item added',
+      createdAt: updatedAt,
+      productId,
+      productName: product.name,
+      deltaCases: Number(casesValue),
+      deltaBottles: Number(bottlesValue),
+    }
+
+    revalidateAccountPaths(accountId)
+    return { success: true, item, historyEvent }
+  }
 }
 
 export async function removeAccountInventoryItem(itemId: string) {
@@ -406,5 +470,16 @@ export async function removeAccountInventoryItem(itemId: string) {
   })
 
   revalidateAccountPaths(existingItem.accountId)
-  return { success: true }
+  const historyEvent: AccountInventoryHistoryEvent = {
+    id: `${existingItem.id}-removed-${Date.now()}`,
+    kind: 'account_inventory_removed',
+    title: 'Inventory item removed',
+    createdAt: new Date(),
+    productId: existingItem.productId,
+    productName: existingItem.productName,
+    deltaCases: -Number(existingItem.casesOnHand ?? '0'),
+    deltaBottles: -Number(existingItem.bottlesOnHand ?? '0'),
+  }
+
+  return { success: true, removedItemId: existingItem.id, historyEvent }
 }

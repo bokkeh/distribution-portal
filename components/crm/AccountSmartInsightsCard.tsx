@@ -23,7 +23,9 @@ export function AccountSmartInsightsCard({ insights }: { insights: SmartInsights
                 <Sparkles className="h-4 w-4 text-blue-600" />
                 Smart Insights
               </CardTitle>
-              <Badge variant="info">AI-powered</Badge>
+              <Badge variant={insights.usedAi ? 'info' : 'secondary'}>
+                {insights.usedAi ? 'AI-powered' : 'Rule-based'}
+              </Badge>
             </div>
             <p className="mt-1 text-sm text-slate-600">{insights.freshnessNote}</p>
           </div>
