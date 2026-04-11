@@ -26,6 +26,7 @@ import { AccountInventoryOnHandCard } from '@/components/crm/AccountInventoryOnH
 import { AccountInventorySummaryCard } from '@/components/crm/AccountInventorySummaryCard'
 import { AccountMapCard } from '@/components/crm/AccountMapCard'
 import { AccountMediaGalleryCard } from '@/components/crm/AccountMediaGalleryCard'
+import { AccountMediaInsightsCard } from '@/components/crm/AccountMediaInsightsCard'
 import { AccountMediaUploadCard } from '@/components/crm/AccountMediaUploadCard'
 import { AccountNotesCard } from '@/components/crm/AccountNotesCard'
 import { AccountRecordTabs } from '@/components/crm/AccountRecordTabs'
@@ -149,6 +150,7 @@ export async function AccountRecordPage({
   const createOrderHref = getCreateOrderPath(mode, account.id)
   const invoicingIndexHref = getInvoicingIndexPath(mode)
   const canUploadAccountMedia = currentUserRoles.some((role) => ['admin', 'sales_rep', 'sales_manager'].includes(role))
+  const canUseMediaInsights = currentUserRoles.some((role) => ['admin', 'staff', 'sales_rep', 'sales_manager'].includes(role))
 
   const quickActions = [
     ...(createOrderHref ? [{ label: 'Create Order', href: createOrderHref, icon: Plus }] : []),
@@ -695,6 +697,7 @@ export async function AccountRecordPage({
       {tab === 'media' && mediaData ? (
         <div className="space-y-6">
           {canUploadAccountMedia ? <AccountMediaUploadCard accountId={account.id} /> : null}
+          {canUseMediaInsights ? <AccountMediaInsightsCard accountId={account.id} /> : null}
           <AccountMediaGalleryCard items={mediaData} title="Account Media" />
         </div>
       ) : null}
