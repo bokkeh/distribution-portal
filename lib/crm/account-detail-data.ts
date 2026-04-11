@@ -2,6 +2,7 @@ import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { db } from '@/db'
 import {
   accountInventoryOnHand,
+  accountMedia,
   accountNotes,
   activityEvents,
   customerAccounts,
@@ -73,6 +74,18 @@ export type AccountActivityItem = {
 }
 
 export type AccountMediaFeedItem = AccountMediaItem
+
+function formatAccountMediaCategory(category: string) {
+  return category
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
+
+function resolveAccountMediaUrl(url: string) {
+  if (url.startsWith('/api/image?') || url.startsWith('/api/photo?')) return url
+  return signedPhotoUrl(url) ?? url
+}
 
 function isMissingTable(error: unknown, tableName: string) {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
@@ -434,6 +447,43 @@ export async function getAccountActivityFeed(accountId: string, mode: 'admin' | 
 
 export async function getAccountMediaFeed(accountId: string, accountPhones: string[], mode: 'admin' | 'staff' | 'sales', limit?: number) {
   const items: AccountMediaFeedItem[] = []
+
+  try {
+    const accountUploadRows = await db
+      .select({
+        id: accountMedia.id,
+        mediaUrl: accountMedia.mediaUrl,
+        category: accountMedia.category,
+        caption: accountMedia.caption,
+        taggedDate: accountMedia.taggedDate,
+        uploadedByName: users.name,
+      })
+      .from(accountMedia)
+      .leftJoin(users, eq(accountMedia.uploadedByUserId, users.id))
+      .where(eq(accountMedia.accountId, accountId))
+      .orderBy(desc(accountMedia.taggedDate), desc(accountMedia.createdAt))
+
+    for (const row of accountUploadRows) {
+      const safeUrl = resolveAccountMediaUrl(row.mediaUrl)
+      if (!safeUrl) continue
+
+      items.push({
+        id: `account-upload-${row.id}`,
+        url: safeUrl,
+        thumbnailUrl: safeUrl,
+        label: formatAccountMediaCategory(row.category),
+        sourceType: 'account_upload',
+        sourceLabel: row.uploadedByName ? `Account upload • ${row.uploadedByName}` : 'Account upload',
+        caption: row.caption,
+        createdAt: row.taggedDate,
+        relatedHref: null,
+      })
+    }
+  } catch (error) {
+    if (!isMissingTable(error, 'account_media')) {
+      console.error('Failed to load account-uploaded media:', error)
+    }
+  }
 
   try {
     const deliveryRows = await db

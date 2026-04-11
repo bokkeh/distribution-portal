@@ -3,12 +3,14 @@
 import { and, eq, sql } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { db } from '@/db'
-import { accountInventoryOnHand, accountNotes, customerAccounts, products } from '@/db/schema'
+import { accountInventoryOnHand, accountMedia, accountNotes, customerAccounts, products, salesMembers } from '@/db/schema'
 import { requireRole } from '@/lib/auth/session'
 import { logActivityEvent } from '@/lib/activity/log'
 import type { AccountInventoryHistoryEvent, AccountInventoryItem } from '@/lib/crm/account-detail-data'
 
 const INTERNAL_ACCOUNT_ROLES = ['admin', 'staff', 'driver', 'taster', 'sales_rep', 'sales_manager'] as const
+const ACCOUNT_MEDIA_UPLOAD_ROLES = ['admin', 'sales_rep', 'sales_manager'] as const
+const ACCOUNT_MEDIA_CATEGORIES = new Set(['tasting', 'store_visit', 'delivery', 'customers', 'employees', 'events'])
 
 function normalizeWhitespace(value: FormDataEntryValue | null) {
   return typeof value === 'string' ? value.trim() : ''
@@ -32,6 +34,45 @@ function getErrorText(error: unknown) {
 function isMissingInventoryColumn(error: unknown) {
   const message = getErrorText(error)
   return message.includes('account_inventory_on_hand') && message.includes('column')
+}
+
+function isMissingTable(error: unknown, tableName: string) {
+  const message = getErrorText(error)
+  return message.includes(tableName.toLowerCase()) && message.includes('does not exist')
+}
+
+async function requireAccountMediaUploadAccess(accountId: string) {
+  const session = await requireRole(...ACCOUNT_MEDIA_UPLOAD_ROLES)
+  const roles = new Set((session.user.roles ?? [session.user.role]).filter(Boolean) as string[])
+  const canManageAny = roles.has('admin') || roles.has('sales_manager')
+
+  const [account] = await db
+    .select({
+      id: customerAccounts.id,
+      companyName: customerAccounts.companyName,
+      assignedSalesRepId: customerAccounts.assignedSalesRepId,
+    })
+    .from(customerAccounts)
+    .where(eq(customerAccounts.id, accountId))
+    .limit(1)
+
+  if (!account) {
+    throw new Error('Account not found.')
+  }
+
+  if (!canManageAny) {
+    const [member] = await db
+      .select({ id: salesMembers.id })
+      .from(salesMembers)
+      .where(eq(salesMembers.userId, session.user.id))
+      .limit(1)
+
+    if (!member || account.assignedSalesRepId !== member.id) {
+      throw new Error('You are not assigned to this account.')
+    }
+  }
+
+  return { session, account }
 }
 
 async function getInventoryOnHandColumns() {
@@ -482,4 +523,64 @@ export async function removeAccountInventoryItem(itemId: string) {
   }
 
   return { success: true, removedItemId: existingItem.id, historyEvent }
+}
+
+export async function addAccountMedia(formData: FormData) {
+  try {
+    const accountId = normalizeWhitespace(formData.get('accountId'))
+    const mediaUrl = normalizeWhitespace(formData.get('mediaUrl'))
+    const mediaType = normalizeWhitespace(formData.get('mediaType')) || 'image'
+    const category = normalizeWhitespace(formData.get('category')) || 'store_visit'
+    const taggedDateInput = normalizeWhitespace(formData.get('taggedDate'))
+    const caption = normalizeWhitespace(formData.get('caption')) || null
+
+    if (!accountId) return { error: 'Account is required.' }
+    if (!mediaUrl) return { error: 'Media upload is required.' }
+    if (!ACCOUNT_MEDIA_CATEGORIES.has(category)) return { error: 'Choose a valid media category.' }
+    if (!taggedDateInput) return { error: 'Choose a tagged date.' }
+
+    const taggedDate = new Date(`${taggedDateInput}T12:00:00.000Z`)
+    if (Number.isNaN(taggedDate.getTime())) {
+      return { error: 'Tagged date is invalid.' }
+    }
+
+    const { session, account } = await requireAccountMediaUploadAccess(accountId)
+
+    try {
+      await db.insert(accountMedia).values({
+        accountId,
+        mediaUrl,
+        mediaType,
+        category,
+        taggedDate,
+        caption,
+        uploadedByUserId: session.user.id,
+      })
+    } catch (error) {
+      if (isMissingTable(error, 'account_media')) {
+        return { error: 'Account media storage is not enabled yet. Run npm run db:push, then try again.' }
+      }
+      throw error
+    }
+
+    await logActivityEvent({
+      entityType: 'account',
+      entityId: accountId,
+      actorUserId: session.user.id,
+      kind: 'account_media_added',
+      title: 'Account media added',
+      body: `${account.companyName} received a new ${category.replaceAll('_', ' ')} media upload.`,
+      metadata: {
+        mediaType,
+        category,
+        taggedDate: taggedDate.toISOString(),
+        caption,
+      },
+    })
+
+    revalidateAccountPaths(accountId)
+    return { success: true }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to save media.' }
+  }
 }

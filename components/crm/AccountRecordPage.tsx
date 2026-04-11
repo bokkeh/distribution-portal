@@ -26,6 +26,7 @@ import { AccountInventoryOnHandCard } from '@/components/crm/AccountInventoryOnH
 import { AccountInventorySummaryCard } from '@/components/crm/AccountInventorySummaryCard'
 import { AccountMapCard } from '@/components/crm/AccountMapCard'
 import { AccountMediaGalleryCard } from '@/components/crm/AccountMediaGalleryCard'
+import { AccountMediaUploadCard } from '@/components/crm/AccountMediaUploadCard'
 import { AccountNotesCard } from '@/components/crm/AccountNotesCard'
 import { AccountRecordTabs } from '@/components/crm/AccountRecordTabs'
 import { AccountSmartInsightsCard } from '@/components/crm/AccountSmartInsightsCard'
@@ -147,6 +148,7 @@ export async function AccountRecordPage({
   const accountPhones = getAccountPhonesForInboxMatch(account.phone, account.businessPhone, account.pocPhone)
   const createOrderHref = getCreateOrderPath(mode, account.id)
   const invoicingIndexHref = getInvoicingIndexPath(mode)
+  const canUploadAccountMedia = currentUserRoles.some((role) => ['admin', 'sales_rep', 'sales_manager'].includes(role))
 
   const quickActions = [
     ...(createOrderHref ? [{ label: 'Create Order', href: createOrderHref, icon: Plus }] : []),
@@ -691,7 +693,10 @@ export async function AccountRecordPage({
       ) : null}
 
       {tab === 'media' && mediaData ? (
-        <AccountMediaGalleryCard items={mediaData} title="Account Media" />
+        <div className="space-y-6">
+          {canUploadAccountMedia ? <AccountMediaUploadCard accountId={account.id} /> : null}
+          <AccountMediaGalleryCard items={mediaData} title="Account Media" />
+        </div>
       ) : null}
 
       {tab === 'settings' ? (
