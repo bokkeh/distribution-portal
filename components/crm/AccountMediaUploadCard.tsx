@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { DragEvent, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { ImagePlus, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -25,8 +25,10 @@ function todayValue() {
 
 export function AccountMediaUploadCard({ accountId }: { accountId: string }) {
   const router = useRouter()
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [isPending, startTransition] = useTransition()
   const [uploading, setUploading] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
   const [mediaUrl, setMediaUrl] = useState('')
   const [caption, setCaption] = useState('')
   const [category, setCategory] = useState<(typeof ACCOUNT_MEDIA_CATEGORY_OPTIONS)[number]['value']>('store_visit')
@@ -66,6 +68,32 @@ export function AccountMediaUploadCard({ accountId }: { accountId: string }) {
       toast.error('Upload failed', { description: error instanceof Error ? error.message : undefined })
     } finally {
       setUploading(false)
+    }
+  }
+
+  function handleDragOver(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault()
+    if (!uploading && !isPending) {
+      setIsDragging(true)
+    }
+  }
+
+  function handleDragLeave(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault()
+    const relatedTarget = event.relatedTarget as Node | null
+    if (!relatedTarget || !event.currentTarget.contains(relatedTarget)) {
+      setIsDragging(false)
+    }
+  }
+
+  function handleDrop(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault()
+    setIsDragging(false)
+    if (uploading || isPending) return
+
+    const file = event.dataTransfer.files?.[0]
+    if (file) {
+      void handleFileSelect(file)
     }
   }
 
@@ -109,15 +137,30 @@ export function AccountMediaUploadCard({ accountId }: { accountId: string }) {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-          <label className="block cursor-pointer">
-            <span className="flex min-h-40 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-center transition-colors hover:border-blue-400 hover:bg-blue-50">
+          <label
+            className="block cursor-pointer"
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            <span
+              className={`flex min-h-40 flex-col items-center justify-center rounded-2xl border-2 border-dashed px-4 py-4 text-center transition-colors ${
+                isDragging
+                  ? 'border-blue-500 bg-blue-50'
+                  : 'border-slate-300 bg-slate-50 hover:border-blue-400 hover:bg-blue-50'
+              }`}
+            >
               {uploading ? <Loader2 className="mb-2 h-6 w-6 animate-spin text-slate-500" /> : <ImagePlus className="mb-2 h-6 w-6 text-slate-500" />}
               <span className="text-sm font-semibold text-slate-900">
                 {mediaUrl ? 'Replace uploaded image' : 'Upload image'}
               </span>
-              <span className="mt-1 text-xs text-slate-500">JPG, PNG, or WEBP up to 10MB</span>
+              <span className="mt-1 text-xs text-slate-500">
+                {isDragging ? 'Drop image here' : 'Drag and drop or click to upload'}
+              </span>
+              <span className="mt-1 text-xs text-slate-400">JPG, PNG, or WEBP up to 10MB</span>
             </span>
             <input
+              ref={fileInputRef}
               type="file"
               accept="image/jpeg,image/png,image/webp"
               className="hidden"
@@ -125,6 +168,7 @@ export function AccountMediaUploadCard({ accountId }: { accountId: string }) {
               onChange={(event) => {
                 const file = event.target.files?.[0]
                 if (file) void handleFileSelect(file)
+                event.currentTarget.value = ''
               }}
             />
           </label>
