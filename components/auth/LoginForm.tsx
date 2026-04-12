@@ -40,6 +40,7 @@ export function LoginForm({ onSuccess }: Props) {
   const searchParams = useSearchParams()
   const defaultEmail = searchParams.get('email') ?? ''
   const fromTasterSignup = searchParams.get('from') === 'taster-signup'
+  const fromSalesRepSignup = searchParams.get('from') === 'sales-rep-signup'
   const [mode, setMode] = useState<'signin' | 'create'>(fromTasterSignup ? 'signin' : 'signin')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -160,10 +161,14 @@ export function LoginForm({ onSuccess }: Props) {
         </p>
       </div>
 
-      {fromTasterSignup ? (
+      {fromTasterSignup || fromSalesRepSignup ? (
         <div className="flex items-start gap-2.5 rounded-lg border border-green-200 bg-green-50 px-3.5 py-3 text-sm text-green-800">
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
-          <span>Account created! Sign in below to access your taster portal.</span>
+          <span>
+            {fromSalesRepSignup
+              ? 'Sales rep account created. Sign in below to access your sales portal.'
+              : 'Account created! Sign in below to access your taster portal.'}
+          </span>
         </div>
       ) : (
         <div className="inline-flex w-full rounded-lg border border-slate-200 bg-slate-50 p-1">

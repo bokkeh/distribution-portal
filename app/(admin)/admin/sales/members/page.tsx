@@ -45,12 +45,17 @@ export default async function SalesMembersPage() {
           <h1 className="text-2xl font-bold text-slate-900">Sales Team Members</h1>
           <p className="text-slate-500 mt-1">{members.length} members</p>
         </div>
-        <Link href="/admin/sales/members/new">
-          <Button>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Member
-          </Button>
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link href="/admin/sales/members/invite">
+            <Button variant="outline">Invite Sales Rep</Button>
+          </Link>
+          <Link href="/admin/sales/members/new">
+            <Button>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Member
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {members.length === 0 ? (

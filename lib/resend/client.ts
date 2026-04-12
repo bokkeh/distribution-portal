@@ -673,6 +673,44 @@ export async function sendWholesalerApprovalEmail({
   })
 }
 
+export async function sendSalesRepInviteEmail({
+  to,
+  invitedName,
+  senderName,
+  inviteUrl,
+  expiresAt,
+}: {
+  to: string
+  invitedName?: string | null
+  senderName: string
+  inviteUrl: string
+  expiresAt: Date
+}): Promise<void> {
+  const expiresLabel = expiresAt.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+
+  await sendEmail({
+    to,
+    recipientName: invitedName ?? to,
+    subject: 'Create your AHAWC sales rep account',
+    html: renderEmailCard({
+      eyebrow: 'Sales Invite',
+      title: `You're invited to join AHAWC sales`,
+      intro: `${escapeHtml(senderName)} invited you to create your AHAWC sales rep portal account.`,
+      body: `
+        <p style="margin: 0 0 14px;">Use the button below to set your password and finish creating your sales rep account.</p>
+        <p style="margin: 0 0 10px;"><strong>Email:</strong> ${escapeHtml(to)}</p>
+        <p style="margin: 0;"><strong>Invite expires:</strong> ${escapeHtml(expiresLabel)}</p>
+      `,
+      ctaLabel: 'Create Sales Rep Account',
+      ctaHref: inviteUrl,
+    }),
+  })
+}
+
 export async function sendTasterInvoiceNotification({
   payeeName,
   payeeEmail,
