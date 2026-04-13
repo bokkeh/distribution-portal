@@ -3,7 +3,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Building2, Map, User, LogOut, DollarSign, Wine, TrendingUp, Menu, X } from 'lucide-react'
+import { LayoutDashboard, Building2, Map, User, LogOut, DollarSign, Wine, TrendingUp, Menu, X, Star } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { signOut } from 'next-auth/react'
 import { useState, useEffect } from 'react'
@@ -15,6 +15,7 @@ const navItems = [
   { href: '/sales/accounts', label: 'My Accounts', icon: Building2 },
   { href: '/sales/routes', label: 'Routes', icon: Map },
   { href: '/sales/tastings', label: 'Tastings', icon: Wine },
+  { href: '/sales/promotion-catalog', label: 'Promotion Catalog', icon: Star },
   { href: '/sales/forecast', label: 'Forecast', icon: TrendingUp },
   { href: '/sales/commissions', label: 'Commissions', icon: DollarSign },
   { href: '/sales/profile', label: 'Profile', icon: User },

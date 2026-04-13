@@ -17,18 +17,19 @@ export const ALL_FEATURES = [
   { key: 'invoices', label: 'Invoices' },
   { key: 'map', label: 'Map' },
   { key: 'sales', label: 'Sales Dashboard' },
+  { key: 'promotions', label: 'Promotion Catalog' },
 ] as const
 
 export type FeatureKey = typeof ALL_FEATURES[number]['key']
 
 const ROLE_DEFAULTS: Record<string, FeatureKey[]> = {
-  admin: ['dashboard', 'invoicing', 'accounting', 'crm', 'inbox', 'wholesale_requests', 'orders', 'inventory', 'users', 'deliveries', 'drivers', 'profile', 'tastings'],
-  staff: ['dashboard', 'invoicing', 'crm', 'inbox', 'orders', 'inventory', 'profile', 'tastings'],
+  admin: ['dashboard', 'invoicing', 'accounting', 'crm', 'inbox', 'wholesale_requests', 'orders', 'inventory', 'users', 'deliveries', 'drivers', 'profile', 'tastings', 'promotions'],
+  staff: ['dashboard', 'invoicing', 'crm', 'inbox', 'orders', 'inventory', 'profile', 'tastings', 'promotions'],
   driver: ['deliveries', 'map', 'profile'],
-  customer: ['dashboard', 'products', 'orders', 'cart', 'invoices', 'profile'],
+  customer: ['dashboard', 'products', 'orders', 'cart', 'invoices', 'profile', 'promotions'],
   taster: ['tastings', 'profile'],
-  sales_rep: ['sales', 'profile'],
-  sales_manager: ['sales', 'profile', 'crm'],
+  sales_rep: ['sales', 'profile', 'promotions'],
+  sales_manager: ['sales', 'profile', 'crm', 'promotions'],
 }
 
 export function getDefaultFeaturesForRoles(roles: string[]) {

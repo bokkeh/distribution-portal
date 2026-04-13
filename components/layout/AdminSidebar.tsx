@@ -78,6 +78,7 @@ const navSections = [
       { href: '/admin/sales/members', label: 'Members', icon: UserCheck, feature: 'dashboard' },
       { href: '/admin/sales/regions', label: 'Regions', icon: Globe, feature: 'dashboard' },
       { href: '/admin/sales/commissions', label: 'Commissions', icon: DollarSign, feature: 'dashboard' },
+      { href: '/admin/sales/promotion-catalog', label: 'Promotion Catalog', icon: Star, feature: 'promotions' },
     ],
   },
   {

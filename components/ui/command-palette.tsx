@@ -41,6 +41,7 @@ const NAV_ITEMS = [
   { label: 'Sales Members', href: '/admin/sales/members', icon: UserCheck, section: 'Navigation' },
   { label: 'Sales Regions', href: '/admin/sales/regions', icon: Globe, section: 'Navigation' },
   { label: 'Commissions', href: '/admin/sales/commissions', icon: DollarSign, section: 'Navigation' },
+  { label: 'Promotion Catalog', href: '/admin/sales/promotion-catalog', icon: Star, section: 'Navigation' },
   { label: 'User Management', href: '/admin/users', icon: Users, section: 'Navigation' },
   { label: 'Automations', href: '/admin/automations', icon: Workflow, section: 'Navigation' },
   { label: 'System Health', href: '/admin/system', icon: HeartPulse, section: 'Navigation' },

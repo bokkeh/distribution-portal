@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Package, ShoppingCart, FileText, User, LogOut } from 'lucide-react'
+import { LayoutDashboard, Package, ShoppingCart, FileText, User, LogOut, Star } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { signOut } from 'next-auth/react'
 import { useCart } from '@/hooks/useCart'
@@ -15,6 +15,7 @@ import { NotificationBell } from '@/components/notifications/NotificationBell'
 const navItems = [
   { href: '/customer/dashboard', label: 'Dashboard', icon: LayoutDashboard, feature: 'dashboard' },
   { href: '/customer/products', label: 'Products', icon: Package, feature: 'products' },
+  { href: '/customer/promotion-catalog', label: 'Promotion Catalog', icon: Star, feature: 'promotions' },
   { href: '/customer/orders', label: 'My Orders', icon: ShoppingCart, feature: 'orders' },
   { href: '/customer/invoices', label: 'Invoices', icon: FileText, feature: 'invoices' },
   { href: '/customer/profile', label: 'Profile', icon: User, feature: 'profile' },
