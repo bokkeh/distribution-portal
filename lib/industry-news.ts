@@ -12,6 +12,7 @@ export type IndustryNewsItem = {
   summary: string
   sourceName: string
   sourceUrl: string
+  thumbnailUrl: string
   publishedAt: string
   category:
     | 'breaking_news'
@@ -32,6 +33,13 @@ export type IndustryNewsItem = {
   isMarylandRelevant?: boolean
 }
 
+export type IndustryNewsPreview = {
+  title: string
+  body: string
+  href: string
+  imageUrl: string
+}
+
 const INDUSTRY_NEWS_ITEMS: IndustryNewsItem[] = [
   {
     id: 'wisher-premium-vodka-positioning',
@@ -40,6 +48,7 @@ const INDUSTRY_NEWS_ITEMS: IndustryNewsItem[] = [
       'Retail buyers are leaning into premium shelf sets that pair a clear founder story with local activation support and high-visibility signage.',
     sourceName: 'Market Watch Magazine',
     sourceUrl: 'https://www.marketwatchmag.com/',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?auto=format&fit=crop&w=1200&q=80',
     publishedAt: '2026-04-13',
     category: 'trend_report',
     priority: 'high',
@@ -58,6 +67,7 @@ const INDUSTRY_NEWS_ITEMS: IndustryNewsItem[] = [
       'Regional bar programs are favoring lighter, premium vodka serves with simpler ingredient decks and higher-margin upsell potential.',
     sourceName: 'Cheers Magazine',
     sourceUrl: 'https://www.cheersonline.com/',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=1200&q=80',
     publishedAt: '2026-04-12',
     category: 'on_premise_insight',
     priority: 'medium',
@@ -76,6 +86,7 @@ const INDUSTRY_NEWS_ITEMS: IndustryNewsItem[] = [
       'Trade reporting continues to show tighter expectations around proof of performance, especially for emerging spirit brands.',
     sourceName: 'Shanken News Daily',
     sourceUrl: 'https://www.shankennewsdaily.com/',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1556740749-887f6717d7e4?auto=format&fit=crop&w=1200&q=80',
     publishedAt: '2026-04-11',
     category: 'breaking_news',
     priority: 'high',
@@ -93,6 +104,7 @@ const INDUSTRY_NEWS_ITEMS: IndustryNewsItem[] = [
       'Buyers continue entering the category through convenience-led RTD purchases, then moving into premium base spirits if merchandising is strong.',
     sourceName: 'BevNET',
     sourceUrl: 'https://www.bevnet.com/',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1544145945-f90425340c7e?auto=format&fit=crop&w=1200&q=80',
     publishedAt: '2026-04-10',
     category: 'consumer_report',
     priority: 'medium',
@@ -110,6 +122,7 @@ const INDUSTRY_NEWS_ITEMS: IndustryNewsItem[] = [
       'Field teams that combine tasting notes with same-day shelf photos and placement feedback are improving close-the-loop sell-through.',
     sourceName: 'SevenFifty Daily',
     sourceUrl: 'https://daily.sevenfifty.com/',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1567696911980-2c5c0cf6cbd4?auto=format&fit=crop&w=1200&q=80',
     publishedAt: '2026-04-09',
     category: 'trend_report',
     priority: 'medium',
@@ -127,6 +140,7 @@ const INDUSTRY_NEWS_ITEMS: IndustryNewsItem[] = [
       'Operations coverage points to increased route risk from regional congestion and weather volatility across several Mid-Atlantic corridors.',
     sourceName: 'The Beverage Journal',
     sourceUrl: 'https://www.thebeveragejournal.com/',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1473448912268-2022ce9509d8?auto=format&fit=crop&w=1200&q=80',
     publishedAt: '2026-04-14',
     category: 'operations_alert',
     priority: 'high',
@@ -145,6 +159,7 @@ const INDUSTRY_NEWS_ITEMS: IndustryNewsItem[] = [
       'Retail coverage shows more store owners expecting signage, shelf talkers, and display creativity before committing to a bigger reset.',
     sourceName: 'Beverage Dynamics',
     sourceUrl: 'https://beveragedynamics.com/',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?auto=format&fit=crop&w=1200&q=80',
     publishedAt: '2026-04-08',
     category: 'retail_insight',
     priority: 'medium',
@@ -162,6 +177,7 @@ const INDUSTRY_NEWS_ITEMS: IndustryNewsItem[] = [
       'On-premise operators are responding better to spirits with a clear origin story and concise tasting notes rather than novelty-heavy positioning.',
     sourceName: 'Chilled Magazine',
     sourceUrl: 'https://chilledmagazine.com/',
+    thumbnailUrl: 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=1200&q=80',
     publishedAt: '2026-04-07',
     category: 'consumer_report',
     priority: 'low',
@@ -195,4 +211,45 @@ export function getIndustryNewsSections(audience: IndustryNewsAudience) {
     ahawcRelevant: stories.filter(item => item.isAHAWCRelevant || item.isMarylandRelevant).slice(0, 4),
     trendReports: stories.filter(item => item.category === 'trend_report' || item.category === 'consumer_report').slice(0, 4),
   }
+}
+
+const audienceHref: Record<IndustryNewsAudience, string> = {
+  admin: '/admin/news',
+  staff: '/staff/news',
+  sales: '/sales/news',
+  taster: '/taster/news',
+  driver: '/driver/news',
+  customer: '/customer/news',
+}
+
+export function getIndustryNewsNotificationPreview(
+  item: IndustryNewsItem,
+  audience: IndustryNewsAudience
+): IndustryNewsPreview {
+  return {
+    title: item.title,
+    body: item.summary,
+    href: audienceHref[audience],
+    imageUrl: item.thumbnailUrl,
+  }
+}
+
+export function getIndustryNewsEmailCardHtml(item: IndustryNewsItem) {
+  return `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; margin: 0 0 16px;">
+      <tr>
+        <td style="padding: 0;">
+          <img src="${item.thumbnailUrl}" alt="${item.title}" style="display: block; width: 100%; height: auto; max-height: 220px; object-fit: cover;" />
+        </td>
+      </tr>
+      <tr>
+        <td style="padding: 16px;">
+          <p style="margin: 0 0 8px; font-size: 12px; color: #64748b;">${item.sourceName} • ${item.publishedAt}</p>
+          <p style="margin: 0 0 10px; font-size: 18px; font-weight: 700; color: #0f172a;">${item.title}</p>
+          <p style="margin: 0 0 12px; font-size: 14px; color: #475569;">${item.summary}</p>
+          <p style="margin: 0; font-size: 13px; color: #0f172a;"><strong>Why it matters:</strong> ${item.whyItMatters}</p>
+        </td>
+      </tr>
+    </table>
+  `.trim()
 }

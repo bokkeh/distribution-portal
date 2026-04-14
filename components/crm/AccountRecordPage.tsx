@@ -1,7 +1,7 @@
-import Link from 'next/link'
+﻿import Link from 'next/link'
 import { and, asc, count, desc, eq, inArray } from 'drizzle-orm'
 import { db } from '@/db'
-import { contacts, deliveries, deliveryStops, invoices, orders, salesMembers, salesRegions, smsMessages, tastings, users } from '@/db/schema'
+import { contacts, deliveries, deliveryStops, invoices, orders, salesMembers, salesRegions, smsMessages, tastingReports, tastings, users } from '@/db/schema'
 import { syncToHubSpot } from '@/actions/crm'
 import { getCRMAccountDetail } from '@/lib/crm/account-read'
 import {
@@ -74,6 +74,22 @@ function getCreateOrderPath(mode: AccountRecordMode, accountId: string) {
 
 function getOrderDetailPath(mode: AccountRecordMode, orderId: string) {
   return mode === 'sales' ? null : `/${mode}/orders/${orderId}`
+}
+
+function getDeliveryReportPath(mode: AccountRecordMode, deliveryId: string) {
+  return mode === 'admin' ? `/admin/deliveries/${deliveryId}` : null
+}
+
+function getTastingReportPath(mode: AccountRecordMode, tastingId: string) {
+  if (mode === 'admin') return `/admin/tastings/${tastingId}`
+  if (mode === 'staff') return '/staff/tastings/reports'
+  return '/sales/tastings'
+}
+
+function getTastingReportLinkLabel(mode: AccountRecordMode, hasReport: boolean) {
+  if (mode === 'admin') return hasReport ? 'View report' : 'Open tasting'
+  if (mode === 'staff') return 'Open reports'
+  return 'Open tastings'
 }
 
 function getInvoicingIndexPath(mode: AccountRecordMode) {
@@ -170,9 +186,9 @@ export async function AccountRecordPage({
         recentOrders: Array<{ id: string; status: string; total: string; createdAt: Date }>
         recentInvoices: Array<{ id: string; invoiceNumber: string; dueDate: string | null; total: string; status: string }>
         orderCount: { total: number }
-        recentDeliveries: Array<{ deliveryId: string; status: string; weekStartDate: string; stopStatus: string; completedAt: Date | null }>
+        recentDeliveries: Array<{ deliveryId: string; status: string; weekStartDate: string; stopStatus: string; completedAt: Date | null; proofOfDeliveryUrl: string | null; shelfPhotoUrl: string | null }>
         recentTexts: Array<{ id: string; direction: string; body: string; createdAt: Date; phoneNumber: string }>
-        recentTastings: Array<{ id: string; eventName: string; status: string; scheduledAt: Date; endAt: Date | null }>
+        recentTastings: Array<{ id: string; eventName: string; status: string; scheduledAt: Date; endAt: Date | null; reportSubmittedAt: Date | null }>
         notes: Awaited<ReturnType<typeof getAccountNotes>>
         inventoryItems: Awaited<ReturnType<typeof getAccountInventoryOnHand>>
         activityItems: Awaited<ReturnType<typeof getAccountActivityFeed>>
@@ -185,8 +201,8 @@ export async function AccountRecordPage({
     | {
         recentOrders: Array<{ id: string; status: string; total: string; createdAt: Date }>
         recentInvoices: Array<{ id: string; invoiceNumber: string; dueDate: string | null; total: string; status: string }>
-        recentDeliveries: Array<{ deliveryId: string; status: string; weekStartDate: string; stopStatus: string; completedAt: Date | null }>
-        recentTastings: Array<{ id: string; eventName: string; status: string; scheduledAt: Date; endAt: Date | null }>
+        recentDeliveries: Array<{ deliveryId: string; status: string; weekStartDate: string; stopStatus: string; completedAt: Date | null; proofOfDeliveryUrl: string | null; shelfPhotoUrl: string | null }>
+        recentTastings: Array<{ id: string; eventName: string; status: string; scheduledAt: Date; endAt: Date | null; reportSubmittedAt: Date | null }>
       }
     | null = null
 
@@ -256,6 +272,8 @@ export async function AccountRecordPage({
         weekStartDate: deliveries.weekStartDate,
         stopStatus: deliveryStops.status,
         completedAt: deliveryStops.completedAt,
+        proofOfDeliveryUrl: deliveryStops.proofOfDeliveryUrl,
+        shelfPhotoUrl: deliveryStops.shelfPhotoUrl,
       }).from(deliveryStops).innerJoin(deliveries, eq(deliveryStops.deliveryId, deliveries.id)).where(eq(deliveryStops.customerId, accountId)).orderBy(desc(deliveries.createdAt)).limit(6),
       accountPhones.length
         ? db.select({
@@ -272,7 +290,8 @@ export async function AccountRecordPage({
         status: tastings.status,
         scheduledAt: tastings.scheduledAt,
         endAt: tastings.endAt,
-      }).from(tastings).where(eq(tastings.customerId, accountId)).orderBy(desc(tastings.scheduledAt)).limit(6),
+        reportSubmittedAt: tastingReports.submittedAt,
+      }).from(tastings).leftJoin(tastingReports, eq(tastingReports.tastingId, tastings.id)).where(eq(tastings.customerId, accountId)).orderBy(desc(tastings.scheduledAt)).limit(6),
       getAccountNotes(accountId),
       getAccountInventoryOnHand(accountId),
       getAccountActivityFeed(accountId, mode),
@@ -334,6 +353,8 @@ export async function AccountRecordPage({
         weekStartDate: deliveries.weekStartDate,
         stopStatus: deliveryStops.status,
         completedAt: deliveryStops.completedAt,
+        proofOfDeliveryUrl: deliveryStops.proofOfDeliveryUrl,
+        shelfPhotoUrl: deliveryStops.shelfPhotoUrl,
       }).from(deliveryStops).innerJoin(deliveries, eq(deliveryStops.deliveryId, deliveries.id)).where(eq(deliveryStops.customerId, accountId)).orderBy(desc(deliveries.createdAt)).limit(20),
       db.select({
         id: tastings.id,
@@ -341,7 +362,8 @@ export async function AccountRecordPage({
         status: tastings.status,
         scheduledAt: tastings.scheduledAt,
         endAt: tastings.endAt,
-      }).from(tastings).where(eq(tastings.customerId, accountId)).orderBy(desc(tastings.scheduledAt)).limit(20),
+        reportSubmittedAt: tastingReports.submittedAt,
+      }).from(tastings).leftJoin(tastingReports, eq(tastingReports.tastingId, tastings.id)).where(eq(tastings.customerId, accountId)).orderBy(desc(tastings.scheduledAt)).limit(20),
     ])
 
     ordersData = { recentOrders, recentInvoices, recentDeliveries, recentTastings }
@@ -576,32 +598,53 @@ export async function AccountRecordPage({
                     )}
                   </CardContent>
                 </Card>
-
                 <Card>
-                  <CardHeader className="flex flex-row items-center justify-between pb-3"><CardTitle className="flex items-center gap-2"><Truck className="h-4 w-4" />Deliveries</CardTitle><Link href={getTabHref(basePath, 'orders')} className="text-xs font-medium text-blue-600 hover:underline">Open tab</Link></CardHeader>
+                  <CardHeader className="flex flex-row items-center justify-between pb-3"><CardTitle className="flex items-center gap-2"><Truck className="h-4 w-4" />Delivery Reports</CardTitle><Link href={getTabHref(basePath, 'orders')} className="text-xs font-medium text-blue-600 hover:underline">Open tab</Link></CardHeader>
                   <CardContent>
                     {overviewData.recentDeliveries.length === 0 ? <p className="text-sm text-slate-500">No deliveries linked to this account yet.</p> : (
                       <div className="space-y-2">
-                        {overviewData.recentDeliveries.map((delivery) => (
-                          <div key={`${delivery.deliveryId}-${String(delivery.completedAt ?? delivery.weekStartDate)}`} className="flex items-center justify-between rounded-xl border border-slate-100 px-3 py-3">
-                            <div><p className="text-sm font-medium text-slate-900">Delivery {String(delivery.deliveryId).slice(-8).toUpperCase()}</p><p className="text-xs text-muted-foreground">{String(delivery.weekStartDate)} • Stop {delivery.stopStatus}</p></div>
-                            <Badge variant="secondary">{delivery.status}</Badge>
-                          </div>
-                        ))}
+                        {overviewData.recentDeliveries.map((delivery) => {
+                          const deliveryHref = getDeliveryReportPath(mode, delivery.deliveryId)
+                          const hasReportMedia = Boolean(delivery.proofOfDeliveryUrl || delivery.shelfPhotoUrl)
+                          return (
+                            <div key={`${delivery.deliveryId}-${String(delivery.completedAt ?? delivery.weekStartDate)}`} className="rounded-xl border border-slate-100 px-3 py-3">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="text-sm font-medium text-slate-900">Delivery {String(delivery.deliveryId).slice(-8).toUpperCase()}</p>
+                                  <p className="text-xs text-muted-foreground">{String(delivery.weekStartDate)}  -  Stop {delivery.stopStatus}</p>
+                                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                                    <Badge variant={hasReportMedia ? 'success' : 'secondary'} className="text-xs">{hasReportMedia ? 'Report media on file' : 'No media attached'}</Badge>
+                                    <Badge variant="secondary" className="text-xs">{delivery.status}</Badge>
+                                  </div>
+                                </div>
+                                {deliveryHref ? <Link href={deliveryHref} className="text-xs font-medium text-blue-600 hover:underline">View delivery</Link> : null}
+                              </div>
+                            </div>
+                          )
+                        })}
                       </div>
                     )}
                   </CardContent>
                 </Card>
 
                 <Card>
-                  <CardHeader className="flex flex-row items-center justify-between pb-3"><CardTitle className="flex items-center gap-2"><CalendarDays className="h-4 w-4" />Tastings</CardTitle><Link href={getTabHref(basePath, 'orders')} className="text-xs font-medium text-blue-600 hover:underline">Open tab</Link></CardHeader>
+                  <CardHeader className="flex flex-row items-center justify-between pb-3"><CardTitle className="flex items-center gap-2"><CalendarDays className="h-4 w-4" />Taster Reports</CardTitle><Link href={getTabHref(basePath, 'orders')} className="text-xs font-medium text-blue-600 hover:underline">Open tab</Link></CardHeader>
                   <CardContent>
                     {overviewData.recentTastings.length === 0 ? <p className="text-sm text-slate-500">No tastings linked to this account yet.</p> : (
                       <div className="space-y-2">
                         {overviewData.recentTastings.map((tasting) => (
-                          <div key={tasting.id} className="flex items-center justify-between rounded-xl border border-slate-100 px-3 py-3">
-                            <div><p className="text-sm font-medium text-slate-900">{tasting.eventName}</p><p className="text-xs text-muted-foreground" suppressHydrationWarning>{formatDate(tasting.scheduledAt)}</p></div>
-                            <Badge variant="secondary">{tasting.status}</Badge>
+                          <div key={tasting.id} className="rounded-xl border border-slate-100 px-3 py-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-medium text-slate-900">{tasting.eventName}</p>
+                                <p className="text-xs text-muted-foreground" suppressHydrationWarning>{formatDate(tasting.scheduledAt)}</p>
+                                <div className="mt-2 flex flex-wrap items-center gap-2">
+                                  <Badge variant={tasting.reportSubmittedAt ? 'success' : 'warning'} className="text-xs">{tasting.reportSubmittedAt ? 'Report submitted' : 'Report pending'}</Badge>
+                                  <Badge variant="secondary" className="text-xs">{tasting.status}</Badge>
+                                </div>
+                              </div>
+                              <Link href={getTastingReportPath(mode, tasting.id)} className="text-xs font-medium text-blue-600 hover:underline">{getTastingReportLinkLabel(mode, Boolean(tasting.reportSubmittedAt))}</Link>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -650,12 +693,16 @@ export async function AccountRecordPage({
             <CardContent>{ordersData.recentInvoices.length === 0 ? <p className="text-sm text-slate-500">No invoices yet.</p> : <div className="space-y-2">{ordersData.recentInvoices.map((invoice) => <div key={invoice.id} className="flex items-center justify-between rounded-xl border border-slate-100 px-3 py-3"><div><p className="text-sm font-medium">{invoice.invoiceNumber}</p>{invoice.dueDate ? <p className="text-xs text-muted-foreground">Due {formatDate(invoice.dueDate)}</p> : null}</div><div className="text-right"><p className="text-sm font-semibold">{formatCurrency(invoice.total)}</p><Badge variant={invoice.status === 'paid' ? 'success' : invoice.status === 'overdue' ? 'destructive' : invoice.status === 'sent' ? 'info' : 'secondary'} className="text-xs">{invoice.status}</Badge></div></div>)}</div>}</CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-3"><CardTitle>Delivery History</CardTitle></CardHeader>
-            <CardContent>{ordersData.recentDeliveries.length === 0 ? <p className="text-sm text-slate-500">No deliveries linked to this account yet.</p> : <div className="space-y-2">{ordersData.recentDeliveries.map((delivery) => <div key={`${delivery.deliveryId}-${String(delivery.completedAt ?? delivery.weekStartDate)}`} className="flex items-center justify-between rounded-xl border border-slate-100 px-3 py-3"><div><p className="text-sm font-medium text-slate-900">Delivery {String(delivery.deliveryId).slice(-8).toUpperCase()}</p><p className="text-xs text-muted-foreground">{String(delivery.weekStartDate)} • Stop {delivery.stopStatus}</p></div><Badge variant="secondary">{delivery.status}</Badge></div>)}</div>}</CardContent>
+            <CardHeader className="pb-3"><CardTitle>Delivery Reports</CardTitle></CardHeader>
+            <CardContent>{ordersData.recentDeliveries.length === 0 ? <p className="text-sm text-slate-500">No deliveries linked to this account yet.</p> : <div className="space-y-2">{ordersData.recentDeliveries.map((delivery) => {
+              const deliveryHref = getDeliveryReportPath(mode, delivery.deliveryId)
+              const hasReportMedia = Boolean(delivery.proofOfDeliveryUrl || delivery.shelfPhotoUrl)
+              return <div key={`${delivery.deliveryId}-${String(delivery.completedAt ?? delivery.weekStartDate)}`} className="rounded-xl border border-slate-100 px-3 py-3"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-medium text-slate-900">Delivery {String(delivery.deliveryId).slice(-8).toUpperCase()}</p><p className="text-xs text-muted-foreground">{String(delivery.weekStartDate)}  -  Stop {delivery.stopStatus}</p><div className="mt-2 flex flex-wrap items-center gap-2"><Badge variant={hasReportMedia ? 'success' : 'secondary'} className="text-xs">{hasReportMedia ? 'Report media on file' : 'No media attached'}</Badge><Badge variant="secondary" className="text-xs">{delivery.status}</Badge></div></div>{deliveryHref ? <Link href={deliveryHref} className="text-xs font-medium text-blue-600 hover:underline">View delivery</Link> : null}</div></div>
+            })}</div>}</CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-3"><CardTitle>Tastings</CardTitle></CardHeader>
-            <CardContent>{ordersData.recentTastings.length === 0 ? <p className="text-sm text-slate-500">No tastings linked to this account yet.</p> : <div className="space-y-2">{ordersData.recentTastings.map((tasting) => <div key={tasting.id} className="flex items-center justify-between rounded-xl border border-slate-100 px-3 py-3"><div><p className="text-sm font-medium text-slate-900">{tasting.eventName}</p><p className="text-xs text-muted-foreground" suppressHydrationWarning>{formatDate(tasting.scheduledAt)}</p></div><Badge variant="secondary">{tasting.status}</Badge></div>)}</div>}</CardContent>
+            <CardHeader className="pb-3"><CardTitle>Taster Reports</CardTitle></CardHeader>
+            <CardContent>{ordersData.recentTastings.length === 0 ? <p className="text-sm text-slate-500">No tastings linked to this account yet.</p> : <div className="space-y-2">{ordersData.recentTastings.map((tasting) => <div key={tasting.id} className="rounded-xl border border-slate-100 px-3 py-3"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-medium text-slate-900">{tasting.eventName}</p><p className="text-xs text-muted-foreground" suppressHydrationWarning>{formatDate(tasting.scheduledAt)}</p><div className="mt-2 flex flex-wrap items-center gap-2"><Badge variant={tasting.reportSubmittedAt ? 'success' : 'warning'} className="text-xs">{tasting.reportSubmittedAt ? 'Report submitted' : 'Report pending'}</Badge><Badge variant="secondary" className="text-xs">{tasting.status}</Badge></div></div><Link href={getTastingReportPath(mode, tasting.id)} className="text-xs font-medium text-blue-600 hover:underline">{getTastingReportLinkLabel(mode, Boolean(tasting.reportSubmittedAt))}</Link></div></div>)}</div>}</CardContent>
           </Card>
         </div>
       ) : null}
@@ -725,3 +772,7 @@ export async function AccountRecordPage({
     </div>
   )
 }
+
+
+
+

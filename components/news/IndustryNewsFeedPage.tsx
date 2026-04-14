@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import Link from 'next/link'
 import { BellRing, ExternalLink, Newspaper, Sparkles, TrendingUp } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -48,7 +49,17 @@ function StoryList({ stories }: { stories: IndustryNewsItem[] }) {
   return (
     <div className="space-y-3">
       {stories.map(story => (
-        <div key={story.id} className="rounded-2xl border border-slate-200 px-4 py-4">
+        <div key={story.id} className="overflow-hidden rounded-2xl border border-slate-200">
+          <div className="relative h-52 w-full">
+            <Image
+              src={story.thumbnailUrl}
+              alt={story.title}
+              fill
+              className="object-cover"
+              unoptimized
+            />
+          </div>
+          <div className="px-4 py-4">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant={story.priority === 'high' ? 'warning' : story.priority === 'medium' ? 'info' : 'secondary'}>
               {story.priority} priority
@@ -81,6 +92,7 @@ function StoryList({ stories }: { stories: IndustryNewsItem[] }) {
               Open source
               <ExternalLink className="h-3.5 w-3.5" />
             </a>
+          </div>
           </div>
         </div>
       ))}

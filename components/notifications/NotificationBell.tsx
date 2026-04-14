@@ -12,6 +12,7 @@ type NotificationItem = {
   title: string
   body: string
   href: string | null
+  imageUrl?: string | null
   readAt: string | Date | null
   createdAt: string | Date
 }
@@ -354,12 +355,19 @@ export function NotificationBell({
                           }}
                         >
                           <div className="flex items-start justify-between gap-3">
-                            <p className={classes.title}>{item.title}</p>
-                            {!item.readAt ? <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-blue-500" /> : null}
-                          </div>
-                          <p className={classes.body}>{item.body}</p>
-                          {item.href ? <p className="mt-2 text-[11px] font-medium text-blue-500">Open</p> : null}
-                          <p className={classes.meta}>{formatTime(item.createdAt)}</p>
+                          <p className={classes.title}>{item.title}</p>
+                          {!item.readAt ? <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-blue-500" /> : null}
+                        </div>
+                        {item.imageUrl ? (
+                          <img
+                            src={item.imageUrl}
+                            alt={item.title}
+                            className="mt-2 h-28 w-full rounded-lg object-cover"
+                          />
+                        ) : null}
+                        <p className={classes.body}>{item.body}</p>
+                        {item.href ? <p className="mt-2 text-[11px] font-medium text-blue-500">Open</p> : null}
+                        <p className={classes.meta}>{formatTime(item.createdAt)}</p>
                         </Link>
                       )
                     }
@@ -375,6 +383,13 @@ export function NotificationBell({
                           <p className={classes.title}>{item.title}</p>
                           {!item.readAt ? <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-blue-500" /> : null}
                         </div>
+                        {item.imageUrl ? (
+                          <img
+                            src={item.imageUrl}
+                            alt={item.title}
+                            className="mt-2 h-28 w-full rounded-lg object-cover"
+                          />
+                        ) : null}
                         <p className={classes.body}>{item.body}</p>
                         <p className={classes.meta}>{formatTime(item.createdAt)}</p>
                       </button>
