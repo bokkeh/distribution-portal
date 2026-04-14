@@ -20,6 +20,7 @@ import {
 import { getTastingById, getTastingsForViewWithFallback } from '@/lib/tastings/read'
 import { formatEasternDateTime, parseDateTimeInTimeZone } from '@/lib/tastings/time'
 import { logActivityEvent } from '@/lib/activity/log'
+import { getStaffEmailsForNotification } from '@/lib/notifications/recipients'
 import { getUserPreferences } from '@/lib/preferences/read'
 
 function tastingRedirectPath(mode: string) {
@@ -934,6 +935,14 @@ export async function submitTasterInvoice(formData: FormData) {
 
   const hoursWorked = (formData.get('hoursWorked') as string) || '0'
   const expenseAmount = (formData.get('expenseAmount') as string) || '0'
+  const receiptUrls = Array.from(
+    new Set(
+      formData
+        .getAll('receiptUrls')
+        .map((value) => String(value || '').trim())
+        .filter(Boolean),
+    ),
+  )
 
   const [report] = await db
     .select({ id: tastingReports.id })
@@ -964,6 +973,7 @@ export async function submitTasterInvoice(formData: FormData) {
     mileage: '0',
     expenseAmount,
     totalAmount,
+    receiptUrls,
     notes: ((formData.get('notes') as string) || '').trim() || null,
     status: 'submitted' as const,
   }
@@ -995,7 +1005,17 @@ export async function submitTasterInvoice(formData: FormData) {
     body: `Invoice submitted for $${totalAmount}.`,
   })
 
+  const adminEmails = await getStaffEmailsForNotification(['admin']).catch(() => [])
+  const invoiceRecipients = Array.from(
+    new Set([
+      ...adminEmails,
+      (process.env.TASTER_ACCOUNTING_EMAIL ?? '').trim(),
+      (process.env.ORDER_NOTIFY_KRISTEN_EMAIL ?? '').trim(),
+    ].filter(Boolean)),
+  )
+
   await sendTasterInvoiceNotification({
+    to: invoiceRecipients,
     payeeName: payload.payeeName,
     payeeEmail: payload.payeeEmail,
     payeePhone: payload.payeePhone,
@@ -1006,6 +1026,7 @@ export async function submitTasterInvoice(formData: FormData) {
     hoursWorked,
     expenseAmount,
     totalAmount,
+    receiptUrls,
     notes: payload.notes,
   })
 

@@ -79,6 +79,7 @@ export default function InvoicePaymentClient({
   const [processingFee, setProcessingFee] = useState('0.00')
   const router = useRouter()
   const baseAmountCents = Math.round(Number(total) * 100)
+  const achBreakdown = getCustomerPaymentBreakdown(baseAmountCents, 'us_bank_account')
   const cardBreakdown = getCustomerPaymentBreakdown(baseAmountCents, 'card')
 
   async function initPayment() {
@@ -99,14 +100,14 @@ export default function InvoicePaymentClient({
       <CardContent>
         {!clientSecret ? (
           <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">Pay securely by bank transfer (ACH) or credit card via Stripe. Credit card payments include a Stripe processing fee paid by the customer.</p>
+            <p className="text-sm text-muted-foreground">Pay securely by bank transfer (ACH) or credit card via Stripe. Stripe processing fees are passed through to the customer.</p>
             <div className="grid gap-2">
               {([
                 {
                   value: 'us_bank_account',
                   title: 'Bank transfer (ACH)',
-                  description: 'No processing fee added.',
-                  totalLabel: formatCurrency(total),
+                  description: `Includes a ${formatCurrency(achBreakdown.processingFee)} Stripe ACH fee.`,
+                  totalLabel: formatCurrency(achBreakdown.totalAmount),
                 },
                 {
                   value: 'card',
@@ -151,12 +152,12 @@ export default function InvoicePaymentClient({
                 <span>{formatCurrency(total)}</span>
               </div>
               <div className="mt-1 flex justify-between">
-                <span>Card processing fee</span>
-                <span>{paymentMethod === 'card' ? formatCurrency(cardBreakdown.processingFee) : formatCurrency(0)}</span>
+                <span>Stripe processing fee</span>
+                <span>{paymentMethod === 'card' ? formatCurrency(cardBreakdown.processingFee) : formatCurrency(achBreakdown.processingFee)}</span>
               </div>
               <div className="mt-2 flex justify-between font-semibold text-slate-900">
                 <span>Total due now</span>
-                <span>{paymentMethod === 'card' ? formatCurrency(cardBreakdown.totalAmount) : formatCurrency(total)}</span>
+                <span>{paymentMethod === 'card' ? formatCurrency(cardBreakdown.totalAmount) : formatCurrency(achBreakdown.totalAmount)}</span>
               </div>
             </div>
             <Button className="w-full" onClick={initPayment} disabled={loading}>
@@ -171,8 +172,8 @@ export default function InvoicePaymentClient({
                 <span>{formatCurrency(total)}</span>
               </div>
               <div className="mt-1 flex justify-between">
-                <span>Card processing fee</span>
-                <span>{paymentMethod === 'card' ? formatCurrency(processingFee) : formatCurrency(0)}</span>
+                <span>Stripe processing fee</span>
+                <span>{formatCurrency(processingFee)}</span>
               </div>
               <div className="mt-2 flex justify-between font-semibold text-slate-900">
                 <span>Total being charged</span>

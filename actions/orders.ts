@@ -225,8 +225,8 @@ export async function createOrder(formData: FormData) {
       notes?.trim() || null,
       `Payment terms: ${formatPaymentTerms(paymentTerms)}.`,
       deliverySummary,
-      paymentMethod === 'card' && sanitizedProcessingFee > 0
-        ? `Card processing fee paid by customer: $${sanitizedProcessingFee.toFixed(2)}.`
+      sanitizedProcessingFee > 0
+        ? `Stripe ${paymentMethod === 'card' ? 'card' : 'ACH'} processing fee paid by customer: $${sanitizedProcessingFee.toFixed(2)}.`
         : null,
     ].filter(Boolean).join('\n')
 

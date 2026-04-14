@@ -25,6 +25,7 @@ export default async function InvoicingPage({
     submittedAt: Date
     payeeName: string
     payeeEmail: string
+    receiptUrls: string[] | null
     eventName: string
     scheduledAt: Date
   }> = []
@@ -40,6 +41,7 @@ export default async function InvoicingPage({
     .select({
       id: invoices.id,
       invoiceNumber: invoices.invoiceNumber,
+      orderId: invoices.orderId,
       total: invoices.total,
       status: invoices.status,
       dueDate: invoices.dueDate,
@@ -60,6 +62,7 @@ export default async function InvoicingPage({
         submittedAt: tasterInvoices.submittedAt,
         payeeName: tasterInvoices.payeeName,
         payeeEmail: tasterInvoices.payeeEmail,
+        receiptUrls: tasterInvoices.receiptUrls,
         eventName: tastings.eventName,
         scheduledAt: tastings.scheduledAt,
       })
@@ -152,6 +155,7 @@ export default async function InvoicingPage({
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Invoice #</th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Customer</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Order</th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Amount</th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Status</th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Due Date</th>
@@ -162,7 +166,7 @@ export default async function InvoicingPage({
               <tbody className="divide-y">
                 {allInvoices.length === 0 ? (
                   <tr>
-                    <td colSpan={7}>
+                    <td colSpan={8}>
                       <EmptyState icon={Receipt} title="No invoices yet" description="Create your first invoice to get started." action={<Link href="/admin/invoicing/new"><Button size="sm">New Invoice</Button></Link>} />
                     </td>
                   </tr>
@@ -170,6 +174,15 @@ export default async function InvoicingPage({
                   <tr key={inv.id} className="transition-colors hover:bg-slate-50">
                     <td className="px-6 py-4 text-sm font-medium">{inv.invoiceNumber}</td>
                     <td className="px-6 py-4 text-sm">{inv.companyName ?? 'N/A'}</td>
+                    <td className="px-6 py-4 text-sm">
+                      {inv.orderId ? (
+                        <Link href={`/admin/orders/${inv.orderId}`} className="font-medium text-blue-600 underline">
+                          #{inv.orderId.slice(-8).toUpperCase()}
+                        </Link>
+                      ) : (
+                        <span className="text-muted-foreground">Direct invoice</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4 text-sm font-semibold">{formatCurrency(inv.total)}</td>
                     <td className="px-6 py-4"><Badge variant={statusVariant[inv.status]}>{inv.status}</Badge></td>
                     <td className="px-6 py-4 text-sm">{inv.dueDate ? formatDate(inv.dueDate) : '—'}</td>
@@ -210,6 +223,7 @@ export default async function InvoicingPage({
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Payee</th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Tasting</th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Amount</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Receipts</th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Status</th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Submitted</th>
                   <th className="px-6 py-3" />
@@ -218,7 +232,7 @@ export default async function InvoicingPage({
               <tbody className="divide-y">
                 {tasterInvoiceSubmissions.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-10 text-center text-muted-foreground">
+                    <td colSpan={7} className="px-6 py-10 text-center text-muted-foreground">
                       No taster invoice submissions yet.
                     </td>
                   </tr>
@@ -237,6 +251,23 @@ export default async function InvoicingPage({
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm font-semibold">{formatCurrency(invoice.totalAmount)}</td>
+                    <td className="px-6 py-4 text-sm">
+                      {invoice.receiptUrls?.length ? (
+                        <div className="space-y-1">
+                          <p className="font-medium text-slate-900">{invoice.receiptUrls.length} uploaded</p>
+                          <div className="flex flex-wrap gap-2">
+                            {invoice.receiptUrls.slice(0, 2).map((url, index) => (
+                              <a key={`${invoice.id}-receipt-${index}`} href={url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline">
+                                Receipt {index + 1}
+                              </a>
+                            ))}
+                            {invoice.receiptUrls.length > 2 ? <span className="text-xs text-slate-500">+{invoice.receiptUrls.length - 2} more</span> : null}
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">None</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4">
                       <div className="space-y-2">
                         <Badge variant={tasterStatusVariant[invoice.status] ?? 'secondary'}>{invoice.status}</Badge>

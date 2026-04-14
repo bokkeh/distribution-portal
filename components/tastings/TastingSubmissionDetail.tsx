@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useFormDraftAutosave } from '@/hooks/useFormDraftAutosave'
 import { formatEasternDateTime } from '@/lib/tastings/time'
+import { TasterInvoiceReceiptField } from './TasterInvoiceReceiptField'
 import { TastingReportFormCard } from './TastingReportFormCard'
 
 type ReportRecord = {
@@ -36,6 +37,7 @@ type InvoiceRecord = {
   hoursWorked: string
   expenseAmount: string
   totalAmount: string
+  receiptUrls: string[] | null
   notes: string | null
   status: string
   submittedAt: Date
@@ -159,6 +161,8 @@ export function TastingSubmissionDetail({
                 <Label htmlFor="expenseAmount">Other Expenses ($)</Label>
                 <Input id="expenseAmount" name="expenseAmount" type="number" step="0.01" min="0" defaultValue={invoice?.expenseAmount ?? '0.00'} />
               </div>
+
+              <TasterInvoiceReceiptField value={invoice?.receiptUrls ?? []} disabled={invoiceLocked} />
 
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
                 <span className="text-slate-500">Estimated total: </span>

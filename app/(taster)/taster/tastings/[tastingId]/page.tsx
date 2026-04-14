@@ -119,6 +119,7 @@ export default async function TasterTastingDetailPage({
             hoursWorked: invoice.hoursWorked,
             expenseAmount: invoice.expenseAmount,
             totalAmount: invoice.totalAmount,
+            receiptUrls: (invoice.receiptUrls as string[] | null) ?? null,
             notes: invoice.notes,
             status: invoice.status,
             submittedAt: invoice.submittedAt,

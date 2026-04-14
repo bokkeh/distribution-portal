@@ -142,7 +142,7 @@ export const EMAIL_AUTOMATION_DEFAULTS = [
     eyebrow: 'Taster invoice',
     titleTemplate: 'A taster invoice was submitted',
     introTemplate: '{{payee_name}} submitted an invoice for {{tasting_name}}.',
-    bodyTemplate: '<p style="margin: 0 0 10px;"><strong>Email:</strong> {{payee_email}}</p><p style="margin: 0 0 10px;"><strong>Phone:</strong> {{payee_phone}}</p><p style="margin: 0 0 10px;"><strong>Date:</strong> {{tasting_date}}</p><p style="margin: 0 0 10px;"><strong>Location:</strong> {{store_address}}</p><p style="margin: 0 0 10px;"><strong>Hourly rate:</strong> {{hourly_rate_currency}}</p><p style="margin: 0 0 10px;"><strong>Hours worked:</strong> {{hours_worked}}</p><p style="margin: 0 0 10px;"><strong>Expenses:</strong> {{expense_amount_currency}}</p><p style="margin: 0 0 10px;"><strong>Total due:</strong> {{total_amount_currency}}</p>{{notes_html}}',
+    bodyTemplate: '<p style="margin: 0 0 10px;"><strong>Email:</strong> {{payee_email}}</p><p style="margin: 0 0 10px;"><strong>Phone:</strong> {{payee_phone}}</p><p style="margin: 0 0 10px;"><strong>Date:</strong> {{tasting_date}}</p><p style="margin: 0 0 10px;"><strong>Location:</strong> {{store_address}}</p><p style="margin: 0 0 10px;"><strong>Hourly rate:</strong> {{hourly_rate_currency}}</p><p style="margin: 0 0 10px;"><strong>Hours worked:</strong> {{hours_worked}}</p><p style="margin: 0 0 10px;"><strong>Expenses:</strong> {{expense_amount_currency}}</p><p style="margin: 0 0 10px;"><strong>Total due:</strong> {{total_amount_currency}}</p>{{receipts_html}}{{notes_html}}',
     ctaLabel: 'Open invoicing',
     ctaPath: '/admin/invoicing',
   },

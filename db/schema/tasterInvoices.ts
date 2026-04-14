@@ -14,6 +14,7 @@ export const tasterInvoices = pgTable('taster_invoices', {
   mileage: numeric('mileage', { precision: 10, scale: 2 }).notNull().default('0'),
   expenseAmount: numeric('expense_amount', { precision: 10, scale: 2 }).notNull().default('0'),
   totalAmount: numeric('total_amount', { precision: 10, scale: 2 }).notNull().default('0'),
+  receiptUrls: text('receipt_urls').array().notNull().default([]),
   notes: text('notes'),
   status: text('status', { enum: ['submitted', 'approved', 'paid'] }).notNull().default('submitted'),
   submittedAt: timestamp('submitted_at', { withTimezone: true }).notNull().defaultNow(),

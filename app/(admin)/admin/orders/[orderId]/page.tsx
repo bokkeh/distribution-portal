@@ -1,5 +1,5 @@
 import { db } from '@/db'
-import { orders, orderItems, products, customerAccounts } from '@/db/schema'
+import { orders, orderItems, products, customerAccounts, invoices } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -95,6 +95,17 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
     .leftJoin(products, eq(orderItems.productId, products.id))
     .where(eq(orderItems.orderId, resolvedParams.orderId))
 
+  const [linkedInvoice] = await db
+    .select({
+      id: invoices.id,
+      invoiceNumber: invoices.invoiceNumber,
+      status: invoices.status,
+      createdAt: invoices.createdAt,
+    })
+    .from(invoices)
+    .where(eq(invoices.orderId, resolvedParams.orderId))
+    .limit(1)
+
   const nextStatus: Record<string, 'confirmed' | 'fulfilled' | 'cancelled'> = {
     pending: 'confirmed',
     confirmed: 'fulfilled',
@@ -173,6 +184,33 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
               <div className="flex justify-between"><span className="text-muted-foreground">Shipping</span><Badge variant={shippingStatusVariant[order.shippingStatus]}>{formatStatusLabel(order.shippingStatus)}</Badge></div>
               <div className="flex justify-between gap-3"><span className="text-muted-foreground">Payment Terms</span><span className="text-right font-medium">{formatPaymentTerms(order.paymentTerms)}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Total</span><span className="font-bold">{formatCurrency(order.total)}</span></div>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Linked Invoice</p>
+                  {linkedInvoice ? (
+                    <>
+                      <p className="mt-1 text-sm font-semibold text-slate-900">{linkedInvoice.invoiceNumber}</p>
+                      <p className="text-xs text-slate-500">{formatDate(linkedInvoice.createdAt)}</p>
+                    </>
+                  ) : (
+                    <p className="mt-1 text-sm text-slate-600">No invoice has been created for this order yet.</p>
+                  )}
+                </div>
+                {linkedInvoice ? <Badge variant="outline">{linkedInvoice.status}</Badge> : null}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {linkedInvoice ? (
+                  <Link href={`/admin/invoicing/${linkedInvoice.id}`}>
+                    <Button type="button" variant="outline" size="sm">View Invoice</Button>
+                  </Link>
+                ) : (
+                  <Link href={`/admin/invoicing/new?orderId=${order.id}`}>
+                    <Button type="button" variant="outline" size="sm">Create Invoice</Button>
+                  </Link>
+                )}
+              </div>
             </div>
             <form action={updateOrderShippingStatus.bind(null, order.id)} className="space-y-2">
               <label htmlFor="shippingStatus" className="text-sm font-medium text-slate-900">Shipping Status</label>

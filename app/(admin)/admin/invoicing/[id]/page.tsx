@@ -69,6 +69,13 @@ export default async function InvoiceDetailPage({
         <div className="flex-1">
           <h1 className="text-2xl font-bold text-slate-900">{invoice.invoiceNumber}</h1>
           <p className="mt-1 text-muted-foreground">{invoice.companyName}</p>
+          {invoiceVisual.orderId ? (
+            <div className="mt-2">
+              <Link href={`/admin/orders/${invoiceVisual.orderId}`}>
+                <Button type="button" variant="outline" size="sm">View Linked Order #{invoiceVisual.orderId.slice(-8).toUpperCase()}</Button>
+              </Link>
+            </div>
+          ) : null}
         </div>
         <Badge variant={statusVariant[invoice.status]} className="px-3 py-1 text-sm">{invoice.status.toUpperCase()}</Badge>
       </div>

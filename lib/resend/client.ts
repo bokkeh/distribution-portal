@@ -712,6 +712,7 @@ export async function sendSalesRepInviteEmail({
 }
 
 export async function sendTasterInvoiceNotification({
+  to,
   payeeName,
   payeeEmail,
   payeePhone,
@@ -722,8 +723,10 @@ export async function sendTasterInvoiceNotification({
   hoursWorked,
   expenseAmount,
   totalAmount,
+  receiptUrls,
   notes,
 }: {
+  to: string[]
   payeeName: string
   payeeEmail: string
   payeePhone: string | null
@@ -734,11 +737,12 @@ export async function sendTasterInvoiceNotification({
   hoursWorked: string
   expenseAmount: string
   totalAmount: string
+  receiptUrls: string[]
   notes: string | null
 }): Promise<void> {
   await sendAutomationEmail({
     key: 'taster_invoice',
-    to: process.env.TASTER_ACCOUNTING_EMAIL ?? '',
+    to,
     recipientName: payeeName,
     variables: {
       payee_name: escapeHtml(payeeName),
@@ -751,6 +755,9 @@ export async function sendTasterInvoiceNotification({
       hours_worked: Number(hoursWorked || 0).toFixed(2),
       expense_amount_currency: formatCurrencyValue(expenseAmount),
       total_amount_currency: formatCurrencyValue(totalAmount),
+      receipts_html: receiptUrls.length
+        ? `<p style="margin: 12px 0 0;"><strong>Receipts:</strong></p><ul style="margin: 8px 0 0; padding-left: 18px;">${receiptUrls.map((url) => `<li><a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a></li>`).join('')}</ul>`
+        : '',
       notes_html: notes ? `<p style="margin: 0;"><strong>Notes:</strong> ${escapeHtml(notes)}</p>` : '',
     },
   })

@@ -181,6 +181,7 @@ export default function CheckoutClient({
       ? (preferredDeliveryDay && ['saturday', 'sunday'].includes(preferredDeliveryDay.toLowerCase()) ? 50 : 30)
       : 0
   const orderAmountWithDelivery = totalAmount + timeSensitiveFee
+  const achBreakdown = getCustomerPaymentBreakdown(Math.round(orderAmountWithDelivery * 100), 'us_bank_account')
   const cardBreakdown = getCustomerPaymentBreakdown(Math.round(orderAmountWithDelivery * 100), 'card')
 
   if (items.length === 0) {
@@ -317,8 +318,8 @@ export default function CheckoutClient({
                   {
                     value: 'us_bank_account',
                     title: 'Bank transfer (ACH)',
-                    description: 'No card processing fee.',
-                    totalLabel: formatCurrency(orderAmountWithDelivery),
+                    description: `Customer pays ${formatCurrency(achBreakdown.processingFee)} Stripe ACH fee.`,
+                    totalLabel: formatCurrency(achBreakdown.totalAmount),
                   },
                   {
                     value: 'card',
@@ -356,12 +357,12 @@ export default function CheckoutClient({
                   <span>{formatCurrency(timeSensitiveFee)}</span>
                 </div>
                 <div className="mt-1 flex justify-between">
-                  <span>Card processing fee</span>
-                  <span>{paymentMethod === 'card' ? formatCurrency(cardBreakdown.processingFee) : formatCurrency(0)}</span>
+                  <span>Stripe processing fee</span>
+                  <span>{paymentMethod === 'card' ? formatCurrency(cardBreakdown.processingFee) : formatCurrency(achBreakdown.processingFee)}</span>
                 </div>
                 <div className="mt-2 flex justify-between font-semibold text-slate-900">
                   <span>Total due now</span>
-                  <span>{paymentMethod === 'card' ? formatCurrency(cardBreakdown.totalAmount) : formatCurrency(orderAmountWithDelivery)}</span>
+                  <span>{paymentMethod === 'card' ? formatCurrency(cardBreakdown.totalAmount) : formatCurrency(achBreakdown.totalAmount)}</span>
                 </div>
               </div>
               <Button className="w-full" onClick={initializePayment} disabled={loading || !!minimumViolation}>
@@ -380,8 +381,8 @@ export default function CheckoutClient({
                   <span>{formatCurrency(timeSensitiveFee)}</span>
                 </div>
                 <div className="mt-1 flex justify-between">
-                  <span>Card processing fee</span>
-                  <span>{paymentMethod === 'card' ? formatCurrency(processingFee) : formatCurrency(0)}</span>
+                  <span>Stripe processing fee</span>
+                  <span>{formatCurrency(processingFee)}</span>
                 </div>
                 <div className="mt-2 flex justify-between font-semibold text-slate-900">
                   <span>Total being charged</span>

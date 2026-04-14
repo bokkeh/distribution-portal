@@ -2,6 +2,7 @@ export type CustomerPaymentMethod = 'us_bank_account' | 'card'
 
 const CARD_RATE = 0.029
 const CARD_FIXED_FEE_CENTS = 30
+const ACH_FIXED_FEE_CENTS = 500
 
 function centsToDollars(cents: number) {
   return (cents / 100).toFixed(2)
@@ -16,7 +17,9 @@ export function calculateCardProcessingFeeCents(baseAmountCents: number) {
 }
 
 export function getCustomerPaymentBreakdown(baseAmountCents: number, method: CustomerPaymentMethod) {
-  const processingFeeCents = method === 'card' ? calculateCardProcessingFeeCents(baseAmountCents) : 0
+  const processingFeeCents = method === 'card'
+    ? calculateCardProcessingFeeCents(baseAmountCents)
+    : ACH_FIXED_FEE_CENTS
   const totalAmountCents = baseAmountCents + processingFeeCents
 
   return {
