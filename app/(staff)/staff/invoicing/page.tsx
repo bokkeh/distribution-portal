@@ -211,7 +211,7 @@ export default async function StaffInvoicingPage({
                     <td className="px-6 py-4 text-sm text-muted-foreground">{formatDate(invoice.submittedAt)}</td>
                     <td className="px-6 py-4">
                       <div className="flex flex-wrap gap-2">
-                        <Link href={`/taster/tastings/${invoice.tastingId}`}>
+                        <Link href={`/admin/tastings/${invoice.tastingId}`}>
                           <Button variant="outline" size="sm">View Report</Button>
                         </Link>
                         {invoice.status === 'submitted' ? (

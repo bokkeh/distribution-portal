@@ -423,7 +423,7 @@ export default async function InvoicingPage({
                         <Link href="/admin/tastings">
                           <Button variant="ghost" size="sm">View Tasting</Button>
                         </Link>
-                        <Link href={`/taster/tastings/${invoice.tastingId}`}>
+                        <Link href={`/admin/tastings/${invoice.tastingId}`}>
                           <Button variant="outline" size="sm">View Report</Button>
                         </Link>
                         {invoice.status === 'submitted' ? (
