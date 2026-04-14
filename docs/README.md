@@ -2,7 +2,7 @@
 
 Welcome to the AHAWC Distribution Portal documentation. This folder contains comprehensive guides for understanding, developing, and maintaining the portal.
 
-**Last Updated:** April 2, 2026
+**Last Updated:** April 14, 2026
 **Status:** Current
 
 ## Getting Started
@@ -36,6 +36,13 @@ Start here: **[APRIL_2026_UPDATE_SUMMARY.md](./APRIL_2026_UPDATE_SUMMARY.md)**
 - Performance improvements
 - Testing recommendations
 
+### Planning Industry News?
+Start here: **[INDUSTRY_NEWS_REQUIREMENTS.md](./INDUSTRY_NEWS_REQUIREMENTS.md)**
+- Industry News product requirements
+- source catalog and prioritization
+- role-targeted feed logic
+- user news notification controls
+
 ## Documentation Index
 
 ### Architecture & Design
@@ -51,6 +58,7 @@ Start here: **[APRIL_2026_UPDATE_SUMMARY.md](./APRIL_2026_UPDATE_SUMMARY.md)**
 |----------|---------|----------|-----------|
 | [CRM_API_REFERENCE.md](./CRM_API_REFERENCE.md) | Complete API documentation | Developers, integrators | 20 min |
 | [APRIL_2026_UPDATE_SUMMARY.md](./APRIL_2026_UPDATE_SUMMARY.md) | Recent changes and features | All technical staff | 15 min |
+| [INDUSTRY_NEWS_REQUIREMENTS.md](./INDUSTRY_NEWS_REQUIREMENTS.md) | Industry News feature requirements | Product, developers, architects | 15 min |
 
 ### Maintenance & QA
 
@@ -81,6 +89,9 @@ A: See [CODEMAPS/INDEX.md § Deployment](./CODEMAPS/INDEX.md#deployment-vercel)
 
 ## Document Organization
 
+**Q: What is the Industry News build plan?**
+A: See [INDUSTRY_NEWS_REQUIREMENTS.md](./INDUSTRY_NEWS_REQUIREMENTS.md)
+
 ```
 docs/
 ├── README.md (this file)
@@ -106,6 +117,7 @@ docs/
 2. Go to specific module codemap (e.g., [CODEMAPS/crm.md](./CODEMAPS/crm.md))
 3. Reference [CRM_API_REFERENCE.md](./CRM_API_REFERENCE.md) for API details
 4. Check [../CHANGES.md](../CHANGES.md) for related recent changes
+5. Use [INDUSTRY_NEWS_REQUIREMENTS.md](./INDUSTRY_NEWS_REQUIREMENTS.md) for the Industry News implementation plan
 
 ### For Code Review
 1. Check [APRIL_2026_UPDATE_SUMMARY.md](./APRIL_2026_UPDATE_SUMMARY.md) for context
@@ -122,6 +134,7 @@ docs/
 2. Deep dive: [CODEMAPS/crm.md](./CODEMAPS/crm.md) (CRM focus, 10 min)
 3. API details: [CRM_API_REFERENCE.md](./CRM_API_REFERENCE.md) (as needed)
 4. Recent context: [APRIL_2026_UPDATE_SUMMARY.md](./APRIL_2026_UPDATE_SUMMARY.md) (5 min)
+5. Planned feature scope: [INDUSTRY_NEWS_REQUIREMENTS.md](./INDUSTRY_NEWS_REQUIREMENTS.md)
 
 ## Key Information at a Glance
 
@@ -192,7 +205,7 @@ These documents describe the AHAWC Distribution Portal, proprietary software of 
 
 ---
 
-**Last Updated:** April 2, 2026
+**Last Updated:** April 14, 2026
 **Documentation Version:** 1.0
 **Portal Version:** Next.js 16
 
