@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { IndustryNewsWidget } from '@/components/news/IndustryNewsWidget'
 
 export default async function CustomerDashboard() {
   const session = await requireRole('customer')
@@ -257,6 +258,8 @@ export default async function CustomerDashboard() {
             </div>
           </CardContent>
         </Card>
+
+        <IndustryNewsWidget audience="customer" />
       </div>
     </div>
   )

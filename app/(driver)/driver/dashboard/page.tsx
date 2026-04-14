@@ -2,6 +2,7 @@ import { Truck } from 'lucide-react'
 import { requireRole } from '@/lib/auth/session'
 import { DriverWorkspaceHero } from '@/components/deliveries/DriverWorkspaceHero'
 import { getDriverWorkspaceData } from '@/lib/driver/deliveries'
+import { IndustryNewsWidget } from '@/components/news/IndustryNewsWidget'
 
 export default async function DriverDashboardPage() {
   const session = await requireRole('driver', 'admin')
@@ -23,6 +24,7 @@ export default async function DriverDashboardPage() {
         title="Driver Dashboard"
         description="See active route readiness, dispatch priorities, and quick actions before you jump into the full stop workflow."
       />
+      <IndustryNewsWidget audience="driver" />
     </div>
   )
 }

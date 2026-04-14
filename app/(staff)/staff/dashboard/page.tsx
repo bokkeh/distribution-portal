@@ -10,6 +10,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { ShoppingCart, Users, Package, MessageSquare, ClipboardList } from 'lucide-react'
 import { getSmsInboxSummary } from '@/lib/inbox/summary'
 import Link from 'next/link'
+import { IndustryNewsWidget } from '@/components/news/IndustryNewsWidget'
 
 export default async function StaffDashboard() {
   const session = await requireAdminOrStaff()
@@ -112,6 +113,7 @@ export default async function StaffDashboard() {
           </table>
         </CardContent>
       </Card>
+      <IndustryNewsWidget audience="staff" />
     </div>
   )
 }

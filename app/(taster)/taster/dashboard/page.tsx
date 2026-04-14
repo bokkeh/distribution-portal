@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { TastingReportFormCard } from '@/components/tastings/TastingReportFormCard'
 import { formatEasternDateTime } from '@/lib/tastings/time'
+import { IndustryNewsWidget } from '@/components/news/IndustryNewsWidget'
 
 function isMissingTastingsTable(error: unknown) {
   const message = (error instanceof Error ? error.message : String(error)).toLowerCase()
@@ -385,6 +386,8 @@ export default async function TasterDashboardPage({
                 </div>
               </CardContent>
             </Card>
+
+            <IndustryNewsWidget audience="taster" />
           </div>
         </div>
       </div>

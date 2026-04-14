@@ -7,6 +7,7 @@ import { commissions, customerAccounts, orders, salesMembers, salesRoutes, tasti
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { IndustryNewsWidget } from '@/components/news/IndustryNewsWidget'
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('en-US', {
@@ -475,6 +476,8 @@ export default async function SalesDashboardPage() {
               </Link>
             </CardContent>
           </Card>
+
+          <IndustryNewsWidget audience="sales" />
         </div>
       </div>
 

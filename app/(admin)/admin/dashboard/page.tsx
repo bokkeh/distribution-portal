@@ -11,6 +11,7 @@ import Link from 'next/link'
 import { getSystemHealthSnapshot } from '@/lib/ops/system-health'
 import { RevenueChart } from '@/components/dashboard/RevenueChart'
 import type { MonthlyRevenuePoint } from '@/components/dashboard/RevenueChart'
+import { IndustryNewsWidget } from '@/components/news/IndustryNewsWidget'
 
 export default async function AdminDashboard() {
   const [
@@ -329,6 +330,8 @@ export default async function AdminDashboard() {
             </CardContent>
           </Card>
         )}
+
+        <IndustryNewsWidget audience="admin" />
       </div>
     </div>
   )

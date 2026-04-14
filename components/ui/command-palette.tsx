@@ -8,6 +8,7 @@ import {
   DollarSign, HeartPulse, Workflow, UserCircle, Search, ArrowRight,
   Star, Cpu, Activity, TrendingUp, Globe, UserCheck, BarChart3,
   ClipboardList,
+  Newspaper,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -22,6 +23,7 @@ type SearchResult = {
 const NAV_ITEMS = [
   { label: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard, section: 'Navigation' },
   { label: 'Needs Attention', href: '/admin/attention', icon: Activity, section: 'Navigation' },
+  { label: 'Industry News', href: '/admin/news', icon: Newspaper, section: 'Navigation' },
   { label: 'Orders', href: '/admin/orders', icon: ShoppingCart, section: 'Navigation' },
   { label: 'Deliveries', href: '/admin/deliveries', icon: Truck, section: 'Navigation' },
   { label: 'Driver Performance', href: '/admin/deliveries/performance', icon: TrendingUp, section: 'Navigation' },
