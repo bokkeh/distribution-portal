@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { saveMyAvailability } from '@/actions/taster-availability'
 
+const AVAILABILITY_MONTH_COUNT = 6
+
 function isTastingDay(date: Date) {
   const day = getDay(date)
   return day === 5 || day === 6 || day === 0
@@ -72,7 +74,7 @@ export function TasterAvailabilityEditor({
           <p className="mt-1 text-sm text-slate-500">Mark the tasting days you are available for the upcoming months. Staff will use this when scheduling.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {Array.from({ length: 3 }, (_, index) => (
+          {Array.from({ length: AVAILABILITY_MONTH_COUNT }, (_, index) => (
             <button
               key={index}
               type="button"

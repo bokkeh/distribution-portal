@@ -28,7 +28,7 @@ export default async function TasterAvailabilityPage() {
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">My Availability</h1>
-          <p className="mt-1 text-sm text-slate-500">Submit the days you can work tastings so the team can plan the next month with real availability.</p>
+          <p className="mt-1 text-sm text-slate-500">Submit the days you can work tastings so the team can plan the next several months with real availability.</p>
         </div>
         <TasterAvailabilityEditor submittedDates={availability.map((row) => row.availableDate)} />
       </div>

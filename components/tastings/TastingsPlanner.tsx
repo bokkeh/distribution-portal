@@ -84,9 +84,21 @@ export function TastingsPlanner({ mode, tastings, accounts, tasters, success, er
 
   const calendarVisibleTastings = tastings.filter((tasting) => isCalendarVisibleStatus(tasting.status))
   const dayTastings = calendarVisibleTastings.filter(tasting => isSameDay(new Date(tasting.scheduledAt), selectedDate))
-  const now = new Date()
-  const upcomingTastings = calendarVisibleTastings.filter(tasting => !isBefore(new Date(tasting.scheduledAt), now))
-  const previousTastings = tastings.filter(tasting => isBefore(new Date(tasting.scheduledAt), now))
+  const now = Date.now()
+  const upcomingTastings = useMemo(
+    () =>
+      calendarVisibleTastings
+        .filter((tasting) => new Date(tasting.scheduledAt).getTime() >= now)
+        .sort((left, right) => new Date(left.scheduledAt).getTime() - new Date(right.scheduledAt).getTime()),
+    [calendarVisibleTastings, now],
+  )
+  const previousTastings = useMemo(
+    () =>
+      tastings
+        .filter((tasting) => new Date(tasting.scheduledAt).getTime() < now)
+        .sort((left, right) => new Date(right.scheduledAt).getTime() - new Date(left.scheduledAt).getTime()),
+    [tastings, now],
+  )
   const filteredPreviousTastings = useMemo(() => {
     return previousTastings.filter((tasting) => {
       const tastingDate = new Date(tasting.scheduledAt)

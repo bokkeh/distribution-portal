@@ -14,6 +14,8 @@ import { formatEasternTimeRange } from '@/lib/tastings/time'
 import { toDisplayAvatarUrl } from '@/lib/users/avatar'
 import { toast } from 'sonner'
 
+const AVAILABILITY_MONTH_COUNT = 6
+
 type TeamTaster = {
   id: string
   name: string
@@ -96,7 +98,7 @@ export function TasterTeamPanel({
 
   const selectedMonth = useMemo(() => startOfMonth(addMonths(new Date(), monthOffset)), [monthOffset])
   const monthOptions = useMemo(
-    () => Array.from({ length: 3 }, (_, index) => ({
+    () => Array.from({ length: AVAILABILITY_MONTH_COUNT }, (_, index) => ({
       index,
       label: format(addMonths(new Date(), index), 'MMMM yyyy'),
     })),
