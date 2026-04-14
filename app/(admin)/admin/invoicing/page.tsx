@@ -1,5 +1,5 @@
 import { db } from '@/db'
-import { activityEvents, customerAccounts, invoices, tasterInvoices, tastings, users } from '@/db/schema'
+import { activityEvents, customerAccounts, invoices, orders, tasterInvoices, tastings, users } from '@/db/schema'
 import { desc, eq, inArray } from 'drizzle-orm'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -10,6 +10,18 @@ import { Plus, Receipt } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
 import { markInvoicePaid } from '@/actions/invoices'
 import { approveTasterInvoice, payoutTasterInvoiceViaStripe } from '@/actions/taster-payouts'
+
+function isMissingTasterInvoiceTable(error: unknown) {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+  return message.includes('taster_invoices') && message.includes('does not exist')
+}
+
+function isMissingTasterInvoiceReceiptColumn(error: unknown) {
+  const code = (error as { code?: string; cause?: { code?: string } } | null)?.code
+    ?? (error as { cause?: { code?: string } } | null)?.cause?.code
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+  return code === '42703' || message.includes('receipt_urls')
+}
 
 export default async function InvoicingPage({
   searchParams,
@@ -36,6 +48,23 @@ export default async function InvoicingPage({
     metadata: unknown
     createdAt: Date
   }> = []
+
+  const recentOrders = await db
+    .select({
+      id: orders.id,
+      total: orders.total,
+      status: orders.status,
+      createdAt: orders.createdAt,
+      companyName: customerAccounts.companyName,
+      invoiceId: invoices.id,
+      invoiceNumber: invoices.invoiceNumber,
+      invoiceStatus: invoices.status,
+    })
+    .from(orders)
+    .leftJoin(customerAccounts, eq(orders.customerId, customerAccounts.id))
+    .leftJoin(invoices, eq(invoices.orderId, orders.id))
+    .orderBy(desc(orders.createdAt))
+    .limit(25)
 
   const allInvoices = await db
     .select({
@@ -82,8 +111,41 @@ export default async function InvoicingPage({
       .where(inArray(activityEvents.kind, ['taster_invoice_paid', 'taster_invoice_payout_failed', 'taster_invoice_approved']))
       .orderBy(desc(activityEvents.createdAt))
   } catch (error) {
+    if (isMissingTasterInvoiceReceiptColumn(error)) {
+      tasterInvoiceSubmissions = await db
+        .select({
+          id: tasterInvoices.id,
+          tastingId: tasterInvoices.tastingId,
+          totalAmount: tasterInvoices.totalAmount,
+          status: tasterInvoices.status,
+          submittedAt: tasterInvoices.submittedAt,
+          payeeName: tasterInvoices.payeeName,
+          payeeEmail: tasterInvoices.payeeEmail,
+          eventName: tastings.eventName,
+          scheduledAt: tastings.scheduledAt,
+        })
+        .from(tasterInvoices)
+        .innerJoin(tastings, eq(tasterInvoices.tastingId, tastings.id))
+        .innerJoin(users, eq(tasterInvoices.submittedByUserId, users.id))
+        .orderBy(desc(tasterInvoices.submittedAt))
+        .then((rows) => rows.map((row) => ({ ...row, receiptUrls: null })))
+
+      payoutEvents = await db
+        .select({
+          kind: activityEvents.kind,
+          body: activityEvents.body,
+          metadata: activityEvents.metadata,
+          createdAt: activityEvents.createdAt,
+        })
+        .from(activityEvents)
+        .where(inArray(activityEvents.kind, ['taster_invoice_paid', 'taster_invoice_payout_failed', 'taster_invoice_approved']))
+        .orderBy(desc(activityEvents.createdAt))
+    } else if (!isMissingTasterInvoiceTable(error)) {
+      throw error
+    }
+
     const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
-    if (!message.includes('taster_invoices') && !message.includes('does not exist')) {
+    if (!message.includes('taster_invoices') && !message.includes('does not exist') && !message.includes('receipt_urls')) {
       throw error
     }
   }
@@ -199,6 +261,83 @@ export default async function InvoicingPage({
                           <form action={markInvoicePaid.bind(null, inv.id)}>
                             <Button variant="secondary" size="sm" type="submit">Mark Paid</Button>
                           </form>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="overflow-hidden">
+        <CardHeader>
+          <CardTitle>Recent Orders & Invoice Status</CardTitle>
+          <p className="text-sm text-muted-foreground">Recent orders are shown here with their linked invoice status so accounting can see what still needs to be invoiced.</p>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="border-b bg-slate-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Order</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Customer</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Order Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Total</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Invoice</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Placed</th>
+                  <th className="px-6 py-3" />
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {recentOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-6 py-10 text-center text-muted-foreground">No recent orders found.</td>
+                  </tr>
+                ) : recentOrders.map((order) => (
+                  <tr key={order.id} className="transition-colors hover:bg-slate-50">
+                    <td className="px-6 py-4 text-sm font-medium">
+                      <Link href={`/admin/orders/${order.id}`} className="text-blue-600 underline">
+                        #{order.id.slice(-8).toUpperCase()}
+                      </Link>
+                    </td>
+                    <td className="px-6 py-4 text-sm">{order.companyName ?? 'N/A'}</td>
+                    <td className="px-6 py-4 text-sm">
+                      <Badge variant={order.status === 'fulfilled' ? 'success' : order.status === 'cancelled' ? 'destructive' : 'info'}>
+                        {order.status}
+                      </Badge>
+                    </td>
+                    <td className="px-6 py-4 text-sm font-semibold">{formatCurrency(order.total)}</td>
+                    <td className="px-6 py-4 text-sm">
+                      {order.invoiceId ? (
+                        <div className="space-y-1">
+                          <Link href={`/admin/invoicing/${order.invoiceId}`} className="font-medium text-blue-600 underline">
+                            {order.invoiceNumber}
+                          </Link>
+                          <div>
+                            <Badge variant="outline">{order.invoiceStatus}</Badge>
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">No invoice yet</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-muted-foreground">{formatDate(order.createdAt)}</td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-wrap gap-2">
+                        <Link href={`/admin/orders/${order.id}`}>
+                          <Button variant="ghost" size="sm">View Order</Button>
+                        </Link>
+                        {order.invoiceId ? (
+                          <Link href={`/admin/invoicing/${order.invoiceId}`}>
+                            <Button variant="outline" size="sm">View Invoice</Button>
+                          </Link>
+                        ) : order.status === 'fulfilled' ? (
+                          <Link href={`/admin/invoicing/new?orderId=${order.id}`}>
+                            <Button variant="outline" size="sm">Create Invoice</Button>
+                          </Link>
                         ) : null}
                       </div>
                     </td>
