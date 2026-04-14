@@ -31,6 +31,13 @@ function isMissingSubmissionTables(error: unknown) {
   )
 }
 
+function isMissingTasterInvoiceReceiptColumn(error: unknown) {
+  const code = (error as { code?: string; cause?: { code?: string } } | null)?.code
+    ?? (error as { cause?: { code?: string } } | null)?.cause?.code
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+  return code === '42703' || message.includes('receipt_urls')
+}
+
 export default async function AdminTastingDetailPage({
   params,
 }: {
@@ -57,7 +64,7 @@ export default async function AdminTastingDetailPage({
     email: string | null
   } | null = null
   let report: typeof tastingReports.$inferSelect | null = null
-  let invoice: typeof tasterInvoices.$inferSelect | null = null
+  let invoice: (typeof tasterInvoices.$inferSelect & { receiptUrls: string[] }) | null = null
   let allTasters: Array<{ id: string; name: string | null; roles: string[] | null }> = []
   let missingSubmissionTables = false
 
@@ -86,28 +93,71 @@ export default async function AdminTastingDetailPage({
         .then(rows => rows.filter(u => u.roles?.includes('taster'))),
     ])
   } catch (error) {
-    if (!isMissingSubmissionTables(error)) throw error
+    if (isMissingTasterInvoiceReceiptColumn(error)) {
+      ;[account, taster, report, invoice, allTasters] = await Promise.all([
+        db.select({
+          id: customerAccounts.id,
+          companyName: customerAccounts.companyName,
+          phone: customerAccounts.phone,
+          address: customerAccounts.address,
+          city: customerAccounts.city,
+          state: customerAccounts.state,
+        }).from(customerAccounts).where(eq(customerAccounts.id, tasting.customerId)).limit(1).then(r => r[0] ?? null),
 
-    missingSubmissionTables = true
-    ;[account, taster, allTasters] = await Promise.all([
-      db.select({
-        id: customerAccounts.id,
-        companyName: customerAccounts.companyName,
-        phone: customerAccounts.phone,
-        address: customerAccounts.address,
-        city: customerAccounts.city,
-        state: customerAccounts.state,
-      }).from(customerAccounts).where(eq(customerAccounts.id, tasting.customerId)).limit(1).then(r => r[0] ?? null),
+        db.select({ id: users.id, name: users.name, phone: users.phone, email: users.email })
+          .from(users).where(eq(users.id, tasting.assignedUserId)).limit(1).then(r => r[0] ?? null),
 
-      db.select({ id: users.id, name: users.name, phone: users.phone, email: users.email })
-        .from(users).where(eq(users.id, tasting.assignedUserId)).limit(1).then(r => r[0] ?? null),
+        db.select().from(tastingReports).where(eq(tastingReports.tastingId, tastingId)).limit(1).then(r => r[0] ?? null),
 
-      db.select({ id: users.id, name: users.name, roles: users.roles })
-        .from(users)
-        .where(eq(users.active, true))
-        .orderBy(users.name)
-        .then(rows => rows.filter(u => u.roles?.includes('taster'))),
-    ])
+        db.select({
+          id: tasterInvoices.id,
+          tastingId: tasterInvoices.tastingId,
+          submittedByUserId: tasterInvoices.submittedByUserId,
+          payeeName: tasterInvoices.payeeName,
+          payeeEmail: tasterInvoices.payeeEmail,
+          payeePhone: tasterInvoices.payeePhone,
+          hourlyRate: tasterInvoices.hourlyRate,
+          hoursWorked: tasterInvoices.hoursWorked,
+          mileage: tasterInvoices.mileage,
+          expenseAmount: tasterInvoices.expenseAmount,
+          totalAmount: tasterInvoices.totalAmount,
+          notes: tasterInvoices.notes,
+          status: tasterInvoices.status,
+          submittedAt: tasterInvoices.submittedAt,
+        }).from(tasterInvoices).where(eq(tasterInvoices.tastingId, tastingId)).limit(1).then(r => (r[0] ? { ...r[0], receiptUrls: [] } : null)),
+
+        db.select({ id: users.id, name: users.name, roles: users.roles })
+          .from(users)
+          .where(eq(users.active, true))
+          .orderBy(users.name)
+          .then(rows => rows.filter(u => u.roles?.includes('taster'))),
+      ])
+    } else if (!isMissingSubmissionTables(error)) {
+      throw error
+    }
+
+    if (isMissingSubmissionTables(error)) {
+      missingSubmissionTables = true
+      ;[account, taster, allTasters] = await Promise.all([
+        db.select({
+          id: customerAccounts.id,
+          companyName: customerAccounts.companyName,
+          phone: customerAccounts.phone,
+          address: customerAccounts.address,
+          city: customerAccounts.city,
+          state: customerAccounts.state,
+        }).from(customerAccounts).where(eq(customerAccounts.id, tasting.customerId)).limit(1).then(r => r[0] ?? null),
+
+        db.select({ id: users.id, name: users.name, phone: users.phone, email: users.email })
+          .from(users).where(eq(users.id, tasting.assignedUserId)).limit(1).then(r => r[0] ?? null),
+
+        db.select({ id: users.id, name: users.name, roles: users.roles })
+          .from(users)
+          .where(eq(users.active, true))
+          .orderBy(users.name)
+          .then(rows => rows.filter(u => u.roles?.includes('taster'))),
+      ])
+    }
   }
 
   const canChangeStatus = tasting.status !== 'completed' && tasting.status !== 'cancelled' && tasting.status !== 'declined'
