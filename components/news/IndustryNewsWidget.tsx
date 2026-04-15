@@ -30,14 +30,14 @@ function formatPublishedDate(value: string) {
   }).format(new Date(`${value}T12:00:00Z`))
 }
 
-export function IndustryNewsWidget({
+export async function IndustryNewsWidget({
   audience,
   title = 'Industry News',
 }: {
   audience: IndustryNewsAudience
   title?: string
 }) {
-  const stories = getIndustryNewsHighlights(audience, 4)
+  const stories = await getIndustryNewsHighlights(audience, 4)
   const href = audienceHref[audience]
 
   return (
@@ -56,9 +56,11 @@ export function IndustryNewsWidget({
       </CardHeader>
       <CardContent className="space-y-3">
         {stories.map(story => (
-          <Link
+          <a
             key={story.id}
-            href={href}
+            href={story.articleUrl}
+            target="_blank"
+            rel="noreferrer"
             className="block overflow-hidden rounded-2xl border border-slate-200 transition-colors hover:bg-slate-50"
           >
             <div className="grid gap-0 sm:grid-cols-[112px_minmax(0,1fr)]">
@@ -90,7 +92,7 @@ export function IndustryNewsWidget({
               <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-slate-300" />
             </div>
             </div>
-          </Link>
+          </a>
         ))}
 
         <div className="grid gap-3 pt-2 sm:grid-cols-2">
@@ -117,7 +119,7 @@ export function IndustryNewsWidget({
               <p className="text-sm font-medium text-slate-900">Admin note</p>
             </div>
             <p className="mt-1 text-xs text-slate-600">
-              Use this as the review surface until live source ingestion and notification preferences are fully wired in.
+              This feed now syncs from configured trade publication sources and will get fresher results when the cron route is enabled.
             </p>
           </div>
         ) : null}

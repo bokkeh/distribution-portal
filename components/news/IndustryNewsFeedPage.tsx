@@ -84,7 +84,7 @@ function StoryList({ stories }: { stories: IndustryNewsItem[] }) {
               ))}
             </div>
             <a
-              href={story.sourceUrl}
+              href={story.articleUrl}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
@@ -100,8 +100,8 @@ function StoryList({ stories }: { stories: IndustryNewsItem[] }) {
   )
 }
 
-export function IndustryNewsFeedPage({ audience }: { audience: IndustryNewsAudience }) {
-  const sections = getIndustryNewsSections(audience)
+export async function IndustryNewsFeedPage({ audience }: { audience: IndustryNewsAudience }) {
+  const sections = await getIndustryNewsSections(audience)
   const meta = audienceMeta[audience]
 
   return (
@@ -152,13 +152,13 @@ export function IndustryNewsFeedPage({ audience }: { audience: IndustryNewsAudie
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <p className="font-medium text-slate-900">Current mode</p>
                 <p className="mt-1 text-xs text-slate-500">
-                  This is the first portal surface for Industry News. Stories are curated from the approved source list and grouped by role.
+                  Stories are pulled from configured industry publication sources, stored in the portal database, and grouped by role.
                 </p>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <p className="font-medium text-slate-900">Next phase</p>
                 <p className="mt-1 text-xs text-slate-500">
-                  Live source ingestion, mute controls, digests, and notification delivery preferences can layer onto this feed without changing the page structure.
+                  Mute controls, digests, and role-targeted notification delivery can layer onto this feed without changing the page structure.
                 </p>
               </div>
             </CardContent>
