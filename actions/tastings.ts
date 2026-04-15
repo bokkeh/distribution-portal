@@ -76,6 +76,7 @@ function isMissingTastingSchedulingColumn(error: unknown) {
     || message.includes('training_day')
     || message.includes('end_at')
     || message.includes('checked_in_at')
+    || message.includes('status')
 }
 
 function isMissingTasterAvailabilityTable(error: unknown) {
@@ -98,6 +99,64 @@ async function getSalesMemberIdForUser(userId: string) {
   }
 
   return member.id
+}
+
+async function insertTastingWithFallback(input: {
+  customerId: string
+  assignedUserId: string
+  createdByUserId: string
+  eventName: string
+  scheduledAt: Date
+  endAt?: Date | null
+  status?: TastingStatus
+  storeAddress?: string | null
+  storeCity?: string | null
+  storeState?: string | null
+  storeZip?: string | null
+  storePhone?: string | null
+  trainingDay?: boolean
+  notes?: string | null
+}) {
+  const fullValues = {
+    customerId: input.customerId,
+    assignedUserId: input.assignedUserId,
+    createdByUserId: input.createdByUserId,
+    eventName: input.eventName,
+    scheduledAt: input.scheduledAt,
+    endAt: input.endAt ?? null,
+    status: input.status ?? 'scheduled',
+    storeAddress: input.storeAddress ?? null,
+    storeCity: input.storeCity ?? null,
+    storeState: input.storeState ?? null,
+    storeZip: input.storeZip ?? null,
+    storePhone: input.storePhone ?? null,
+    trainingDay: input.trainingDay ?? false,
+    notes: input.notes ?? null,
+  }
+
+  try {
+    const [tasting] = await db.insert(tastings).values(fullValues).returning({ id: tastings.id })
+    return tasting
+  } catch (error) {
+    if (!isMissingTastingSchedulingColumn(error)) throw error
+
+    const legacyValues = {
+      customerId: input.customerId,
+      assignedUserId: input.assignedUserId,
+      createdByUserId: input.createdByUserId,
+      eventName: input.eventName,
+      scheduledAt: input.scheduledAt,
+      storeAddress: input.storeAddress ?? null,
+      storeCity: input.storeCity ?? null,
+      storeState: input.storeState ?? null,
+      storeZip: input.storeZip ?? null,
+      storePhone: input.storePhone ?? null,
+      notes: input.notes ?? null,
+    }
+
+    const [tasting] = await db.insert(tastings).values(legacyValues).returning({ id: tastings.id })
+    return tasting
+  }
 }
 
 async function validateTastingWindow({
@@ -274,7 +333,7 @@ export async function createTasting(formData: FormData) {
   }
   const assignedUserPrefs = await getUserPreferences(assignedUser.id).catch(() => null)
 
-  const baseTastingValues = {
+  const tasting = await insertTastingWithFallback({
     customerId: account.id,
     assignedUserId: assignedUser.id,
     createdByUserId: session.user.id,
@@ -286,30 +345,8 @@ export async function createTasting(formData: FormData) {
     storeState: account.state,
     storeZip: account.zip,
     storePhone: account.phone,
-    notes,
-  }
-
-  const [tasting] = await db.insert(tastings).values({
-    ...baseTastingValues,
     trainingDay,
-  }).returning({ id: tastings.id }).catch(async (error) => {
-    if (!isMissingTastingSchedulingColumn(error)) throw error
-
-    const legacyValues = {
-      customerId: account.id,
-      assignedUserId: assignedUser.id,
-      createdByUserId: session.user.id,
-      eventName: account.companyName,
-      scheduledAt,
-      storeAddress: account.address,
-      storeCity: account.city,
-      storeState: account.state,
-      storeZip: account.zip,
-      storePhone: account.phone,
-      notes,
-    }
-
-    return db.insert(tastings).values(legacyValues).returning({ id: tastings.id })
+    notes,
   })
 
   const storeAddress = [account.address, account.city, account.state, account.zip].filter(Boolean).join(', ') || 'Store address not provided'
@@ -1265,23 +1302,20 @@ export async function requestTastingFromRep({
     return { error: 'No tasters are currently configured. Ask an admin to add a taster before requesting a tasting.' }
   }
 
-  const [created] = await db
-    .insert(tastings)
-    .values({
-      customerId: accountId,
-      assignedUserId: placeholderTaster.id,
-      createdByUserId: session.user.id,
-      eventName: account.companyName,
-      scheduledAt,
-      status: 'requested',
-      storeAddress: account.address ?? null,
-      storeCity: account.city ?? null,
-      storeState: account.state ?? null,
-      storeZip: account.zip ?? null,
-      storePhone: account.phone ?? null,
-      notes: `Requested by sales rep${notes ? `: ${notes}` : ''}`,
-    })
-    .returning()
+  const created = await insertTastingWithFallback({
+    customerId: accountId,
+    assignedUserId: placeholderTaster.id,
+    createdByUserId: session.user.id,
+    eventName: account.companyName,
+    scheduledAt,
+    status: 'requested',
+    storeAddress: account.address ?? null,
+    storeCity: account.city ?? null,
+    storeState: account.state ?? null,
+    storeZip: account.zip ?? null,
+    storePhone: account.phone ?? null,
+    notes: `Requested by sales rep${notes ? `: ${notes}` : ''}`,
+  })
 
   const dateLabel = new Date(scheduledAt).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
   const tastingUrl = `${process.env.NEXTAUTH_URL}/admin/tastings/${created.id}`
