@@ -7,12 +7,18 @@ function isMissingUserNotificationsTable(error: unknown) {
   return message.includes('user_notifications') && message.includes('does not exist')
 }
 
+function isMissingNotificationImageColumn(error: unknown) {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+  return message.includes('image_url') || (message.includes('user_notifications') && message.includes('column'))
+}
+
 export type BellNotification = {
   id: string
   kind: string
   title: string
   body: string
   href: string | null
+  imageUrl?: string | null
   readAt: Date | null
   createdAt: Date
 }
@@ -23,6 +29,7 @@ export async function createUserNotification(input: {
   title: string
   body: string
   href?: string | null
+  imageUrl?: string | null
   availableAt?: Date
 }) {
   try {
@@ -32,9 +39,21 @@ export async function createUserNotification(input: {
       title: input.title,
       body: input.body,
       href: input.href ?? null,
+      imageUrl: input.imageUrl ?? null,
       availableAt: input.availableAt ?? new Date(),
     })
   } catch (error) {
+    if (isMissingNotificationImageColumn(error)) {
+      await db.insert(userNotifications).values({
+        userId: input.userId,
+        kind: input.kind,
+        title: input.title,
+        body: input.body,
+        href: input.href ?? null,
+        availableAt: input.availableAt ?? new Date(),
+      })
+      return
+    }
     if (!isMissingUserNotificationsTable(error)) {
       console.error('Failed to create user notification:', error)
     }
@@ -47,6 +66,7 @@ export async function createNotificationsForRoles(input: {
   title: string
   body: string
   href?: string | null
+  imageUrl?: string | null
   availableAt?: Date
 }) {
   try {
@@ -75,6 +95,7 @@ export async function createNotificationsForRoles(input: {
       title: input.title,
       body: input.body,
       href: input.href ?? null,
+      imageUrl: input.imageUrl ?? null,
       availableAt: input.availableAt,
     })))
   } catch (error) {
@@ -110,20 +131,40 @@ export async function clearUserNotifications(input: {
 
 export async function getBellNotificationsForUser(userId: string) {
   try {
-    const rows = await db
-      .select({
-        id: userNotifications.id,
-        kind: userNotifications.kind,
-        title: userNotifications.title,
-        body: userNotifications.body,
-        href: userNotifications.href,
-        readAt: userNotifications.readAt,
-        createdAt: userNotifications.createdAt,
-      })
-      .from(userNotifications)
-      .where(and(eq(userNotifications.userId, userId), lte(userNotifications.availableAt, new Date())))
-      .orderBy(desc(userNotifications.createdAt))
-      .limit(40)
+    let rows: BellNotification[] = []
+    try {
+      rows = await db
+        .select({
+          id: userNotifications.id,
+          kind: userNotifications.kind,
+          title: userNotifications.title,
+          body: userNotifications.body,
+          href: userNotifications.href,
+          imageUrl: userNotifications.imageUrl,
+          readAt: userNotifications.readAt,
+          createdAt: userNotifications.createdAt,
+        })
+        .from(userNotifications)
+        .where(and(eq(userNotifications.userId, userId), lte(userNotifications.availableAt, new Date())))
+        .orderBy(desc(userNotifications.createdAt))
+        .limit(40)
+    } catch (error) {
+      if (!isMissingNotificationImageColumn(error)) throw error
+      rows = await db
+        .select({
+          id: userNotifications.id,
+          kind: userNotifications.kind,
+          title: userNotifications.title,
+          body: userNotifications.body,
+          href: userNotifications.href,
+          readAt: userNotifications.readAt,
+          createdAt: userNotifications.createdAt,
+        })
+        .from(userNotifications)
+        .where(and(eq(userNotifications.userId, userId), lte(userNotifications.availableAt, new Date())))
+        .orderBy(desc(userNotifications.createdAt))
+        .limit(40)
+    }
 
     const unreadCount = await db.$count(
       userNotifications,

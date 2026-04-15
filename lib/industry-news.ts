@@ -1,6 +1,7 @@
 import { desc, eq } from 'drizzle-orm'
 import { db } from '@/db'
-import { industryNewsItems, industryNewsSources } from '@/db/schema'
+import { industryNewsItems, industryNewsSources, userPreferences, users } from '@/db/schema'
+import { createUserNotification } from '@/lib/notifications/in-app'
 
 export type IndustryNewsAudience = 'admin' | 'staff' | 'sales' | 'taster' | 'driver' | 'customer'
 export type IndustryNewsCategory =
@@ -55,6 +56,8 @@ type ParsedFeedItem = {
   thumbnailUrl: string | null
 }
 
+export type IndustryNewsSourceRow = typeof industryNewsSources.$inferSelect
+
 const SOURCE_SEEDS: SourceSeed[] = [
   { name: 'Shanken News Daily', homepageUrl: 'https://www.shankennewsdaily.com/', sourceTier: 'tier_1', defaultRoleTargets: ['admin', 'staff', 'sales'] },
   { name: 'Market Watch Magazine', homepageUrl: 'https://www.marketwatchmag.com/', sourceTier: 'tier_1', defaultRoleTargets: ['admin', 'sales', 'customer'] },
@@ -86,6 +89,15 @@ const audienceHref: Record<IndustryNewsAudience, string> = {
   taster: '/taster/news',
   driver: '/driver/news',
   customer: '/customer/news',
+}
+
+function isMissingNewsPreferenceColumns(error: unknown) {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+  return message.includes('news_notifications_muted')
+    || message.includes('news_digest_frequency')
+    || message.includes('news_email_enabled')
+    || message.includes('news_sms_enabled')
+    || message.includes('news_in_app_enabled')
 }
 
 function stripHtml(value: string) {
@@ -330,6 +342,97 @@ async function ensureDefaultIndustryNewsSources() {
   )
 }
 
+async function notifyUsersAboutNewsItem(item: {
+  title: string
+  summary: string
+  thumbnailUrl: string | null
+  roleTargets: IndustryNewsAudience[]
+  priority: 'high' | 'medium' | 'low'
+  isWisherRelevant: boolean
+  isAHAWCRelevant: boolean
+  isMarylandRelevant: boolean
+}) {
+  if (item.priority !== 'high' && !item.isWisherRelevant && !item.isAHAWCRelevant) return
+
+  let recipients: Array<{
+    id: string
+    roles: string[]
+    active: boolean
+    newsNotificationsMuted: boolean | null
+    newsInAppEnabled: boolean | null
+    inAppNotificationsEnabled: boolean | null
+    newsDigestFrequency: string | null
+  }>
+
+  try {
+    recipients = await db
+      .select({
+        id: users.id,
+        roles: users.roles,
+        active: users.active,
+        newsNotificationsMuted: userPreferences.newsNotificationsMuted,
+        newsInAppEnabled: userPreferences.newsInAppEnabled,
+        inAppNotificationsEnabled: userPreferences.inAppNotificationsEnabled,
+        newsDigestFrequency: userPreferences.newsDigestFrequency,
+      })
+      .from(users)
+      .leftJoin(userPreferences, eq(users.id, userPreferences.userId))
+  } catch (error) {
+    if (!isMissingNewsPreferenceColumns(error)) throw error
+
+    recipients = await db
+      .select({
+        id: users.id,
+        roles: users.roles,
+        active: users.active,
+        inAppNotificationsEnabled: userPreferences.inAppNotificationsEnabled,
+      })
+      .from(users)
+      .leftJoin(userPreferences, eq(users.id, userPreferences.userId))
+      .then((rows) =>
+        rows.map((row) => ({
+          ...row,
+          newsNotificationsMuted: false,
+          newsInAppEnabled: true,
+          newsDigestFrequency: 'important_only',
+        }))
+      )
+  }
+
+  const eligibleUsers = recipients.filter((user) => {
+    if (!user.active) return false
+    if (user.newsNotificationsMuted ?? false) return false
+    if ((user.newsInAppEnabled ?? true) === false) return false
+    if ((user.inAppNotificationsEnabled ?? true) === false) return false
+    if ((user.newsDigestFrequency ?? 'important_only') === 'weekly_digest') return false
+    if ((user.newsDigestFrequency ?? 'important_only') === 'daily_digest') return false
+    return item.roleTargets.some((role) => user.roles.includes(role))
+  })
+
+  await Promise.allSettled(
+    eligibleUsers.map((user) =>
+      createUserNotification({
+        userId: user.id,
+        kind: 'industry_news',
+        title: item.title,
+        body: item.summary,
+        href: item.roleTargets.includes('admin')
+          ? '/admin/news'
+          : item.roleTargets.includes('sales')
+            ? '/sales/news'
+            : item.roleTargets.includes('staff')
+              ? '/staff/news'
+              : item.roleTargets.includes('taster')
+                ? '/taster/news'
+                : item.roleTargets.includes('driver')
+                  ? '/driver/news'
+                  : '/customer/news',
+        imageUrl: item.thumbnailUrl ?? FALLBACK_THUMBNAIL,
+      })
+    )
+  )
+}
+
 export async function syncIndustryNews(force = false) {
   await ensureDefaultIndustryNewsSources()
   const sources = await db.select().from(industryNewsSources).where(eq(industryNewsSources.active, true))
@@ -371,6 +474,12 @@ export async function syncIndustryNews(force = false) {
           .where(eq(industryNewsSources.id, source.id))
 
         for (const item of parsedItems) {
+          const [existing] = await db
+            .select({ id: industryNewsItems.id })
+            .from(industryNewsItems)
+            .where(eq(industryNewsItems.articleUrl, item.articleUrl))
+            .limit(1)
+
           const scoring = scoreItem(
             source.name,
             item.title,
@@ -424,6 +533,19 @@ export async function syncIndustryNews(force = false) {
                 updatedAt: new Date(),
               },
             })
+
+          if (!existing) {
+            await notifyUsersAboutNewsItem({
+              title: item.title,
+              summary: item.summary,
+              thumbnailUrl: item.thumbnailUrl,
+              roleTargets: scoring.roleTargets,
+              priority: scoring.priority,
+              isWisherRelevant: scoring.isWisherRelevant,
+              isAHAWCRelevant: scoring.isAHAWCRelevant,
+              isMarylandRelevant: scoring.isMarylandRelevant,
+            })
+          }
         }
       } catch (error) {
         await db
@@ -437,6 +559,22 @@ export async function syncIndustryNews(force = false) {
       }
     })
   )
+}
+
+export async function getIndustryNewsSourcesWithStats() {
+  await ensureDefaultIndustryNewsSources()
+  const sources = await db.select().from(industryNewsSources).orderBy(industryNewsSources.name)
+  const itemCounts = await Promise.all(
+    sources.map(async (source) => ({
+      sourceId: source.id,
+      count: await db.$count(industryNewsItems, eq(industryNewsItems.sourceId, source.id)),
+    }))
+  )
+  const countsBySource = new Map(itemCounts.map((row) => [row.sourceId, row.count]))
+  return sources.map((source) => ({
+    ...source,
+    itemCount: countsBySource.get(source.id) ?? 0,
+  }))
 }
 
 async function syncIfStale() {

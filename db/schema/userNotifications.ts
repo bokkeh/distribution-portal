@@ -8,6 +8,7 @@ export const userNotifications = pgTable('user_notifications', {
   title: text('title').notNull(),
   body: text('body').notNull(),
   href: text('href'),
+  imageUrl: text('image_url'),
   readAt: timestamp('read_at', { withTimezone: true }),
   availableAt: timestamp('available_at', { withTimezone: true }).notNull().defaultNow(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

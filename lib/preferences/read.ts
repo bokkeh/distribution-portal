@@ -7,42 +7,46 @@ function isMissingPreferenceTable(error: unknown) {
   const code = (error as { code?: string; cause?: { code?: string } } | null)?.code
     ?? (error as { cause?: { code?: string } } | null)?.cause?.code
   const message = error instanceof Error ? error.message.toLowerCase() : ''
-  return code === '42P01' || message.includes('user_preferences') || message.includes('account_preferences')
+  return code === '42P01'
+    || code === '42703'
+    || message.includes('user_preferences')
+    || message.includes('account_preferences')
+    || message.includes('news_notifications_muted')
+    || message.includes('news_digest_frequency')
+    || message.includes('news_email_enabled')
+    || message.includes('news_sms_enabled')
+    || message.includes('news_in_app_enabled')
+}
+
+function buildDefaultUserPreferences(userId: string) {
+  return {
+    userId,
+    timeZone: DEFAULT_TIME_ZONE,
+    notificationPreference: 'all',
+    emailNotificationsEnabled: true,
+    smsNotificationsEnabled: true,
+    inAppNotificationsEnabled: true,
+    newsNotificationsMuted: false,
+    newsDigestFrequency: 'important_only',
+    newsEmailEnabled: true,
+    newsSmsEnabled: false,
+    newsInAppEnabled: true,
+    quietHoursStart: null,
+    quietHoursEnd: null,
+    tasterOnboardingCompletedAt: null,
+    driverOnboardingCompletedAt: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  }
 }
 
 export async function getUserPreferences(userId: string) {
   try {
     const [row] = await db.select().from(userPreferences).where(eq(userPreferences.userId, userId)).limit(1)
-    return row ?? {
-      userId,
-      timeZone: DEFAULT_TIME_ZONE,
-      notificationPreference: 'all',
-      emailNotificationsEnabled: true,
-      smsNotificationsEnabled: true,
-      inAppNotificationsEnabled: true,
-      quietHoursStart: null,
-      quietHoursEnd: null,
-      tasterOnboardingCompletedAt: null,
-      driverOnboardingCompletedAt: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }
+    return row ?? buildDefaultUserPreferences(userId)
   } catch (error) {
     if (!isMissingPreferenceTable(error)) throw error
-    return {
-      userId,
-      timeZone: DEFAULT_TIME_ZONE,
-      notificationPreference: 'all',
-      emailNotificationsEnabled: true,
-      smsNotificationsEnabled: true,
-      inAppNotificationsEnabled: true,
-      quietHoursStart: null,
-      quietHoursEnd: null,
-      tasterOnboardingCompletedAt: null,
-      driverOnboardingCompletedAt: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }
+    return buildDefaultUserPreferences(userId)
   }
 }
 
