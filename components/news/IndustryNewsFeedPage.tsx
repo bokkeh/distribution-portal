@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { BellRing, ExternalLink, Newspaper, Sparkles, TrendingUp } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { getIndustryNewsSections, type IndustryNewsAudience, type IndustryNewsItem } from '@/lib/industry-news'
 
 const audienceMeta: Record<IndustryNewsAudience, { title: string; description: string }> = {
@@ -87,9 +87,9 @@ function StoryList({ stories }: { stories: IndustryNewsItem[] }) {
               href={story.articleUrl}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
             >
-              Open source
+              Read more
               <ExternalLink className="h-3.5 w-3.5" />
             </a>
           </div>

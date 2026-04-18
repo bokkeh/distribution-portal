@@ -79,8 +79,14 @@ const SOURCE_SEEDS: SourceSeed[] = [
 
 const SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000
 const MAX_ITEMS_PER_SOURCE = 8
-const FALLBACK_THUMBNAIL =
+const LEGACY_FALLBACK_THUMBNAIL =
   'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=1200&q=80'
+const FALLBACK_THUMBNAILS = [
+  '/news/fallbacks/industry-news-1.svg',
+  '/news/fallbacks/industry-news-2.svg',
+  '/news/fallbacks/industry-news-3.svg',
+  '/news/fallbacks/industry-news-4.svg',
+] as const
 
 const audienceHref: Record<IndustryNewsAudience, string> = {
   admin: '/admin/news',
@@ -112,6 +118,26 @@ function stripHtml(value: string) {
     .replace(/&gt;/gi, '>')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+function hashString(value: string) {
+  let hash = 0
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0
+  }
+  return hash
+}
+
+function getFallbackThumbnail(seed: string) {
+  return FALLBACK_THUMBNAILS[hashString(seed) % FALLBACK_THUMBNAILS.length]
+}
+
+function resolveThumbnailUrl(thumbnailUrl: string | null | undefined, seed: string) {
+  const normalized = thumbnailUrl?.trim()
+  if (!normalized || normalized === LEGACY_FALLBACK_THUMBNAIL) {
+    return getFallbackThumbnail(seed)
+  }
+  return normalized
 }
 
 function getTagValue(block: string, tag: string) {
@@ -343,6 +369,7 @@ async function ensureDefaultIndustryNewsSources() {
 }
 
 async function notifyUsersAboutNewsItem(item: {
+  articleUrl: string
   title: string
   summary: string
   thumbnailUrl: string | null
@@ -425,9 +452,9 @@ async function notifyUsersAboutNewsItem(item: {
               : item.roleTargets.includes('taster')
                 ? '/taster/news'
                 : item.roleTargets.includes('driver')
-                  ? '/driver/news'
-                  : '/customer/news',
-        imageUrl: item.thumbnailUrl ?? FALLBACK_THUMBNAIL,
+              ? '/driver/news'
+              : '/customer/news',
+        imageUrl: resolveThumbnailUrl(item.thumbnailUrl, item.articleUrl),
       })
     )
   )
@@ -496,7 +523,7 @@ export async function syncIndustryNews(force = false) {
               articleUrl: item.articleUrl,
               title: item.title,
               summary: item.summary,
-              thumbnailUrl: item.thumbnailUrl ?? FALLBACK_THUMBNAIL,
+              thumbnailUrl: resolveThumbnailUrl(item.thumbnailUrl, item.articleUrl),
               publishedAt: item.publishedAt,
               fetchedAt: new Date(),
               category: scoring.category,
@@ -518,7 +545,7 @@ export async function syncIndustryNews(force = false) {
                 sourceUrl: source.homepageUrl,
                 title: item.title,
                 summary: item.summary,
-                thumbnailUrl: item.thumbnailUrl ?? FALLBACK_THUMBNAIL,
+                thumbnailUrl: resolveThumbnailUrl(item.thumbnailUrl, item.articleUrl),
                 publishedAt: item.publishedAt,
                 fetchedAt: new Date(),
                 category: scoring.category,
@@ -536,6 +563,7 @@ export async function syncIndustryNews(force = false) {
 
           if (!existing) {
             await notifyUsersAboutNewsItem({
+              articleUrl: item.articleUrl,
               title: item.title,
               summary: item.summary,
               thumbnailUrl: item.thumbnailUrl,
@@ -602,7 +630,7 @@ function toClientItem(row: typeof industryNewsItems.$inferSelect): IndustryNewsI
     sourceName: row.sourceName,
     sourceUrl: row.sourceUrl,
     articleUrl: row.articleUrl,
-    thumbnailUrl: row.thumbnailUrl ?? FALLBACK_THUMBNAIL,
+    thumbnailUrl: resolveThumbnailUrl(row.thumbnailUrl, row.articleUrl || row.id),
     publishedAt: (row.publishedAt ?? row.createdAt).toISOString().slice(0, 10),
     category: row.category as IndustryNewsCategory,
     priority: row.priority as 'high' | 'medium' | 'low',

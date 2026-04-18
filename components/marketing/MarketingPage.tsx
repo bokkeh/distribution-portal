@@ -202,10 +202,6 @@ export function MarketingPage() {
                   $44.99 <span className="text-base font-normal text-slate-500">/ bottle</span>
                 </p>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Wholesale Price</p>
-                <p className="mt-1 text-lg font-semibold text-slate-900">$130.00 per case</p>
-              </div>
             </div>
 
             <p className="mt-5 text-sm leading-relaxed text-slate-600 sm:text-base">
