@@ -29,7 +29,7 @@ export function getDashboardForRole(role?: string | null) {
     case 'sales_rep': return '/sales/dashboard'
     case 'sales_manager': return '/sales/dashboard'
     case 'taster': return '/taster'
-    default: return '/login'
+    default: return '/unauthorized'
   }
 }
 
@@ -48,5 +48,5 @@ export function getDashboardForRoles(roles: string[], primaryRole?: string | nul
   if (normalizedRoles.includes('sales_rep')) return getDashboardForRole('sales_rep')
   if (normalizedRoles.includes('taster')) return getDashboardForRole('taster')
 
-  return '/login'
+  return '/unauthorized'
 }

@@ -21,7 +21,8 @@ export default auth((req) => {
   const viewAsRoles = isAdmin ? parseViewAsRoles(req.cookies.get(VIEW_AS_ROLES_COOKIE)?.value) : []
   const effectiveRole = viewAsUserId ? (viewAsRole ?? viewAsRoles[0]) : role
   const effectiveRoles = viewAsUserId ? normalizeRoleList(effectiveRole, viewAsRoles) : realRoles
-  const redirectHome = () => NextResponse.redirect(new URL(getDashboardForRole(effectiveRole), req.url))
+  const dashboardPath = getDashboardForRole(effectiveRole ?? realRoles[0] ?? role)
+  const redirectHome = () => NextResponse.redirect(new URL(dashboardPath, req.url))
 
   if (pathname.startsWith('/share') || pathname === '/join' || pathname.startsWith('/pay') || pathname === '/taster-signup') {
     return NextResponse.next()
@@ -29,7 +30,7 @@ export default auth((req) => {
 
   if (pathname === '/login' || pathname === '/' || pathname === '/privacy' || pathname === '/terms') {
     if (session) {
-      return NextResponse.redirect(new URL(getDashboardForRole(effectiveRole), req.url))
+      return NextResponse.redirect(new URL(dashboardPath, req.url))
     }
     return NextResponse.next()
   }
