@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, LogIn, LogOut, Eye } from 'lucide-react'
+import { ArrowLeft, LogIn, LogOut } from 'lucide-react'
 import { db } from '@/db'
 import { customerAccounts, drivers, userFeatureSettings, users } from '@/db/schema'
 import { Badge } from '@/components/ui/badge'
@@ -68,9 +68,21 @@ export default async function UserDetailPage({ params }: { params: Promise<{ use
           <h1 className="text-2xl font-bold text-slate-900">{user.name}</h1>
           <p className="text-muted-foreground mt-1">{user.email}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <Badge variant={user.active ? 'success' : 'secondary'}>{user.active ? 'Active' : 'Inactive'}</Badge>
-          {canSwitchView && <ViewAsButton userId={user.id} userName={user.name} />}
+          {canSwitchView ? (
+            user.roles.length > 1 ? user.roles.map((role) => (
+              <ViewAsButton
+                key={role}
+                userId={user.id}
+                userName={user.name}
+                role={role}
+                label={`View as ${role.replace('_', ' ')}`}
+              />
+            )) : (
+              <ViewAsButton userId={user.id} userName={user.name} role={user.role} />
+            )
+          ) : null}
         </div>
       </div>
 

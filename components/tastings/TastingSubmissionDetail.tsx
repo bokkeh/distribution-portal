@@ -103,7 +103,6 @@ export function TastingSubmissionDetail({
   error?: string
 }) {
   const invoiceLocked = invoice?.status === 'approved' || invoice?.status === 'paid'
-  const invoiceReady = Boolean(report) || tasting.status === 'completed'
   const defaultHoursWorked = useMemo(() => getDefaultHoursWorked(report, invoice), [invoice, report])
   const [hoursWorked, setHoursWorked] = useState(() => invoice?.hoursWorked ?? defaultHoursWorked)
   const [expenseAmount, setExpenseAmount] = useState(() => invoice?.expenseAmount ?? '0.00')
@@ -256,7 +255,7 @@ export function TastingSubmissionDetail({
                 <span className="text-slate-500">{invoice ? `Status: ${invoice.status}` : 'Draft mode'}</span>
               </div>
 
-              <Button type="submit" className="w-full" disabled={!invoiceReady || invoiceLocked}>{invoice ? 'Update Invoice' : 'Submit Invoice'}</Button>
+              <Button type="submit" className="w-full" disabled={invoiceLocked}>{invoice ? 'Update Invoice' : 'Submit Invoice'}</Button>
             </form>
           </CardContent>
         </Card>

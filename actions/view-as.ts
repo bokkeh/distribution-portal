@@ -34,7 +34,7 @@ function getCookieOptions() {
   }
 }
 
-export async function startViewAsUser(targetUserId: string): Promise<{ error?: string }> {
+export async function startViewAsUser(targetUserId: string, preferredRole?: string): Promise<{ error?: string }> {
   await requireAdmin()
 
   const [target] = await db
@@ -47,12 +47,13 @@ export async function startViewAsUser(targetUserId: string): Promise<{ error?: s
 
   const jar = await cookies()
   const roles = Array.from(new Set([...(target.roles ?? []), ...(target.role ? [target.role] : [])].filter(Boolean)))
+  const selectedRole = preferredRole && roles.includes(preferredRole) ? preferredRole : target.role
   const cookieOptions = getCookieOptions()
   jar.set(VIEW_AS_COOKIE, targetUserId, cookieOptions)
-  jar.set(VIEW_AS_ROLE_COOKIE, target.role, cookieOptions)
+  jar.set(VIEW_AS_ROLE_COOKIE, selectedRole, cookieOptions)
   jar.set(VIEW_AS_ROLES_COOKIE, serializeViewAsRoles(roles), cookieOptions)
 
-  redirect(getDashboardForRoles(roles, target.role))
+  redirect(getDashboardForRoles(roles, selectedRole))
 }
 
 export async function stopViewAsUser(): Promise<void> {

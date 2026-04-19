@@ -7,16 +7,17 @@ import { useTransition } from 'react'
 interface Props {
   userId: string
   userName: string | null
+  role?: string
   label?: string
   className?: string
 }
 
-export function ViewAsButton({ userId, userName, label, className }: Props) {
+export function ViewAsButton({ userId, userName, role, label, className }: Props) {
   const [isPending, startTransition] = useTransition()
 
   function handleViewAs() {
     startTransition(async () => {
-      await startViewAsUser(userId)
+      await startViewAsUser(userId, role)
     })
   }
 

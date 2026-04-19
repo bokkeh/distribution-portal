@@ -255,6 +255,7 @@ export function TasterTeamPanel({
                         <ViewAsButton
                           userId={taster.id}
                           userName={taster.name}
+                          role="taster"
                           label="View taster portal"
                           className="flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-xs font-semibold text-violet-700 transition-colors hover:bg-violet-100 disabled:opacity-50"
                         />
