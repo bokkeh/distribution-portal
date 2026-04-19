@@ -7,7 +7,14 @@ import { db } from '@/db'
 import { userFeatureSettings, users } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import type { Session } from 'next-auth'
-import { normalizeRoleList, VIEW_AS_COOKIE } from '@/lib/auth/view-as'
+import {
+  hasActiveViewAs,
+  normalizeRoleList,
+  parseViewAsRoles,
+  VIEW_AS_COOKIE,
+  VIEW_AS_ROLE_COOKIE,
+  VIEW_AS_ROLES_COOKIE,
+} from '@/lib/auth/view-as'
 
 async function applyViewAs(session: Session): Promise<Session> {
   const roles = normalizeRoleList(session.user.role as string, session.user.roles)
@@ -16,7 +23,9 @@ async function applyViewAs(session: Session): Promise<Session> {
   try {
     const jar = await cookies()
     const viewAsUserId = jar.get(VIEW_AS_COOKIE)?.value
-    if (!viewAsUserId) return session
+    const viewAsRole = jar.get(VIEW_AS_ROLE_COOKIE)?.value
+    const viewAsRoles = parseViewAsRoles(jar.get(VIEW_AS_ROLES_COOKIE)?.value)
+    if (!viewAsUserId || !hasActiveViewAs(viewAsUserId, viewAsRole, viewAsRoles)) return session
 
     const [target] = await db
       .select({
@@ -81,7 +90,12 @@ export async function requireRole(...roles: string[]): Promise<Session> {
 }
 
 export async function requireAdmin() {
-  return requireRole('admin')
+  const rawSession = await auth()
+  if (!rawSession) redirect('/login')
+  const session = rawSession as Session
+  const realRoles = normalizeRoleList(session.user.role as string, session.user.roles)
+  if (!realRoles.includes('admin')) redirect('/unauthorized')
+  return session
 }
 
 export async function requireAdminOrStaff() {

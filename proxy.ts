@@ -2,6 +2,7 @@ import { auth } from '@/lib/auth/config'
 import { NextResponse } from 'next/server'
 import {
   getDashboardForRole,
+  hasActiveViewAs,
   normalizeRoleList,
   parseViewAsRoles,
   VIEW_AS_COOKIE,
@@ -19,10 +20,19 @@ export default auth((req) => {
   const viewAsUserId = isAdmin ? req.cookies.get(VIEW_AS_COOKIE)?.value : undefined
   const viewAsRole = isAdmin ? req.cookies.get(VIEW_AS_ROLE_COOKIE)?.value : undefined
   const viewAsRoles = isAdmin ? parseViewAsRoles(req.cookies.get(VIEW_AS_ROLES_COOKIE)?.value) : []
-  const effectiveRole = viewAsUserId ? (viewAsRole ?? viewAsRoles[0]) : role
-  const effectiveRoles = viewAsUserId ? normalizeRoleList(effectiveRole, viewAsRoles) : realRoles
+  const isViewAsActive = hasActiveViewAs(viewAsUserId, viewAsRole, viewAsRoles)
+  const effectiveRole = isViewAsActive ? (viewAsRole ?? viewAsRoles[0]) : (realRoles[0] ?? role)
+  const effectiveRoles = isViewAsActive ? normalizeRoleList(effectiveRole, viewAsRoles) : realRoles
   const dashboardPath = getDashboardForRole(effectiveRole ?? realRoles[0] ?? role)
   const redirectHome = () => NextResponse.redirect(new URL(dashboardPath, req.url))
+  const withSanitizedViewAsCookies = (response: NextResponse) => {
+    if (isAdmin && viewAsUserId && !isViewAsActive) {
+      response.cookies.delete(VIEW_AS_COOKIE)
+      response.cookies.delete(VIEW_AS_ROLE_COOKIE)
+      response.cookies.delete(VIEW_AS_ROLES_COOKIE)
+    }
+    return response
+  }
 
   if (pathname.startsWith('/share') || pathname === '/join' || pathname.startsWith('/pay') || pathname === '/taster-signup') {
     return NextResponse.next()
@@ -30,44 +40,48 @@ export default auth((req) => {
 
   if (pathname === '/login' || pathname === '/' || pathname === '/privacy' || pathname === '/terms') {
     if (session) {
-      return NextResponse.redirect(new URL(dashboardPath, req.url))
+      return withSanitizedViewAsCookies(NextResponse.redirect(new URL(dashboardPath, req.url)))
     }
-    return NextResponse.next()
+    return withSanitizedViewAsCookies(NextResponse.next())
   }
 
   if (!session) {
     return NextResponse.redirect(new URL('/login', req.url))
   }
 
+  if (pathname.startsWith('/admin') && isAdmin) {
+    return withSanitizedViewAsCookies(NextResponse.next())
+  }
+
   if (effectiveRoles.includes('admin')) {
-    return NextResponse.next()
+    return withSanitizedViewAsCookies(NextResponse.next())
   }
 
   if (pathname.startsWith('/admin') && !effectiveRoles.includes('admin')) {
-    return viewAsUserId ? redirectHome() : NextResponse.redirect(new URL('/unauthorized', req.url))
+    return withSanitizedViewAsCookies(viewAsUserId ? redirectHome() : NextResponse.redirect(new URL('/unauthorized', req.url)))
   }
 
   if (pathname.startsWith('/staff') && !effectiveRoles.some((nextRole) => ['admin', 'staff'].includes(nextRole))) {
-    return viewAsUserId ? redirectHome() : NextResponse.redirect(new URL('/unauthorized', req.url))
+    return withSanitizedViewAsCookies(viewAsUserId ? redirectHome() : NextResponse.redirect(new URL('/unauthorized', req.url)))
   }
 
   if (pathname.startsWith('/driver') && !effectiveRoles.includes('driver')) {
-    return viewAsUserId ? redirectHome() : NextResponse.redirect(new URL('/unauthorized', req.url))
+    return withSanitizedViewAsCookies(viewAsUserId ? redirectHome() : NextResponse.redirect(new URL('/unauthorized', req.url)))
   }
 
   if (pathname.startsWith('/customer') && !effectiveRoles.includes('customer')) {
-    return viewAsUserId ? redirectHome() : NextResponse.redirect(new URL('/unauthorized', req.url))
+    return withSanitizedViewAsCookies(viewAsUserId ? redirectHome() : NextResponse.redirect(new URL('/unauthorized', req.url)))
   }
 
   if (pathname.startsWith('/sales') && !effectiveRoles.some((nextRole) => ['admin', 'sales_rep', 'sales_manager'].includes(nextRole))) {
-    return viewAsUserId ? redirectHome() : NextResponse.redirect(new URL('/unauthorized', req.url))
+    return withSanitizedViewAsCookies(viewAsUserId ? redirectHome() : NextResponse.redirect(new URL('/unauthorized', req.url)))
   }
 
   if (pathname.startsWith('/taster') && !effectiveRoles.some((nextRole) => ['admin', 'taster'].includes(nextRole))) {
-    return viewAsUserId ? redirectHome() : NextResponse.redirect(new URL('/unauthorized', req.url))
+    return withSanitizedViewAsCookies(viewAsUserId ? redirectHome() : NextResponse.redirect(new URL('/unauthorized', req.url)))
   }
 
-  return NextResponse.next()
+  return withSanitizedViewAsCookies(NextResponse.next())
 })
 
 export const config = {

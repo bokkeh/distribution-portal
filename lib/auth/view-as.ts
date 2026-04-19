@@ -20,6 +20,14 @@ export function parseViewAsRoles(serializedRoles: string | null | undefined) {
   ))
 }
 
+export function hasActiveViewAs(
+  viewAsUserId: string | null | undefined,
+  viewAsRole: string | null | undefined,
+  viewAsRoles: string[] | null | undefined,
+) {
+  return Boolean(viewAsUserId && normalizeRoleList(viewAsRole, viewAsRoles ?? undefined).length > 0)
+}
+
 export function getDashboardForRole(role?: string | null) {
   switch (role) {
     case 'admin': return '/admin/dashboard'

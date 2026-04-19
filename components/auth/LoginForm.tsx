@@ -12,6 +12,7 @@ import { signIn } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Chrome, Loader2, CheckCircle2 } from 'lucide-react'
 import { registerCustomerAccount } from '@/actions/auth'
+import { getDashboardForRoles } from '@/lib/auth/view-as'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -26,13 +27,7 @@ async function getPostLoginDestination() {
   const role = session?.user?.role as string | undefined
   const roles = ((session?.user?.roles as string[] | undefined) ?? (role ? [role] : []))
 
-  return roles.includes('admin') ? '/admin/dashboard'
-    : roles.includes('staff') ? '/staff/dashboard'
-    : roles.includes('driver') ? '/driver/deliveries'
-    : roles.includes('sales_rep') || roles.includes('sales_manager') ? '/sales/dashboard'
-    : roles.includes('taster') ? '/taster/welcome'
-    : roles.includes('customer') ? '/customer/dashboard'
-    : '/'
+  return getDashboardForRoles(roles, role)
 }
 
 export function LoginForm({ onSuccess }: Props) {
