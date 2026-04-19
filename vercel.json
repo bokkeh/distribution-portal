@@ -27,7 +27,7 @@
     },
     {
       "path": "/api/cron/industry-news",
-      "schedule": "0 */6 * * *"
+      "schedule": "0 12 * * *"
     }
   ],
   "headers": [

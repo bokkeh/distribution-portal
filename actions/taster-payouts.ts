@@ -38,7 +38,7 @@ export async function payoutTasterInvoiceViaStripe(formData: FormData) {
     id: string
     totalAmount: string
     status: string
-    submittedByUserId: string
+    payoutUserId: string
     payeeName: string
     tastingId: string
     eventName: string
@@ -51,7 +51,7 @@ export async function payoutTasterInvoiceViaStripe(formData: FormData) {
         id: tasterInvoices.id,
         totalAmount: tasterInvoices.totalAmount,
         status: tasterInvoices.status,
-        submittedByUserId: tasterInvoices.submittedByUserId,
+        payoutUserId: tastings.assignedUserId,
         payeeName: tasterInvoices.payeeName,
         tastingId: tasterInvoices.tastingId,
         eventName: tastings.eventName,
@@ -59,7 +59,7 @@ export async function payoutTasterInvoiceViaStripe(formData: FormData) {
       })
       .from(tasterInvoices)
       .innerJoin(tastings, eq(tasterInvoices.tastingId, tastings.id))
-      .innerJoin(users, eq(tasterInvoices.submittedByUserId, users.id))
+      .innerJoin(users, eq(tastings.assignedUserId, users.id))
       .where(eq(tasterInvoices.id, invoiceId))
       .limit(1)
   } catch (error) {
@@ -106,7 +106,7 @@ export async function payoutTasterInvoiceViaStripe(formData: FormData) {
       entityType: 'tasting',
       entityId: invoice.tastingId,
       actorUserId: session.user.id,
-      relatedUserId: invoice.submittedByUserId,
+      relatedUserId: invoice.payoutUserId,
       kind: 'taster_invoice_payout_failed',
       title: 'Taster payout failed',
       body: getStripeErrorMessage(error),
@@ -126,7 +126,7 @@ export async function payoutTasterInvoiceViaStripe(formData: FormData) {
     entityType: 'tasting',
     entityId: invoice.tastingId,
     actorUserId: session.user.id,
-    relatedUserId: invoice.submittedByUserId,
+    relatedUserId: invoice.payoutUserId,
     kind: 'taster_invoice_paid',
     title: 'Taster invoice paid via Stripe',
     body: `${invoice.payeeName} was paid $${Number(invoice.totalAmount).toFixed(2)} via Stripe.`,
@@ -139,7 +139,7 @@ export async function payoutTasterInvoiceViaStripe(formData: FormData) {
   })
 
   await createUserNotification({
-    userId: invoice.submittedByUserId,
+    userId: invoice.payoutUserId,
     kind: 'taster_invoice_paid',
     title: 'Stripe payout sent',
     body: `Your tasting invoice for ${invoice.eventName} has been paid out via Stripe.`,
@@ -163,10 +163,11 @@ export async function approveTasterInvoice(formData: FormData) {
       id: tasterInvoices.id,
       tastingId: tasterInvoices.tastingId,
       payeeName: tasterInvoices.payeeName,
-      submittedByUserId: tasterInvoices.submittedByUserId,
+      payoutUserId: tastings.assignedUserId,
       status: tasterInvoices.status,
     })
     .from(tasterInvoices)
+    .innerJoin(tastings, eq(tasterInvoices.tastingId, tastings.id))
     .where(eq(tasterInvoices.id, invoiceId))
     .limit(1)
 
@@ -188,7 +189,7 @@ export async function approveTasterInvoice(formData: FormData) {
       entityType: 'tasting',
       entityId: invoice.tastingId,
       actorUserId: session.user.id,
-      relatedUserId: invoice.submittedByUserId,
+      relatedUserId: invoice.payoutUserId,
       kind: 'taster_invoice_approved',
       title: 'Taster invoice approved',
       body: `${invoice.payeeName}'s invoice was approved for payout.`,

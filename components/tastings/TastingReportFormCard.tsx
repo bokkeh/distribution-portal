@@ -58,7 +58,7 @@ export function TastingReportFormCard({
   const [uploadingShelf, setUploadingShelf] = useState<boolean[]>([false, false, false, false])
 
   useEffect(() => {
-    if (success === 'report_submitted') reportDraft.clearDraft()
+    if (success === 'Tasting report submitted.') reportDraft.clearDraft()
   }, [reportDraft, success])
 
   async function handleUploadSetup(file: File) {

@@ -29,7 +29,7 @@ export default async function TasterPayoutsPage() {
       })
       .from(tasterInvoices)
       .innerJoin(tastings, eq(tasterInvoices.tastingId, tastings.id))
-      .where(eq(tasterInvoices.submittedByUserId, userId))
+      .where(eq(tastings.assignedUserId, userId))
       .orderBy(desc(tasterInvoices.submittedAt)),
     db
       .select({

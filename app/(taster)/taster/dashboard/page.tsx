@@ -73,7 +73,8 @@ export default async function TasterDashboardPage({
         status: tasterInvoices.status,
       })
       .from(tasterInvoices)
-      .where(eq(tasterInvoices.submittedByUserId, session.user.id))
+      .innerJoin(tastings, eq(tasterInvoices.tastingId, tastings.id))
+      .where(eq(tastings.assignedUserId, session.user.id))
 
     const payoutSubmitted = invoiceRows.reduce((sum, invoice) => sum + Number(invoice.totalAmount ?? '0'), 0)
     const payoutPaid = invoiceRows

@@ -87,6 +87,28 @@ function isMissingTasterAvailabilityTable(error: unknown) {
   return code === '42p01' || message.includes('taster_availability')
 }
 
+function parseNonNegativeDecimalField(value: FormDataEntryValue | null, fieldLabel: string, maxValue?: number) {
+  const rawValue = String(value ?? '').trim()
+  const parsedValue = Number(rawValue || '0')
+
+  if (!Number.isFinite(parsedValue)) {
+    return { error: `Enter a valid ${fieldLabel.toLowerCase()}.` }
+  }
+
+  if (parsedValue < 0) {
+    return { error: `${fieldLabel} cannot be negative.` }
+  }
+
+  if (maxValue != null && parsedValue > maxValue) {
+    return { error: `${fieldLabel} looks too high. Please review it and try again.` }
+  }
+
+  return {
+    numericValue: parsedValue,
+    formattedValue: parsedValue.toFixed(2),
+  }
+}
+
 async function getSalesMemberIdForUser(userId: string) {
   const [member] = await db
     .select({ id: salesMembers.id, status: salesMembers.status })
@@ -970,8 +992,20 @@ export async function submitTasterInvoice(formData: FormData) {
     redirect(`/taster/tastings/${tastingId}?error=${encodeURIComponent('You can submit an invoice after the tasting is marked completed.')}`)
   }
 
-  const hoursWorked = (formData.get('hoursWorked') as string) || '0'
-  const expenseAmount = (formData.get('expenseAmount') as string) || '0'
+  const hoursWorkedResult = parseNonNegativeDecimalField(formData.get('hoursWorked'), 'Hours worked', 24)
+  if ('error' in hoursWorkedResult) {
+    redirect(`/taster/tastings/${tastingId}?error=${encodeURIComponent(hoursWorkedResult.error)}`)
+  }
+
+  const expenseAmountResult = parseNonNegativeDecimalField(formData.get('expenseAmount'), 'Expense amount', 10000)
+  if ('error' in expenseAmountResult) {
+    redirect(`/taster/tastings/${tastingId}?error=${encodeURIComponent(expenseAmountResult.error)}`)
+  }
+
+  if (hoursWorkedResult.numericValue === 0 && expenseAmountResult.numericValue === 0) {
+    redirect(`/taster/tastings/${tastingId}?error=${encodeURIComponent('Enter hours worked or reimbursable expenses before submitting the invoice.')}`)
+  }
+
   const receiptUrls = Array.from(
     new Set(
       formData
@@ -997,18 +1031,20 @@ export async function submitTasterInvoice(formData: FormData) {
     .from(users)
     .where(eq(users.id, tasting.assignedUserId ?? session.user.id))
     .limit(1)
-  const hourlyRate = tasterUser?.tasterHourlyRate ?? '25'
-  const totalAmount = (Number(hourlyRate) * Number(hoursWorked) + Number(expenseAmount)).toFixed(2)
+  const hourlyRateNumber = Number(tasterUser?.tasterHourlyRate ?? '25')
+  const hourlyRate = Number.isFinite(hourlyRateNumber) && hourlyRateNumber >= 0 ? hourlyRateNumber.toFixed(2) : '25.00'
+  const totalAmount = ((Number(hourlyRate) * hoursWorkedResult.numericValue) + expenseAmountResult.numericValue).toFixed(2)
+  const invoiceOwnerUserId = tasting.assignedUserId ?? session.user.id
 
   const payload = {
-    submittedByUserId: session.user.id,
+    submittedByUserId: invoiceOwnerUserId,
     payeeName: (formData.get('payeeName') as string) || session.user.name || 'Taster',
     payeeEmail: (formData.get('payeeEmail') as string) || session.user.email || '',
     payeePhone: (formData.get('payeePhone') as string) || null,
     hourlyRate,
-    hoursWorked,
+    hoursWorked: hoursWorkedResult.formattedValue,
     mileage: '0',
-    expenseAmount,
+    expenseAmount: expenseAmountResult.formattedValue,
     totalAmount,
     receiptUrls,
     notes: ((formData.get('notes') as string) || '').trim() || null,
@@ -1060,15 +1096,17 @@ export async function submitTasterInvoice(formData: FormData) {
     tastingDate: formatEasternDateTime(tasting.scheduledAt),
     storeAddress: [tasting.storeAddress, tasting.storeCity, tasting.storeState, tasting.storeZip].filter(Boolean).join(', '),
     hourlyRate,
-    hoursWorked,
-    expenseAmount,
+    hoursWorked: hoursWorkedResult.formattedValue,
+    expenseAmount: expenseAmountResult.formattedValue,
     totalAmount,
     receiptUrls,
     notes: payload.notes,
   })
 
   revalidatePath('/admin/tastings')
+  revalidatePath('/admin/invoicing')
   revalidatePath('/staff/tastings')
+  revalidatePath('/staff/invoicing')
   revalidatePath('/taster/tastings')
   revalidatePath('/taster/payouts')
   redirect(`/taster/tastings/${tastingId}?success=${encodeURIComponent('Invoice submitted to accounting.')}`)

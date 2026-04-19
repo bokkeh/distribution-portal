@@ -1,5 +1,5 @@
 import { db } from '@/db'
-import { activityEvents, customerAccounts, invoices, tasterInvoices, tastings, users } from '@/db/schema'
+import { activityEvents, customerAccounts, invoices, tasterInvoices, tastings } from '@/db/schema'
 import { desc, eq, inArray } from 'drizzle-orm'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,9 @@ export default async function StaffInvoicingPage({
   let tasterInvoiceSubmissions: Array<{
     id: string
     tastingId: string
+    hourlyRate: string
+    hoursWorked: string
+    expenseAmount: string
     totalAmount: string
     status: string
     submittedAt: Date
@@ -52,6 +55,9 @@ export default async function StaffInvoicingPage({
       .select({
         id: tasterInvoices.id,
         tastingId: tasterInvoices.tastingId,
+        hourlyRate: tasterInvoices.hourlyRate,
+        hoursWorked: tasterInvoices.hoursWorked,
+        expenseAmount: tasterInvoices.expenseAmount,
         totalAmount: tasterInvoices.totalAmount,
         status: tasterInvoices.status,
         submittedAt: tasterInvoices.submittedAt,
@@ -62,7 +68,6 @@ export default async function StaffInvoicingPage({
       })
       .from(tasterInvoices)
       .innerJoin(tastings, eq(tasterInvoices.tastingId, tastings.id))
-      .innerJoin(users, eq(tasterInvoices.submittedByUserId, users.id))
       .orderBy(desc(tasterInvoices.submittedAt))
 
     payoutEvents = await db
@@ -206,7 +211,12 @@ export default async function StaffInvoicingPage({
                         <p className="text-xs text-muted-foreground">{formatDate(invoice.scheduledAt)}</p>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-sm font-semibold">{formatCurrency(invoice.totalAmount)}</td>
+                    <td className="px-6 py-4">
+                      <p className="text-sm font-semibold">{formatCurrency(invoice.totalAmount)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {Number(invoice.hoursWorked).toFixed(2)} hrs @ {formatCurrency(invoice.hourlyRate)}{Number(invoice.expenseAmount) > 0 ? ` + ${formatCurrency(invoice.expenseAmount)} exp` : ''}
+                      </p>
+                    </td>
                     <td className="px-6 py-4"><Badge variant={tasterStatusVariant[invoice.status] ?? 'secondary'}>{invoice.status}</Badge></td>
                     <td className="px-6 py-4 text-sm text-muted-foreground">{formatDate(invoice.submittedAt)}</td>
                     <td className="px-6 py-4">

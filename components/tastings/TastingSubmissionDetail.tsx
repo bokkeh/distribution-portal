@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { submitTasterInvoice } from '@/actions/tastings'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useFormDraftAutosave } from '@/hooks/useFormDraftAutosave'
 import { formatEasternDateTime } from '@/lib/tastings/time'
+import { formatCurrency } from '@/lib/utils'
 import { TasterInvoiceReceiptField } from './TasterInvoiceReceiptField'
 import { TastingReportFormCard } from './TastingReportFormCard'
 
@@ -42,6 +43,32 @@ type InvoiceRecord = {
   status: string
   submittedAt: Date
 } | null
+
+function parseTimeToMinutes(value: string | null | undefined) {
+  if (!value) return null
+  const match = value.match(/^(\d{1,2}):(\d{2})$/)
+  if (!match) return null
+
+  const hours = Number(match[1])
+  const minutes = Number(match[2])
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null
+
+  return (hours * 60) + minutes
+}
+
+function getDefaultHoursWorked(report: ReportRecord, invoice: InvoiceRecord) {
+  if (invoice?.hoursWorked) return invoice.hoursWorked
+
+  const startMinutes = parseTimeToMinutes(report?.actualStartTime)
+  const endMinutes = parseTimeToMinutes(report?.actualEndTime)
+  if (startMinutes == null || endMinutes == null || endMinutes <= startMinutes) {
+    return '2.00'
+  }
+
+  const roundedQuarterHours = Math.round((endMinutes - startMinutes) / 15) / 4
+  return Math.max(0.25, roundedQuarterHours).toFixed(2)
+}
 
 export function TastingSubmissionDetail({
   tasting,
@@ -77,18 +104,21 @@ export function TastingSubmissionDetail({
 }) {
   const invoiceLocked = invoice?.status === 'approved' || invoice?.status === 'paid'
   const invoiceReady = tasting.status === 'completed'
+  const defaultHoursWorked = useMemo(() => getDefaultHoursWorked(report, invoice), [invoice, report])
+  const [hoursWorked, setHoursWorked] = useState(() => invoice?.hoursWorked ?? defaultHoursWorked)
+  const [expenseAmount, setExpenseAmount] = useState(() => invoice?.expenseAmount ?? '0.00')
   const totalEstimate = useMemo(() => {
     const rate = Number(adminHourlyRate ?? invoice?.hourlyRate ?? '25')
-    const hours = Number(invoice?.hoursWorked ?? '2')
-    const expenses = Number(invoice?.expenseAmount ?? '0')
+    const hours = Number(hoursWorked || '0')
+    const expenses = Number(expenseAmount || '0')
     return (rate * hours) + expenses
-  }, [adminHourlyRate, invoice?.expenseAmount, invoice?.hourlyRate, invoice?.hoursWorked])
+  }, [adminHourlyRate, expenseAmount, hoursWorked, invoice?.hourlyRate])
 
   const invoiceFormRef = useRef<HTMLFormElement | null>(null)
   const invoiceDraft = useFormDraftAutosave(invoiceFormRef, `tasting-invoice:${tasting.id}`)
 
   useEffect(() => {
-    if (success === 'invoice_submitted') invoiceDraft.clearDraft()
+    if (success === 'Invoice submitted to accounting.') invoiceDraft.clearDraft()
   }, [invoiceDraft, success])
 
   return (
@@ -154,12 +184,32 @@ export function TastingSubmissionDetail({
 
               <div className="space-y-2">
                 <Label htmlFor="hoursWorked">Hours Worked</Label>
-                <Input id="hoursWorked" name="hoursWorked" type="number" step="0.25" min="0" defaultValue={invoice?.hoursWorked ?? '2.00'} required />
+                <Input
+                  id="hoursWorked"
+                  name="hoursWorked"
+                  type="number"
+                  step="0.25"
+                  min="0"
+                  value={hoursWorked}
+                  onChange={(event) => setHoursWorked(event.target.value)}
+                  required
+                />
+                <p className="text-xs text-slate-500">
+                  Adjust this to match the actual shift length. {report?.actualStartTime && report?.actualEndTime ? 'Prefilled from your report times.' : 'Use 15-minute increments if possible.'}
+                </p>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="expenseAmount">Other Expenses ($)</Label>
-                <Input id="expenseAmount" name="expenseAmount" type="number" step="0.01" min="0" defaultValue={invoice?.expenseAmount ?? '0.00'} />
+                <Input
+                  id="expenseAmount"
+                  name="expenseAmount"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={expenseAmount}
+                  onChange={(event) => setExpenseAmount(event.target.value)}
+                />
               </div>
 
               <TasterInvoiceReceiptField value={invoice?.receiptUrls ?? []} disabled={invoiceLocked} />
@@ -167,9 +217,11 @@ export function TastingSubmissionDetail({
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
                 <span className="text-slate-500">Estimated total: </span>
                 <span className="font-semibold text-slate-900">
-                  ${invoice?.totalAmount ?? totalEstimate.toFixed(2)}
+                  {formatCurrency(invoiceLocked ? invoice?.totalAmount ?? totalEstimate : totalEstimate)}
                 </span>
-                <span className="ml-2 text-xs text-slate-400">(calculated by accounting)</span>
+                <span className="ml-2 text-xs text-slate-400">
+                  ({formatCurrency(adminHourlyRate ?? invoice?.hourlyRate ?? '25')}/hr + expenses)
+                </span>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="notes">Invoice Notes</Label>

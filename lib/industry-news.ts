@@ -132,6 +132,11 @@ function getFallbackThumbnail(seed: string) {
   return FALLBACK_THUMBNAILS[hashString(seed) % FALLBACK_THUMBNAILS.length]
 }
 
+function isFallbackThumbnail(thumbnailUrl: string | null | undefined) {
+  if (!thumbnailUrl) return true
+  return thumbnailUrl === LEGACY_FALLBACK_THUMBNAIL || FALLBACK_THUMBNAILS.includes(thumbnailUrl as typeof FALLBACK_THUMBNAILS[number])
+}
+
 function resolveThumbnailUrl(thumbnailUrl: string | null | undefined, seed: string) {
   const normalized = thumbnailUrl?.trim()
   if (!normalized || normalized === LEGACY_FALLBACK_THUMBNAIL) {
@@ -160,6 +165,19 @@ function absolutizeUrl(value: string | null, baseUrl: string) {
   }
 }
 
+function isLikelyImageUrl(value: string | null) {
+  if (!value) return false
+
+  try {
+    const url = new URL(value)
+    if (!['http:', 'https:'].includes(url.protocol)) return false
+    if (/\.(css|js|json|xml|ico|woff2?|ttf|eot|pdf)(\?|$)/i.test(url.pathname)) return false
+    return true
+  } catch {
+    return false
+  }
+}
+
 function findThumbnail(block: string, baseUrl: string) {
   const candidates = [
     getAttributeValue(block, 'media:content', 'url'),
@@ -174,6 +192,130 @@ function findThumbnail(block: string, baseUrl: string) {
   }
 
   return null
+}
+
+function getMetaContent(html: string, key: string) {
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const patterns = [
+    new RegExp(`<meta[^>]+property=["']${escapedKey}["'][^>]+content=["']([^"']+)["'][^>]*>`, 'i'),
+    new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+property=["']${escapedKey}["'][^>]*>`, 'i'),
+    new RegExp(`<meta[^>]+name=["']${escapedKey}["'][^>]+content=["']([^"']+)["'][^>]*>`, 'i'),
+    new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+name=["']${escapedKey}["'][^>]*>`, 'i'),
+    new RegExp(`<meta[^>]+itemprop=["']${escapedKey}["'][^>]+content=["']([^"']+)["'][^>]*>`, 'i'),
+    new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+itemprop=["']${escapedKey}["'][^>]*>`, 'i'),
+  ]
+
+  for (const pattern of patterns) {
+    const match = pattern.exec(html)?.[1]
+    if (match) return match
+  }
+
+  return null
+}
+
+function getLinkHref(html: string, rel: string) {
+  const escapedRel = rel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const patterns = [
+    new RegExp(`<link[^>]+rel=["'][^"']*${escapedRel}[^"']*["'][^>]+href=["']([^"']+)["'][^>]*>`, 'i'),
+    new RegExp(`<link[^>]+href=["']([^"']+)["'][^>]+rel=["'][^"']*${escapedRel}[^"']*["'][^>]*>`, 'i'),
+  ]
+
+  for (const pattern of patterns) {
+    const match = pattern.exec(html)?.[1]
+    if (match) return match
+  }
+
+  return null
+}
+
+function extractJsonLdImage(value: unknown): string | null {
+  if (!value) return null
+  if (typeof value === 'string') return value
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const nested = extractJsonLdImage(item)
+      if (nested) return nested
+    }
+    return null
+  }
+
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    return typeof record.url === 'string'
+      ? record.url
+      : typeof record.contentUrl === 'string'
+        ? record.contentUrl
+        : null
+  }
+
+  return null
+}
+
+function findJsonLdThumbnail(html: string, baseUrl: string) {
+  const blocks = [...html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)]
+    .map(match => match[1])
+
+  for (const block of blocks) {
+    try {
+      const parsed = JSON.parse(block.trim()) as unknown
+      const queue = Array.isArray(parsed) ? [...parsed] : [parsed]
+
+      while (queue.length) {
+        const current = queue.shift()
+        if (!current || typeof current !== 'object') continue
+
+        const record = current as Record<string, unknown>
+        const image = extractJsonLdImage(record.image)
+        const imageUrl = absolutizeUrl(image, baseUrl)
+        if (imageUrl && isLikelyImageUrl(imageUrl)) return imageUrl
+
+        if (Array.isArray(record['@graph'])) queue.push(...record['@graph'])
+      }
+    } catch {
+      continue
+    }
+  }
+
+  return null
+}
+
+function findArticleThumbnailFromHtml(html: string, baseUrl: string) {
+  const candidates = [
+    getMetaContent(html, 'og:image'),
+    getMetaContent(html, 'og:image:url'),
+    getMetaContent(html, 'twitter:image'),
+    getMetaContent(html, 'twitter:image:src'),
+    getMetaContent(html, 'image'),
+    getLinkHref(html, 'image_src'),
+    findJsonLdThumbnail(html, baseUrl),
+  ]
+
+  for (const candidate of candidates) {
+    const url = absolutizeUrl(candidate, baseUrl)
+    if (url && isLikelyImageUrl(url)) return url
+  }
+
+  return null
+}
+
+async function fetchArticleThumbnail(articleUrl: string) {
+  try {
+    const articleHtml = await fetchText(articleUrl)
+    return findArticleThumbnailFromHtml(articleHtml, articleUrl)
+  } catch {
+    return null
+  }
+}
+
+async function resolveStoredThumbnailUrl(input: {
+  articleUrl: string
+  feedThumbnailUrl: string | null
+  existingThumbnailUrl?: string | null
+}) {
+  if (input.feedThumbnailUrl) return input.feedThumbnailUrl
+  if (!isFallbackThumbnail(input.existingThumbnailUrl)) return input.existingThumbnailUrl ?? null
+  return fetchArticleThumbnail(input.articleUrl)
 }
 
 function parseDate(value: string | null) {
@@ -502,7 +644,7 @@ export async function syncIndustryNews(force = false) {
 
         for (const item of parsedItems) {
           const [existing] = await db
-            .select({ id: industryNewsItems.id })
+            .select({ id: industryNewsItems.id, thumbnailUrl: industryNewsItems.thumbnailUrl })
             .from(industryNewsItems)
             .where(eq(industryNewsItems.articleUrl, item.articleUrl))
             .limit(1)
@@ -513,6 +655,11 @@ export async function syncIndustryNews(force = false) {
             item.summary,
             (source.defaultRoleTargets as IndustryNewsAudience[]) ?? ['admin']
           )
+          const storedThumbnailUrl = await resolveStoredThumbnailUrl({
+            articleUrl: item.articleUrl,
+            feedThumbnailUrl: item.thumbnailUrl,
+            existingThumbnailUrl: existing?.thumbnailUrl ?? null,
+          })
 
           await db
             .insert(industryNewsItems)
@@ -523,7 +670,7 @@ export async function syncIndustryNews(force = false) {
               articleUrl: item.articleUrl,
               title: item.title,
               summary: item.summary,
-              thumbnailUrl: resolveThumbnailUrl(item.thumbnailUrl, item.articleUrl),
+              thumbnailUrl: storedThumbnailUrl,
               publishedAt: item.publishedAt,
               fetchedAt: new Date(),
               category: scoring.category,
@@ -545,7 +692,7 @@ export async function syncIndustryNews(force = false) {
                 sourceUrl: source.homepageUrl,
                 title: item.title,
                 summary: item.summary,
-                thumbnailUrl: resolveThumbnailUrl(item.thumbnailUrl, item.articleUrl),
+                thumbnailUrl: storedThumbnailUrl,
                 publishedAt: item.publishedAt,
                 fetchedAt: new Date(),
                 category: scoring.category,
@@ -566,7 +713,7 @@ export async function syncIndustryNews(force = false) {
               articleUrl: item.articleUrl,
               title: item.title,
               summary: item.summary,
-              thumbnailUrl: item.thumbnailUrl,
+              thumbnailUrl: storedThumbnailUrl,
               roleTargets: scoring.roleTargets,
               priority: scoring.priority,
               isWisherRelevant: scoring.isWisherRelevant,

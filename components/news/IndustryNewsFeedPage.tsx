@@ -1,9 +1,9 @@
-import Image from 'next/image'
 import Link from 'next/link'
 import { BellRing, ExternalLink, Newspaper, Sparkles, TrendingUp } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
+import { AdaptiveNewsThumbnail } from '@/components/news/AdaptiveNewsThumbnail'
 import { getIndustryNewsSections, type IndustryNewsAudience, type IndustryNewsItem } from '@/lib/industry-news'
 
 const audienceMeta: Record<IndustryNewsAudience, { title: string; description: string }> = {
@@ -50,15 +50,7 @@ function StoryList({ stories }: { stories: IndustryNewsItem[] }) {
     <div className="space-y-3">
       {stories.map(story => (
         <div key={story.id} className="overflow-hidden rounded-2xl border border-slate-200">
-          <div className="relative h-52 w-full">
-            <Image
-              src={story.thumbnailUrl}
-              alt={story.title}
-              fill
-              className="object-cover"
-              unoptimized
-            />
-          </div>
+          <AdaptiveNewsThumbnail src={story.thumbnailUrl} alt={story.title} />
           <div className="px-4 py-4">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant={story.priority === 'high' ? 'warning' : story.priority === 'medium' ? 'info' : 'secondary'}>
@@ -87,7 +79,7 @@ function StoryList({ stories }: { stories: IndustryNewsItem[] }) {
               href={story.articleUrl}
               target="_blank"
               rel="noreferrer"
-              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+              className="inline-flex h-8 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-input bg-background px-3 text-xs font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
             >
               Read more
               <ExternalLink className="h-3.5 w-3.5" />

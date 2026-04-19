@@ -1,5 +1,5 @@
 import { db } from '@/db'
-import { activityEvents, customerAccounts, invoices, orders, tasterInvoices, tastings, users } from '@/db/schema'
+import { activityEvents, customerAccounts, invoices, orders, tasterInvoices, tastings } from '@/db/schema'
 import { desc, eq, inArray } from 'drizzle-orm'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -32,6 +32,9 @@ export default async function InvoicingPage({
   let tasterInvoiceSubmissions: Array<{
     id: string
     tastingId: string
+    hourlyRate: string
+    hoursWorked: string
+    expenseAmount: string
     totalAmount: string
     status: string
     submittedAt: Date
@@ -86,6 +89,9 @@ export default async function InvoicingPage({
       .select({
         id: tasterInvoices.id,
         tastingId: tasterInvoices.tastingId,
+        hourlyRate: tasterInvoices.hourlyRate,
+        hoursWorked: tasterInvoices.hoursWorked,
+        expenseAmount: tasterInvoices.expenseAmount,
         totalAmount: tasterInvoices.totalAmount,
         status: tasterInvoices.status,
         submittedAt: tasterInvoices.submittedAt,
@@ -97,7 +103,6 @@ export default async function InvoicingPage({
       })
       .from(tasterInvoices)
       .innerJoin(tastings, eq(tasterInvoices.tastingId, tastings.id))
-      .innerJoin(users, eq(tasterInvoices.submittedByUserId, users.id))
       .orderBy(desc(tasterInvoices.submittedAt))
 
     payoutEvents = await db
@@ -116,6 +121,9 @@ export default async function InvoicingPage({
         .select({
           id: tasterInvoices.id,
           tastingId: tasterInvoices.tastingId,
+          hourlyRate: tasterInvoices.hourlyRate,
+          hoursWorked: tasterInvoices.hoursWorked,
+          expenseAmount: tasterInvoices.expenseAmount,
           totalAmount: tasterInvoices.totalAmount,
           status: tasterInvoices.status,
           submittedAt: tasterInvoices.submittedAt,
@@ -126,7 +134,6 @@ export default async function InvoicingPage({
         })
         .from(tasterInvoices)
         .innerJoin(tastings, eq(tasterInvoices.tastingId, tastings.id))
-        .innerJoin(users, eq(tasterInvoices.submittedByUserId, users.id))
         .orderBy(desc(tasterInvoices.submittedAt))
         .then((rows) => rows.map((row) => ({ ...row, receiptUrls: null })))
 
@@ -389,7 +396,12 @@ export default async function InvoicingPage({
                         <p className="text-xs text-muted-foreground">{formatDate(invoice.scheduledAt)}</p>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-sm font-semibold">{formatCurrency(invoice.totalAmount)}</td>
+                    <td className="px-6 py-4">
+                      <p className="text-sm font-semibold">{formatCurrency(invoice.totalAmount)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {Number(invoice.hoursWorked).toFixed(2)} hrs @ {formatCurrency(invoice.hourlyRate)}{Number(invoice.expenseAmount) > 0 ? ` + ${formatCurrency(invoice.expenseAmount)} exp` : ''}
+                      </p>
+                    </td>
                     <td className="px-6 py-4 text-sm">
                       {invoice.receiptUrls?.length ? (
                         <div className="space-y-1">
