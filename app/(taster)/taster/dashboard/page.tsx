@@ -4,7 +4,7 @@ import { CalendarDays, CheckCircle2, Clock3, DollarSign, FileText, Mail, Phone, 
 import { requireFeature } from '@/lib/auth/session'
 import { getTastingsForView } from '@/actions/tastings'
 import { db } from '@/db'
-import { tasterInvoices, tastingReports, users } from '@/db/schema'
+import { tasterInvoices, tastingReports, tastings, users } from '@/db/schema'
 import { getUserPreferences } from '@/lib/preferences/read'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -39,7 +39,7 @@ export default async function TasterDashboardPage({
   const params = await searchParams
 
   try {
-    const [tastings, preferences, user] = await Promise.all([
+    const [tastingRows, preferences, user] = await Promise.all([
       getTastingsForView({ assignedUserId: session.user.id }),
       getUserPreferences(session.user.id),
       db
@@ -55,13 +55,13 @@ export default async function TasterDashboardPage({
         .then(rows => rows[0] ?? null),
     ])
 
-    const reportsNeeded = tastings.filter(tasting => tasting.status === 'completed' && !tasting.reportSubmittedAt)
-    const invoicesNeeded = tastings.filter(tasting => (Boolean(tasting.reportSubmittedAt) || tasting.status === 'completed') && !tasting.invoiceSubmittedAt)
-    const upcoming = tastings.filter(tasting => new Date(tasting.scheduledAt) >= new Date())
+    const reportsNeeded = tastingRows.filter(tasting => tasting.status === 'completed' && !tasting.reportSubmittedAt)
+    const invoicesNeeded = tastingRows.filter(tasting => (Boolean(tasting.reportSubmittedAt) || tasting.status === 'completed') && !tasting.invoiceSubmittedAt)
+    const upcoming = tastingRows.filter(tasting => new Date(tasting.scheduledAt) >= new Date())
     const confirmedUpcoming = upcoming.filter(tasting => tasting.status === 'confirmed')
     const nextTasting = upcoming[0] ?? null
     const featuredTasting = reportsNeeded[0] ?? nextTasting ?? null
-    const submittedReports = tastings.filter(tasting => tasting.reportSubmittedAt)
+    const submittedReports = tastingRows.filter(tasting => tasting.reportSubmittedAt)
 
     const report = featuredTasting
       ? await db.select().from(tastingReports).where(eq(tastingReports.tastingId, featuredTasting.id)).then(rows => rows[0] ?? null)

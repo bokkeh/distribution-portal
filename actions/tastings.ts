@@ -87,23 +87,28 @@ function isMissingTasterAvailabilityTable(error: unknown) {
   return code === '42p01' || message.includes('taster_availability')
 }
 
-function parseNonNegativeDecimalField(value: FormDataEntryValue | null, fieldLabel: string, maxValue?: number) {
+function parseNonNegativeDecimalField(
+  value: FormDataEntryValue | null,
+  fieldLabel: string,
+  maxValue?: number,
+): { ok: false; error: string } | { ok: true; numericValue: number; formattedValue: string } {
   const rawValue = String(value ?? '').trim()
   const parsedValue = Number(rawValue || '0')
 
   if (!Number.isFinite(parsedValue)) {
-    return { error: `Enter a valid ${fieldLabel.toLowerCase()}.` }
+    return { ok: false, error: `Enter a valid ${fieldLabel.toLowerCase()}.` }
   }
 
   if (parsedValue < 0) {
-    return { error: `${fieldLabel} cannot be negative.` }
+    return { ok: false, error: `${fieldLabel} cannot be negative.` }
   }
 
   if (maxValue != null && parsedValue > maxValue) {
-    return { error: `${fieldLabel} looks too high. Please review it and try again.` }
+    return { ok: false, error: `${fieldLabel} looks too high. Please review it and try again.` }
   }
 
   return {
+    ok: true,
     numericValue: parsedValue,
     formattedValue: parsedValue.toFixed(2),
   }
@@ -989,12 +994,12 @@ export async function submitTasterInvoice(formData: FormData) {
   }
 
   const hoursWorkedResult = parseNonNegativeDecimalField(formData.get('hoursWorked'), 'Hours worked', 24)
-  if ('error' in hoursWorkedResult) {
+  if (!hoursWorkedResult.ok) {
     redirect(`/taster/tastings/${tastingId}?error=${encodeURIComponent(hoursWorkedResult.error)}`)
   }
 
   const expenseAmountResult = parseNonNegativeDecimalField(formData.get('expenseAmount'), 'Expense amount', 10000)
-  if ('error' in expenseAmountResult) {
+  if (!expenseAmountResult.ok) {
     redirect(`/taster/tastings/${tastingId}?error=${encodeURIComponent(expenseAmountResult.error)}`)
   }
 
