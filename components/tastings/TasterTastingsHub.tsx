@@ -43,7 +43,8 @@ const statusVariant: Record<string, 'secondary' | 'success' | 'warning' | 'destr
 function TastingCard({ tasting, compact = false }: { tasting: TastingRow; compact?: boolean }) {
   const tastingDate = new Date(tasting.scheduledAt)
   const missingReport = tasting.status === 'completed' && !tasting.reportSubmittedAt
-  const missingInvoice = tasting.status === 'completed' && !tasting.invoiceSubmittedAt
+  const invoiceEligible = Boolean(tasting.reportSubmittedAt) || tasting.status === 'completed'
+  const missingInvoice = invoiceEligible && !tasting.invoiceSubmittedAt
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -138,7 +139,7 @@ export function TasterTastingsHub({
   const [previousFrom, setPreviousFrom] = useState('')
   const [previousTo, setPreviousTo] = useState('')
   const missingReportCount = tastings.filter(tasting => tasting.status === 'completed' && !tasting.reportSubmittedAt).length
-  const missingInvoiceCount = tastings.filter(tasting => tasting.status === 'completed' && !tasting.invoiceSubmittedAt).length
+  const missingInvoiceCount = tastings.filter(tasting => (Boolean(tasting.reportSubmittedAt) || tasting.status === 'completed') && !tasting.invoiceSubmittedAt).length
   const filteredPast = past.filter(tasting => {
     const tastingDate = new Date(tasting.scheduledAt)
     if (previousFrom) {

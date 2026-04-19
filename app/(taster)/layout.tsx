@@ -2,6 +2,7 @@ import { requireFeature } from '@/lib/auth/session'
 import { getBellNotificationsForUser } from '@/lib/notifications/in-app'
 import { PortalTopBar } from '@/components/layout/PortalTopBar'
 import { TasterSidebar } from '@/components/layout/TasterSidebar'
+import { ViewAsProvider } from '@/components/admin/ViewAsProvider'
 
 export default async function TasterLayout({ children }: { children: React.ReactNode }) {
   const session = await requireFeature('tastings', 'taster', 'admin')
@@ -13,6 +14,7 @@ export default async function TasterLayout({ children }: { children: React.React
 
   return (
     <div className="min-h-screen bg-slate-50">
+      <ViewAsProvider />
       <TasterSidebar
         showViewSwitcher={isSuperAdmin}
         showProfile={canViewProfile}

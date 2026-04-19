@@ -56,7 +56,7 @@ export default async function TasterDashboardPage({
     ])
 
     const reportsNeeded = tastings.filter(tasting => tasting.status === 'completed' && !tasting.reportSubmittedAt)
-    const invoicesNeeded = tastings.filter(tasting => tasting.status === 'completed' && !tasting.invoiceSubmittedAt)
+    const invoicesNeeded = tastings.filter(tasting => (Boolean(tasting.reportSubmittedAt) || tasting.status === 'completed') && !tasting.invoiceSubmittedAt)
     const upcoming = tastings.filter(tasting => new Date(tasting.scheduledAt) >= new Date())
     const confirmedUpcoming = upcoming.filter(tasting => tasting.status === 'confirmed')
     const nextTasting = upcoming[0] ?? null

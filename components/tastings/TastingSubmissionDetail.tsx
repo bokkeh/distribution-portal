@@ -103,7 +103,7 @@ export function TastingSubmissionDetail({
   error?: string
 }) {
   const invoiceLocked = invoice?.status === 'approved' || invoice?.status === 'paid'
-  const invoiceReady = tasting.status === 'completed'
+  const invoiceReady = Boolean(report) || tasting.status === 'completed'
   const defaultHoursWorked = useMemo(() => getDefaultHoursWorked(report, invoice), [invoice, report])
   const [hoursWorked, setHoursWorked] = useState(() => invoice?.hoursWorked ?? defaultHoursWorked)
   const [expenseAmount, setExpenseAmount] = useState(() => invoice?.expenseAmount ?? '0.00')
@@ -235,9 +235,14 @@ export function TastingSubmissionDetail({
                 </div>
               ) : null}
 
-              {!invoiceReady ? (
+              {!report ? (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                  Complete the tasting and submit the event report before sending an invoice to accounting.
+                  Submit the event report before sending an invoice to accounting.
+                </div>
+              ) : null}
+              {report && tasting.status !== 'completed' ? (
+                <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+                  Sending this invoice will also mark the tasting completed.
                 </div>
               ) : null}
               {invoiceLocked ? (

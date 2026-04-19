@@ -1,7 +1,7 @@
 import Link from 'next/link'
-import { and, desc, eq, isNull } from 'drizzle-orm'
+import { and, desc, eq, isNotNull, isNull } from 'drizzle-orm'
 import { db } from '@/db'
-import { tasterInvoices, tastings } from '@/db/schema'
+import { tasterInvoices, tastingReports, tastings } from '@/db/schema'
 import { requireFeature } from '@/lib/auth/session'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -38,8 +38,9 @@ export default async function TasterPayoutsPage() {
         scheduledAt: tastings.scheduledAt,
       })
       .from(tastings)
+      .leftJoin(tastingReports, eq(tastingReports.tastingId, tastings.id))
       .leftJoin(tasterInvoices, eq(tasterInvoices.tastingId, tastings.id))
-      .where(and(eq(tastings.assignedUserId, userId), eq(tastings.status, 'completed'), isNull(tasterInvoices.id)))
+      .where(and(eq(tastings.assignedUserId, userId), isNotNull(tastingReports.id), isNull(tasterInvoices.id)))
       .orderBy(desc(tastings.scheduledAt)),
   ])
 

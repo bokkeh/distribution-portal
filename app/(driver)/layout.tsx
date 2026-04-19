@@ -4,6 +4,7 @@ import { hasFeature } from '@/lib/users/features'
 import { getBellNotificationsForUser } from '@/lib/notifications/in-app'
 import { PortalTopBar } from '@/components/layout/PortalTopBar'
 import { DriverNav } from '@/components/layout/DriverNav'
+import { ViewAsProvider } from '@/components/admin/ViewAsProvider'
 
 export default async function DriverLayout({ children }: { children: React.ReactNode }) {
   const session = await requireRole('driver', 'admin')
@@ -13,6 +14,7 @@ export default async function DriverLayout({ children }: { children: React.React
   const { notifications, unreadCount } = await getBellNotificationsForUser(session.user.id)
   return (
     <div className="min-h-screen bg-slate-50">
+      <ViewAsProvider />
       <DriverNav
         notifications={notifications}
         unreadCount={unreadCount}

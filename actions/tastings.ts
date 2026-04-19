@@ -988,10 +988,6 @@ export async function submitTasterInvoice(formData: FormData) {
     redirect('/unauthorized')
   }
 
-  if (tasting.status !== 'completed') {
-    redirect(`/taster/tastings/${tastingId}?error=${encodeURIComponent('You can submit an invoice after the tasting is marked completed.')}`)
-  }
-
   const hoursWorkedResult = parseNonNegativeDecimalField(formData.get('hoursWorked'), 'Hours worked', 24)
   if ('error' in hoursWorkedResult) {
     redirect(`/taster/tastings/${tastingId}?error=${encodeURIComponent(hoursWorkedResult.error)}`)
@@ -1023,6 +1019,42 @@ export async function submitTasterInvoice(formData: FormData) {
 
   if (!report) {
     redirect(`/taster/tastings/${tastingId}?error=${encodeURIComponent('Submit the tasting report before invoicing accounting.')}`)
+  }
+
+  if (tasting.status === 'requested' || tasting.status === 'cancelled' || tasting.status === 'declined') {
+    redirect(`/taster/tastings/${tastingId}?error=${encodeURIComponent('Invoice submission is not available for the current tasting status.')}`)
+  }
+
+  if (tasting.status !== 'completed') {
+    if (new Date(tasting.scheduledAt).getTime() > Date.now() + (15 * 60 * 1000)) {
+      redirect(`/taster/tastings/${tastingId}?error=${encodeURIComponent('You cannot submit an invoice before the tasting start time.')}`)
+    }
+
+    await db.update(tastings).set({ status: 'completed' }).where(eq(tastings.id, tastingId))
+    await logActivityEvent({
+      entityType: 'tasting',
+      entityId: tastingId,
+      actorUserId: session.user.id,
+      kind: 'tasting_status_changed',
+      title: 'Tasting status updated',
+      body: 'Status changed to completed.',
+    })
+    await Promise.all([
+      createNotificationsForRoles({
+        roles: ['admin'],
+        kind: 'tasting_completed',
+        title: 'Tasting completed',
+        body: 'A tasting has been marked complete.',
+        href: '/admin/tastings',
+      }),
+      createNotificationsForRoles({
+        roles: ['staff'],
+        kind: 'tasting_completed',
+        title: 'Tasting completed',
+        body: 'A tasting has been marked complete.',
+        href: '/staff/tastings',
+      }),
+    ])
   }
 
   // Fetch admin-set hourly rate from user record
@@ -1109,6 +1141,7 @@ export async function submitTasterInvoice(formData: FormData) {
   revalidatePath('/staff/invoicing')
   revalidatePath('/taster/tastings')
   revalidatePath('/taster/payouts')
+  revalidatePath(`/taster/tastings/${tastingId}`)
   redirect(`/taster/tastings/${tastingId}?success=${encodeURIComponent('Invoice submitted to accounting.')}`)
 }
 

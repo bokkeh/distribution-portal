@@ -3,11 +3,16 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { db } from '@/db'
-import { users } from '@/db/schema'
+import { customerAccounts, users } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { auth } from '@/lib/auth/config'
-
-const COOKIE_NAME = '__portal_view_as'
+import {
+  getDashboardForRoles,
+  serializeViewAsRoles,
+  VIEW_AS_COOKIE,
+  VIEW_AS_ROLE_COOKIE,
+  VIEW_AS_ROLES_COOKIE,
+} from '@/lib/auth/view-as'
 
 async function requireAdmin() {
   const session = await auth()
@@ -19,11 +24,21 @@ async function requireAdmin() {
   return session
 }
 
+function getCookieOptions() {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax' as const,
+    path: '/',
+    maxAge: 60 * 60,
+  }
+}
+
 export async function startViewAsUser(targetUserId: string): Promise<{ error?: string }> {
   await requireAdmin()
 
   const [target] = await db
-    .select({ id: users.id, name: users.name, email: users.email, roles: users.roles })
+    .select({ id: users.id, name: users.name, email: users.email, role: users.role, roles: users.roles })
     .from(users)
     .where(eq(users.id, targetUserId))
     .limit(1)
@@ -31,52 +46,34 @@ export async function startViewAsUser(targetUserId: string): Promise<{ error?: s
   if (!target) return { error: 'User not found' }
 
   const jar = await cookies()
-  jar.set(COOKIE_NAME, targetUserId, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/',
-    maxAge: 60 * 60, // 1 hour
-  })
+  const roles = Array.from(new Set([...(target.roles ?? []), ...(target.role ? [target.role] : [])].filter(Boolean)))
+  const cookieOptions = getCookieOptions()
+  jar.set(VIEW_AS_COOKIE, targetUserId, cookieOptions)
+  jar.set(VIEW_AS_ROLE_COOKIE, target.role, cookieOptions)
+  jar.set(VIEW_AS_ROLES_COOKIE, serializeViewAsRoles(roles), cookieOptions)
 
-  // Redirect to the most relevant portal for the user's role
-  const roles = target.roles ?? []
-  if (roles.includes('sales_rep') || roles.includes('sales_manager')) {
-    redirect('/sales/dashboard')
-  }
-  if (roles.includes('driver')) {
-    redirect('/driver')
-  }
-  if (roles.includes('taster')) {
-    redirect('/taster/tastings')
-  }
-  if (roles.includes('customer')) {
-    redirect('/customer/dashboard')
-  }
-  if (roles.includes('staff')) {
-    redirect('/staff')
-  }
-  redirect('/sales/dashboard')
+  redirect(getDashboardForRoles(roles, target.role))
 }
 
 export async function stopViewAsUser(): Promise<void> {
   const jar = await cookies()
-  jar.delete(COOKIE_NAME)
+  jar.delete(VIEW_AS_COOKIE)
+  jar.delete(VIEW_AS_ROLE_COOKIE)
+  jar.delete(VIEW_AS_ROLES_COOKIE)
   redirect('/admin/users')
 }
 
 export async function getViewAsUserId(): Promise<string | null> {
   const jar = await cookies()
-  return jar.get(COOKIE_NAME)?.value ?? null
+  return jar.get(VIEW_AS_COOKIE)?.value ?? null
 }
 
 export async function searchAccountsForViewAs(query: string) {
   await requireAdmin()
-  const { db } = await import('@/db')
-  const { customerAccounts } = await import('@/db/schema')
-  const { ilike } = await import('drizzle-orm')
 
   if (!query.trim()) return []
+
+  const { ilike } = await import('drizzle-orm')
 
   return db
     .select({ id: customerAccounts.id, companyName: customerAccounts.companyName, userId: customerAccounts.userId })
@@ -88,13 +85,15 @@ export async function searchAccountsForViewAs(query: string) {
 export async function startViewAsAccount(accountId: string): Promise<{ error?: string }> {
   await requireAdmin()
 
-  const { db } = await import('@/db')
-  const { customerAccounts } = await import('@/db/schema')
-  const { eq } = await import('drizzle-orm')
-
   const [account] = await db
-    .select({ userId: customerAccounts.userId, companyName: customerAccounts.companyName })
+    .select({
+      userId: customerAccounts.userId,
+      companyName: customerAccounts.companyName,
+      role: users.role,
+      roles: users.roles,
+    })
     .from(customerAccounts)
+    .leftJoin(users, eq(customerAccounts.userId, users.id))
     .where(eq(customerAccounts.id, accountId))
     .limit(1)
 
@@ -102,13 +101,11 @@ export async function startViewAsAccount(accountId: string): Promise<{ error?: s
   if (!account.userId) return { error: `${account.companyName} has no linked portal user. Ask the customer to register first.` }
 
   const jar = await cookies()
-  jar.set(COOKIE_NAME, account.userId, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/',
-    maxAge: 60 * 60,
-  })
+  const roles = Array.from(new Set([...(account.roles ?? []), ...(account.role ? [account.role] : [])].filter(Boolean)))
+  const cookieOptions = getCookieOptions()
+  jar.set(VIEW_AS_COOKIE, account.userId, cookieOptions)
+  jar.set(VIEW_AS_ROLE_COOKIE, account.role, cookieOptions)
+  jar.set(VIEW_AS_ROLES_COOKIE, serializeViewAsRoles(roles), cookieOptions)
 
-  redirect('/customer/dashboard')
+  redirect(getDashboardForRoles(roles, account.role))
 }

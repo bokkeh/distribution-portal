@@ -1,17 +1,16 @@
 import { auth } from './config'
 import { redirect } from 'next/navigation'
 import type { FeatureKey } from '@/lib/users/features'
-import { hasFeature } from '@/lib/users/features'
+import { hasFeature, resolveFeatureFlags } from '@/lib/users/features'
 import { cookies } from 'next/headers'
 import { db } from '@/db'
-import { users } from '@/db/schema'
+import { userFeatureSettings, users } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import type { Session } from 'next-auth'
-
-const VIEW_AS_COOKIE = '__portal_view_as'
+import { normalizeRoleList, VIEW_AS_COOKIE } from '@/lib/auth/view-as'
 
 async function applyViewAs(session: Session): Promise<Session> {
-  const roles = mergeRoles(session.user.role as string, session.user.roles)
+  const roles = normalizeRoleList(session.user.role as string, session.user.roles)
   if (!roles.includes('admin')) return session
 
   try {
@@ -20,14 +19,22 @@ async function applyViewAs(session: Session): Promise<Session> {
     if (!viewAsUserId) return session
 
     const [target] = await db
-      .select({ id: users.id, name: users.name, email: users.email, role: users.role, roles: users.roles })
+      .select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        role: users.role,
+        roles: users.roles,
+        features: userFeatureSettings.features,
+      })
       .from(users)
+      .leftJoin(userFeatureSettings, eq(userFeatureSettings.userId, users.id))
       .where(eq(users.id, viewAsUserId))
       .limit(1)
 
     if (!target) return session
+    const targetRoles = normalizeRoleList(target.role, target.roles)
 
-    // Return a shallow copy with the viewed user's identity overlaid
     return {
       ...session,
       user: {
@@ -36,8 +43,8 @@ async function applyViewAs(session: Session): Promise<Session> {
         name: target.name,
         email: target.email,
         role: target.role,
-        roles: target.roles,
-        // Keep original admin email in a separate field for the banner
+        roles: targetRoles,
+        featureFlags: resolveFeatureFlags(targetRoles, target.features ?? null),
         _viewingAsOf: session.user.email,
       } as Session['user'],
     } as Session
@@ -56,23 +63,21 @@ export async function requireAuth(): Promise<Session> {
   return rawSession as Session
 }
 
-function mergeRoles(role: string | null | undefined, rolesArr: string[] | null | undefined): string[] {
-  const combined = [...(rolesArr ?? []), ...(role ? [role] : [])]
-  return [...new Set(combined.filter(Boolean))]
-}
-
 export async function requireRole(...roles: string[]): Promise<Session> {
   const rawSession = await auth()
   if (!rawSession) redirect('/login')
   const session = rawSession as Session
-  const realRoles = mergeRoles(session.user.role as string, session.user.roles)
-  if (realRoles.includes('admin')) {
-    // Admin always passes — apply view-as overlay if active so pages see the target user's data
-    const effective = await applyViewAs(session)
-    return effective
+  const realRoles = normalizeRoleList(session.user.role as string, session.user.roles)
+  const effectiveSession = realRoles.includes('admin') ? await applyViewAs(session) : session
+  const effectiveRoles = normalizeRoleList(effectiveSession.user.role as string, effectiveSession.user.roles)
+  const isViewAsMode = effectiveSession.user.id !== session.user.id
+
+  if (realRoles.includes('admin') && !isViewAsMode) {
+    return effectiveSession
   }
-  if (!realRoles.some(role => roles.includes(role))) redirect('/unauthorized')
-  return session
+
+  if (!effectiveRoles.some((role) => roles.includes(role))) redirect('/unauthorized')
+  return effectiveSession
 }
 
 export async function requireAdmin() {
