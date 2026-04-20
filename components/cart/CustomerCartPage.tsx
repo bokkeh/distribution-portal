@@ -15,6 +15,8 @@ function getDisplayedPrice(
   item: { productId: string; price: string; samplePrice: string; quantity: number },
   orderType: 'paid' | 'sample',
   pricingRules: GeographicPricingRuleInput[],
+  pricingAccountId: string | null,
+  pricingBusinessType: string | null,
   pricingState: string | null,
   pricingCounty: string | null
 ) {
@@ -22,6 +24,8 @@ function getDisplayedPrice(
   return resolveGeographicCasePrice({
     productId: item.productId,
     baseCasePrice: item.price,
+    accountId: pricingAccountId,
+    businessType: pricingBusinessType,
     state: pricingState,
     county: pricingCounty,
     rules: pricingRules,
@@ -33,16 +37,20 @@ function getDisplayedPrice(
 export default function CustomerCartPage({
   businessType,
   pricingRules,
+  pricingAccountId,
+  pricingBusinessType,
   pricingState,
   pricingCounty,
 }: {
   businessType?: string | null
   pricingRules: GeographicPricingRuleInput[]
+  pricingAccountId: string | null
+  pricingBusinessType: string | null
   pricingState: string | null
   pricingCounty: string | null
 }) {
   const { items, orderType, removeItem, updateQuantity, clearCart, itemCount } = useCart()
-  const displayedTotal = items.reduce((sum, item) => sum + getDisplayedPrice(item, orderType, pricingRules, pricingState, pricingCounty) * item.quantity, 0)
+  const displayedTotal = items.reduce((sum, item) => sum + getDisplayedPrice(item, orderType, pricingRules, pricingAccountId, pricingBusinessType, pricingState, pricingCounty) * item.quantity, 0)
 
   if (items.length === 0) {
     return (
@@ -68,7 +76,7 @@ export default function CustomerCartPage({
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-3 lg:col-span-2">
           {items.map(item => {
-            const price = getDisplayedPrice(item, orderType, pricingRules, pricingState, pricingCounty)
+            const price = getDisplayedPrice(item, orderType, pricingRules, pricingAccountId, pricingBusinessType, pricingState, pricingCounty)
             const minimumMessage = getMinimumCaseQuantityMessage(item, businessType)
             const min = getMinimumCaseQuantity(item, businessType)
             const isLockedAtMinimum = isWisherVodkaProduct(item) && item.quantity <= min
@@ -132,7 +140,7 @@ export default function CustomerCartPage({
           <CardContent className="space-y-4">
             <div className="space-y-2">
               {items.map(item => {
-                const price = getDisplayedPrice(item, orderType, pricingRules, pricingState, pricingCounty)
+                const price = getDisplayedPrice(item, orderType, pricingRules, pricingAccountId, pricingBusinessType, pricingState, pricingCounty)
                 return (
                   <div key={item.productId} className="flex justify-between text-sm">
                     <span className="text-muted-foreground">{item.name} x{item.quantity}</span>

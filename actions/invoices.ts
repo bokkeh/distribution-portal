@@ -270,6 +270,8 @@ export async function createInvoice(formData: FormData) {
 
     const [account] = await db
       .select({
+        accountId: customerAccounts.id,
+        businessType: customerAccounts.businessType,
         state: customerAccounts.state,
         county: customerAccounts.county,
       })

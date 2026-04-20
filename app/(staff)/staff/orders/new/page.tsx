@@ -13,6 +13,7 @@ export default async function NewOrderPage() {
       .select({
         id: customerAccounts.id,
         companyName: customerAccounts.companyName,
+        businessType: customerAccounts.businessType,
         paymentTerms: customerAccounts.paymentTerms,
         state: customerAccounts.state,
         county: customerAccounts.county,

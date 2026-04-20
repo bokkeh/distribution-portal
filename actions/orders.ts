@@ -19,6 +19,8 @@ import type { GeographicPricingSource } from '@/lib/pricing/geographic'
 type PurchaseUnit = 'case' | 'bottle'
 
 type PricingContext = {
+  accountId: string | null
+  businessType: string | null
   state: string | null
   county: string | null
 }
@@ -43,6 +45,8 @@ function getBottleUnitPrice(product: typeof products.$inferSelect, resolvedCaseP
 async function getAccountPricingContext(customerId: string): Promise<PricingContext> {
   const [account] = await db
     .select({
+      accountId: customerAccounts.id,
+      businessType: customerAccounts.businessType,
       state: customerAccounts.state,
       county: customerAccounts.county,
     })

@@ -1,11 +1,15 @@
-import { and, eq, inArray, isNull } from 'drizzle-orm'
+import { eq, inArray } from 'drizzle-orm'
 import { db } from '@/db'
 import { geographicPricingRules } from '@/db/schema'
 import { buildCountyKey, normalizeCountyName, normalizeStateCode, resolveGeographicCasePrice, type GeographicPricingRuleInput } from './geographic'
+import { normalizeBusinessType } from '@/lib/customers/business-types'
 
 export type AccountPricingContext = {
+  accountId: string | null
+  businessType: string | null
   state: string | null
   county: string | null
+  countyKey?: string | null
 }
 
 export async function getPricingRulesForProducts(productIds: string[]) {
@@ -18,6 +22,8 @@ export async function getPricingRulesForProducts(productIds: string[]) {
       stateCode: geographicPricingRules.stateCode,
       countyName: geographicPricingRules.countyName,
       countyKey: geographicPricingRules.countyKey,
+      accountId: geographicPricingRules.accountId,
+      businessType: geographicPricingRules.businessType,
       ruleType: geographicPricingRules.ruleType,
       minCaseQuantity: geographicPricingRules.minCaseQuantity,
       maxCaseQuantity: geographicPricingRules.maxCaseQuantity,
@@ -38,8 +44,15 @@ export async function getAllPricingRules() {
   return db.select().from(geographicPricingRules)
 }
 
-export function normalizeAccountGeography(input: { state: string | null | undefined; county: string | null | undefined }) {
+export function normalizeAccountGeography(input: {
+  accountId?: string | null | undefined
+  businessType?: string | null | undefined
+  state: string | null | undefined
+  county: string | null | undefined
+}) {
   return {
+    accountId: input.accountId?.trim() || null,
+    businessType: normalizeBusinessType(input.businessType) ?? (input.businessType?.trim() || null),
     state: normalizeStateCode(input.state) ?? (input.state?.trim().toUpperCase() || null),
     county: normalizeCountyName(input.county),
     countyKey: buildCountyKey(input.county),
@@ -57,6 +70,8 @@ export function resolveProductCasePrice(input: {
   return resolveGeographicCasePrice({
     productId: input.productId,
     baseCasePrice: input.baseCasePrice,
+    accountId: input.account.accountId,
+    businessType: input.account.businessType,
     state: input.account.state,
     county: input.account.county,
     rules: input.rules,
@@ -67,24 +82,33 @@ export function resolveProductCasePrice(input: {
 
 export async function getPotentialConflictingRules(input: {
   productId: string
-  stateCode: string
-  ruleType: 'state' | 'county'
-  countyKey: string | null
+  stateCode?: string | null
+  ruleType: 'state' | 'county' | 'account' | 'business_type'
+  countyKey?: string | null
+  accountId?: string | null
+  businessType?: string | null
   excludeRuleId?: string | null
 }) {
   const rows = await db
     .select()
     .from(geographicPricingRules)
-    .where(
-      and(
-        eq(geographicPricingRules.productId, input.productId),
-        eq(geographicPricingRules.stateCode, input.stateCode),
-        eq(geographicPricingRules.ruleType, input.ruleType),
-        input.ruleType === 'county'
-          ? eq(geographicPricingRules.countyKey, input.countyKey ?? '')
-          : isNull(geographicPricingRules.countyKey)
-      )
-    )
+    .where(eq(geographicPricingRules.productId, input.productId))
 
-  return rows.filter((row) => row.id !== input.excludeRuleId)
+  return rows.filter((row) => {
+    if (row.id === input.excludeRuleId) return false
+    if (row.ruleType !== input.ruleType) return false
+
+    switch (input.ruleType) {
+      case 'county':
+        return row.stateCode === input.stateCode && row.countyKey === input.countyKey
+      case 'state':
+        return row.stateCode === input.stateCode && row.countyKey === null
+      case 'account':
+        return row.accountId === input.accountId
+      case 'business_type':
+        return row.businessType === input.businessType
+      default:
+        return false
+    }
+  })
 }

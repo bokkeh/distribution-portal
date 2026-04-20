@@ -29,6 +29,7 @@ interface Product {
 interface Customer {
   id: string
   companyName: string
+  businessType: string | null
   paymentTerms: string | null
   state: string | null
   county: string | null
@@ -86,6 +87,8 @@ export default function OrderFormClient({
     return resolveGeographicCasePrice({
       productId: product.id,
       baseCasePrice: product.price,
+      accountId: customer?.id,
+      businessType: customer?.businessType,
       state: customer?.state,
       county: customer?.county,
       rules: pricingRules,

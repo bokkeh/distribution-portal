@@ -8,6 +8,8 @@ export type ProductPricingInput = {
 }
 
 export type ProductPricingContext = {
+  accountId: string | null
+  businessType: string | null
   state: string | null
   county: string | null
 }
@@ -36,6 +38,8 @@ export function resolveProductUnitPrice(input: {
   const casePricing = resolveGeographicCasePrice({
     productId: input.product.id,
     baseCasePrice: input.product.price,
+    accountId: input.account.accountId,
+    businessType: input.account.businessType,
     state: input.account.state,
     county: input.account.county,
     rules: input.rules,

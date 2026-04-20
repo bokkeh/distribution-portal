@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { createInvoice } from '@/actions/invoices'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -13,6 +13,7 @@ import { resolveProductUnitPrice } from '@/lib/pricing/product-price'
 type CustomerOption = {
   id: string
   companyName: string
+  businessType: string | null
   state: string | null
   county: string | null
 }
@@ -82,17 +83,12 @@ export function AdminInvoiceCreateForm({
     () => orders.filter((order) => !customerId || order.customerId === customerId),
     [customerId, orders],
   )
+  const selectedOrderId = availableOrders.some((order) => order.id === orderId) ? orderId : ''
 
   const subtotal = useMemo(
     () => lineItems.reduce((sum, item) => sum + toAmount(item.quantity) * toAmount(item.unitPrice), 0),
     [lineItems],
   )
-
-  useEffect(() => {
-    if (orderId && !availableOrders.some((order) => order.id === orderId)) {
-      setOrderId('')
-    }
-  }, [availableOrders, orderId])
 
   const updateRow = (key: string, updater: (row: LineItemFormRow) => LineItemFormRow) => {
     setLineItems((current) => current.map((row) => (row.key === key ? updater(row) : row)))
@@ -101,6 +97,8 @@ export function AdminInvoiceCreateForm({
   const getAccountContext = (selectedCustomerId: string) => {
     const customer = customers.find((item) => item.id === selectedCustomerId)
     return {
+      accountId: customer?.id ?? null,
+      businessType: customer?.businessType ?? null,
       state: customer?.state ?? null,
       county: customer?.county ?? null,
     }
@@ -117,6 +115,18 @@ export function AdminInvoiceCreateForm({
     })
 
     return resolved.unitPrice.toFixed(2)
+  }
+
+  const repriceRowsForCustomer = (selectedCustomerId: string) => {
+    setLineItems((current) => current.map((row) => {
+      const product = products.find((item) => item.id === row.productId)
+      if (!product) return row
+
+      return {
+        ...row,
+        unitPrice: getResolvedUnitPrice(product, row.unit, row.quantity, selectedCustomerId),
+      }
+    }))
   }
 
   const handleProductChange = (key: string, productId: string) => {
@@ -152,18 +162,6 @@ export function AdminInvoiceCreateForm({
     })
   }
 
-  useEffect(() => {
-    setLineItems((current) => current.map((row) => {
-      const product = products.find((item) => item.id === row.productId)
-      if (!product) return row
-
-      return {
-        ...row,
-        unitPrice: getResolvedUnitPrice(product, row.unit, row.quantity, customerId),
-      }
-    }))
-  }, [customerId, pricingRules, products])
-
   return (
     <form action={createInvoice} className="space-y-6">
       <div className="space-y-2">
@@ -173,7 +171,14 @@ export function AdminInvoiceCreateForm({
           id="customerId"
           required
           value={customerId}
-          onChange={(event) => setCustomerId(event.target.value)}
+          onChange={(event) => {
+            const nextCustomerId = event.target.value
+            setCustomerId(nextCustomerId)
+            if (orderId && !orders.some((order) => order.customerId === nextCustomerId && order.id === orderId)) {
+              setOrderId('')
+            }
+            repriceRowsForCustomer(nextCustomerId)
+          }}
           className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         >
           <option value="">Select customer...</option>
@@ -188,7 +193,7 @@ export function AdminInvoiceCreateForm({
         <select
           name="orderId"
           id="orderId"
-          value={orderId}
+          value={selectedOrderId}
           onChange={(event) => setOrderId(event.target.value)}
           className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         >

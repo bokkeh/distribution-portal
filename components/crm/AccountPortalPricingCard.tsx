@@ -3,10 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { db } from '@/db'
 import { products } from '@/db/schema'
-import { formatBusinessType } from '@/lib/customers/business-types'
+import { formatBusinessType, normalizeBusinessType } from '@/lib/customers/business-types'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { getPricingRulesForProducts, normalizeAccountGeography, resolveProductCasePrice } from '@/lib/pricing/geographic-service'
-import { describePricingSource, describeQuantityRange, isRuleActiveOnDate, normalizeStateCode } from '@/lib/pricing/geographic'
+import { describePricingRuleScope, describePricingSource, describeQuantityRange, isRuleActiveOnDate, normalizeStateCode } from '@/lib/pricing/geographic'
 
 type Props = {
   account: {
@@ -30,7 +30,12 @@ export async function AccountPortalPricingCard({ account }: Props) {
     .orderBy(products.name)
 
   const pricingRules = await getPricingRulesForProducts(productRows.map((product) => product.id))
-  const pricingContext = normalizeAccountGeography({ state: account.state, county: account.county })
+  const pricingContext = normalizeAccountGeography({
+    accountId: account.id,
+    businessType: account.businessType,
+    state: account.state,
+    county: account.county,
+  })
   const now = new Date()
   const productNameById = new Map(productRows.map((product) => [product.id, product.name]))
 
@@ -53,20 +58,31 @@ export async function AccountPortalPricingCard({ account }: Props) {
 
   const applicableRules = pricingRules
     .filter((rule) =>
-      isRuleActiveOnDate(rule, now)
-      && pricingContext.state
-      && normalizeStateCode(rule.stateCode) === pricingContext.state
-      && (rule.ruleType === 'state' || rule.countyKey === pricingContext.countyKey)
-      && productNameById.has(rule.productId)
+      isRuleActiveOnDate(rule, now) &&
+      productNameById.has(rule.productId) &&
+      (
+        (rule.ruleType === 'account' && rule.accountId === pricingContext.accountId) ||
+        (rule.ruleType === 'business_type' && normalizeBusinessType(rule.businessType) === pricingContext.businessType) ||
+        (rule.ruleType === 'county' &&
+          pricingContext.state &&
+          normalizeStateCode(rule.stateCode) === pricingContext.state &&
+          rule.countyKey === pricingContext.countyKey) ||
+        (rule.ruleType === 'state' &&
+          pricingContext.state &&
+          normalizeStateCode(rule.stateCode) === pricingContext.state)
+      )
     )
     .sort((left, right) => {
-      const leftTypeWeight = left.ruleType === 'county' ? 0 : 1
-      const rightTypeWeight = right.ruleType === 'county' ? 0 : 1
+      const weight = { account: 0, county: 1, business_type: 2, state: 3 } as const
+      const leftTypeWeight = weight[left.ruleType]
+      const rightTypeWeight = weight[right.ruleType]
       if (leftTypeWeight !== rightTypeWeight) return leftTypeWeight - rightTypeWeight
       return (productNameById.get(left.productId) ?? '').localeCompare(productNameById.get(right.productId) ?? '')
     })
 
+  const specialAccountPrices = portalCatalog.filter((product) => product.pricingSource === 'account_special').length
   const countyOverrides = portalCatalog.filter((product) => product.pricingSource === 'county_override').length
+  const businessTypePrices = portalCatalog.filter((product) => product.pricingSource === 'business_type_price').length
   const stateOverrides = portalCatalog.filter((product) => product.pricingSource === 'state_price').length
   const defaultPrices = portalCatalog.filter((product) => product.pricingSource === 'default_price').length
 
@@ -84,10 +100,18 @@ export async function AccountPortalPricingCard({ account }: Props) {
             <Badge variant="info">{portalCatalog.length} active products</Badge>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-5">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs uppercase tracking-wide text-slate-500">Special Pricing</p>
+              <p className="mt-2 text-2xl font-semibold text-slate-900">{specialAccountPrices}</p>
+            </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <p className="text-xs uppercase tracking-wide text-slate-500">County Overrides</p>
               <p className="mt-2 text-2xl font-semibold text-slate-900">{countyOverrides}</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs uppercase tracking-wide text-slate-500">Business Type</p>
+              <p className="mt-2 text-2xl font-semibold text-slate-900">{businessTypePrices}</p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <p className="text-xs uppercase tracking-wide text-slate-500">State Rules</p>
@@ -102,7 +126,7 @@ export async function AccountPortalPricingCard({ account }: Props) {
           <div className="rounded-xl border border-slate-200">
             <div className="border-b px-4 py-3">
               <p className="text-sm font-medium text-slate-900">Visible catalog prices</p>
-              <p className="text-xs text-slate-500">This preview uses the same geographic price resolver as the customer product catalog.</p>
+              <p className="text-xs text-slate-500">This preview uses the same pricing resolver as the customer product catalog.</p>
             </div>
             <div className="max-h-[28rem] overflow-auto">
               <table className="min-w-full text-sm">
@@ -127,7 +151,7 @@ export async function AccountPortalPricingCard({ account }: Props) {
                       <td className="px-4 py-3 text-slate-600">{describePricingSource(product.pricingSource)}</td>
                       <td className="px-4 py-3 text-slate-600">
                         {product.matchedRule
-                          ? `${product.matchedRule.ruleType === 'county' ? product.matchedRule.countyName : product.matchedRule.stateCode} · ${describeQuantityRange(product.matchedRule)}`
+                          ? `${describePricingRuleScope(product.matchedRule)} - ${describeQuantityRange(product.matchedRule)}`
                           : 'Base catalog price'}
                       </td>
                     </tr>
@@ -141,13 +165,13 @@ export async function AccountPortalPricingCard({ account }: Props) {
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle>Applicable Geographic Rules</CardTitle>
+          <CardTitle>Applicable Pricing Rules</CardTitle>
         </CardHeader>
         <CardContent>
-          {!pricingContext.state ? (
-            <p className="text-sm text-slate-500">Add a state to this CRM record before geographic pricing can apply.</p>
+          {!pricingContext.state && !pricingContext.businessType ? (
+            <p className="text-sm text-slate-500">Add a state, county, or business type to this CRM record before scoped pricing can apply.</p>
           ) : applicableRules.length === 0 ? (
-            <p className="text-sm text-slate-500">No active geographic pricing rules currently match this account.</p>
+            <p className="text-sm text-slate-500">No active pricing rules currently match this account.</p>
           ) : (
             <div className="space-y-3">
               {applicableRules.map((rule) => (
@@ -156,7 +180,7 @@ export async function AccountPortalPricingCard({ account }: Props) {
                     <div>
                       <p className="font-medium text-slate-900">{productNameById.get(rule.productId) ?? 'Unknown product'}</p>
                       <p className="text-xs text-slate-500">
-                        {rule.ruleType === 'county' ? `${rule.countyName}, ${rule.stateCode}` : rule.stateCode} · {describeQuantityRange(rule)}
+                        {describePricingRuleScope(rule)} - {describeQuantityRange(rule)}
                       </p>
                     </div>
                     <div className="text-right">

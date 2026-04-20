@@ -1,6 +1,6 @@
 import { desc, eq, sql } from 'drizzle-orm'
 import { db } from '@/db'
-import { activityEvents, geographicPricingRules, products, users } from '@/db/schema'
+import { activityEvents, customerAccounts, geographicPricingRules, products, users } from '@/db/schema'
 import { requireRole } from '@/lib/auth/session'
 import { GeographicPricingManager } from '@/components/pricing/GeographicPricingManager'
 
@@ -30,7 +30,7 @@ async function hasGeographicPricingSchema() {
         or
         (table_name = 'order_items' and column_name in ('pricing_source', 'pricing_rule_id', 'pricing_state', 'pricing_county'))
         or
-        (table_name = 'geographic_pricing_rules' and column_name in ('product_id', 'state_code', 'county_name', 'county_key', 'rule_type', 'min_case_quantity', 'max_case_quantity', 'case_price', 'effective_start_date', 'effective_end_date', 'is_active', 'updated_by', 'updated_at'))
+        (table_name = 'geographic_pricing_rules' and column_name in ('product_id', 'state_code', 'county_name', 'county_key', 'account_id', 'business_type', 'rule_type', 'min_case_quantity', 'max_case_quantity', 'case_price', 'effective_start_date', 'effective_end_date', 'is_active', 'updated_by', 'updated_at'))
       )
   `)
 
@@ -51,7 +51,7 @@ async function hasGeographicPricingSchema() {
   const requiredColumns: Record<string, string[]> = {
     customer_accounts: ['county'],
     order_items: ['pricing_source', 'pricing_rule_id', 'pricing_state', 'pricing_county'],
-    geographic_pricing_rules: ['product_id', 'state_code', 'county_name', 'county_key', 'rule_type', 'min_case_quantity', 'max_case_quantity', 'case_price', 'effective_start_date', 'effective_end_date', 'is_active', 'updated_by', 'updated_at'],
+    geographic_pricing_rules: ['product_id', 'state_code', 'county_name', 'county_key', 'account_id', 'business_type', 'rule_type', 'min_case_quantity', 'max_case_quantity', 'case_price', 'effective_start_date', 'effective_end_date', 'is_active', 'updated_by', 'updated_at'],
   }
 
   for (const [tableName, required] of Object.entries(requiredColumns)) {
@@ -69,14 +69,18 @@ export default async function GeographicPricingPage() {
 
   let missingMigration = false
   let productRows: Array<{ id: string; sku: string; name: string }> = []
+  let accountRows: Array<{ id: string; companyName: string; businessType: string | null }> = []
   let ruleRows: Array<{
     id: string
     productId: string
     productName: string | null
     productSku: string | null
-    stateCode: string
+    stateCode: string | null
     countyName: string | null
-    ruleType: 'state' | 'county'
+    accountId: string | null
+    accountName: string | null
+    businessType: string | null
+    ruleType: 'state' | 'county' | 'account' | 'business_type'
     minCaseQuantity: number | null
     maxCaseQuantity: number | null
     casePrice: string
@@ -102,7 +106,7 @@ export default async function GeographicPricingPage() {
   }
 
   if (schemaReady) try {
-    ;[productRows, ruleRows, historyRows] = await Promise.all([
+    ;[productRows, accountRows, ruleRows, historyRows] = await Promise.all([
       db
         .select({
           id: products.id,
@@ -114,12 +118,23 @@ export default async function GeographicPricingPage() {
         .orderBy(products.name),
       db
         .select({
+          id: customerAccounts.id,
+          companyName: customerAccounts.companyName,
+          businessType: customerAccounts.businessType,
+        })
+        .from(customerAccounts)
+        .orderBy(customerAccounts.companyName),
+      db
+        .select({
           id: geographicPricingRules.id,
           productId: geographicPricingRules.productId,
           productName: products.name,
           productSku: products.sku,
           stateCode: geographicPricingRules.stateCode,
           countyName: geographicPricingRules.countyName,
+          accountId: geographicPricingRules.accountId,
+          accountName: customerAccounts.companyName,
+          businessType: geographicPricingRules.businessType,
           ruleType: geographicPricingRules.ruleType,
           minCaseQuantity: geographicPricingRules.minCaseQuantity,
           maxCaseQuantity: geographicPricingRules.maxCaseQuantity,
@@ -133,6 +148,7 @@ export default async function GeographicPricingPage() {
         })
         .from(geographicPricingRules)
         .leftJoin(products, eq(geographicPricingRules.productId, products.id))
+        .leftJoin(customerAccounts, eq(geographicPricingRules.accountId, customerAccounts.id))
         .leftJoin(users, eq(geographicPricingRules.updatedBy, users.id))
         .orderBy(desc(geographicPricingRules.updatedAt)),
       db
@@ -150,7 +166,6 @@ export default async function GeographicPricingPage() {
         .orderBy(desc(activityEvents.createdAt))
         .limit(50),
     ])
-
   } catch (error) {
     if (!isMissingGeographicPricingTable(error)) {
       throw error
@@ -170,8 +185,9 @@ export default async function GeographicPricingPage() {
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
           <p className="font-semibold text-amber-900">Migration required</p>
           <p className="mt-2 text-sm text-amber-800">
-            The geographic pricing tables and columns have not been applied yet. Run the database migrations for
-            `0031_geographic_pricing.sql` and `0032_geographic_pricing_quantity_tiers.sql`, then reload this page.
+            The pricing tables and columns have not been applied yet. Run the database migrations for
+            `0031_geographic_pricing.sql`, `0032_geographic_pricing_quantity_tiers.sql`, and
+            `0043_pricing_scope_rules.sql`, then reload this page.
           </p>
         </div>
       </div>
@@ -183,10 +199,10 @@ export default async function GeographicPricingPage() {
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Geographic Pricing</h1>
         <p className="mt-1 text-muted-foreground">
-          Manage state-level pricing, county overrides, effective dating, and pricing audit history.
+          Manage state pricing, county overrides, special account pricing, business type pricing, and audit history.
         </p>
       </div>
-      <GeographicPricingManager products={productRows} rules={ruleRows} history={historyRows} />
+      <GeographicPricingManager products={productRows} accounts={accountRows} rules={ruleRows} history={historyRows} />
     </div>
   )
 }

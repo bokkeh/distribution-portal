@@ -1,12 +1,16 @@
-export type GeographicPricingSource = 'county_override' | 'state_price' | 'default_price'
+import { formatBusinessType, normalizeBusinessType } from '@/lib/customers/business-types'
+
+export type GeographicPricingSource = 'account_special' | 'county_override' | 'business_type_price' | 'state_price' | 'default_price'
 
 export type GeographicPricingRuleInput = {
   id: string
   productId: string
-  stateCode: string
+  stateCode: string | null
   countyName: string | null
   countyKey: string | null
-  ruleType: 'state' | 'county'
+  accountId: string | null
+  businessType: string | null
+  ruleType: 'state' | 'county' | 'account' | 'business_type'
   minCaseQuantity: number | null
   maxCaseQuantity: number | null
   casePrice: string
@@ -293,6 +297,8 @@ function sortRules(rules: GeographicPricingRuleInput[]) {
 export function resolveGeographicCasePrice(input: {
   baseCasePrice: string | number
   productId: string
+  accountId?: string | null
+  businessType?: string | null
   state: string | null | undefined
   county: string | null | undefined
   rules: GeographicPricingRuleInput[]
@@ -300,6 +306,8 @@ export function resolveGeographicCasePrice(input: {
   quantityCases?: number | null
 }): GeographicPriceResolution {
   const basePrice = typeof input.baseCasePrice === 'number' ? input.baseCasePrice : Number(input.baseCasePrice)
+  const normalizedAccountId = input.accountId?.trim() || null
+  const normalizedBusinessType = normalizeBusinessType(input.businessType)
   const normalizedState = normalizeStateCode(input.state)
   const countyKey = buildCountyKey(input.county)
   const relevantRules = sortRules(
@@ -324,6 +332,23 @@ export function resolveGeographicCasePrice(input: {
     return candidates.find((rule) => normalizeCaseQuantity(rule.minCaseQuantity) === null && normalizeCaseQuantity(rule.maxCaseQuantity) === null)
   }
 
+  if (normalizedAccountId) {
+    const accountRule = findBestRule(relevantRules.filter((rule) =>
+      rule.ruleType === 'account' &&
+      rule.accountId === normalizedAccountId
+    ))
+
+    if (accountRule) {
+      return {
+        price: Number(accountRule.casePrice),
+        source: 'account_special',
+        matchedRule: accountRule,
+        matchedState: normalizedState,
+        matchedCounty: normalizeCountyName(input.county),
+      }
+    }
+  }
+
   if (normalizedState && countyKey) {
     const countyRule = findBestRule(relevantRules.filter((rule) =>
       rule.ruleType === 'county' &&
@@ -336,6 +361,23 @@ export function resolveGeographicCasePrice(input: {
         price: Number(countyRule.casePrice),
         source: 'county_override',
         matchedRule: countyRule,
+        matchedState: normalizedState,
+        matchedCounty: normalizeCountyName(input.county),
+      }
+    }
+  }
+
+  if (normalizedBusinessType) {
+    const businessTypeRule = findBestRule(relevantRules.filter((rule) =>
+      rule.ruleType === 'business_type' &&
+      normalizeBusinessType(rule.businessType) === normalizedBusinessType
+    ))
+
+    if (businessTypeRule) {
+      return {
+        price: Number(businessTypeRule.casePrice),
+        source: 'business_type_price',
+        matchedRule: businessTypeRule,
         matchedState: normalizedState,
         matchedCounty: normalizeCountyName(input.county),
       }
@@ -370,11 +412,41 @@ export function resolveGeographicCasePrice(input: {
 
 export function describePricingSource(source: GeographicPricingSource) {
   switch (source) {
+    case 'account_special':
+      return 'Special account pricing'
     case 'county_override':
       return 'County override'
+    case 'business_type_price':
+      return 'Business type pricing'
     case 'state_price':
       return 'State rule'
     default:
       return 'Default price'
+  }
+}
+
+export function describePricingRuleType(ruleType: GeographicPricingRuleInput['ruleType']) {
+  switch (ruleType) {
+    case 'account':
+      return 'Special pricing'
+    case 'business_type':
+      return 'Business type pricing'
+    case 'county':
+      return 'County override'
+    default:
+      return 'State price'
+  }
+}
+
+export function describePricingRuleScope(rule: Pick<GeographicPricingRuleInput, 'ruleType' | 'stateCode' | 'countyName' | 'businessType'> & { accountName?: string | null }) {
+  switch (rule.ruleType) {
+    case 'account':
+      return rule.accountName?.trim() || 'Specific account'
+    case 'business_type':
+      return formatBusinessType(rule.businessType)
+    case 'county':
+      return `${rule.countyName ?? 'Unknown county'}, ${rule.stateCode ?? ''}`.trim().replace(/^,\s*/, '')
+    default:
+      return rule.stateCode ?? 'No state'
   }
 }

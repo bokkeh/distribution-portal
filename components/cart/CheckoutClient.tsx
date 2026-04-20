@@ -21,6 +21,8 @@ function getDisplayedPrice(
   item: { productId: string; price: string; samplePrice: string; quantity: number },
   orderType: 'paid' | 'sample',
   pricingRules: GeographicPricingRuleInput[],
+  pricingAccountId: string | null,
+  pricingBusinessType: string | null,
   pricingState: string | null,
   pricingCounty: string | null
 ) {
@@ -28,6 +30,8 @@ function getDisplayedPrice(
   return resolveGeographicCasePrice({
     productId: item.productId,
     baseCasePrice: item.price,
+    accountId: pricingAccountId,
+    businessType: pricingBusinessType,
     state: pricingState,
     county: pricingCounty,
     rules: pricingRules,
@@ -113,6 +117,8 @@ export default function CheckoutClient({
   customerName,
   businessType,
   pricingRules,
+  pricingAccountId,
+  pricingBusinessType,
   pricingState,
   pricingCounty,
 }: {
@@ -120,6 +126,8 @@ export default function CheckoutClient({
   customerName: string
   businessType?: string | null
   pricingRules: GeographicPricingRuleInput[]
+  pricingAccountId: string | null
+  pricingBusinessType: string | null
   pricingState: string | null
   pricingCounty: string | null
 }) {
@@ -155,7 +163,7 @@ export default function CheckoutClient({
         deliveryTiming === 'time_sensitive'
           ? (preferredDeliveryDay && ['saturday', 'sunday'].includes(preferredDeliveryDay.toLowerCase()) ? 50 : 30)
           : 0
-      const baseAmountCents = Math.round((items.reduce((sum, item) => sum + getDisplayedPrice(item, orderType, pricingRules, pricingState, pricingCounty) * item.quantity, 0) + deliveryFee) * 100)
+      const baseAmountCents = Math.round((items.reduce((sum, item) => sum + getDisplayedPrice(item, orderType, pricingRules, pricingAccountId, pricingBusinessType, pricingState, pricingCounty) * item.quantity, 0) + deliveryFee) * 100)
       const res = await fetch('/api/stripe/payment-intent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -175,7 +183,7 @@ export default function CheckoutClient({
     }
   }
 
-  const totalAmount = items.reduce((sum, item) => sum + getDisplayedPrice(item, orderType, pricingRules, pricingState, pricingCounty) * item.quantity, 0)
+  const totalAmount = items.reduce((sum, item) => sum + getDisplayedPrice(item, orderType, pricingRules, pricingAccountId, pricingBusinessType, pricingState, pricingCounty) * item.quantity, 0)
   const timeSensitiveFee =
     deliveryTiming === 'time_sensitive'
       ? (preferredDeliveryDay && ['saturday', 'sunday'].includes(preferredDeliveryDay.toLowerCase()) ? 50 : 30)
@@ -207,7 +215,7 @@ export default function CheckoutClient({
           )}
           <div className="space-y-2 border-t pt-3">
             {items.map(item => {
-              const price = getDisplayedPrice(item, orderType, pricingRules, pricingState, pricingCounty)
+              const price = getDisplayedPrice(item, orderType, pricingRules, pricingAccountId, pricingBusinessType, pricingState, pricingCounty)
               return (
                 <div key={item.productId} className="flex justify-between text-sm">
                   <span>{item.name} x{item.quantity}</span>

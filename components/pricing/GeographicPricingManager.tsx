@@ -9,7 +9,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { US_STATE_OPTIONS, describeQuantityRange } from '@/lib/pricing/geographic'
+import { BUSINESS_TYPE_OPTIONS } from '@/lib/customers/business-types'
+import { US_STATE_OPTIONS, describePricingRuleScope, describePricingRuleType, describeQuantityRange } from '@/lib/pricing/geographic'
 import { formatCurrency, formatDate } from '@/lib/utils'
 
 type ProductOption = {
@@ -18,14 +19,23 @@ type ProductOption = {
   name: string
 }
 
+type AccountOption = {
+  id: string
+  companyName: string
+  businessType: string | null
+}
+
 type RuleRow = {
   id: string
   productId: string
   productName: string | null
   productSku: string | null
-  stateCode: string
+  stateCode: string | null
   countyName: string | null
-  ruleType: 'state' | 'county'
+  accountId: string | null
+  accountName: string | null
+  businessType: string | null
+  ruleType: 'state' | 'county' | 'account' | 'business_type'
   minCaseQuantity: number | null
   maxCaseQuantity: number | null
   casePrice: string
@@ -51,7 +61,9 @@ type FormState = {
   productId: string
   stateCode: string
   countyName: string
-  ruleType: 'state' | 'county'
+  accountId: string
+  businessType: string
+  ruleType: 'state' | 'county' | 'account' | 'business_type'
   minCaseQuantity: string
   maxCaseQuantity: string
   casePrice: string
@@ -66,6 +78,8 @@ const EMPTY_FORM: FormState = {
   productId: '',
   stateCode: '',
   countyName: '',
+  accountId: '',
+  businessType: '',
   ruleType: 'state',
   minCaseQuantity: '',
   maxCaseQuantity: '',
@@ -81,12 +95,27 @@ function toDateInputValue(value: string | Date | null) {
   return new Date(value).toISOString().slice(0, 10)
 }
 
+function getRuleTypeBadgeVariant(ruleType: RuleRow['ruleType']) {
+  switch (ruleType) {
+    case 'account':
+      return 'info'
+    case 'county':
+      return 'warning'
+    case 'business_type':
+      return 'secondary'
+    default:
+      return 'outline'
+  }
+}
+
 export function GeographicPricingManager({
   products,
+  accounts,
   rules,
   history,
 }: {
   products: ProductOption[]
+  accounts: AccountOption[]
   rules: RuleRow[]
   history: HistoryRow[]
 }) {
@@ -104,12 +133,16 @@ export function GeographicPricingManager({
       const matchesSearch = !query || [
         rule.productName,
         rule.productSku,
-        rule.stateCode,
+        rule.stateCode ?? '',
         rule.countyName ?? '',
+        rule.accountName ?? '',
+        rule.businessType ?? '',
         rule.notes ?? '',
       ].some((value) => (value ?? '').toLowerCase().includes(query))
 
-      const matchesState = stateFilter === 'all' || rule.stateCode === stateFilter
+      const matchesState =
+        stateFilter === 'all' ||
+        (stateFilter === 'scoped' ? !rule.stateCode : rule.stateCode === stateFilter)
       const matchesType = ruleTypeFilter === 'all' || rule.ruleType === ruleTypeFilter
       const matchesProduct = productFilter === 'all' || rule.productId === productFilter
       return matchesSearch && matchesState && matchesType && matchesProduct
@@ -124,8 +157,10 @@ export function GeographicPricingManager({
     setForm({
       id: rule.id,
       productId: rule.productId,
-      stateCode: rule.stateCode,
+      stateCode: rule.stateCode ?? '',
       countyName: rule.countyName ?? '',
+      accountId: rule.accountId ?? '',
+      businessType: rule.businessType ?? '',
       ruleType: rule.ruleType,
       minCaseQuantity: rule.minCaseQuantity?.toString() ?? '',
       maxCaseQuantity: rule.maxCaseQuantity?.toString() ?? '',
@@ -142,8 +177,10 @@ export function GeographicPricingManager({
       const result = await upsertGeographicPricingRule({
         id: form.id,
         productId: form.productId,
-        stateCode: form.stateCode,
+        stateCode: form.ruleType === 'state' || form.ruleType === 'county' ? form.stateCode : null,
         countyName: form.ruleType === 'county' ? form.countyName : null,
+        accountId: form.ruleType === 'account' ? form.accountId : null,
+        businessType: form.ruleType === 'business_type' ? form.businessType : null,
         ruleType: form.ruleType,
         minCaseQuantity: form.minCaseQuantity || null,
         maxCaseQuantity: form.maxCaseQuantity || null,
@@ -189,19 +226,20 @@ export function GeographicPricingManager({
     })
   }
 
-  const stateOptions = Array.from(new Set(rules.map((rule) => rule.stateCode))).sort()
+  const stateOptions = Array.from(new Set(rules.map((rule) => rule.stateCode).filter(Boolean) as string[])).sort()
 
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>{form.id ? 'Edit Geographic Pricing Rule' : 'Add Geographic Pricing Rule'}</CardTitle>
+          <CardTitle>{form.id ? 'Edit Pricing Rule' : 'Add Pricing Rule'}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
-            Create one rule per quantity break. Example: `3+ cases` at one price, `5+ cases` at a lower price, and
-            `10+ cases` at the best price. If multiple breaks match, the highest qualifying break wins.
+            Create one rule per quantity break. Rule priority is: special pricing by account, county override,
+            business type pricing, state pricing, then default catalog price.
           </div>
+
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <div className="space-y-2 xl:col-span-2">
               <Label htmlFor="pricing-product">Product / SKU</Label>
@@ -219,13 +257,42 @@ export function GeographicPricingManager({
                 ))}
               </select>
             </div>
+
+            <div className="space-y-2 xl:col-span-2">
+              <Label htmlFor="pricing-rule-type">Pricing Scope</Label>
+              <select
+                id="pricing-rule-type"
+                value={form.ruleType}
+                onChange={(event) => {
+                  const ruleType = event.target.value as FormState['ruleType']
+                  setForm((current) => ({
+                    ...current,
+                    ruleType,
+                    stateCode: ruleType === 'state' || ruleType === 'county' ? current.stateCode : '',
+                    countyName: ruleType === 'county' ? current.countyName : '',
+                    accountId: ruleType === 'account' ? current.accountId : '',
+                    businessType: ruleType === 'business_type' ? current.businessType : '',
+                  }))
+                }}
+                className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm"
+              >
+                <option value="state">State pricing</option>
+                <option value="county">County override</option>
+                <option value="account">Special pricing by account</option>
+                <option value="business_type">Business type pricing</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <div className="space-y-2">
               <Label htmlFor="pricing-state">State</Label>
               <select
                 id="pricing-state"
                 value={form.stateCode}
                 onChange={(event) => setForm((current) => ({ ...current, stateCode: event.target.value }))}
-                className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm"
+                disabled={form.ruleType !== 'state' && form.ruleType !== 'county'}
+                className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <option value="">Select state...</option>
                 {US_STATE_OPTIONS.map((state) => (
@@ -235,25 +302,7 @@ export function GeographicPricingManager({
                 ))}
               </select>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="pricing-rule-type">Rule Type</Label>
-              <select
-                id="pricing-rule-type"
-                value={form.ruleType}
-                onChange={(event) => setForm((current) => ({
-                  ...current,
-                  ruleType: event.target.value as 'state' | 'county',
-                  countyName: event.target.value === 'county' ? current.countyName : '',
-                }))}
-                className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm"
-              >
-                <option value="state">State price</option>
-                <option value="county">County override</option>
-              </select>
-            </div>
-          </div>
 
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <div className="space-y-2">
               <Label htmlFor="pricing-county">County</Label>
               <Input
@@ -264,6 +313,46 @@ export function GeographicPricingManager({
                 disabled={form.ruleType !== 'county'}
               />
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="pricing-account">Account</Label>
+              <select
+                id="pricing-account"
+                value={form.accountId}
+                onChange={(event) => setForm((current) => ({ ...current, accountId: event.target.value }))}
+                disabled={form.ruleType !== 'account'}
+                className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="">Select account...</option>
+                {accounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.companyName}
+                    {account.businessType ? ` (${account.businessType})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="pricing-business-type">Business Type</Label>
+              <select
+                id="pricing-business-type"
+                value={form.businessType}
+                onChange={(event) => setForm((current) => ({ ...current, businessType: event.target.value }))}
+                disabled={form.ruleType !== 'business_type'}
+                className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="">Select business type...</option>
+                {BUSINESS_TYPE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <div className="space-y-2">
               <Label htmlFor="pricing-min-qty">Break Starts At</Label>
               <Input
@@ -275,8 +364,9 @@ export function GeographicPricingManager({
                 onChange={(event) => setForm((current) => ({ ...current, minCaseQuantity: event.target.value }))}
                 placeholder="3"
               />
-              <p className="text-xs text-slate-500">Enter the case count where this price begins, like `3`, `5`, or `10`.</p>
+              <p className="text-xs text-slate-500">Enter the case count where this price begins, like 3, 5, or 10.</p>
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="pricing-max-qty">Applies Through</Label>
               <Input
@@ -288,8 +378,9 @@ export function GeographicPricingManager({
                 onChange={(event) => setForm((current) => ({ ...current, maxCaseQuantity: event.target.value }))}
                 placeholder="Leave blank for 3+"
               />
-              <p className="text-xs text-slate-500">Optional. Leave blank for an open-ended break such as `10+ cases`.</p>
+              <p className="text-xs text-slate-500">Optional. Leave blank for an open-ended break such as 10+ cases.</p>
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="pricing-price">Case Price</Label>
               <Input
@@ -301,8 +392,8 @@ export function GeographicPricingManager({
                 onChange={(event) => setForm((current) => ({ ...current, casePrice: event.target.value }))}
                 placeholder="120.00"
               />
-              <p className="text-xs text-slate-500">Price per case for this quantity break.</p>
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="pricing-start">Effective Start</Label>
               <Input
@@ -312,6 +403,7 @@ export function GeographicPricingManager({
                 onChange={(event) => setForm((current) => ({ ...current, effectiveStartDate: event.target.value }))}
               />
             </div>
+
             <div className="space-y-2">
               <Label htmlFor="pricing-end">Effective End</Label>
               <Input
@@ -331,7 +423,7 @@ export function GeographicPricingManager({
               onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
               rows={3}
               className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm"
-              placeholder="Internal explanation for regulated counties, promotions, or distributor strategy."
+              placeholder="Internal explanation for special pricing, geography, promotions, or distributor strategy."
             />
           </div>
 
@@ -365,13 +457,16 @@ export function GeographicPricingManager({
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search rules..." />
             <select value={stateFilter} onChange={(event) => setStateFilter(event.target.value)} className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm">
-              <option value="all">All states</option>
+              <option value="all">All states and scopes</option>
+              <option value="scoped">Account and business type rules</option>
               {stateOptions.map((stateCode) => <option key={stateCode} value={stateCode}>{stateCode}</option>)}
             </select>
             <select value={ruleTypeFilter} onChange={(event) => setRuleTypeFilter(event.target.value)} className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm">
               <option value="all">All rule types</option>
-              <option value="state">State price</option>
+              <option value="state">State pricing</option>
               <option value="county">County override</option>
+              <option value="account">Special pricing</option>
+              <option value="business_type">Business type pricing</option>
             </select>
             <select value={productFilter} onChange={(event) => setProductFilter(event.target.value)} className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-sm">
               <option value="all">All products</option>
@@ -380,11 +475,11 @@ export function GeographicPricingManager({
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[960px]">
+            <table className="w-full min-w-[1140px]">
               <thead className="border-b bg-slate-50">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Product / SKU</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Geography</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Scope</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Rule Type</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Quantity</th>
                   <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground">Case Price</th>
@@ -402,12 +497,12 @@ export function GeographicPricingManager({
                       <p className="text-xs text-slate-500">{rule.productSku ?? 'No SKU'}</p>
                     </td>
                     <td className="px-4 py-3 text-sm">
-                      <p className="font-medium text-slate-900">{rule.stateCode}</p>
-                      <p className="text-xs text-slate-500">{rule.countyName ?? 'All counties in state'}</p>
+                      <p className="font-medium text-slate-900">{describePricingRuleScope(rule)}</p>
+                      {rule.notes ? <p className="text-xs text-slate-500">{rule.notes}</p> : null}
                     </td>
                     <td className="px-4 py-3 text-sm">
-                      <Badge variant={rule.ruleType === 'county' ? 'warning' : 'secondary'}>
-                        {rule.ruleType === 'county' ? 'County override' : 'State price'}
+                      <Badge variant={getRuleTypeBadgeVariant(rule.ruleType)}>
+                        {describePricingRuleType(rule.ruleType)}
                       </Badge>
                     </td>
                     <td className="px-4 py-3 text-sm text-slate-600">{describeQuantityRange(rule)}</td>

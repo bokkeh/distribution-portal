@@ -18,6 +18,7 @@ export default async function NewInvoicePage({
     .select({
       id: customerAccounts.id,
       companyName: customerAccounts.companyName,
+      businessType: customerAccounts.businessType,
       state: customerAccounts.state,
       county: customerAccounts.county,
     })

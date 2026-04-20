@@ -15,7 +15,12 @@ export default async function CheckoutPage() {
 
   const productList = await db.select({ id: products.id, price: products.price }).from(products).where(eq(products.active, true))
   const pricingRules = await getPricingRulesForProducts(productList.map((product) => product.id))
-  const pricingContext = normalizeAccountGeography({ state: account?.state, county: account?.county })
+  const pricingContext = normalizeAccountGeography({
+    accountId: account?.id,
+    businessType: account?.businessType,
+    state: account?.state,
+    county: account?.county,
+  })
 
   return (
     <div className="space-y-6">
@@ -28,6 +33,8 @@ export default async function CheckoutPage() {
         customerName={session.user.name ?? ''}
         businessType={account?.businessType}
         pricingRules={pricingRules}
+        pricingAccountId={pricingContext.accountId}
+        pricingBusinessType={pricingContext.businessType}
         pricingState={pricingContext.state}
         pricingCounty={pricingContext.county}
       />
