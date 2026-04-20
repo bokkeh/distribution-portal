@@ -8,6 +8,7 @@ import { sendMapAccountSms } from '@/actions/map-contact'
 import { addAccountToRoute } from '@/actions/sales-routes'
 import { convexHull, expandHull, circlePolygon } from '@/lib/maps/convex-hull'
 import { getRegionColor } from '@/lib/maps/region-colors'
+import { formatBusinessType } from '@/lib/customers/business-types'
 import { RegionAccountsModal } from './RegionAccountsModal'
 import { TelnyxCallButton } from './TelnyxCallButton'
 
@@ -15,10 +16,7 @@ function fmt(n: number) {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
 }
 
-function isOverdue(date: Date | null) {
-  if (!date) return false
-  return new Date(date) < new Date()
-}
+const REGION_MAP_RENDER_TIME = Date.now()
 
 const BUSINESS_TYPE_GLYPH: Record<string, string> = {
   // Display values (new dropdown)
@@ -60,7 +58,7 @@ function getAccountMarkerGlyph(account: RegionMapAccount): string {
 }
 
 function getAccountMarkerTitle(account: RegionMapAccount): string {
-  return account.businessType ?? account.accountType?.replaceAll('_', ' ') ?? 'Account'
+  return formatBusinessType(account.businessType) || account.accountType?.replaceAll('_', ' ') || 'Account'
 }
 
 /**
@@ -160,8 +158,6 @@ export function RegionsMap({ data, routes = [] }: { data: RegionMapData; routes?
     const avgLng = mappedAccounts.reduce((s, a) => s + a.lng!, 0) / mappedAccounts.length
     return { lat: avgLat, lng: avgLng }
   }, [mappedAccounts])
-
-  const hoveredRegion = data.regions.find(r => r.id === hoveredRegionId) ?? null
 
   if (!isLoaded) {
     return (
@@ -476,7 +472,6 @@ export function RegionsMap({ data, routes = [] }: { data: RegionMapData; routes?
 }
 
 function AccountInfoCard({ account }: { account: RegionMapAccount }) {
-  const overdue = isOverdue(account.nextRequiredVisitDate)
   const [composing, setComposing] = useState(false)
   const [smsText, setSmsText] = useState('')
   const [sending, setSending] = useState(false)
@@ -488,12 +483,6 @@ function AccountInfoCard({ account }: { account: RegionMapAccount }) {
     off_premise: 'Off-Premise',
     chain: 'Chain',
     independent: 'Independent',
-  }
-  const businessTypeLabel: Record<string, string> = {
-    restaurant: 'Restaurant',
-    restaurant_group: 'Restaurant Group',
-    liquor_store: 'Liquor Store',
-    hotel_group: 'Hotel Group',
   }
   const priorityColors: Record<string, string> = {
     high: '#EF4444',
@@ -528,9 +517,9 @@ function AccountInfoCard({ account }: { account: RegionMapAccount }) {
       </div>
 
       <div className="flex flex-wrap gap-1">
-        {account.businessType && businessTypeLabel[account.businessType] && (
+        {account.businessType && (
           <span className="rounded bg-blue-50 px-1.5 py-0.5 text-xs font-medium text-blue-700">
-            {businessTypeLabel[account.businessType]}
+            {formatBusinessType(account.businessType)}
           </span>
         )}
         {account.accountType && (
@@ -611,12 +600,12 @@ function AccountInfoCard({ account }: { account: RegionMapAccount }) {
       {(() => {
         const healthColor = getAccountHealthColor(account)
         const daysSince = account.lastVisitDate
-          ? Math.floor((Date.now() - new Date(account.lastVisitDate).getTime()) / 86400000)
+          ? Math.floor((REGION_MAP_RENDER_TIME - new Date(account.lastVisitDate).getTime()) / 86400000)
           : null
         const freq = account.visitFrequency ?? 30
         const staleness = daysSince != null ? daysSince / freq : null
         const daysUntilNext = account.nextRequiredVisitDate
-          ? Math.ceil((new Date(account.nextRequiredVisitDate).getTime() - Date.now()) / 86400000)
+          ? Math.ceil((new Date(account.nextRequiredVisitDate).getTime() - REGION_MAP_RENDER_TIME) / 86400000)
           : null
 
         return (

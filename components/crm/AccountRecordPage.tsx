@@ -29,6 +29,7 @@ import { AccountMediaGalleryCard } from '@/components/crm/AccountMediaGalleryCar
 import { AccountMediaInsightsCard } from '@/components/crm/AccountMediaInsightsCard'
 import { AccountMediaUploadCard } from '@/components/crm/AccountMediaUploadCard'
 import { AccountNotesCard } from '@/components/crm/AccountNotesCard'
+import { AccountPortalPricingCard } from '@/components/crm/AccountPortalPricingCard'
 import { AccountRecordTabs } from '@/components/crm/AccountRecordTabs'
 import { AccountSmartInsightsCard } from '@/components/crm/AccountSmartInsightsCard'
 import { ViewAsAccountButton } from '@/components/admin/ViewAsAccountButton'
@@ -750,23 +751,26 @@ export async function AccountRecordPage({
       ) : null}
 
       {tab === 'settings' ? (
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-          <div className="xl:col-span-2">
-            <Card id="edit-account">
-              <CardHeader className="pb-3"><CardTitle>Account Setup / Edit</CardTitle></CardHeader>
-              <CardContent><AccountEditForm account={account} mode={mode} salesLeadOptions={salesLeadOptions} /></CardContent>
-            </Card>
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+            <div className="xl:col-span-2">
+              <Card id="edit-account">
+                <CardHeader className="pb-3"><CardTitle>Account Setup / Edit</CardTitle></CardHeader>
+                <CardContent><AccountEditForm account={account} mode={mode} salesLeadOptions={salesLeadOptions} /></CardContent>
+              </Card>
+            </div>
+            <div className="space-y-6">
+              <Card>
+                <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2"><RefreshCcw className="h-4 w-4" />Sync Status Center</CardTitle></CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs uppercase tracking-wide text-slate-500">HubSpot</p><p className="mt-2 text-sm font-semibold text-slate-900">{account.hubspotContactId || account.hubspotCompanyId ? 'Connected' : 'Needs sync'}</p><p className="mt-1 text-xs text-slate-500">{account.hubspotCompanyId ? `Company ${account.hubspotCompanyId}` : 'No HubSpot company linked'}</p></div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs uppercase tracking-wide text-slate-500">Notification preference</p><p className="mt-2 text-sm font-semibold text-slate-900">{account.notificationPreference ?? 'email'}</p></div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs uppercase tracking-wide text-slate-500">Payment terms</p><p className="mt-2 text-sm font-semibold text-slate-900">{account.paymentTerms ?? 'PREPAID'}</p></div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
-          <div className="space-y-6">
-            <Card>
-              <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2"><RefreshCcw className="h-4 w-4" />Sync Status Center</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs uppercase tracking-wide text-slate-500">HubSpot</p><p className="mt-2 text-sm font-semibold text-slate-900">{account.hubspotContactId || account.hubspotCompanyId ? 'Connected' : 'Needs sync'}</p><p className="mt-1 text-xs text-slate-500">{account.hubspotCompanyId ? `Company ${account.hubspotCompanyId}` : 'No HubSpot company linked'}</p></div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs uppercase tracking-wide text-slate-500">Notification preference</p><p className="mt-2 text-sm font-semibold text-slate-900">{account.notificationPreference ?? 'email'}</p></div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs uppercase tracking-wide text-slate-500">Payment terms</p><p className="mt-2 text-sm font-semibold text-slate-900">{account.paymentTerms ?? 'PREPAID'}</p></div>
-              </CardContent>
-            </Card>
-          </div>
+          {mode === 'admin' ? <AccountPortalPricingCard account={account} /> : null}
         </div>
       ) : null}
     </div>

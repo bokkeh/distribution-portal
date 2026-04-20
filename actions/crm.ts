@@ -4,7 +4,7 @@ import { db } from '@/db'
 import { accountPreferences, activityEvents, contacts, customerAccounts, deliveryStops, invoices, orders, salesMembers, salesRouteStops, smsThreads, tastings, users } from '@/db/schema'
 import { requireAdminOrStaff, requireRole } from '@/lib/auth/session'
 import { geocodeAddress } from '@/lib/maps/geocode'
-import { and, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { after } from 'next/server'
 import { getHubSpotCompanyContacts, upsertHubSpotContact, getHubSpotCompanies, updateHubSpotCompany } from '@/lib/hubspot/client'
@@ -12,6 +12,7 @@ import { logActivityEvent } from '@/lib/activity/log'
 import { createUserNotification } from '@/lib/notifications/in-app'
 import { normalizeAccountGeography } from '@/lib/pricing/geographic-service'
 import { isGeocodeActionRateLimited } from '@/lib/auth/rate-limit'
+import { normalizeBusinessType } from '@/lib/customers/business-types'
 
 const CRM_EDITOR_ROLES = ['admin', 'staff', 'sales_rep', 'sales_manager'] as const
 const HUBSPOT_COMPANY_SYNC_FIELDS = new Set<string>([
@@ -647,7 +648,7 @@ export async function updateCustomerAccount(
     const hoursOfOperation = (formData.get('hoursOfOperation') as string) || null
     const website = validateWebsiteUrl((formData.get('website') as string) || null)
     const dcAbraNumber = (formData.get('dcAbraNumber') as string) || null
-    const businessType = (formData.get('businessType') as string) || null
+    const businessType = normalizeBusinessType(formData.get('businessType') as string) ?? null
     const creditLimit = formData.get('creditLimit') as string
     const paymentTerms = formData.get('paymentTerms') as string
     const requestedAssignedSalesRepId = ((formData.get('assignedSalesRepId') as string) || '').trim() || null
@@ -973,7 +974,7 @@ export async function updateAccountBySalesRep(
     hoursOfOperation: (formData.get('hoursOfOperation') as string) || null,
     preferredDeliveryDays: (formData.get('preferredDeliveryDays') as string) || null,
     preferredDeliveryTimes: (formData.get('preferredDeliveryTimes') as string) || null,
-    businessType: (formData.get('businessType') as string) || null,
+    businessType: normalizeBusinessType(formData.get('businessType') as string) ?? null,
     dcAbraNumber: (formData.get('dcAbraNumber') as string) || null,
     liquorLicenseNumber: (formData.get('liquorLicenseNumber') as string) || null,
     liquorLicenseState: (formData.get('liquorLicenseState') as string) || null,

@@ -4,6 +4,7 @@ import { useActionState, useRef } from 'react'
 import Link from 'next/link'
 import { CheckCircle2 } from 'lucide-react'
 import { submitWholesaleAccountRequest } from '@/actions/marketing'
+import { BUSINESS_TYPE_OPTIONS } from '@/lib/customers/business-types'
 import { SMS_CONSENT_COPY } from '@/lib/telnyx/messages'
 
 const initialState = null
@@ -82,13 +83,9 @@ export function JoinRequestForm() {
               className={fieldClassName}
             >
               <option value="">Select type...</option>
-              <option value="restaurant">Restaurant</option>
-              <option value="restaurant_group">Restaurant Group</option>
-              <option value="liquor_store">Liquor Store</option>
-              <option value="hotel_group">Hotel Group</option>
-              <option value="bar">Bar / Nightclub</option>
-              <option value="catering">Catering Company</option>
-              <option value="other">Other</option>
+              {BUSINESS_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
             </select>
           </div>
         </div>

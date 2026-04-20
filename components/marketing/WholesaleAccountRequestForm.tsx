@@ -4,6 +4,7 @@ import { useActionState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { submitWholesaleAccountRequest } from '@/actions/marketing'
+import { BUSINESS_TYPE_OPTIONS } from '@/lib/customers/business-types'
 import { SMS_CONSENT_COPY } from '@/lib/telnyx/messages'
 
 const initialState = null
@@ -54,10 +55,9 @@ export function WholesaleAccountRequestForm() {
         className={fieldClassName}
       >
         <option value="">Business type</option>
-        <option value="restaurant">Restaurant</option>
-        <option value="restaurant_group">Restaurant Group</option>
-        <option value="liquor_store">Liquor Store</option>
-        <option value="hotel_group">Hotel Group</option>
+        {BUSINESS_TYPE_OPTIONS.map((option) => (
+          <option key={option.value} value={option.value}>{option.label}</option>
+        ))}
       </select>
       <input
         name="phone"

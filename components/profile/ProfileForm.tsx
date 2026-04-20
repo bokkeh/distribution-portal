@@ -13,6 +13,7 @@ import { User, Building2, Bell, UserCircle, Truck, MapPin, Plus, Trash2, CreditC
 import { ProfilePhotoUploadField } from '@/components/profile/ProfilePhotoUploadField'
 import { COMMON_TIME_ZONES } from '@/lib/timezones'
 import { DocumentUploadField } from '@/components/shared/DocumentUploadField'
+import { BUSINESS_TYPE_OPTIONS, normalizeBusinessType } from '@/lib/customers/business-types'
 
 interface Location { address: string; city: string; state: string; zip: string }
 
@@ -214,14 +215,11 @@ export function ProfileForm({ user, account }: Props) {
               )}
               <FieldRow cols={3}>
                 <Field label="Business Type">
-                  <select name="businessType" defaultValue={account.businessType ?? ''} className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm">
+                  <select name="businessType" defaultValue={normalizeBusinessType(account.businessType) ?? ''} className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm">
                     <option value="">Select type</option>
-                    <option value="restaurant">Restaurant</option>
-                    <option value="restaurant_group">Restaurant Group</option>
-                    <option value="liquor_store">Liquor Store</option>
-                    <option value="hotel_group">Hotel Group</option>
-                    <option value="bar">Bar</option>
-                    <option value="other">Other</option>
+                    {BUSINESS_TYPE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
                   </select>
                 </Field>
                 <Field label="Business Email">
@@ -345,7 +343,7 @@ export function ProfileForm({ user, account }: Props) {
             </CardHeader>
             <CardContent className="space-y-4">
               {extraLocations.length === 0 && (
-                <p className="text-sm text-muted-foreground">No additional locations. Click "Add Location" if you have multiple sites.</p>
+                <p className="text-sm text-muted-foreground">No additional locations. Click &quot;Add Location&quot; if you have multiple sites.</p>
               )}
               {extraLocations.map((loc, i) => (
                 <div key={i} className="relative space-y-3 rounded-lg border p-4">

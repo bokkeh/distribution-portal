@@ -13,6 +13,7 @@ export type GeographicPricingRuleInput = {
   effectiveStartDate: string | Date
   effectiveEndDate: string | Date | null
   isActive: boolean
+  notes?: string | null
   updatedAt?: string | Date
 }
 

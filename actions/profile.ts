@@ -12,6 +12,7 @@ import { v4 as uuidv4 } from 'uuid'
 import Stripe from 'stripe'
 import { redirect } from 'next/navigation'
 import { isRedirectError } from 'next/dist/client/components/redirect-error'
+import { normalizeBusinessType } from '@/lib/customers/business-types'
 
 if (!process.env.STRIPE_SECRET_KEY) throw new Error('Missing STRIPE_SECRET_KEY')
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2026-02-25.clover' })
@@ -105,7 +106,7 @@ export async function updateProfile(
         zip,
         phone: businessPhone || phone,
         email,
-        businessType: (formData.get('businessType') as string) || null,
+        businessType: normalizeBusinessType(formData.get('businessType') as string) ?? null,
         dcAbraNumber: (formData.get('dcAbraNumber') as string) || null,
         liquorLicenseNumber: (formData.get('liquorLicenseNumber') as string) || null,
         liquorLicenseState: (formData.get('liquorLicenseState') as string) || null,

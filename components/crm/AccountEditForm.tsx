@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { useFormDraftAutosave } from '@/hooks/useFormDraftAutosave'
 import { AddressAutocomplete } from '@/components/shared/AddressAutocomplete'
 import { DocumentUploadField } from '@/components/shared/DocumentUploadField'
+import { BUSINESS_TYPE_OPTIONS, normalizeBusinessType } from '@/lib/customers/business-types'
 
 type Account = {
   id: string
@@ -223,24 +224,13 @@ export function AccountEditForm({
           <select
             id={`${mode}-businessType`}
             name="businessType"
-            defaultValue={account.businessType ?? ''}
+            defaultValue={normalizeBusinessType(account.businessType) ?? ''}
             className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
             <option value="">— Select type —</option>
-            <option value="Liquor Store">Liquor Store</option>
-            <option value="Restaurant">Restaurant</option>
-            <option value="Restaurant Group">Restaurant Group</option>
-            <option value="Hotel">Hotel</option>
-            <option value="Hotel Group">Hotel Group</option>
-            <option value="Venue">Venue</option>
-            <option value="Bar">Bar</option>
-            <option value="Night Club">Night Club</option>
-            <option value="Grocery Store">Grocery Store</option>
-            <option value="Convenience Store">Convenience Store</option>
-            <option value="Country Club">Country Club</option>
-            <option value="Casino">Casino</option>
-            <option value="Wholesaler">Wholesaler</option>
-            <option value="Other">Other</option>
+            {BUSINESS_TYPE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
           </select>
         </div>
         <div className="space-y-2">

@@ -13,6 +13,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Chrome, Loader2, CheckCircle2 } from 'lucide-react'
 import { registerCustomerAccount } from '@/actions/auth'
 import { getDashboardForRoles } from '@/lib/auth/view-as'
+import { BUSINESS_TYPE_OPTIONS } from '@/lib/customers/business-types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -88,7 +89,12 @@ export function LoginForm({ onSuccess }: Props) {
     const email = (fd.get('email') as string) || ''
     const password = (fd.get('password') as string) || ''
     const confirmPassword = (fd.get('confirmPassword') as string) || ''
+    const businessType = (fd.get('businessType') as string) || ''
     const phone = (fd.get('phone') as string) || ''
+    const address = (fd.get('address') as string) || ''
+    const city = (fd.get('city') as string) || ''
+    const state = (fd.get('state') as string) || ''
+    const zip = (fd.get('zip') as string) || ''
 
     if (password !== confirmPassword) {
       setError('Passwords do not match.')
@@ -101,7 +107,12 @@ export function LoginForm({ onSuccess }: Props) {
       companyName,
       email,
       password,
+      businessType,
       phone,
+      address,
+      city,
+      state,
+      zip,
     })
 
     if (result?.error) {
@@ -218,6 +229,38 @@ export function LoginForm({ onSuccess }: Props) {
           <div className="space-y-1.5">
             <Label htmlFor="cf-phone">Phone</Label>
             <Input id="cf-phone" name="phone" type="tel" placeholder="+1 (555) 000-0000" autoComplete="tel" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="cf-businessType">Business Type</Label>
+            <select
+              id="cf-businessType"
+              name="businessType"
+              defaultValue=""
+              className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+            >
+              <option value="">Select type</option>
+              {BUSINESS_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="cf-address">Business Address</Label>
+            <Input id="cf-address" name="address" type="text" placeholder="123 Main St" autoComplete="street-address" />
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="cf-city">City</Label>
+              <Input id="cf-city" name="city" type="text" placeholder="Washington" autoComplete="address-level2" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="cf-state">State</Label>
+              <Input id="cf-state" name="state" type="text" placeholder="DC" maxLength={2} autoComplete="address-level1" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="cf-zip">ZIP</Label>
+              <Input id="cf-zip" name="zip" type="text" placeholder="20001" autoComplete="postal-code" />
+            </div>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="cf-password">Password</Label>

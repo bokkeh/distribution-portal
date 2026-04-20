@@ -2,10 +2,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { db } from '@/db'
-import { activityEvents, users, wholesaleAccountRequests } from '@/db/schema'
+import { activityEvents, customerAccounts, users, wholesaleAccountRequests } from '@/db/schema'
 import { and, asc, desc, eq, inArray } from 'drizzle-orm'
 import { updateWholesaleRequestWorkflow } from '@/actions/wholesale-requests'
 import { SendInvitationModal } from '@/components/wholesale-requests/SendInvitationModal'
+import { formatBusinessType } from '@/lib/customers/business-types'
 import Link from 'next/link'
 import { ExternalLink } from 'lucide-react'
 
@@ -31,6 +32,14 @@ function formatDateTime(value: Date | null) {
   return new Date(value).toLocaleString()
 }
 
+function normalizeMatchText(value: string | null | undefined) {
+  return value
+    ?.trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    ?? ''
+}
+
 export default async function WholesaleRequestsPage() {
   async function submitWorkflow(formData: FormData) {
     'use server'
@@ -46,6 +55,13 @@ export default async function WholesaleRequestsPage() {
     createdAt: Date
   }> = []
   let assignableUsers: Array<{ id: string; name: string }> = []
+  let crmAccounts: Array<{
+    id: string
+    companyName: string
+    email: string | null
+    businessEmail: string | null
+    userId: string | null
+  }> = []
 
   try {
     requests = await db
@@ -72,6 +88,17 @@ export default async function WholesaleRequestsPage() {
       .from(users)
       .where(eq(users.active, true))
       .orderBy(asc(users.name))
+
+    crmAccounts = await db
+      .select({
+        id: customerAccounts.id,
+        companyName: customerAccounts.companyName,
+        email: customerAccounts.email,
+        businessEmail: customerAccounts.businessEmail,
+        userId: customerAccounts.userId,
+      })
+      .from(customerAccounts)
+      .orderBy(asc(customerAccounts.companyName))
   } catch (error) {
     const code = (error as { code?: string; cause?: { code?: string } } | null)?.code
       ?? (error as { cause?: { code?: string } } | null)?.cause?.code
@@ -89,6 +116,8 @@ export default async function WholesaleRequestsPage() {
     status: string
     assigneeUserId: string | null
     assigneeName: string | null
+    attachedAccountId: string | null
+    attachedAccountName: string | null
     notes: string | null
     updatedAt: Date | null
   }>()
@@ -100,6 +129,8 @@ export default async function WholesaleRequestsPage() {
       status: typeof metadata.status === 'string' ? metadata.status : 'new',
       assigneeUserId: typeof metadata.assigneeUserId === 'string' ? metadata.assigneeUserId : null,
       assigneeName: typeof metadata.assigneeName === 'string' ? metadata.assigneeName : null,
+      attachedAccountId: typeof metadata.attachedAccountId === 'string' ? metadata.attachedAccountId : null,
+      attachedAccountName: typeof metadata.attachedAccountName === 'string' ? metadata.attachedAccountName : null,
       notes: typeof metadata.notes === 'string' ? metadata.notes : null,
       updatedAt: event.createdAt,
     })
@@ -110,6 +141,7 @@ export default async function WholesaleRequestsPage() {
     return !['approved', 'rejected', 'resolved'].includes(state)
   }).length
   const escalatedCount = requests.filter((request) => (workflowMap.get(request.id)?.status ?? 'new') === 'escalated').length
+  const crmAccountLookup = new Map(crmAccounts.map((account) => [account.id, account]))
 
   return (
     <div className="p-4 sm:p-8 space-y-6">
@@ -176,6 +208,19 @@ export default async function WholesaleRequestsPage() {
                   {(() => {
                     const workflow = workflowMap.get(request.id)
                     const status = workflow?.status ?? 'new'
+                    const attachedAccount = workflow?.attachedAccountId ? crmAccountLookup.get(workflow.attachedAccountId) : null
+                    const requestBusinessName = normalizeMatchText(request.businessName)
+                    const requestBusinessEmail = normalizeMatchText(request.businessEmail)
+                    const likelyAccounts = crmAccounts
+                      .filter((account) => {
+                        const companyMatches = normalizeMatchText(account.companyName) === requestBusinessName
+                        const emailMatches = [account.email, account.businessEmail].some((value) => normalizeMatchText(value) === requestBusinessEmail)
+                        return companyMatches || emailMatches || account.id === workflow?.attachedAccountId
+                      })
+                      .slice(0, 6)
+                    const attachedAccountSelection = attachedAccount
+                      ? `${attachedAccount.companyName} [${attachedAccount.id}]`
+                      : ''
                     return (
                       <>
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -208,7 +253,7 @@ export default async function WholesaleRequestsPage() {
                   <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                     <div className="space-y-1">
                       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Business Type</p>
-                      <p className="text-sm text-slate-900">{request.businessType ? request.businessType.replaceAll('_', ' ') : 'Not provided'}</p>
+                      <p className="text-sm text-slate-900">{formatBusinessType(request.businessType)}</p>
                     </div>
                     <div className="space-y-1">
                       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Email</p>
@@ -254,6 +299,21 @@ export default async function WholesaleRequestsPage() {
                         <p className="mt-1 text-sm text-slate-900">
                           Owner: {workflow?.assigneeName ?? 'Unassigned'}
                         </p>
+                        <p className="text-sm text-slate-900">
+                          CRM account:{' '}
+                          {attachedAccount ? (
+                            <Link href={`/admin/crm/${attachedAccount.id}`} className="underline-offset-4 hover:underline">
+                              {attachedAccount.companyName}
+                            </Link>
+                          ) : (
+                            'Unattached'
+                          )}
+                        </p>
+                        {attachedAccount ? (
+                          <p className="text-xs text-muted-foreground">
+                            {attachedAccount.userId ? 'Portal user already linked' : 'No portal user linked yet'}
+                          </p>
+                        ) : null}
                         <p className="text-xs text-muted-foreground">
                           Last updated: {workflow?.updatedAt ? formatDateTime(workflow.updatedAt) : 'Not reviewed yet'}
                         </p>
@@ -262,7 +322,7 @@ export default async function WholesaleRequestsPage() {
                         ) : null}
                       </div>
                     </div>
-                    <form action={submitWorkflow} className="mt-4 grid gap-3 lg:grid-cols-[1fr_180px_160px_auto]">
+                    <form action={submitWorkflow} className="mt-4 grid gap-3 lg:grid-cols-[1fr_240px_180px_160px_auto]">
                       <input type="hidden" name="requestId" value={request.id} />
                       <input
                         name="notes"
@@ -270,6 +330,22 @@ export default async function WholesaleRequestsPage() {
                         placeholder="Add review notes, escalation context, or follow-up details"
                         className="flex h-10 rounded-md border border-input bg-white px-3 text-sm"
                       />
+                      <div className="space-y-1">
+                        <input
+                          name="attachedAccountSelection"
+                          list="crm-account-options"
+                          defaultValue={attachedAccountSelection}
+                          placeholder="Attach CRM account"
+                          className="flex h-10 w-full rounded-md border border-input bg-white px-3 text-sm"
+                        />
+                        {likelyAccounts.length ? (
+                          <p className="text-xs text-muted-foreground">
+                            Suggested: {likelyAccounts.map((account) => account.companyName).join(', ')}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">Choose any CRM account from the list or leave blank.</p>
+                        )}
+                      </div>
                       <select name="assigneeUserId" defaultValue={workflow?.assigneeUserId ?? ''} className="flex h-10 rounded-md border border-input bg-white px-3 text-sm">
                         <option value="">Unassigned</option>
                         {assignableUsers.map((user) => (
@@ -296,6 +372,11 @@ export default async function WholesaleRequestsPage() {
           )}
         </CardContent>
       </Card>
+      <datalist id="crm-account-options">
+        {crmAccounts.map((account) => (
+          <option key={account.id} value={`${account.companyName} [${account.id}]`} />
+        ))}
+      </datalist>
     </div>
   )
 }

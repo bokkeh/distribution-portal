@@ -5,6 +5,7 @@ import { AddressAutocomplete } from '@/components/shared/AddressAutocomplete'
 import { updateAccountBySalesRep } from '@/actions/crm'
 import { Pencil, X, Loader2, CheckCircle2 } from 'lucide-react'
 import type { CustomerAccount } from '@/db/schema/customers'
+import { BUSINESS_TYPE_OPTIONS, normalizeBusinessType } from '@/lib/customers/business-types'
 
 type Props = { account: CustomerAccount }
 
@@ -56,7 +57,7 @@ export function EditAccountModal({ account }: Props) {
                 <Field label="Contact Name" name="contactName" defaultValue={account.contactName ?? ''} />
                 <Field label="Phone" name="phone" defaultValue={account.phone ?? ''} type="tel" />
                 <Field label="Email" name="email" defaultValue={account.email ?? ''} type="email" />
-                <SelectField label="Business Type" name="businessType" defaultValue={account.businessType ?? ''} options={BUSINESS_TYPES} />
+                <SelectField label="Business Type" name="businessType" defaultValue={normalizeBusinessType(account.businessType) ?? ''} options={BUSINESS_TYPES} />
                 <Field label="DC ABRA Number" name="dcAbraNumber" defaultValue={account.dcAbraNumber ?? ''} />
               </div>
             </section>
@@ -153,22 +154,7 @@ export function EditAccountModal({ account }: Props) {
   )
 }
 
-const BUSINESS_TYPES = [
-  'Liquor Store',
-  'Restaurant',
-  'Restaurant Group',
-  'Hotel',
-  'Hotel Group',
-  'Venue',
-  'Bar',
-  'Night Club',
-  'Grocery Store',
-  'Convenience Store',
-  'Country Club',
-  'Casino',
-  'Wholesaler',
-  'Other',
-]
+const BUSINESS_TYPES = BUSINESS_TYPE_OPTIONS.map((option) => option.value)
 
 function Field({
   label, name, defaultValue, type = 'text', required = false, placeholder,

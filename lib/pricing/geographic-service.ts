@@ -25,6 +25,7 @@ export async function getPricingRulesForProducts(productIds: string[]) {
       effectiveStartDate: geographicPricingRules.effectiveStartDate,
       effectiveEndDate: geographicPricingRules.effectiveEndDate,
       isActive: geographicPricingRules.isActive,
+      notes: geographicPricingRules.notes,
       updatedAt: geographicPricingRules.updatedAt,
     })
     .from(geographicPricingRules)

@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { getPricingRulesForProducts, normalizeAccountGeography, resolveProductCasePrice } from '@/lib/pricing/geographic-service'
+import { formatBusinessType } from '@/lib/customers/business-types'
 
 export default async function CustomerProductsPage() {
   const session = await requireRole('customer')
@@ -56,7 +57,7 @@ export default async function CustomerProductsPage() {
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="info">Catalog</Badge>
-              {account?.businessType ? <Badge variant="outline" className="capitalize">{account.businessType.replace('_', ' ')}</Badge> : null}
+              {account?.businessType ? <Badge variant="outline">{formatBusinessType(account.businessType)}</Badge> : null}
             </div>
             <div>
               <h1 className="text-2xl font-bold text-slate-900">Order Products</h1>

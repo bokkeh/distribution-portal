@@ -1,3 +1,5 @@
+import { isRestaurantStyleBusinessType } from '@/lib/customers/business-types'
+
 type ProductLike = {
   name?: string | null
   sku?: string | null
@@ -7,11 +9,8 @@ type ProductLike = {
 export const WISHER_VODKA_MIN_CASES = 10
 export const WISHER_VODKA_RESTAURANT_MIN_CASES = 3
 
-/** Business types that receive the reduced restaurant minimum. */
-const RESTAURANT_BUSINESS_TYPES = new Set(['restaurant', 'restaurant_group', 'bar', 'catering'])
-
 export function isRestaurantBusinessType(businessType?: string | null) {
-  return RESTAURANT_BUSINESS_TYPES.has((businessType ?? '').trim().toLowerCase())
+  return isRestaurantStyleBusinessType(businessType)
 }
 
 export function isWisherVodkaProduct(product: ProductLike) {

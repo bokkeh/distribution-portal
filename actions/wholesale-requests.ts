@@ -3,7 +3,7 @@
 import { and, desc, eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { db } from '@/db'
-import { activityEvents, users, wholesaleAccountRequests } from '@/db/schema'
+import { activityEvents, customerAccounts, users, wholesaleAccountRequests } from '@/db/schema'
 import { requireAdmin, requireAdminOrStaff } from '@/lib/auth/session'
 import { logActivityEvent } from '@/lib/activity/log'
 import { sendWholesalerApprovalEmail, sendWholesalerInvitationEmail } from '@/lib/resend/client'
@@ -12,6 +12,7 @@ export async function updateWholesaleRequestWorkflow(formData: FormData) {
   const session = await requireAdmin()
   const requestId = ((formData.get('requestId') as string) || '').trim()
   const assigneeUserId = ((formData.get('assigneeUserId') as string) || '').trim() || null
+  const attachedAccountSelection = ((formData.get('attachedAccountSelection') as string) || '').trim()
   const status = ((formData.get('status') as string) || 'new').trim()
   const notes = ((formData.get('notes') as string) || '').trim()
 
@@ -33,6 +34,28 @@ export async function updateWholesaleRequestWorkflow(formData: FormData) {
     return { error: 'Wholesale request not found.' }
   }
 
+  const attachedAccountIdMatch = attachedAccountSelection.match(/\[([0-9a-f-]{36})\]$/i)
+  const attachedAccountId = attachedAccountIdMatch?.[1] ?? null
+  let attachedAccountName: string | null = null
+
+  if (attachedAccountSelection && !attachedAccountId) {
+    return { error: 'Choose an attached CRM account from the suggested list.' }
+  }
+
+  if (attachedAccountId) {
+    const [account] = await db
+      .select({ id: customerAccounts.id, companyName: customerAccounts.companyName })
+      .from(customerAccounts)
+      .where(eq(customerAccounts.id, attachedAccountId))
+      .limit(1)
+
+    if (!account) {
+      return { error: 'The selected CRM account could not be found.' }
+    }
+
+    attachedAccountName = account.companyName
+  }
+
   const [latestWorkflowEvent] = await db
     .select({ metadata: activityEvents.metadata })
     .from(activityEvents)
@@ -48,6 +71,7 @@ export async function updateWholesaleRequestWorkflow(formData: FormData) {
     ? latestWorkflowEvent.metadata as Record<string, unknown>
     : {}
   const previousStatus = typeof previousMetadata.status === 'string' ? previousMetadata.status : 'new'
+  const previousAttachedAccountId = typeof previousMetadata.attachedAccountId === 'string' ? previousMetadata.attachedAccountId : null
 
   let assigneeName: string | null = null
   if (assigneeUserId) {
@@ -77,17 +101,20 @@ export async function updateWholesaleRequestWorkflow(formData: FormData) {
     title: titles[status] ?? 'Wholesale request updated',
     body: [
       assigneeName ? `Owner: ${assigneeName}` : 'Owner: Unassigned',
+      attachedAccountName ? `CRM account: ${attachedAccountName}` : attachedAccountSelection ? null : 'CRM account: Unattached',
       notes ? `Notes: ${notes}` : null,
     ].filter(Boolean).join(' | '),
     metadata: {
       status,
       assigneeUserId,
       assigneeName,
+      attachedAccountId,
+      attachedAccountName,
       notes,
     },
   })
 
-  if (status === 'approved' && previousStatus !== 'approved') {
+  if (status === 'approved' && (previousStatus !== 'approved' || previousAttachedAccountId !== attachedAccountId)) {
     await sendWholesalerApprovalEmail({
       to: request.businessEmail,
       businessName: request.businessName,

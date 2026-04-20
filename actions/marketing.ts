@@ -8,6 +8,7 @@ import { sql } from 'drizzle-orm'
 import { normalizePhone, setSmsSubscription, SMS_CONFIRMATION_MESSAGE, SMS_CONSENT_COPY } from '@/lib/telnyx/compliance'
 import { sendSms } from '@/lib/telnyx/client'
 import { createNotificationsForRoles } from '@/lib/notifications/in-app'
+import { normalizeBusinessType } from '@/lib/customers/business-types'
 
 const requestSchema = z.object({
   businessName: z.string().trim().min(2, 'Business name is required'),
@@ -86,7 +87,7 @@ export async function submitWholesaleAccountRequest(
     const insertValues = {
       businessName: parsed.businessName,
       businessEmail: parsed.businessEmail,
-      businessType: parsed.businessType || null,
+      businessType: normalizeBusinessType(parsed.businessType) ?? null,
       phone,
       phoneNormalized,
       smsOptIn: parsed.smsOptIn,
@@ -179,7 +180,7 @@ export async function submitWholesaleAccountRequest(
       to: toAddresses,
       businessName: parsed.businessName,
       businessEmail: parsed.businessEmail,
-      businessType: parsed.businessType || null,
+      businessType: normalizeBusinessType(parsed.businessType) ?? null,
       phone,
       phoneNormalized,
       smsOptIn: parsed.smsOptIn,
