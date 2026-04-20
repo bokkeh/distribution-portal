@@ -5,12 +5,18 @@ import { products } from './products'
 import { salesMembers } from './salesMembers'
 import { geographicPricingRules } from './geographicPricingRules'
 
+export const ORDER_PAYMENT_STATUSES = ['not_applicable', 'requires_action', 'processing', 'paid', 'failed', 'canceled'] as const
+export type OrderPaymentStatus = typeof ORDER_PAYMENT_STATUSES[number]
+
 export const orders = pgTable('orders', {
   id: uuid('id').primaryKey().defaultRandom(),
   customerId: uuid('customer_id').notNull().references(() => customerAccounts.id),
   createdBy: uuid('created_by').notNull().references(() => users.id),
   orderType: text('order_type', { enum: ['paid', 'sample'] }).notNull(),
   paymentTerms: text('payment_terms').default('NET30'),
+  stripePaymentIntentId: text('stripe_payment_intent_id'),
+  paymentStatus: text('payment_status', { enum: ORDER_PAYMENT_STATUSES }).notNull().default('not_applicable'),
+  paidAt: timestamp('paid_at', { withTimezone: true }),
   status: text('status', { enum: ['pending', 'confirmed', 'fulfilled', 'cancelled'] }).notNull().default('pending'),
   shippingStatus: text('shipping_status', { enum: ['not_scheduled', 'scheduled', 'out_for_delivery', 'delivered', 'issue'] }).notNull().default('not_scheduled'),
   subtotal: numeric('subtotal', { precision: 12, scale: 2 }).notNull().default('0'),

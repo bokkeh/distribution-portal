@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -37,25 +37,26 @@ function CartButton({ count }: { count: number }) {
 }
 
 export default function CustomerNav({
+  cartScopeKey,
   featureFlags = [],
   roles = [],
   notifications = [],
   unreadCount = 0,
 }: {
+  cartScopeKey: string
   featureFlags?: string[]
   roles?: string[]
   notifications?: Array<{ id: string; kind: string; title: string; body: string; href: string | null; readAt: string | Date | null; createdAt: string | Date }>
   unreadCount?: number
 }) {
   const pathname = usePathname()
-  const { itemCount } = useCart()
-  const [mounted, setMounted] = useState(false)
+  const { itemCount, setCartScope } = useCart()
 
   useEffect(() => {
-    setMounted(true)
-  }, [])
+    setCartScope(cartScopeKey)
+  }, [cartScopeKey, setCartScope])
 
-  const cartCount = mounted ? itemCount() : 0
+  const cartCount = itemCount()
   const visibleNavItems = navItems.filter(item => hasFeature(item.feature as FeatureKey, roles, featureFlags))
   const canUseCart = hasFeature('cart', roles, featureFlags)
 

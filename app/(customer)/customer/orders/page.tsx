@@ -1,12 +1,12 @@
 import { db } from '@/db'
-import { orders, customerAccounts, orderItems, products } from '@/db/schema'
+import { orders, customerAccounts } from '@/db/schema'
 import { eq, desc } from 'drizzle-orm'
 import { requireRole } from '@/lib/auth/session'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { formatStatusLabel, orderStatusVariant, shippingStatusVariant } from '@/lib/orders/status'
+import { formatOrderPaymentStatusLabel, formatStatusLabel, orderPaymentStatusVariant, orderStatusVariant, shippingStatusVariant } from '@/lib/orders/status'
 import { isMissingShippingStatusColumn } from '@/lib/orders/shipping-fallback'
 import Link from 'next/link'
 import { ShoppingCart } from 'lucide-react'
@@ -23,6 +23,7 @@ export default async function CustomerOrdersPage() {
     total: string
     status: 'pending' | 'confirmed' | 'fulfilled' | 'cancelled'
     orderType: 'paid' | 'sample'
+    paymentStatus: string
     shippingStatus: 'not_scheduled' | 'scheduled' | 'out_for_delivery' | 'delivered' | 'issue'
     notes: string | null
     createdAt: Date
@@ -32,7 +33,7 @@ export default async function CustomerOrdersPage() {
     try {
       myOrders = await db
         .select({
-          id: orders.id, total: orders.total, status: orders.status, orderType: orders.orderType,
+          id: orders.id, total: orders.total, status: orders.status, orderType: orders.orderType, paymentStatus: orders.paymentStatus,
           shippingStatus: orders.shippingStatus, notes: orders.notes, createdAt: orders.createdAt,
         })
         .from(orders)
@@ -49,7 +50,7 @@ export default async function CustomerOrdersPage() {
         .from(orders)
         .where(eq(orders.customerId, account.id))
         .orderBy(desc(orders.createdAt))
-        .then(rows => rows.map(row => ({ ...row, shippingStatus: 'not_scheduled' as const })))
+        .then(rows => rows.map(row => ({ ...row, paymentStatus: 'not_applicable', shippingStatus: 'not_scheduled' as const })))
     }
   }
 
@@ -115,6 +116,7 @@ export default async function CustomerOrdersPage() {
                     <div className="flex items-center gap-3">
                       <p className="font-semibold">Order #{order.id.slice(-8).toUpperCase()}</p>
                       <Badge variant="outline">{order.orderType}</Badge>
+                      <Badge variant={orderPaymentStatusVariant[order.paymentStatus] ?? 'secondary'}>{formatOrderPaymentStatusLabel(order.paymentStatus)}</Badge>
                       <Badge variant={orderStatusVariant[order.status]}>{formatStatusLabel(order.status)}</Badge>
                       <Badge variant={shippingStatusVariant[order.shippingStatus]}>{formatStatusLabel(order.shippingStatus)}</Badge>
                     </div>

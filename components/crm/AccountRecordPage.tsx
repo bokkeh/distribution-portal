@@ -732,7 +732,14 @@ export async function AccountRecordPage({
       ) : null}
 
       {tab === 'inventory' && inventoryData ? (
-        <AccountInventoryOnHandCard accountId={account.id} items={inventoryData.inventoryItems} historyEvents={inventoryData.inventoryHistory} products={inventoryData.productOptions} showHistory={mode === 'admin' || mode === 'sales'} />
+        <AccountInventoryOnHandCard
+          accountId={account.id}
+          items={inventoryData.inventoryItems}
+          historyEvents={inventoryData.inventoryHistory}
+          products={inventoryData.productOptions}
+          showHistory={mode === 'admin' || mode === 'sales'}
+          canManageHistory={mode === 'admin'}
+        />
       ) : null}
 
       {tab === 'notes-activity' && notesActivityData ? (

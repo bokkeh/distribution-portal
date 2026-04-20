@@ -1,12 +1,12 @@
 'use server'
 
-import { and, eq, sql } from 'drizzle-orm'
+import { and, asc, eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { db } from '@/db'
-import { accountInventoryOnHand, accountMedia, accountNotes, customerAccounts, products, salesMembers } from '@/db/schema'
+import { accountInventoryAdjustments, accountInventoryOnHand, accountMedia, accountNotes, customerAccounts, products, salesMembers } from '@/db/schema'
 import { requireRole } from '@/lib/auth/session'
 import { logActivityEvent } from '@/lib/activity/log'
-import type { AccountInventoryHistoryEvent, AccountInventoryItem } from '@/lib/crm/account-detail-data'
+import type { AccountInventoryItem } from '@/lib/crm/account-detail-data'
 
 const INTERNAL_ACCOUNT_ROLES = ['admin', 'staff', 'driver', 'taster', 'sales_rep', 'sales_manager'] as const
 const ACCOUNT_MEDIA_UPLOAD_ROLES = ['admin', 'sales_rep', 'sales_manager'] as const
@@ -29,11 +29,6 @@ function getPrimaryRole(session: Awaited<ReturnType<typeof requireRole>>) {
 
 function getErrorText(error: unknown) {
   return error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
-}
-
-function isMissingInventoryColumn(error: unknown) {
-  const message = getErrorText(error)
-  return message.includes('account_inventory_on_hand') && message.includes('column')
 }
 
 function isMissingTable(error: unknown, tableName: string) {
@@ -75,22 +70,209 @@ async function requireAccountMediaUploadAccess(accountId: string) {
   return { session, account }
 }
 
-async function getInventoryOnHandColumns() {
-  const rows = await db.execute(sql`
-    select column_name
-    from information_schema.columns
-    where table_schema = 'public'
-      and table_name = 'account_inventory_on_hand'
-  `)
+function roundInventoryValue(value: number) {
+  return Math.round(value * 100) / 100
+}
 
-  return new Set(
-    rows.rows
-      .map((row) => {
-        const value = row as Record<string, unknown>
-        return typeof value.column_name === 'string' ? value.column_name : null
-      })
-      .filter((columnName): columnName is string => Boolean(columnName))
-  )
+function toInventoryFixed(value: number) {
+  return roundInventoryValue(value).toFixed(2)
+}
+
+function parseInventoryNumber(value: string, label: string) {
+  const parsed = Number(value || '0')
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`${label} must be zero or greater.`)
+  }
+  return roundInventoryValue(parsed)
+}
+
+function parseInventoryDateInput(value: string) {
+  if (!value) return new Date()
+  const parsed = new Date(`${value}T12:00:00.000Z`)
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error('Inventory date is invalid.')
+  }
+  return parsed
+}
+
+async function buildAccountInventoryItem(itemId: string): Promise<AccountInventoryItem | null> {
+  const [item] = await db
+    .select({
+      id: accountInventoryOnHand.id,
+      accountId: accountInventoryOnHand.accountId,
+      productId: accountInventoryOnHand.productId,
+      sku: accountInventoryOnHand.sku,
+      productName: accountInventoryOnHand.productName,
+      unitType: accountInventoryOnHand.unitType,
+      casesOnHand: accountInventoryOnHand.casesOnHand,
+      bottlesOnHand: accountInventoryOnHand.bottlesOnHand,
+      updatedByUserId: accountInventoryOnHand.updatedByUserId,
+      updatedAt: accountInventoryOnHand.updatedAt,
+    })
+    .from(accountInventoryOnHand)
+    .where(eq(accountInventoryOnHand.id, itemId))
+    .limit(1)
+
+  if (!item) return null
+
+  return {
+    ...item,
+    updatedByName: null,
+    updatedByRole: null,
+  }
+}
+
+async function rebuildAccountInventorySnapshot(input: {
+  accountId: string
+  productId: string
+}) {
+  const [adjustments, [product], [existingItem]] = await Promise.all([
+    db
+      .select()
+      .from(accountInventoryAdjustments)
+      .where(and(
+        eq(accountInventoryAdjustments.accountId, input.accountId),
+        eq(accountInventoryAdjustments.productId, input.productId),
+      ))
+      .orderBy(
+        asc(accountInventoryAdjustments.effectiveAt),
+        asc(accountInventoryAdjustments.createdAt),
+        asc(accountInventoryAdjustments.id),
+      ),
+    db
+      .select({ id: products.id, sku: products.sku, name: products.name, unit: products.unit })
+      .from(products)
+      .where(eq(products.id, input.productId))
+      .limit(1),
+    db
+      .select()
+      .from(accountInventoryOnHand)
+      .where(and(
+        eq(accountInventoryOnHand.accountId, input.accountId),
+        eq(accountInventoryOnHand.productId, input.productId),
+      ))
+      .limit(1),
+  ])
+
+  if (!product) {
+    throw new Error('Product not found.')
+  }
+
+  let runningCases = 0
+  let runningBottles = 0
+
+  for (const adjustment of adjustments) {
+    runningCases = roundInventoryValue(runningCases + Number(adjustment.deltaCases ?? 0))
+    runningBottles = roundInventoryValue(runningBottles + Number(adjustment.deltaBottles ?? 0))
+
+    await db.update(accountInventoryAdjustments).set({
+      resultingCasesOnHand: toInventoryFixed(runningCases),
+      resultingBottlesOnHand: toInventoryFixed(runningBottles),
+    }).where(eq(accountInventoryAdjustments.id, adjustment.id))
+  }
+
+  const finalCases = toInventoryFixed(runningCases)
+  const finalBottles = toInventoryFixed(runningBottles)
+  const finalIsZero = Number(finalCases) === 0 && Number(finalBottles) === 0
+  const latestAdjustment = adjustments[adjustments.length - 1]
+
+  if (!latestAdjustment || finalIsZero) {
+    if (existingItem) {
+      await db.delete(accountInventoryOnHand).where(eq(accountInventoryOnHand.id, existingItem.id))
+    }
+
+    await db
+      .update(accountInventoryAdjustments)
+      .set({ inventoryItemId: null })
+      .where(and(
+        eq(accountInventoryAdjustments.accountId, input.accountId),
+        eq(accountInventoryAdjustments.productId, input.productId),
+      ))
+
+    return { item: null as AccountInventoryItem | null }
+  }
+
+  const updatedByUserId = latestAdjustment.updatedByUserId ?? latestAdjustment.createdByUserId ?? null
+  const updatedAt = latestAdjustment.effectiveAt
+
+  let itemId = existingItem?.id ?? null
+
+  if (existingItem) {
+    await db.update(accountInventoryOnHand).set({
+      sku: product.sku,
+      productName: product.name,
+      unitType: product.unit,
+      casesOnHand: finalCases,
+      bottlesOnHand: finalBottles,
+      quantityOnHand: finalCases,
+      updatedByUserId,
+      updatedAt,
+    }).where(eq(accountInventoryOnHand.id, existingItem.id))
+  } else {
+    const [insertedItem] = await db.insert(accountInventoryOnHand).values({
+      accountId: input.accountId,
+      productId: input.productId,
+      sku: product.sku,
+      productName: product.name,
+      unitType: product.unit,
+      casesOnHand: finalCases,
+      bottlesOnHand: finalBottles,
+      quantityOnHand: finalCases,
+      updatedByUserId,
+      updatedAt,
+    }).returning({ id: accountInventoryOnHand.id })
+
+    itemId = insertedItem.id
+  }
+
+  if (itemId) {
+    await db
+      .update(accountInventoryAdjustments)
+      .set({ inventoryItemId: itemId })
+      .where(and(
+        eq(accountInventoryAdjustments.accountId, input.accountId),
+        eq(accountInventoryAdjustments.productId, input.productId),
+      ))
+
+    const item = await buildAccountInventoryItem(itemId)
+    return { item }
+  }
+
+  return { item: null as AccountInventoryItem | null }
+}
+
+async function insertAccountInventoryAdjustment(input: {
+  accountId: string
+  productId: string
+  inventoryItemId?: string | null
+  sku: string
+  productName: string
+  changeType: 'manual_add' | 'manual_update' | 'manual_remove' | 'manual_edit'
+  deltaCases: number
+  deltaBottles: number
+  effectiveAt: Date
+  notes?: string | null
+  actorUserId: string
+}) {
+  const [adjustment] = await db.insert(accountInventoryAdjustments).values({
+    accountId: input.accountId,
+    productId: input.productId,
+    inventoryItemId: input.inventoryItemId ?? null,
+    sku: input.sku,
+    productName: input.productName,
+    changeType: input.changeType,
+    deltaCases: toInventoryFixed(input.deltaCases),
+    deltaBottles: toInventoryFixed(input.deltaBottles),
+    resultingCasesOnHand: '0.00',
+    resultingBottlesOnHand: '0.00',
+    effectiveAt: input.effectiveAt,
+    notes: input.notes ?? null,
+    createdByUserId: input.actorUserId,
+    updatedByUserId: input.actorUserId,
+    updatedAt: new Date(),
+  }).returning()
+
+  return adjustment
 }
 
 export async function addAccountNote(formData: FormData) {
@@ -229,257 +411,90 @@ export async function upsertAccountInventoryItem(formData: FormData) {
   const session = await requireRole(...INTERNAL_ACCOUNT_ROLES)
   const accountId = normalizeWhitespace(formData.get('accountId'))
   const productId = normalizeWhitespace(formData.get('productId'))
-  const casesInput = normalizeWhitespace(formData.get('casesOnHand'))
-  const bottlesInput = normalizeWhitespace(formData.get('bottlesOnHand'))
+  const casesInput = normalizeWhitespace(formData.get('casesOnHand')) || '0'
+  const bottlesInput = normalizeWhitespace(formData.get('bottlesOnHand')) || '0'
+  const inventoryDateInput = normalizeWhitespace(formData.get('inventoryDate'))
 
   if (!accountId || !productId) return { error: 'Account and product are required.' }
 
-  const cases = Number(casesInput || '0')
-  const bottles = Number(bottlesInput || '0')
-  if (!Number.isFinite(cases) || cases < 0 || !Number.isFinite(bottles) || bottles < 0) {
-    return { error: 'Cases and bottles must be zero or greater.' }
+  let cases = 0
+  let bottles = 0
+  let effectiveAt = new Date()
+
+  try {
+    cases = parseInventoryNumber(casesInput, 'Cases')
+    bottles = parseInventoryNumber(bottlesInput, 'Bottles')
+    effectiveAt = parseInventoryDateInput(inventoryDateInput)
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Inventory input is invalid.' }
   }
 
-  const [[account], [product]] = await Promise.all([
+  const [[account], [product], [existingItem]] = await Promise.all([
     db.select({ companyName: customerAccounts.companyName }).from(customerAccounts).where(eq(customerAccounts.id, accountId)).limit(1),
     db.select({ id: products.id, sku: products.sku, name: products.name, unit: products.unit }).from(products).where(eq(products.id, productId)).limit(1),
+    db
+      .select()
+      .from(accountInventoryOnHand)
+      .where(and(eq(accountInventoryOnHand.accountId, accountId), eq(accountInventoryOnHand.productId, productId)))
+      .limit(1),
   ])
 
   if (!account) return { error: 'Account not found.' }
   if (!product) return { error: 'Product not found.' }
 
-  const casesValue = cases.toFixed(2)
-  const bottlesValue = bottles.toFixed(2)
-  const updatedAt = new Date()
-  const updatedByName = session.user.name ?? null
-  const updatedByRole = getPrimaryRole(session)
+  const beforeCases = roundInventoryValue(Number(existingItem?.casesOnHand ?? '0'))
+  const beforeBottles = roundInventoryValue(Number(existingItem?.bottlesOnHand ?? '0'))
+  const deltaCases = roundInventoryValue(cases - beforeCases)
+  const deltaBottles = roundInventoryValue(bottles - beforeBottles)
 
-  let existingItem:
-    | (typeof accountInventoryOnHand.$inferSelect & { casesOnHand?: string; bottlesOnHand?: string })
-    | undefined
-
-  try {
-    ;[existingItem] = await db
-      .select()
-      .from(accountInventoryOnHand)
-      .where(and(eq(accountInventoryOnHand.accountId, accountId), eq(accountInventoryOnHand.productId, productId)))
-      .limit(1)
-  } catch (error) {
-    if (!isMissingInventoryColumn(error)) throw error
-
-    const legacyRows = await db.execute(sql`
-      select
-        id,
-        account_id,
-        product_id,
-        sku,
-        product_name,
-        unit_type,
-        quantity_on_hand,
-        updated_by_user_id,
-        created_at,
-        updated_at
-      from account_inventory_on_hand
-      where account_id = ${accountId}::uuid
-        and product_id = ${productId}::uuid
-      limit 1
-    `)
-
-    const row = legacyRows.rows[0] as Record<string, unknown> | undefined
-    if (row) {
-      existingItem = {
-        id: String(row.id),
-        accountId: String(row.account_id),
-        productId: String(row.product_id),
-        sku: String(row.sku ?? ''),
-        productName: String(row.product_name ?? ''),
-        unitType: typeof row.unit_type === 'string' ? row.unit_type : null,
-        quantityOnHand: String(row.quantity_on_hand ?? '0'),
-        casesOnHand: String(row.quantity_on_hand ?? '0'),
-        bottlesOnHand: '0',
-        updatedByUserId: typeof row.updated_by_user_id === 'string' ? row.updated_by_user_id : null,
-        createdAt: row.created_at instanceof Date ? row.created_at : new Date(),
-        updatedAt: row.updated_at instanceof Date ? row.updated_at : new Date(),
-      } as typeof accountInventoryOnHand.$inferSelect & { casesOnHand?: string; bottlesOnHand?: string }
-    }
+  if (deltaCases === 0 && deltaBottles === 0) {
+    return { error: 'Enter a changed inventory amount before saving.' }
   }
 
-  const beforeCases = existingItem?.casesOnHand ?? existingItem?.quantityOnHand ?? '0'
-  const beforeBottles = existingItem?.bottlesOnHand ?? '0'
+  const changeType = existingItem ? 'manual_update' : 'manual_add'
 
-  if (existingItem) {
-    try {
-      await db.update(accountInventoryOnHand).set({
-        sku: product.sku,
-        productName: product.name,
-        unitType: product.unit,
-        casesOnHand: casesValue,
-        bottlesOnHand: bottlesValue,
-        quantityOnHand: casesValue,
-        updatedByUserId: session.user.id,
-        updatedAt,
-      }).where(eq(accountInventoryOnHand.id, existingItem.id))
-    } catch (error) {
-      if (!isMissingInventoryColumn(error)) throw error
+  await insertAccountInventoryAdjustment({
+    accountId,
+    productId,
+    inventoryItemId: existingItem?.id ?? null,
+    sku: product.sku,
+    productName: product.name,
+    changeType,
+    deltaCases,
+    deltaBottles,
+    effectiveAt,
+    actorUserId: session.user.id,
+  })
 
-      if (bottles > 0) {
-        return { error: 'Bottle tracking is not enabled in this database yet. Run npm run db:push, then try again.' }
-      }
+  await rebuildAccountInventorySnapshot({ accountId, productId })
 
-      await db.execute(sql`
-        update account_inventory_on_hand
-        set
-          sku = ${product.sku},
-          product_name = ${product.name},
-          unit_type = ${product.unit},
-          quantity_on_hand = ${casesValue},
-          updated_by_user_id = ${session.user.id}::uuid,
-          updated_at = now()
-        where id = ${existingItem.id}::uuid
-      `)
-    }
-
-    await logActivityEvent({
-      entityType: 'account',
-      entityId: accountId,
-      actorUserId: session.user.id,
-      kind: 'account_inventory_updated',
-      title: 'Inventory quantity updated',
-      body: `${product.name} changed from ${beforeCases} cases / ${beforeBottles} bottles to ${casesValue} cases / ${bottlesValue} bottles.`,
-      metadata: {
-        productId,
-        sku: product.sku,
-        productName: product.name,
-        before: {
-          casesOnHand: beforeCases,
-          bottlesOnHand: beforeBottles,
-        },
-        after: {
-          casesOnHand: casesValue,
-          bottlesOnHand: bottlesValue,
-        },
-      },
-    })
-
-    const item: AccountInventoryItem = {
-      id: existingItem.id,
-      accountId,
+  await logActivityEvent({
+    entityType: 'account',
+    entityId: accountId,
+    actorUserId: session.user.id,
+    kind: existingItem ? 'account_inventory_updated' : 'account_inventory_added',
+    title: existingItem ? 'Inventory quantity updated' : 'Inventory item added',
+    body: existingItem
+      ? `${product.name} changed from ${toInventoryFixed(beforeCases)} cases / ${toInventoryFixed(beforeBottles)} bottles to ${toInventoryFixed(cases)} cases / ${toInventoryFixed(bottles)} bottles.`
+      : `${product.name} was added with ${toInventoryFixed(cases)} cases and ${toInventoryFixed(bottles)} bottles.`,
+    metadata: {
       productId,
       sku: product.sku,
       productName: product.name,
-      unitType: product.unit,
-      casesOnHand: casesValue,
-      bottlesOnHand: bottlesValue,
-      updatedByUserId: session.user.id,
-      updatedByName,
-      updatedByRole,
-      updatedAt,
-    }
-    const historyEvent: AccountInventoryHistoryEvent = {
-      id: `${existingItem.id}-${updatedAt.getTime()}`,
-      kind: 'account_inventory_updated',
-      title: 'Inventory quantity updated',
-      createdAt: updatedAt,
-      productId,
-      productName: product.name,
-      deltaCases: Number(casesValue) - Number(beforeCases),
-      deltaBottles: Number(bottlesValue) - Number(beforeBottles),
-    }
-
-    revalidateAccountPaths(accountId)
-    return { success: true, item, historyEvent }
-  } else {
-    try {
-      await db.insert(accountInventoryOnHand).values({
-        accountId,
-        productId,
-        sku: product.sku,
-        productName: product.name,
-        unitType: product.unit,
-        casesOnHand: casesValue,
-        bottlesOnHand: bottlesValue,
-        quantityOnHand: casesValue,
-        updatedByUserId: session.user.id,
-        updatedAt,
-      })
-    } catch (error) {
-      if (!isMissingInventoryColumn(error)) throw error
-
-      if (bottles > 0) {
-        return { error: 'Bottle tracking is not enabled in this database yet. Run npm run db:push, then try again.' }
-      }
-
-      await db.execute(sql`
-        insert into account_inventory_on_hand (
-          account_id,
-          product_id,
-          sku,
-          product_name,
-          unit_type,
-          quantity_on_hand,
-          updated_by_user_id
-        ) values (
-          ${accountId}::uuid,
-          ${productId}::uuid,
-          ${product.sku},
-          ${product.name},
-          ${product.unit},
-          ${casesValue},
-          ${session.user.id}::uuid
-        )
-      `)
-    }
-
-    const [insertedItem] = await db
-      .select({ id: accountInventoryOnHand.id })
-      .from(accountInventoryOnHand)
-      .where(and(eq(accountInventoryOnHand.accountId, accountId), eq(accountInventoryOnHand.productId, productId)))
-      .limit(1)
-
-    await logActivityEvent({
-      entityType: 'account',
-      entityId: accountId,
-      actorUserId: session.user.id,
-      kind: 'account_inventory_added',
-      title: 'Inventory item added',
-      body: `${product.name} was added with ${casesValue} cases and ${bottlesValue} bottles.`,
-      metadata: {
-        productId,
-        sku: product.sku,
-        productName: product.name,
-        casesOnHand: casesValue,
-        bottlesOnHand: bottlesValue,
+      effectiveAt: effectiveAt.toISOString(),
+      before: {
+        casesOnHand: toInventoryFixed(beforeCases),
+        bottlesOnHand: toInventoryFixed(beforeBottles),
       },
-    })
+      after: {
+        casesOnHand: toInventoryFixed(cases),
+        bottlesOnHand: toInventoryFixed(bottles),
+      },
+    },
+  })
 
-    const item: AccountInventoryItem = {
-      id: insertedItem?.id ?? `${accountId}-${productId}`,
-      accountId,
-      productId,
-      sku: product.sku,
-      productName: product.name,
-      unitType: product.unit,
-      casesOnHand: casesValue,
-      bottlesOnHand: bottlesValue,
-      updatedByUserId: session.user.id,
-      updatedByName,
-      updatedByRole,
-      updatedAt,
-    }
-    const historyEvent: AccountInventoryHistoryEvent = {
-      id: `${productId}-${updatedAt.getTime()}`,
-      kind: 'account_inventory_added',
-      title: 'Inventory item added',
-      createdAt: updatedAt,
-      productId,
-      productName: product.name,
-      deltaCases: Number(casesValue),
-      deltaBottles: Number(bottlesValue),
-    }
-
-    revalidateAccountPaths(accountId)
-    return { success: true, item, historyEvent }
-  }
+  revalidateAccountPaths(accountId)
+  return { success: true }
 }
 
 export async function removeAccountInventoryItem(itemId: string) {
@@ -492,7 +507,23 @@ export async function removeAccountInventoryItem(itemId: string) {
 
   if (!existingItem) return { error: 'Inventory item not found.' }
 
-  await db.delete(accountInventoryOnHand).where(eq(accountInventoryOnHand.id, itemId))
+  await insertAccountInventoryAdjustment({
+    accountId: existingItem.accountId,
+    productId: existingItem.productId,
+    inventoryItemId: existingItem.id,
+    sku: existingItem.sku,
+    productName: existingItem.productName,
+    changeType: 'manual_remove',
+    deltaCases: -roundInventoryValue(Number(existingItem.casesOnHand ?? '0')),
+    deltaBottles: -roundInventoryValue(Number(existingItem.bottlesOnHand ?? '0')),
+    effectiveAt: new Date(),
+    actorUserId: session.user.id,
+  })
+
+  await rebuildAccountInventorySnapshot({
+    accountId: existingItem.accountId,
+    productId: existingItem.productId,
+  })
 
   await logActivityEvent({
     entityType: 'account',
@@ -511,18 +542,119 @@ export async function removeAccountInventoryItem(itemId: string) {
   })
 
   revalidateAccountPaths(existingItem.accountId)
-  const historyEvent: AccountInventoryHistoryEvent = {
-    id: `${existingItem.id}-removed-${Date.now()}`,
-    kind: 'account_inventory_removed',
-    title: 'Inventory item removed',
-    createdAt: new Date(),
-    productId: existingItem.productId,
-    productName: existingItem.productName,
-    deltaCases: -Number(existingItem.casesOnHand ?? '0'),
-    deltaBottles: -Number(existingItem.bottlesOnHand ?? '0'),
+  return { success: true, removedItemId: existingItem.id }
+}
+
+export async function updateAccountInventoryAdjustment(formData: FormData) {
+  const session = await requireRole('admin')
+  const adjustmentId = normalizeWhitespace(formData.get('adjustmentId'))
+  const deltaCasesInput = normalizeWhitespace(formData.get('deltaCases')) || '0'
+  const deltaBottlesInput = normalizeWhitespace(formData.get('deltaBottles')) || '0'
+  const inventoryDateInput = normalizeWhitespace(formData.get('inventoryDate'))
+  const notes = normalizeWhitespace(formData.get('notes')) || null
+
+  if (!adjustmentId) return { error: 'Adjustment is required.' }
+
+  let deltaCases = 0
+  let deltaBottles = 0
+  let effectiveAt = new Date()
+
+  try {
+    deltaCases = roundInventoryValue(Number(deltaCasesInput))
+    deltaBottles = roundInventoryValue(Number(deltaBottlesInput))
+    if (!Number.isFinite(deltaCases) || !Number.isFinite(deltaBottles)) {
+      throw new Error('Adjustment values must be valid numbers.')
+    }
+    effectiveAt = parseInventoryDateInput(inventoryDateInput)
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Adjustment is invalid.' }
   }
 
-  return { success: true, removedItemId: existingItem.id, historyEvent }
+  if (deltaCases === 0 && deltaBottles === 0) {
+    return { error: 'Enter a change amount before saving.' }
+  }
+
+  const [existingAdjustment] = await db
+    .select()
+    .from(accountInventoryAdjustments)
+    .where(eq(accountInventoryAdjustments.id, adjustmentId))
+    .limit(1)
+
+  if (!existingAdjustment) return { error: 'Inventory change not found.' }
+
+  await db.update(accountInventoryAdjustments).set({
+    changeType: 'manual_edit',
+    deltaCases: toInventoryFixed(deltaCases),
+    deltaBottles: toInventoryFixed(deltaBottles),
+    effectiveAt,
+    notes,
+    updatedByUserId: session.user.id,
+    updatedAt: new Date(),
+  }).where(eq(accountInventoryAdjustments.id, adjustmentId))
+
+  await rebuildAccountInventorySnapshot({
+    accountId: existingAdjustment.accountId,
+    productId: existingAdjustment.productId,
+  })
+
+  await logActivityEvent({
+    entityType: 'account',
+    entityId: existingAdjustment.accountId,
+    actorUserId: session.user.id,
+    kind: 'account_inventory_adjustment_edited',
+    title: 'Inventory change edited',
+    body: `${existingAdjustment.productName} inventory change was edited.`,
+    metadata: {
+      adjustmentId,
+      productId: existingAdjustment.productId,
+      productName: existingAdjustment.productName,
+      deltaCases: toInventoryFixed(deltaCases),
+      deltaBottles: toInventoryFixed(deltaBottles),
+      effectiveAt: effectiveAt.toISOString(),
+      notes,
+    },
+  })
+
+  revalidateAccountPaths(existingAdjustment.accountId)
+  return { success: true }
+}
+
+export async function deleteAccountInventoryAdjustment(adjustmentId: string) {
+  const session = await requireRole('admin')
+  const [existingAdjustment] = await db
+    .select()
+    .from(accountInventoryAdjustments)
+    .where(eq(accountInventoryAdjustments.id, adjustmentId))
+    .limit(1)
+
+  if (!existingAdjustment) return { error: 'Inventory change not found.' }
+
+  await db.delete(accountInventoryAdjustments).where(eq(accountInventoryAdjustments.id, adjustmentId))
+
+  await rebuildAccountInventorySnapshot({
+    accountId: existingAdjustment.accountId,
+    productId: existingAdjustment.productId,
+  })
+
+  await logActivityEvent({
+    entityType: 'account',
+    entityId: existingAdjustment.accountId,
+    actorUserId: session.user.id,
+    kind: 'account_inventory_adjustment_deleted',
+    title: 'Inventory change deleted',
+    body: `${existingAdjustment.productName} inventory change was deleted.`,
+    metadata: {
+      adjustmentId,
+      productId: existingAdjustment.productId,
+      productName: existingAdjustment.productName,
+      deltaCases: existingAdjustment.deltaCases,
+      deltaBottles: existingAdjustment.deltaBottles,
+      effectiveAt: existingAdjustment.effectiveAt.toISOString(),
+    },
+  })
+
+  revalidateAccountPaths(existingAdjustment.accountId)
+  return { success: true }
 }
 
 export async function addAccountMedia(formData: FormData) {

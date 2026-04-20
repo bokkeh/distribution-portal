@@ -35,12 +35,16 @@ export function LoginForm({ onSuccess }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const defaultEmail = searchParams.get('email') ?? ''
+  const authError = searchParams.get('error') ?? ''
   const fromTasterSignup = searchParams.get('from') === 'taster-signup'
   const fromSalesRepSignup = searchParams.get('from') === 'sales-rep-signup'
   const [mode, setMode] = useState<'signin' | 'create'>(fromTasterSignup ? 'signin' : 'signin')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
+  const externalError = authError === 'google-signup-disabled'
+    ? 'Use the account creation form so we can match your business to the correct CRM account before sign-in.'
+    : ''
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -201,16 +205,24 @@ export function LoginForm({ onSuccess }: Props) {
         </div>
       )}
 
-      <Button type="button" variant="outline" className="w-full" onClick={handleGoogle} disabled={googleLoading}>
-        {googleLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Chrome className="h-4 w-4" />}
-        {googleLoading ? 'Redirecting...' : mode === 'create' ? 'Create with Google' : 'Continue with Google'}
-      </Button>
+      {mode === 'signin' ? (
+        <>
+          <Button type="button" variant="outline" className="w-full" onClick={handleGoogle} disabled={googleLoading}>
+            {googleLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Chrome className="h-4 w-4" />}
+            {googleLoading ? 'Redirecting...' : 'Continue with Google'}
+          </Button>
 
-      <div className="flex items-center gap-3 text-xs uppercase tracking-wide text-muted-foreground">
-        <div className="h-px flex-1 bg-border" />
-        <span>or</span>
-        <div className="h-px flex-1 bg-border" />
-      </div>
+          <div className="flex items-center gap-3 text-xs uppercase tracking-wide text-muted-foreground">
+            <div className="h-px flex-1 bg-border" />
+            <span>or</span>
+            <div className="h-px flex-1 bg-border" />
+          </div>
+        </>
+      ) : (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 px-3.5 py-3 text-sm text-blue-800">
+          Create new wholesale accounts with the form below so we can match them to the correct CRM record before access is granted.
+        </div>
+      )}
 
       {mode === 'create' && !fromTasterSignup ? (
         <form onSubmit={handleCreateAccount} autoComplete="on" className="space-y-3">
@@ -271,7 +283,7 @@ export function LoginForm({ onSuccess }: Props) {
             <Input id="cf-confirm-password" name="confirmPassword" type="password" placeholder="Repeat your password" required autoComplete="new-password" />
           </div>
 
-          {error ? <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p> : null}
+          {error || externalError ? <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error || externalError}</p> : null}
 
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? <><Loader2 className="h-4 w-4 animate-spin" /> Creating account...</> : 'Create Account'}
@@ -288,7 +300,7 @@ export function LoginForm({ onSuccess }: Props) {
             <Input id="lf-password" name="password" type="password" placeholder="Password" required autoComplete="current-password" />
           </div>
 
-          {error ? <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p> : null}
+          {error || externalError ? <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error || externalError}</p> : null}
 
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? <><Loader2 className="h-4 w-4 animate-spin" /> Signing in...</> : 'Sign In'}
@@ -297,7 +309,7 @@ export function LoginForm({ onSuccess }: Props) {
       )}
 
       <p className="text-center text-xs text-muted-foreground">
-        Google still works for first-time customer setup, and email/password signup is now available here too.
+        Google sign-in is available for existing accounts. New wholesale accounts should use the portal signup form above.
       </p>
     </div>
   )

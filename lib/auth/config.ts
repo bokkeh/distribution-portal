@@ -4,7 +4,7 @@ import Credentials from 'next-auth/providers/credentials'
 import Google from 'next-auth/providers/google'
 import bcrypt from 'bcryptjs'
 import { db } from '@/db'
-import { customerAccounts, userFeatureSettings, users } from '@/db/schema'
+import { userFeatureSettings, users } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { recordUserAccessEvent } from '@/lib/auth/activity'
 import { resolveFeatureFlags } from '@/lib/users/features'
@@ -248,6 +248,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return true
       }
 
+      if (!isSuperAdmin) {
+        return `/login?error=google-signup-disabled&email=${encodeURIComponent(normalizedEmail)}`
+      }
+
       const placeholderPassword = await bcrypt.hash(crypto.randomUUID(), 12)
       const displayName = user.name ?? (profile?.name as string | undefined) ?? user.email.split('@')[0]
       const avatarUrl = user.image ?? (profile?.picture as string | undefined) ?? null
@@ -261,21 +265,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         avatarUrl,
         active: true,
       }).returning()
-
-      if (!isSuperAdmin) {
-        await db.insert(customerAccounts).values({
-          userId: createdUser.id,
-          companyName: displayName,
-          email: createdUser.email,
-          phone: null,
-          address: null,
-          city: null,
-          state: null,
-          zip: null,
-          creditLimit: '0',
-          paymentTerms: 'PREPAID',
-        })
-      }
 
       user.id = createdUser.id
       ;(user as typeof user & { role: string }).role = createdUser.role

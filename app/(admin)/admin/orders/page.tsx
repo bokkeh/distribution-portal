@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { formatStatusLabel, orderStatusVariant, shippingStatusVariant } from '@/lib/orders/status'
+import { formatOrderPaymentStatusLabel, formatStatusLabel, orderPaymentStatusVariant, orderStatusVariant, shippingStatusVariant } from '@/lib/orders/status'
 import { isMissingShippingStatusColumn } from '@/lib/orders/shipping-fallback'
 import Link from 'next/link'
 import { Plus, FileText } from 'lucide-react'
@@ -19,6 +19,7 @@ export default async function AdminOrdersPage() {
     status: 'pending' | 'confirmed' | 'fulfilled' | 'cancelled'
     shippingStatus: 'not_scheduled' | 'scheduled' | 'out_for_delivery' | 'delivered' | 'issue'
     orderType: 'paid' | 'sample'
+    paymentStatus: string
     createdAt: Date
     companyName: string | null
   }> = []
@@ -31,6 +32,7 @@ export default async function AdminOrdersPage() {
         status: orders.status,
         shippingStatus: orders.shippingStatus,
         orderType: orders.orderType,
+        paymentStatus: orders.paymentStatus,
         createdAt: orders.createdAt,
         companyName: customerAccounts.companyName,
       })
@@ -52,7 +54,7 @@ export default async function AdminOrdersPage() {
       .from(orders)
       .leftJoin(customerAccounts, eq(orders.customerId, customerAccounts.id))
       .orderBy(desc(orders.createdAt))
-      .then(rows => rows.map(row => ({ ...row, shippingStatus: 'not_scheduled' as const })))
+      .then(rows => rows.map(row => ({ ...row, paymentStatus: 'not_applicable', shippingStatus: 'not_scheduled' as const })))
   }
 
   return (
@@ -80,6 +82,7 @@ export default async function AdminOrdersPage() {
                 <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Order #</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Customer</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Type</th>
+                <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Payment</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Order Status</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Shipping</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Total</th>
@@ -89,12 +92,13 @@ export default async function AdminOrdersPage() {
             </thead>
             <tbody className="divide-y">
               {allOrders.length === 0 ? (
-                <tr><td colSpan={8}><EmptyState icon={FileText} title="No orders yet" description="New orders will appear here." /></td></tr>
+                <tr><td colSpan={9}><EmptyState icon={FileText} title="No orders yet" description="New orders will appear here." /></td></tr>
               ) : allOrders.map(order => (
                 <tr key={order.id} className="hover:bg-slate-50">
                   <td className="px-6 py-4 text-sm font-mono">#{order.id.slice(-8).toUpperCase()}</td>
                   <td className="px-6 py-4 text-sm font-medium">{order.companyName ?? '-'}</td>
                   <td className="px-6 py-4"><Badge variant="outline">{order.orderType}</Badge></td>
+                  <td className="px-6 py-4"><Badge variant={orderPaymentStatusVariant[order.paymentStatus] ?? 'secondary'}>{formatOrderPaymentStatusLabel(order.paymentStatus)}</Badge></td>
                   <td className="px-6 py-4"><Badge variant={orderStatusVariant[order.status]}>{formatStatusLabel(order.status)}</Badge></td>
                   <td className="px-6 py-4"><Badge variant={shippingStatusVariant[order.shippingStatus]}>{formatStatusLabel(order.shippingStatus)}</Badge></td>
                   <td className="px-6 py-4 text-sm font-semibold">{formatCurrency(order.total)}</td>

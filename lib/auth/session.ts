@@ -66,6 +66,14 @@ export async function getSession() {
   return await auth()
 }
 
+export async function getEffectiveSession(): Promise<Session | null> {
+  const rawSession = await auth()
+  if (!rawSession) return null
+  const session = rawSession as Session
+  const realRoles = normalizeRoleList(session.user.role as string, session.user.roles)
+  return realRoles.includes('admin') ? await applyViewAs(session) : session
+}
+
 export async function requireAuth(): Promise<Session> {
   const rawSession = await auth()
   if (!rawSession) redirect('/login')

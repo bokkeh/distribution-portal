@@ -21,14 +21,14 @@ export function ViewAsAccountButton({ accountId, companyName }: { accountId: str
       <button
         onClick={handle}
         disabled={isPending}
-        className="flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-100 transition-colors disabled:opacity-50"
+        className="flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700 transition-colors hover:bg-violet-100 disabled:opacity-50"
       >
-        {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Eye className="w-3.5 h-3.5" />}
-        {isPending ? 'Opening…' : `View as ${companyName.split(' ')[0]}`}
+        {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
+        {isPending ? 'Opening...' : `View as ${companyName.split(' ')[0]}`}
       </button>
       {error && (
         <p className="flex items-center gap-1 text-xs text-red-600">
-          <AlertCircle className="w-3 h-3 shrink-0" />{error}
+          <AlertCircle className="h-3 w-3 shrink-0" />{error}
         </p>
       )}
     </div>

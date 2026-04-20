@@ -1,154 +1,50 @@
 'use server'
 
+import Stripe from 'stripe'
 import { db } from '@/db'
-import { customerAccounts, inventory, orderItems, orders, products } from '@/db/schema'
-import { requireAuth } from '@/lib/auth/session'
+import { customerAccounts, inventory, orderItems, orders } from '@/db/schema'
+import { getEffectiveSession, requireAuth } from '@/lib/auth/session'
 import { eq, inArray } from 'drizzle-orm'
 import { calculateCommissionForOrder, recordCommission } from '@/actions/sales-members'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { logInventoryTransaction } from '@/lib/inventory/history'
-import { getMinimumCaseQuantity, isWisherVodkaProduct } from '@/lib/orders/minimums'
 import { createUserNotification } from '@/lib/notifications/in-app'
 import { notify } from '@/lib/notifications/dispatch'
 import { logActivityEvent } from '@/lib/activity/log'
 import { formatPaymentTerms } from '@/lib/orders/payment-terms'
-import { getPricingRulesForProducts, normalizeAccountGeography, resolveProductCasePrice } from '@/lib/pricing/geographic-service'
-import type { GeographicPricingSource } from '@/lib/pricing/geographic'
-
-type PurchaseUnit = 'case' | 'bottle'
-
-type PricingContext = {
-  accountId: string | null
-  businessType: string | null
-  state: string | null
-  county: string | null
-}
+import { buildPricedLineItems, computeDeliveryFee, type CheckoutOrderType, type PurchaseUnit } from '@/lib/orders/checkout'
+import type { OrderPaymentStatus } from '@/db/schema'
 
 function uniqueEmails(...values: Array<string | null | undefined>) {
   return Array.from(new Set(values.map((value) => value?.trim()).filter(Boolean) as string[]))
 }
 
-function getBottleUnitPrice(product: typeof products.$inferSelect, resolvedCasePrice: number) {
-  const explicitBottlePrice = parseFloat(product.bottlePrice || '0')
-  if (explicitBottlePrice > 0) {
-    return { unitPrice: explicitBottlePrice, inheritsCasePricing: false }
+if (!process.env.STRIPE_SECRET_KEY) throw new Error('Missing STRIPE_SECRET_KEY')
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2026-02-25.clover' })
+
+function resolveOrderPaymentStatus(status: Stripe.PaymentIntent.Status): OrderPaymentStatus {
+  switch (status) {
+    case 'succeeded':
+      return 'paid'
+    case 'processing':
+    case 'requires_capture':
+      return 'processing'
+    case 'canceled':
+      return 'canceled'
+    case 'requires_payment_method':
+      return 'failed'
+    default:
+      return 'requires_action'
   }
-
-  const bottlesPerCase = product.bottlesPerCase || 12
-  return {
-    unitPrice: resolvedCasePrice / bottlesPerCase,
-    inheritsCasePricing: true,
-  }
-}
-
-async function getAccountPricingContext(customerId: string): Promise<PricingContext> {
-  const [account] = await db
-    .select({
-      accountId: customerAccounts.id,
-      businessType: customerAccounts.businessType,
-      state: customerAccounts.state,
-      county: customerAccounts.county,
-    })
-    .from(customerAccounts)
-    .where(eq(customerAccounts.id, customerId))
-    .limit(1)
-
-  if (!account) {
-    throw new Error('Customer account not found')
-  }
-
-  return normalizeAccountGeography(account)
-}
-
-async function buildPricedLineItems(input: {
-  customerId: string
-  purchaseUnit: PurchaseUnit
-  orderDate: Date
-  items: { productId: string; quantity: number }[]
-  customerBusinessType: string | null
-}) {
-  const productIds = input.items.map((item) => item.productId)
-  const [productList, inventoryRows, pricingContext, pricingRules] = await Promise.all([
-    db.select().from(products).where(inArray(products.id, productIds)),
-    db.select().from(inventory).where(inArray(inventory.productId, productIds)),
-    getAccountPricingContext(input.customerId),
-    getPricingRulesForProducts(productIds),
-  ])
-
-  const productMap = Object.fromEntries(productList.map((product) => [product.id, product]))
-  const inventoryMap = Object.fromEntries(inventoryRows.map((row) => [row.productId, row]))
-  let subtotal = 0
-
-  const lineItems = input.items.map((item) => {
-    const product = productMap[item.productId]
-    const inv = inventoryMap[item.productId]
-    if (!product) {
-      throw new Error(`Product ${item.productId} not found`)
-    }
-    if (!inv) {
-      throw new Error(`Inventory record missing for product ${product.name}`)
-    }
-
-    const bottlesPerCase = product.bottlesPerCase || 12
-    const availableQuantity = input.purchaseUnit === 'bottle'
-      ? inv.quantityPaid * bottlesPerCase - inv.looseBottlePaid
-      : inv.quantityPaid
-
-    if (item.quantity > availableQuantity) {
-      throw new Error(`Not enough ${input.purchaseUnit}s in stock for ${product.name}`)
-    }
-
-    if (
-      input.purchaseUnit === 'case' &&
-      isWisherVodkaProduct(product) &&
-      item.quantity < getMinimumCaseQuantity(product, input.customerBusinessType)
-    ) {
-      throw new Error(`${product.name} requires a minimum order of ${getMinimumCaseQuantity(product, input.customerBusinessType)} cases`)
-    }
-
-    const pricing = resolveProductCasePrice({
-      productId: item.productId,
-      baseCasePrice: product.price,
-      account: pricingContext,
-      rules: pricingRules,
-      asOf: input.orderDate,
-      quantityCases: input.purchaseUnit === 'case' ? item.quantity : null,
-    })
-
-    const bottlePricing = getBottleUnitPrice(product, pricing.price)
-    const unitPrice = input.purchaseUnit === 'case'
-      ? pricing.price
-      : bottlePricing.unitPrice
-
-    const total = unitPrice * item.quantity
-    subtotal += total
-
-    const pricingSource: GeographicPricingSource | null =
-      input.purchaseUnit === 'case' || bottlePricing.inheritsCasePricing
-        ? pricing.source
-        : null
-
-    return {
-      orderId: '',
-      productId: item.productId,
-      quantity: String(item.quantity),
-      unit: input.purchaseUnit,
-      unitPrice: unitPrice.toFixed(2),
-      total: total.toFixed(2),
-      pricingSource,
-      pricingRuleId: pricingSource ? pricing.matchedRule?.id ?? null : null,
-      pricingState: pricingSource ? pricing.matchedState : null,
-      pricingCounty: pricingSource ? pricing.matchedCounty : null,
-    }
-  })
-
-  return { lineItems, subtotal, productMap, inventoryMap }
 }
 
 export async function createOrder(formData: FormData) {
   try {
-    const session = await requireAuth()
+    const session = await getEffectiveSession()
+    if (!session) {
+      throw new Error('Unauthorized')
+    }
     const userRoles = session.user.roles ?? [session.user.role as string]
     const canCreateOrder = userRoles.some(role => ['admin', 'staff', 'customer'].includes(role))
     if (!canCreateOrder) {
@@ -157,6 +53,7 @@ export async function createOrder(formData: FormData) {
 
     const customerId = formData.get('customerId') as string
     const purchaseUnit = (formData.get('purchaseUnit') as PurchaseUnit) || 'case'
+    const orderType = (formData.get('orderType') as CheckoutOrderType) === 'sample' ? 'sample' : 'paid'
     const notes = formData.get('notes') as string | null
     const deliveryTiming = (formData.get('deliveryTiming') as string | null) ?? 'standard'
     const preferredDeliveryDay = (formData.get('preferredDeliveryDay') as string | null)?.trim() || null
@@ -165,6 +62,7 @@ export async function createOrder(formData: FormData) {
     const requestedPaymentTerms = (formData.get('paymentTerms') as string | null)?.trim() || null
     const paymentMethod = (formData.get('paymentMethod') as string | null) ?? null
     const processingFee = Number((formData.get('processingFee') as string | null) ?? '0')
+    const paymentIntentId = (formData.get('paymentIntentId') as string | null)?.trim() || null
     const itemsJson = formData.get('items') as string
     const items: { productId: string; quantity: number }[] = JSON.parse(itemsJson)
 
@@ -207,17 +105,61 @@ export async function createOrder(formData: FormData) {
       customerId,
       purchaseUnit,
       orderDate: new Date(),
+      orderType,
       items,
       customerBusinessType,
     })
 
     const tax = 0
     const sanitizedProcessingFee = Number.isFinite(processingFee) && processingFee > 0 ? processingFee : 0
-    const deliveryFee =
-      deliveryTiming === 'time_sensitive'
-        ? (preferredDeliveryDay && ['saturday', 'sunday'].includes(preferredDeliveryDay.toLowerCase()) ? 50 : 30)
-        : 0
+    const deliveryFee = computeDeliveryFee(deliveryTiming, preferredDeliveryDay)
     const total = subtotal + tax + deliveryFee + sanitizedProcessingFee
+    let paymentStatus: OrderPaymentStatus = 'not_applicable'
+    let paidAt: Date | null = null
+
+    if (userRoles.includes('customer')) {
+      if (!paymentIntentId) {
+        throw new Error('Missing payment confirmation. Please restart checkout.')
+      }
+
+      const [existingOrder] = await db
+        .select({ id: orders.id })
+        .from(orders)
+        .where(eq(orders.stripePaymentIntentId, paymentIntentId))
+        .limit(1)
+
+      if (existingOrder) {
+        throw new Error('This payment has already been used for an order.')
+      }
+
+      const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId)
+      const expectedAmountCents = Math.round(total * 100)
+      const nextPaymentStatus = resolveOrderPaymentStatus(paymentIntent.status)
+
+      if (paymentIntent.metadata?.customerId !== customerId || paymentIntent.metadata?.checkoutScope !== 'customer_order') {
+        throw new Error('Payment confirmation does not match this account.')
+      }
+
+      if ((paymentIntent.metadata?.orderType ?? 'paid') !== orderType) {
+        throw new Error('Payment confirmation does not match the selected order type.')
+      }
+
+      if (paymentIntent.amount !== expectedAmountCents) {
+        throw new Error('Payment confirmation amount does not match this order. Please restart checkout.')
+      }
+
+      if (nextPaymentStatus === 'failed' || nextPaymentStatus === 'canceled') {
+        throw new Error('Payment was not completed. Please try again.')
+      }
+
+      if (nextPaymentStatus === 'requires_action') {
+        throw new Error('Stripe still requires additional payment confirmation. Please finish the payment step and retry.')
+      }
+
+      paymentStatus = nextPaymentStatus
+      paidAt = paymentStatus === 'paid' ? new Date() : null
+    }
+
     const deliverySummary = [
       `Delivery option: ${deliveryTiming === 'time_sensitive' ? 'Time-sensitive' : 'Standard within 2 weeks'}.`,
       preferredDeliveryDay ? `Requested day: ${preferredDeliveryDay}.` : null,
@@ -232,13 +174,19 @@ export async function createOrder(formData: FormData) {
       sanitizedProcessingFee > 0
         ? `Stripe ${paymentMethod === 'card' ? 'card' : 'ACH'} processing fee paid by customer: $${sanitizedProcessingFee.toFixed(2)}.`
         : null,
+      userRoles.includes('customer') && paymentStatus === 'processing'
+        ? 'Payment status: awaiting Stripe confirmation before funds settle.'
+        : null,
     ].filter(Boolean).join('\n')
 
     const [order] = await db.insert(orders).values({
       customerId,
       createdBy: session.user.id,
-      orderType: 'paid',
+      orderType,
       paymentTerms,
+      stripePaymentIntentId: paymentIntentId,
+      paymentStatus,
+      paidAt,
       status: 'pending',
       shippingStatus: 'not_scheduled',
       subtotal: subtotal.toFixed(2),
@@ -291,16 +239,18 @@ export async function createOrder(formData: FormData) {
       await createUserNotification({
         userId: customerAccount.userId,
         kind: 'order_created',
-        title: 'Order received',
-        body: `Your order for ${customerAccount.companyName} has been received and is now being processed.`,
+        title: paymentStatus === 'processing' ? 'Order received, payment processing' : 'Order received',
+        body: paymentStatus === 'processing'
+          ? `Your order for ${customerAccount.companyName} was received. We are waiting for Stripe to confirm the payment.`
+          : `Your order for ${customerAccount.companyName} has been received and is now being processed.`,
         href: `/customer/orders/${order.id}`,
       })
     }
 
 
     for (const item of items) {
-    const product = productMap[item.productId]
-    const inv = inventoryMap[item.productId]
+    const product = productMap.get(item.productId)
+    const inv = inventoryMap.get(item.productId)
 
     if (!product || !inv) continue
 
@@ -368,6 +318,7 @@ export async function createOrder(formData: FormData) {
 
     return {
       success: true as const,
+      paymentStatus,
       redirectTo: userRoles.includes('customer')
         ? `/customer/orders/${order.id}`
         : userRoles.includes('admin')
@@ -377,6 +328,61 @@ export async function createOrder(formData: FormData) {
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Failed to create order' }
   }
+}
+
+export async function applyWebhookOrderPaymentUpdate(
+  paymentIntentId: string,
+  paymentIntentStatus: Stripe.PaymentIntent.Status,
+  actorUserId: string,
+) {
+  const nextPaymentStatus = resolveOrderPaymentStatus(paymentIntentStatus)
+  if (nextPaymentStatus === 'requires_action') return
+
+  const [order] = await db
+    .select({
+      id: orders.id,
+      customerId: orders.customerId,
+      paymentStatus: orders.paymentStatus,
+    })
+    .from(orders)
+    .where(eq(orders.stripePaymentIntentId, paymentIntentId))
+    .limit(1)
+
+  if (!order || order.paymentStatus === nextPaymentStatus) return
+
+  await db
+    .update(orders)
+    .set({
+      paymentStatus: nextPaymentStatus,
+      paidAt: nextPaymentStatus === 'paid' ? new Date() : null,
+    })
+    .where(eq(orders.id, order.id))
+
+  const activityBody =
+    nextPaymentStatus === 'paid'
+      ? 'Stripe confirmed payment for this order.'
+      : nextPaymentStatus === 'processing'
+        ? 'Stripe marked payment as processing.'
+        : nextPaymentStatus === 'failed'
+          ? 'Stripe reported a failed payment for this order.'
+          : 'Stripe canceled the payment for this order.'
+
+  await logActivityEvent({
+    entityType: 'order',
+    entityId: order.id,
+    actorUserId,
+    kind: 'order_payment_status_changed',
+    title: 'Order payment status updated',
+    body: activityBody,
+    metadata: { paymentIntentId, paymentStatus: nextPaymentStatus },
+  })
+
+  revalidatePath('/customer/orders')
+  revalidatePath(`/customer/orders/${order.id}`)
+  revalidatePath('/admin/orders')
+  revalidatePath(`/admin/orders/${order.id}`)
+  revalidatePath('/staff/orders')
+  revalidatePath(`/staff/orders/${order.id}`)
 }
 
 export async function updateOrderStatus(orderId: string, status: 'pending' | 'confirmed' | 'fulfilled' | 'cancelled') {
@@ -515,6 +521,7 @@ export async function reorderCustomerOrder(orderId: string) {
     customerId: account.id,
     purchaseUnit,
     orderDate: new Date(),
+    orderType: existingOrder.orderType,
     items: existingItems.map((item) => ({
       productId: item.productId,
       quantity: Number(item.quantity),

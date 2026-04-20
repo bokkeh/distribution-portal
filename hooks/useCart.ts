@@ -4,9 +4,11 @@ import type { CartItem } from '@/types'
 import { normalizeCaseQuantity } from '@/lib/orders/minimums'
 
 interface CartStore {
+  cartScopeKey: string | null
   items: CartItem[]
   orderType: 'paid' | 'sample'
   businessType: string | null
+  setCartScope: (scopeKey: string | null) => void
   setOrderType: (type: 'paid' | 'sample') => void
   setBusinessType: (type: string | null) => void
   addItem: (item: Omit<CartItem, 'quantity'>) => void
@@ -20,9 +22,22 @@ interface CartStore {
 export const useCart = create<CartStore>()(
   persist(
     (set, get) => ({
+      cartScopeKey: null,
       items: [],
       orderType: 'paid',
       businessType: null,
+      setCartScope: (scopeKey) => set((state) => {
+        if (!scopeKey || state.cartScopeKey === scopeKey) {
+          return state
+        }
+
+        return {
+          cartScopeKey: scopeKey,
+          items: [],
+          orderType: 'paid',
+          businessType: null,
+        }
+      }),
       setOrderType: (type) => set({ orderType: type, items: [] }),
       setBusinessType: (type) => set({ businessType: type }),
       addItem: (newItem) => set((state) => {

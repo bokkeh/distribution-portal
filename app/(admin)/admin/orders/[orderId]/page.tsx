@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { ConfirmSubmitButton } from '@/components/ui/confirm-submit-button'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { updateOrderShippingStatus, updateOrderStatus } from '@/actions/orders'
-import { formatStatusLabel, orderStatusVariant, shippingStatusVariant } from '@/lib/orders/status'
+import { formatOrderPaymentStatusLabel, formatStatusLabel, orderPaymentStatusVariant, orderStatusVariant, shippingStatusVariant } from '@/lib/orders/status'
 import { formatPaymentTerms } from '@/lib/orders/payment-terms'
 import { isMissingShippingStatusColumn } from '@/lib/orders/shipping-fallback'
 import { describePricingSource } from '@/lib/pricing/geographic'
@@ -31,6 +31,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
         status: 'pending' | 'confirmed' | 'fulfilled' | 'cancelled'
         shippingStatus: 'not_scheduled' | 'scheduled' | 'out_for_delivery' | 'delivered' | 'issue'
         orderType: 'paid' | 'sample'
+        paymentStatus: string
         paymentTerms: string | null
         notes: string | null
         createdAt: Date
@@ -48,6 +49,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
         status: orders.status,
         shippingStatus: orders.shippingStatus,
         orderType: orders.orderType,
+        paymentStatus: orders.paymentStatus,
         paymentTerms: orders.paymentTerms,
         notes: orders.notes,
         createdAt: orders.createdAt,
@@ -75,7 +77,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
       .from(orders)
       .leftJoin(customerAccounts, eq(orders.customerId, customerAccounts.id))
       .where(eq(orders.id, resolvedParams.orderId))
-      .then(rows => rows.map(row => ({ ...row, shippingStatus: 'not_scheduled' as const })))
+      .then(rows => rows.map(row => ({ ...row, paymentStatus: 'not_applicable', shippingStatus: 'not_scheduled' as const })))
   }
 
   if (!order) notFound()
@@ -131,6 +133,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
           <p className="text-muted-foreground mt-1">{order.companyName} · {formatDate(order.createdAt)}</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Badge variant={orderPaymentStatusVariant[order.paymentStatus] ?? 'secondary'} className="text-sm px-3 py-1">{formatOrderPaymentStatusLabel(order.paymentStatus)}</Badge>
           <Badge variant={orderStatusVariant[order.status]} className="text-sm px-3 py-1">{formatStatusLabel(order.status)}</Badge>
           <Badge variant={shippingStatusVariant[order.shippingStatus]} className="text-sm px-3 py-1">{formatStatusLabel(order.shippingStatus)}</Badge>
         </div>
@@ -180,6 +183,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
           <CardContent className="space-y-4">
             <div className="text-sm space-y-2">
               <div className="flex justify-between"><span className="text-muted-foreground">Type</span><Badge variant="outline">{order.orderType}</Badge></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Payment</span><Badge variant={orderPaymentStatusVariant[order.paymentStatus] ?? 'secondary'}>{formatOrderPaymentStatusLabel(order.paymentStatus)}</Badge></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Order Status</span><Badge variant={orderStatusVariant[order.status]}>{formatStatusLabel(order.status)}</Badge></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Shipping</span><Badge variant={shippingStatusVariant[order.shippingStatus]}>{formatStatusLabel(order.shippingStatus)}</Badge></div>
               <div className="flex justify-between gap-3"><span className="text-muted-foreground">Payment Terms</span><span className="text-right font-medium">{formatPaymentTerms(order.paymentTerms)}</span></div>

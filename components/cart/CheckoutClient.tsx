@@ -40,7 +40,7 @@ function getDisplayedPrice(
   }).price
 }
 
-function PaymentForm({ customerId, orderType, items, total, notes, deliveryTiming, preferredDeliveryDay, preferredDeliveryTime, deliveryRequirements, paymentMethod, processingFee, onSuccess }: {
+function PaymentForm({ customerId, orderType, items, total, notes, deliveryTiming, preferredDeliveryDay, preferredDeliveryTime, deliveryRequirements, paymentMethod, processingFee, paymentIntentId, onSuccess }: {
   customerId: string
   orderType: 'paid' | 'sample'
   items: Array<{ productId: string; quantity: number }>
@@ -52,6 +52,7 @@ function PaymentForm({ customerId, orderType, items, total, notes, deliveryTimin
   deliveryRequirements: string
   paymentMethod: CustomerPaymentMethod
   processingFee: number
+  paymentIntentId: string
   onSuccess: (redirectTo?: string) => void
 }) {
   const stripe = useStripe()
@@ -90,6 +91,7 @@ function PaymentForm({ customerId, orderType, items, total, notes, deliveryTimin
     if (deliveryRequirements) formData.append('deliveryRequirements', deliveryRequirements)
     formData.append('paymentMethod', paymentMethod)
     formData.append('processingFee', processingFee.toFixed(2))
+    formData.append('paymentIntentId', paymentIntentId)
     const result = await createOrder(formData)
     if (result?.error) {
       setError(result.error)
@@ -97,7 +99,14 @@ function PaymentForm({ customerId, orderType, items, total, notes, deliveryTimin
       setLoading(false)
       return
     }
-    toast.success('Order placed')
+    toast.success(
+      result?.paymentStatus === 'processing' ? 'Order received, payment processing' : 'Order placed',
+      {
+        description: result?.paymentStatus === 'processing'
+          ? 'Stripe is still confirming the payment. The order is saved and will update when payment clears.'
+          : undefined,
+      },
+    )
     onSuccess(result?.redirectTo)
   }
 
@@ -133,6 +142,7 @@ export default function CheckoutClient({
 }) {
   const { items, orderType, clearCart } = useCart()
   const [clientSecret, setClientSecret] = useState<string | null>(null)
+  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [notes, setNotes] = useState('')
   const [deliveryTiming, setDeliveryTiming] = useState<'standard' | 'time_sensitive'>('standard')
@@ -159,22 +169,29 @@ export default function CheckoutClient({
 
     try {
       setLoading(true)
-      const deliveryFee =
-        deliveryTiming === 'time_sensitive'
-          ? (preferredDeliveryDay && ['saturday', 'sunday'].includes(preferredDeliveryDay.toLowerCase()) ? 50 : 30)
-          : 0
-      const baseAmountCents = Math.round((items.reduce((sum, item) => sum + getDisplayedPrice(item, orderType, pricingRules, pricingAccountId, pricingBusinessType, pricingState, pricingCounty) * item.quantity, 0) + deliveryFee) * 100)
       const res = await fetch('/api/stripe/payment-intent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: baseAmountCents, customerId, paymentMethod }),
+        body: JSON.stringify({
+          customerId,
+          orderType,
+          items: items.map((item) => ({ productId: item.productId, quantity: item.quantity })),
+          deliveryTiming,
+          preferredDeliveryDay,
+          paymentMethod,
+        }),
       })
-      if (!res.ok) throw new Error('Unable to initialize Stripe payment')
-      const { clientSecret, amount, processingFee } = await res.json()
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null)
+        throw new Error(typeof payload?.error === 'string' ? payload.error : 'Unable to initialize Stripe payment')
+      }
+      const { clientSecret, amount, processingFee, paymentIntentId } = await res.json()
       if (!clientSecret) throw new Error('Missing Stripe client secret')
+      if (!paymentIntentId) throw new Error('Missing Stripe payment intent id')
       setClientSecret(clientSecret)
       setPayableTotal(Number(amount))
       setProcessingFee(Number(processingFee))
+      setPaymentIntentId(paymentIntentId)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to initialize payment'
       toast.error('Payment setup failed', { description: message })
@@ -377,7 +394,7 @@ export default function CheckoutClient({
                 {loading ? 'Preparing...' : `Continue to ${paymentMethod === 'card' ? 'Card Payment' : 'ACH Payment'}`}
               </Button>
             </div>
-          ) : (
+          ) : clientSecret && paymentIntentId ? (
             <Elements stripe={stripePromise} options={{ clientSecret }}>
               <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
                 <div className="flex justify-between">
@@ -409,9 +426,12 @@ export default function CheckoutClient({
                 deliveryRequirements={deliveryRequirements}
                 paymentMethod={paymentMethod}
                 processingFee={processingFee}
+                paymentIntentId={paymentIntentId}
                 onSuccess={(redirectTo) => { clearCart(); router.push(redirectTo ?? '/customer/orders') }}
               />
             </Elements>
+          ) : (
+            <p className="text-sm text-red-600">Stripe checkout could not be initialized. Please restart the payment step.</p>
           )}
         </CardContent>
       </Card>

@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { db } from '@/db'
 import {
+  accountInventoryAdjustments,
   accountInventoryOnHand,
   accountMedia,
   accountNotes,
@@ -56,6 +57,11 @@ export type AccountInventoryHistoryEvent = {
   productName: string | null
   deltaCases: number
   deltaBottles: number
+  resultingCasesOnHand?: number | null
+  resultingBottlesOnHand?: number | null
+  actorName?: string | null
+  actorRole?: string | null
+  notes?: string | null
 }
 
 export type AccountActivityItem = {
@@ -318,63 +324,113 @@ export async function getAvailableInventoryProducts() {
 
 export async function getAccountInventoryHistory(accountId: string) {
   try {
-    const rows = await db
+    const adjustmentRows = await db
       .select({
-        id: activityEvents.id,
-        kind: activityEvents.kind,
-        title: activityEvents.title,
-        metadata: activityEvents.metadata,
-        createdAt: activityEvents.createdAt,
+        id: accountInventoryAdjustments.id,
+        changeType: accountInventoryAdjustments.changeType,
+        effectiveAt: accountInventoryAdjustments.effectiveAt,
+        productId: accountInventoryAdjustments.productId,
+        productName: accountInventoryAdjustments.productName,
+        deltaCases: accountInventoryAdjustments.deltaCases,
+        deltaBottles: accountInventoryAdjustments.deltaBottles,
+        resultingCasesOnHand: accountInventoryAdjustments.resultingCasesOnHand,
+        resultingBottlesOnHand: accountInventoryAdjustments.resultingBottlesOnHand,
+        notes: accountInventoryAdjustments.notes,
+        actorName: users.name,
+        actorRole: users.role,
       })
-      .from(activityEvents)
-      .where(and(
-        eq(activityEvents.entityType, 'account'),
-        eq(activityEvents.entityId, accountId),
-        inArray(activityEvents.kind, [
-          'account_inventory_added',
-          'account_inventory_updated',
-          'account_inventory_removed',
-        ]),
-      ))
-      .orderBy(activityEvents.createdAt)
+      .from(accountInventoryAdjustments)
+      .leftJoin(users, eq(accountInventoryAdjustments.createdByUserId, users.id))
+      .where(eq(accountInventoryAdjustments.accountId, accountId))
+      .orderBy(accountInventoryAdjustments.effectiveAt, accountInventoryAdjustments.createdAt)
 
-    return rows.flatMap((row) => {
-      const metadata = toRecord(row.metadata)
-      const before = toRecord(metadata.before)
-      const after = toRecord(metadata.after)
-      const productName = typeof metadata.productName === 'string' ? metadata.productName : null
-      const productId = typeof metadata.productId === 'string' ? metadata.productId : null
-
-      let deltaCases = 0
-      let deltaBottles = 0
-
-      if (row.kind === 'account_inventory_updated') {
-        deltaCases = toNumericValue(after.casesOnHand) - toNumericValue(before.casesOnHand)
-        deltaBottles = toNumericValue(after.bottlesOnHand) - toNumericValue(before.bottlesOnHand)
-      } else if (row.kind === 'account_inventory_added') {
-        deltaCases = toNumericValue(metadata.casesOnHand)
-        deltaBottles = toNumericValue(metadata.bottlesOnHand)
-      } else if (row.kind === 'account_inventory_removed') {
-        deltaCases = -toNumericValue(metadata.casesOnHand)
-        deltaBottles = -toNumericValue(metadata.bottlesOnHand)
-      }
-
-      if (deltaCases === 0 && deltaBottles === 0) {
-        return []
-      }
-
-      return [{
-        id: row.id,
-        kind: row.kind,
-        title: row.title,
-        createdAt: row.createdAt,
-        productId,
-        productName,
-        deltaCases,
-        deltaBottles,
-      } satisfies AccountInventoryHistoryEvent]
-    })
+    return adjustmentRows.map((row) => ({
+      id: row.id,
+      kind: row.changeType,
+      title:
+        row.changeType === 'manual_add'
+          ? 'Inventory item added'
+          : row.changeType === 'manual_remove'
+            ? 'Inventory item removed'
+            : 'Inventory quantity updated',
+      createdAt: row.effectiveAt,
+      productId: row.productId,
+      productName: row.productName,
+      deltaCases: toNumericValue(row.deltaCases),
+      deltaBottles: toNumericValue(row.deltaBottles),
+      resultingCasesOnHand: toNumericValue(row.resultingCasesOnHand),
+      resultingBottlesOnHand: toNumericValue(row.resultingBottlesOnHand),
+      actorName: row.actorName,
+      actorRole: row.actorRole,
+      notes: row.notes,
+    } satisfies AccountInventoryHistoryEvent))
   } catch (error) {
+    if (isMissingTable(error, 'account_inventory_adjustments')) {
+      try {
+        const rows = await db
+          .select({
+            id: activityEvents.id,
+            kind: activityEvents.kind,
+            title: activityEvents.title,
+            metadata: activityEvents.metadata,
+            createdAt: activityEvents.createdAt,
+          })
+          .from(activityEvents)
+          .where(and(
+            eq(activityEvents.entityType, 'account'),
+            eq(activityEvents.entityId, accountId),
+            inArray(activityEvents.kind, [
+              'account_inventory_added',
+              'account_inventory_updated',
+              'account_inventory_removed',
+            ]),
+          ))
+          .orderBy(activityEvents.createdAt)
+
+        return rows.flatMap((row) => {
+          const metadata = toRecord(row.metadata)
+          const before = toRecord(metadata.before)
+          const after = toRecord(metadata.after)
+          const productName = typeof metadata.productName === 'string' ? metadata.productName : null
+          const productId = typeof metadata.productId === 'string' ? metadata.productId : null
+
+          let deltaCases = 0
+          let deltaBottles = 0
+
+          if (row.kind === 'account_inventory_updated') {
+            deltaCases = toNumericValue(after.casesOnHand) - toNumericValue(before.casesOnHand)
+            deltaBottles = toNumericValue(after.bottlesOnHand) - toNumericValue(before.bottlesOnHand)
+          } else if (row.kind === 'account_inventory_added') {
+            deltaCases = toNumericValue(metadata.casesOnHand)
+            deltaBottles = toNumericValue(metadata.bottlesOnHand)
+          } else if (row.kind === 'account_inventory_removed') {
+            deltaCases = -toNumericValue(metadata.casesOnHand)
+            deltaBottles = -toNumericValue(metadata.bottlesOnHand)
+          }
+
+          if (deltaCases === 0 && deltaBottles === 0) {
+            return []
+          }
+
+          return [{
+            id: row.id,
+            kind: row.kind,
+            title: row.title,
+            createdAt: row.createdAt,
+            productId,
+            productName,
+            deltaCases,
+            deltaBottles,
+          } satisfies AccountInventoryHistoryEvent]
+        })
+      } catch (fallbackError) {
+        if (!isMissingTable(fallbackError, 'activity_events')) {
+          console.error('Failed to load fallback account inventory history:', fallbackError)
+        }
+        return [] as AccountInventoryHistoryEvent[]
+      }
+    }
+
     if (!isMissingTable(error, 'activity_events')) {
       console.error('Failed to load account inventory history:', error)
     }

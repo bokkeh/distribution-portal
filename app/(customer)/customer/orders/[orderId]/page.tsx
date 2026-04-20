@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { formatStatusLabel, orderStatusVariant, shippingStatusVariant } from '@/lib/orders/status'
+import { formatOrderPaymentStatusLabel, formatStatusLabel, orderPaymentStatusVariant, orderStatusVariant, shippingStatusVariant } from '@/lib/orders/status'
 import { formatPaymentTerms } from '@/lib/orders/payment-terms'
 import { isMissingShippingStatusColumn } from '@/lib/orders/shipping-fallback'
 import { describePricingSource } from '@/lib/pricing/geographic'
@@ -25,6 +25,7 @@ export default async function CustomerOrderDetailPage({ params }: { params: Prom
         total: string
         status: 'pending' | 'confirmed' | 'fulfilled' | 'cancelled'
         orderType: 'paid' | 'sample'
+        paymentStatus: string
         shippingStatus: 'not_scheduled' | 'scheduled' | 'out_for_delivery' | 'delivered' | 'issue'
         paymentTerms: string | null
         notes: string | null
@@ -36,7 +37,7 @@ export default async function CustomerOrderDetailPage({ params }: { params: Prom
   try {
     ;[order] = await db
       .select({
-        id: orders.id, total: orders.total, status: orders.status, orderType: orders.orderType,
+        id: orders.id, total: orders.total, status: orders.status, orderType: orders.orderType, paymentStatus: orders.paymentStatus,
         shippingStatus: orders.shippingStatus, paymentTerms: orders.paymentTerms, notes: orders.notes, createdAt: orders.createdAt, customerId: orders.customerId,
       })
       .from(orders)
@@ -52,7 +53,7 @@ export default async function CustomerOrderDetailPage({ params }: { params: Prom
       .from(orders)
       .leftJoin(customerAccounts, eq(orders.customerId, customerAccounts.id))
       .where(eq(orders.id, orderId))
-      .then(rows => rows.map(row => ({ ...row, shippingStatus: 'not_scheduled' as const })))
+      .then(rows => rows.map(row => ({ ...row, paymentStatus: 'not_applicable', shippingStatus: 'not_scheduled' as const })))
   }
 
   if (!order) notFound()
@@ -136,6 +137,7 @@ export default async function CustomerOrderDetailPage({ params }: { params: Prom
           <p className="text-muted-foreground mt-1">{formatDate(order.createdAt)}</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Badge variant={orderPaymentStatusVariant[order.paymentStatus] ?? 'secondary'}>{formatOrderPaymentStatusLabel(order.paymentStatus)}</Badge>
           <Badge variant={orderStatusVariant[order.status]}>{formatStatusLabel(order.status)}</Badge>
           <Badge variant={shippingStatusVariant[order.shippingStatus]}>{formatStatusLabel(order.shippingStatus)}</Badge>
           <form action={reorderCustomerOrder.bind(null, order.id)}>
@@ -155,6 +157,10 @@ export default async function CustomerOrderDetailPage({ params }: { params: Prom
             <div className="rounded-lg border bg-slate-50 p-4">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Shipping Status</p>
               <div className="mt-2"><Badge variant={shippingStatusVariant[order.shippingStatus]}>{formatStatusLabel(order.shippingStatus)}</Badge></div>
+            </div>
+            <div className="rounded-lg border bg-slate-50 p-4 sm:col-span-2">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Payment Status</p>
+              <div className="mt-2"><Badge variant={orderPaymentStatusVariant[order.paymentStatus] ?? 'secondary'}>{formatOrderPaymentStatusLabel(order.paymentStatus)}</Badge></div>
             </div>
             <div className="rounded-lg border bg-slate-50 p-4 sm:col-span-2">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Payment Terms</p>

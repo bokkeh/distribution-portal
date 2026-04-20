@@ -103,7 +103,7 @@ export async function startViewAsAccount(accountId: string): Promise<{ error?: s
 
   const jar = await cookies()
   const roles = Array.from(new Set([...(account.roles ?? []), ...(account.role ? [account.role] : [])].filter(Boolean)))
-  const selectedRole = account.role ?? roles[0] ?? 'customer'
+  const selectedRole = roles.includes('customer') ? 'customer' : (account.role ?? roles[0] ?? 'customer')
   const cookieOptions = getCookieOptions()
   jar.set(VIEW_AS_COOKIE, account.userId, cookieOptions)
   jar.set(VIEW_AS_ROLE_COOKIE, selectedRole, cookieOptions)
