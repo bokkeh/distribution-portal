@@ -1,16 +1,21 @@
 'use client'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
-import { useCallback } from 'react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { CalendarDays } from 'lucide-react'
 
 const PRESETS = [
-  { label: '30 days', days: 30 },
-  { label: '90 days', days: 90 },
-  { label: '6 months', days: 180 },
-  { label: '1 year', days: 365 },
-  { label: 'All time', days: 0 },
+  { value: 'today', label: 'Today' },
+  { value: 'yesterday', label: 'Yesterday' },
+  { value: 'last7', label: 'Last 7 days' },
+  { value: 'last14', label: 'Last 14 days' },
+  { value: 'thisMonth', label: 'This month' },
+  { value: 'lastMonth', label: 'Last month' },
+  { value: 'all', label: 'All time' },
 ] as const
+
+type PresetValue = (typeof PRESETS)[number]['value'] | 'custom'
 
 interface DateRangeFilterProps {
   /** URL param name for start date (default: 'from') */
@@ -26,75 +31,133 @@ export function DateRangeFilter({ fromParam = 'from', toParam = 'to' }: DateRang
   const currentFrom = searchParams.get(fromParam) ?? ''
   const currentTo = searchParams.get(toParam) ?? ''
 
-  const applyPreset = useCallback((days: number) => {
-    const params = new URLSearchParams(searchParams.toString())
-    if (days === 0) {
-      params.delete(fromParam)
-      params.delete(toParam)
-    } else {
-      const to = new Date()
-      const from = new Date()
-      from.setDate(from.getDate() - days)
-      params.set(fromParam, from.toISOString().slice(0, 10))
-      params.set(toParam, to.toISOString().slice(0, 10))
-    }
-    router.push(`${pathname}?${params.toString()}`)
-  }, [router, pathname, searchParams, fromParam, toParam])
+  function formatDateInput(date: Date) {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
 
-  const applyCustom = useCallback((from: string, to: string) => {
+  function startOfMonth(date: Date) {
+    return new Date(date.getFullYear(), date.getMonth(), 1)
+  }
+
+  function endOfMonth(date: Date) {
+    return new Date(date.getFullYear(), date.getMonth() + 1, 0)
+  }
+
+  function addDays(date: Date, days: number) {
+    const next = new Date(date)
+    next.setDate(next.getDate() + days)
+    return next
+  }
+
+  function buildRange(preset: Exclude<PresetValue, 'custom'>) {
+    const today = new Date()
+
+    switch (preset) {
+      case 'today': {
+        const value = formatDateInput(today)
+        return { from: value, to: value }
+      }
+      case 'yesterday': {
+        const yesterday = addDays(today, -1)
+        const value = formatDateInput(yesterday)
+        return { from: value, to: value }
+      }
+      case 'last7':
+        return { from: formatDateInput(addDays(today, -6)), to: formatDateInput(today) }
+      case 'last14':
+        return { from: formatDateInput(addDays(today, -13)), to: formatDateInput(today) }
+      case 'thisMonth':
+        return { from: formatDateInput(startOfMonth(today)), to: formatDateInput(today) }
+      case 'lastMonth': {
+        const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+        return {
+          from: formatDateInput(startOfMonth(lastMonth)),
+          to: formatDateInput(endOfMonth(lastMonth)),
+        }
+      }
+      case 'all':
+        return { from: '', to: '' }
+    }
+  }
+
+  function navigateWithDates(from: string, to: string) {
     const params = new URLSearchParams(searchParams.toString())
+
     if (from) params.set(fromParam, from)
     else params.delete(fromParam)
     if (to) params.set(toParam, to)
     else params.delete(toParam)
-    router.push(`${pathname}?${params.toString()}`)
-  }, [router, pathname, searchParams, fromParam, toParam])
+
+    const query = params.toString()
+    router.push(query ? `${pathname}?${query}` : pathname)
+  }
+
+  function applyPreset(preset: Exclude<PresetValue, 'custom'>) {
+    const nextRange = buildRange(preset)
+    navigateWithDates(nextRange.from, nextRange.to)
+  }
+
+  function getCurrentPreset(): PresetValue {
+    if (!currentFrom && !currentTo) return 'all'
+
+    for (const preset of PRESETS) {
+      if (preset.value === 'all') continue
+      const range = buildRange(preset.value)
+      if (range.from === currentFrom && range.to === currentTo) {
+        return preset.value
+      }
+    }
+
+    return 'custom'
+  }
+
+  const currentPreset = getCurrentPreset()
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white/90 p-3 shadow-sm">
       <CalendarDays className="h-4 w-4 text-slate-400 shrink-0" />
 
-      {/* Preset buttons */}
-      <div className="flex items-center gap-1">
-        {PRESETS.map(({ label, days }) => {
-          const isActive = days === 0
-            ? !currentFrom && !currentTo
-            : currentFrom === (() => { const d = new Date(); d.setDate(d.getDate() - days); return d.toISOString().slice(0, 10) })()
-          return (
-            <button
-              key={label}
-              onClick={() => applyPreset(days)}
-              className={`px-2.5 py-1 text-xs rounded-lg font-medium transition-colors ${
-                isActive
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              {label}
-            </button>
-          )
-        })}
-      </div>
+      <Select
+        value={currentPreset}
+        onValueChange={(value) => {
+          if (value === 'custom') return
+          applyPreset(value as Exclude<PresetValue, 'custom'>)
+        }}
+      >
+        <SelectTrigger className="h-9 w-[170px] bg-white text-sm">
+          <SelectValue placeholder="Select range" />
+        </SelectTrigger>
+        <SelectContent>
+          {PRESETS.map((preset) => (
+            <SelectItem key={preset.value} value={preset.value}>
+              {preset.label}
+            </SelectItem>
+          ))}
+          <SelectItem value="custom">Custom range</SelectItem>
+        </SelectContent>
+      </Select>
 
-      {/* Custom date inputs */}
-      <div className="flex items-center gap-1.5 ml-1">
-        <input
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
           type="date"
           value={currentFrom}
-          onChange={e => applyCustom(e.target.value, currentTo)}
-          className="h-7 rounded-lg border border-slate-200 px-2 text-xs text-slate-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
+          onChange={(event) => navigateWithDates(event.target.value, currentTo)}
+          className="h-9 w-[150px] bg-white text-sm"
         />
         <span className="text-xs text-slate-400">to</span>
-        <input
+        <Input
           type="date"
           value={currentTo}
-          onChange={e => applyCustom(currentFrom, e.target.value)}
-          className="h-7 rounded-lg border border-slate-200 px-2 text-xs text-slate-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
+          onChange={(event) => navigateWithDates(currentFrom, event.target.value)}
+          className="h-9 w-[150px] bg-white text-sm"
         />
       </div>
 
       {(currentFrom || currentTo) && (
-        <Button variant="ghost" size="sm" className="h-7 text-xs text-slate-400 hover:text-slate-600" onClick={() => applyPreset(0)}>
+        <Button variant="ghost" size="sm" className="h-9 text-xs text-slate-500 hover:text-slate-700" onClick={() => applyPreset('all')}>
           Clear
         </Button>
       )}

@@ -1,19 +1,118 @@
+import { Suspense } from 'react'
+import Link from 'next/link'
+import { eq, sql, desc, and, ne, inArray, gte, lte } from 'drizzle-orm'
+import { DollarSign, ShoppingCart, Users, MessageSquare, AlertTriangle, HeartPulse, Truck, Wine } from 'lucide-react'
 import { db } from '@/db'
 import { orders, invoices, customerAccounts, inventory, wholesaleAccountRequests, tastingReports, tastings, scheduledSmsJobs, deliveries, deliveryStops } from '@/db/schema'
-import { eq, sql, desc, and, ne, inArray } from 'drizzle-orm'
 import KpiCard from '@/components/dashboard/KpiCard'
-import { DollarSign, ShoppingCart, Users, MessageSquare, AlertTriangle, HeartPulse, Truck, Wine } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { DateRangeFilter } from '@/components/ui/date-range-filter'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { getSmsInboxSummary } from '@/lib/inbox/summary'
-import Link from 'next/link'
 import { getSystemHealthSnapshot } from '@/lib/ops/system-health'
 import { RevenueChart } from '@/components/dashboard/RevenueChart'
 import type { MonthlyRevenuePoint } from '@/components/dashboard/RevenueChart'
 import { IndustryNewsWidget } from '@/components/news/IndustryNewsWidget'
 
-export default async function AdminDashboard() {
+function isValidDateInput(value?: string) {
+  if (!value) return false
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  return !Number.isNaN(new Date(`${value}T00:00:00`).getTime())
+}
+
+function startOfDay(value?: string) {
+  return isValidDateInput(value) ? new Date(`${value}T00:00:00`) : null
+}
+
+function endOfDay(value?: string) {
+  return isValidDateInput(value) ? new Date(`${value}T23:59:59.999`) : null
+}
+
+function buildRangeLabel(from?: string, to?: string) {
+  if (from && to) {
+    if (from === to) return formatDate(new Date(`${from}T00:00:00`))
+    return `${formatDate(new Date(`${from}T00:00:00`))} to ${formatDate(new Date(`${to}T00:00:00`))}`
+  }
+
+  if (from) return `Since ${formatDate(new Date(`${from}T00:00:00`))}`
+  if (to) return `Through ${formatDate(new Date(`${to}T00:00:00`))}`
+  return 'All time overview'
+}
+
+export default async function AdminDashboard({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string; to?: string }>
+}) {
+  const { from, to } = await searchParams
+  const fromInput = isValidDateInput(from) ? from : undefined
+  const toInput = isValidDateInput(to) ? to : undefined
+  const fromDate = startOfDay(fromInput)
+  const toDate = endOfDay(toInput)
+  const hasDateFilter = Boolean(fromInput || toInput)
+  const rangeLabel = buildRangeLabel(fromInput, toInput)
+
+  const revenueFilters = [
+    ne(orders.status, 'cancelled'),
+    fromDate ? gte(orders.createdAt, fromDate) : undefined,
+    toDate ? lte(orders.createdAt, toDate) : undefined,
+  ].filter(Boolean) as Parameters<typeof and>
+
+  const totalOrdersFilters = [
+    fromDate ? gte(orders.createdAt, fromDate) : undefined,
+    toDate ? lte(orders.createdAt, toDate) : undefined,
+  ].filter(Boolean) as Parameters<typeof and>
+
+  const customerFilters = [
+    fromDate ? gte(customerAccounts.createdAt, fromDate) : undefined,
+    toDate ? lte(customerAccounts.createdAt, toDate) : undefined,
+  ].filter(Boolean) as Parameters<typeof and>
+
+  const invoiceFilters = [
+    eq(invoices.status, 'sent'),
+    fromDate ? gte(invoices.createdAt, fromDate) : undefined,
+    toDate ? lte(invoices.createdAt, toDate) : undefined,
+  ].filter(Boolean) as Parameters<typeof and>
+
+  const chartFilters = [
+    ne(orders.status, 'cancelled'),
+    fromDate ? gte(orders.createdAt, fromDate) : undefined,
+    toDate ? lte(orders.createdAt, toDate) : undefined,
+    !hasDateFilter ? sql`${orders.createdAt} >= NOW() - INTERVAL '12 months'` : undefined,
+  ].filter(Boolean) as Parameters<typeof and>
+
+  const missingTastingReportFilters = [
+    eq(tastings.status, 'completed'),
+    sql`${tastingReports.id} is null`,
+    fromDate ? gte(tastings.scheduledAt, fromDate) : undefined,
+    toDate ? lte(tastings.scheduledAt, toDate) : undefined,
+  ].filter(Boolean) as Parameters<typeof and>
+
+  const failedJobFilters = [
+    eq(scheduledSmsJobs.status, 'failed'),
+    fromDate ? gte(scheduledSmsJobs.createdAt, fromDate) : undefined,
+    toDate ? lte(scheduledSmsJobs.createdAt, toDate) : undefined,
+  ].filter(Boolean) as Parameters<typeof and>
+
+  const tastingConversionFilters = [
+    eq(tastings.status, 'completed'),
+    fromDate ? gte(tastings.scheduledAt, fromDate) : undefined,
+    toDate ? lte(tastings.scheduledAt, toDate) : undefined,
+  ].filter(Boolean) as Parameters<typeof and>
+
+  const topAccountJoinFilters = [
+    eq(orders.customerId, customerAccounts.id),
+    ne(orders.status, 'cancelled'),
+    fromDate ? gte(orders.createdAt, fromDate) : undefined,
+    toDate ? lte(orders.createdAt, toDate) : undefined,
+  ].filter(Boolean) as Parameters<typeof and>
+
+  const deliveryFilters = [
+    fromInput ? gte(deliveries.weekStartDate, fromInput) : undefined,
+    toInput ? lte(deliveries.weekStartDate, toInput) : undefined,
+  ].filter(Boolean) as Parameters<typeof and>
+
   const [
     totalRevenue,
     totalOrders,
@@ -31,22 +130,24 @@ export default async function AdminDashboard() {
     topAccounts,
     deliveryStats,
   ] = await Promise.all([
-    db.select({ total: sql<string>`COALESCE(SUM(total), 0)` }).from(orders).where(ne(orders.status, 'cancelled')),
-    db.select({ count: sql<number>`COUNT(*)` }).from(orders),
-    db.select({ count: sql<number>`COUNT(*)` }).from(customerAccounts),
+    db.select({ total: sql<string>`COALESCE(SUM(total), 0)` }).from(orders).where(and(...revenueFilters)),
+    db.select({ count: sql<number>`COUNT(*)` }).from(orders).where(totalOrdersFilters.length ? and(...totalOrdersFilters) : undefined),
+    db.select({ count: sql<number>`COUNT(*)` }).from(customerAccounts).where(customerFilters.length ? and(...customerFilters) : undefined),
     db.select({ count: sql<number>`COUNT(*)` }).from(inventory).where(sql`quantity_paid <= reorder_level`),
     db.select({ id: orders.id, total: orders.total, status: orders.status, orderType: orders.orderType, createdAt: orders.createdAt })
-      .from(orders).orderBy(desc(orders.createdAt)).limit(5),
-    db.select({ total: sql<string>`COALESCE(SUM(total), 0)` }).from(invoices).where(eq(invoices.status, 'sent')),
+      .from(orders)
+      .where(totalOrdersFilters.length ? and(...totalOrdersFilters) : undefined)
+      .orderBy(desc(orders.createdAt))
+      .limit(5),
+    db.select({ total: sql<string>`COALESCE(SUM(total), 0)` }).from(invoices).where(and(...invoiceFilters)),
     getSmsInboxSummary(),
     db.select({ count: sql<number>`COUNT(*)` }).from(wholesaleAccountRequests),
     db.select({ count: sql<number>`COUNT(*)` })
       .from(tastings)
       .leftJoin(tastingReports, eq(tastings.id, tastingReports.tastingId))
-      .where(and(eq(tastings.status, 'completed'), sql`${tastingReports.id} is null`)),
-    db.select({ count: sql<number>`COUNT(*)` }).from(scheduledSmsJobs).where(eq(scheduledSmsJobs.status, 'failed')),
+      .where(and(...missingTastingReportFilters)),
+    db.select({ count: sql<number>`COUNT(*)` }).from(scheduledSmsJobs).where(and(...failedJobFilters)),
     getSystemHealthSnapshot(),
-    // Monthly revenue (last 12 months)
     db.select({
       month: sql<string>`TO_CHAR(DATE_TRUNC('month', ${orders.createdAt}), 'Mon YYYY')`,
       monthOrder: sql<string>`DATE_TRUNC('month', ${orders.createdAt})`,
@@ -54,39 +155,42 @@ export default async function AdminDashboard() {
       orderCount: sql<number>`COUNT(*)`,
     })
       .from(orders)
-      .where(and(
-        ne(orders.status, 'cancelled'),
-        sql`${orders.createdAt} >= NOW() - INTERVAL '12 months'`
-      ))
+      .where(and(...chartFilters))
       .groupBy(sql`DATE_TRUNC('month', ${orders.createdAt})`)
       .orderBy(sql`DATE_TRUNC('month', ${orders.createdAt})`),
-    // Tasting conversion stats
     db.select({
       totalInteractions: sql<number>`COALESCE(SUM(${tastingReports.consumerInteractions}), 0)`,
       totalBottles: sql<number>`COALESCE(SUM(${tastingReports.bottlesSold}), 0)`,
-    }).from(tastingReports),
-    // Top accounts by total orders
+    })
+      .from(tastings)
+      .leftJoin(tastingReports, eq(tastings.id, tastingReports.tastingId))
+      .where(and(...tastingConversionFilters)),
     db.select({
       companyName: customerAccounts.companyName,
       customerId: customerAccounts.id,
       total: sql<string>`COALESCE(SUM(${orders.total}), 0)`,
     })
       .from(customerAccounts)
-      .leftJoin(orders, and(eq(orders.customerId, customerAccounts.id), ne(orders.status, 'cancelled')))
+      .leftJoin(orders, and(...topAccountJoinFilters))
       .groupBy(customerAccounts.id, customerAccounts.companyName)
       .orderBy(desc(sql`COALESCE(SUM(${orders.total}), 0)`))
       .limit(5),
-    // Delivery completion stats
     (async () => {
-      const allDeliveries = await db.select({ id: deliveries.id, status: deliveries.status }).from(deliveries)
-      const allDeliveryIds = allDeliveries.map(d => d.id)
+      const allDeliveries = await db
+        .select({ id: deliveries.id, status: deliveries.status })
+        .from(deliveries)
+        .where(deliveryFilters.length ? and(...deliveryFilters) : undefined)
+
+      const allDeliveryIds = allDeliveries.map((delivery) => delivery.id)
       if (allDeliveryIds.length === 0) return { totalStops: 0, deliveredStops: 0 }
+
       const stopStats = await db.select({
         total: sql<number>`COUNT(*)`,
         delivered: sql<number>`COUNT(*) FILTER (WHERE ${deliveryStops.status} = 'delivered')`,
       })
         .from(deliveryStops)
         .where(inArray(deliveryStops.deliveryId, allDeliveryIds))
+
       return {
         totalStops: Number(stopStats[0]?.total ?? 0),
         deliveredStops: Number(stopStats[0]?.delivered ?? 0),
@@ -94,13 +198,13 @@ export default async function AdminDashboard() {
     })(),
   ])
 
-  const chartData: MonthlyRevenuePoint[] = monthlyRevenue.map(r => ({
-    month: r.month.split(' ')[0], // "Jan 2025" → "Jan"
-    revenue: Number(r.revenue),
+  const chartData: MonthlyRevenuePoint[] = monthlyRevenue.map((row) => ({
+    month: row.month.split(' ')[0],
+    revenue: Number(row.revenue),
   }))
 
-  const revenueSparkline = monthlyRevenue.map(r => Number(r.revenue))
-  const ordersSparkline = monthlyRevenue.map(r => Number(r.orderCount))
+  const revenueSparkline = monthlyRevenue.map((row) => Number(row.revenue))
+  const ordersSparkline = monthlyRevenue.map((row) => Number(row.orderCount))
 
   const tastingConversion = tastingConvStats[0]
   const convRate = tastingConversion && Number(tastingConversion.totalInteractions) > 0
@@ -120,13 +224,18 @@ export default async function AdminDashboard() {
 
   return (
     <div className="p-8 space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-        <p className="text-muted-foreground mt-1">Welcome back to the AHAWC Distribution Portal</p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
+          <p className="mt-1 text-muted-foreground">Welcome back to the AHAWC Distribution Portal</p>
+          <p className="mt-2 text-sm font-medium text-slate-600">{rangeLabel}</p>
+        </div>
+        <Suspense>
+          <DateRangeFilter />
+        </Suspense>
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
         <KpiCard
           title="Total Revenue"
           value={formatCurrency(totalRevenue[0]?.total ?? '0')}
@@ -144,8 +253,9 @@ export default async function AdminDashboard() {
           sparklineColor="#2563eb"
         />
         <KpiCard
-          title="Active Customers"
+          title={hasDateFilter ? 'New Customers' : 'Active Customers'}
           value={String(totalCustomers[0]?.count ?? 0)}
+          change={hasDateFilter ? 'Accounts created in range' : undefined}
           icon={Users}
           iconColor="text-purple-600"
         />
@@ -179,7 +289,7 @@ export default async function AdminDashboard() {
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-slate-500">SMS Inbox</p>
                 <p className="mt-3 text-2xl font-bold tracking-tight text-slate-950">{smsInboxSummary.totalTexts}</p>
-                <p className="mt-1.5 text-xs font-medium text-slate-500">Total texts logged</p>
+                <p className="mt-1.5 text-xs font-medium text-slate-500">Current inbox snapshot</p>
               </div>
               <div className="rounded-xl bg-slate-100 p-2.5 shrink-0 text-emerald-600">
                 <MessageSquare className="h-4 w-4" />
@@ -210,11 +320,10 @@ export default async function AdminDashboard() {
         />
       </div>
 
-      {/* Monthly Revenue Chart */}
       {chartData.length > 0 && (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-base">Monthly Revenue (Last 12 Months)</CardTitle>
+            <CardTitle className="text-base">{hasDateFilter ? 'Revenue Trend' : 'Monthly Revenue (Last 12 Months)'}</CardTitle>
             <Link href="/admin/orders" className="text-xs text-primary hover:underline">View orders</Link>
           </CardHeader>
           <CardContent className="pt-0 pb-4">
@@ -223,8 +332,7 @@ export default async function AdminDashboard() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Orders */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">Recent Orders</CardTitle>
@@ -232,11 +340,11 @@ export default async function AdminDashboard() {
           </CardHeader>
           <CardContent>
             {recentOrders.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">No orders yet</p>
+              <p className="py-4 text-center text-sm text-muted-foreground">No orders yet</p>
             ) : (
               <div className="space-y-3">
                 {recentOrders.map((order) => (
-                  <div key={order.id} className="flex items-center justify-between py-2 border-b last:border-0">
+                  <div key={order.id} className="flex items-center justify-between border-b py-2 last:border-0">
                     <div>
                       <p className="text-sm font-medium">Order #{order.id.slice(-8).toUpperCase()}</p>
                       <p className="text-xs text-muted-foreground">{formatDate(order.createdAt)}</p>
@@ -252,7 +360,6 @@ export default async function AdminDashboard() {
           </CardContent>
         </Card>
 
-        {/* Outstanding Invoices */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">Outstanding Invoices</CardTitle>
@@ -262,7 +369,7 @@ export default async function AdminDashboard() {
             <div className="flex items-center justify-center py-8">
               <div className="text-center">
                 <p className="text-3xl font-bold text-orange-600">{formatCurrency(outstandingInvoices[0]?.total ?? '0')}</p>
-                <p className="text-sm text-muted-foreground mt-1">Awaiting payment</p>
+                <p className="mt-1 text-sm text-muted-foreground">Awaiting payment</p>
               </div>
             </div>
           </CardContent>
@@ -307,7 +414,6 @@ export default async function AdminDashboard() {
           </CardContent>
         </Card>
 
-        {/* Top Accounts */}
         {topAccounts.length > 0 && (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
@@ -316,14 +422,15 @@ export default async function AdminDashboard() {
             </CardHeader>
             <CardContent className="p-0">
               <div className="divide-y">
-                {topAccounts.map((acct, i) => (
-                  <div key={acct.customerId} className="flex items-center gap-3 px-5 py-3">
-                    <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold
-                      ${i === 0 ? 'bg-amber-100 text-amber-700' : i === 1 ? 'bg-slate-100 text-slate-600' : 'bg-slate-50 text-slate-500'}`}>
-                      {i + 1}
+                {topAccounts.map((account, index) => (
+                  <div key={account.customerId} className="flex items-center gap-3 px-5 py-3">
+                    <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
+                      index === 0 ? 'bg-amber-100 text-amber-700' : index === 1 ? 'bg-slate-100 text-slate-600' : 'bg-slate-50 text-slate-500'
+                    }`}>
+                      {index + 1}
                     </span>
-                    <span className="flex-1 min-w-0 text-sm font-medium text-slate-900 truncate">{acct.companyName}</span>
-                    <span className="text-sm font-semibold text-slate-700 shrink-0">{formatCurrency(acct.total ?? '0')}</span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-900">{account.companyName}</span>
+                    <span className="shrink-0 text-sm font-semibold text-slate-700">{formatCurrency(account.total ?? '0')}</span>
                   </div>
                 ))}
               </div>
