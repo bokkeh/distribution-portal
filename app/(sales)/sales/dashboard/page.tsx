@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { IndustryNewsWidget } from '@/components/news/IndustryNewsWidget'
+import { getReorderFollowUps, LOW_INVENTORY_CASE_THRESHOLD, SINGLE_CASE_REORDER_DELAY_DAYS } from '@/lib/sales/reorder-follow-ups'
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('en-US', {
@@ -120,22 +121,7 @@ export default async function SalesDashboardPage() {
   const nextTastings = upcomingTastings.filter(tasting => new Date(tasting.scheduledAt) >= now).slice(0, 4)
   const totalRevenue = recentOrders.reduce((sumValue, order) => sumValue + Number(order.total ?? '0'), 0)
 
-  const lastOrderByAccount = new Map<string, Date>()
-  for (const order of recentOrders) {
-    if (!lastOrderByAccount.has(order.customerId)) {
-      lastOrderByAccount.set(order.customerId, new Date(order.createdAt))
-    }
-  }
-
-  const reorderTargets = accounts
-    .map(account => {
-      const lastOrderAt = lastOrderByAccount.get(account.id)
-      const daysSinceLastOrder = lastOrderAt ? daysBetween(lastOrderAt, now) : null
-      return { account, lastOrderAt, daysSinceLastOrder }
-    })
-    .filter(entry => entry.daysSinceLastOrder == null || entry.daysSinceLastOrder >= 30)
-    .sort((left, right) => (right.daysSinceLastOrder ?? 9999) - (left.daysSinceLastOrder ?? 9999))
-    .slice(0, 5)
+  const reorderTargets = (await getReorderFollowUps(accounts)).slice(0, 5)
 
   let teamStats: Array<{
     member: typeof salesMembers.$inferSelect
@@ -200,7 +186,7 @@ export default async function SalesDashboardPage() {
       label: 'Reorder follow-ups',
       count: reorderTargets.length,
       href: '/sales/accounts',
-      description: 'Assigned accounts that have gone 30+ days without an order.',
+      description: `Accounts at ${LOW_INVENTORY_CASE_THRESHOLD} case left, plus ${SINGLE_CASE_REORDER_DELAY_DAYS}-day 1-case follow-ups.`,
       tone: reorderTargets.length > 0 ? 'warning' : 'success',
     },
     {
@@ -347,12 +333,12 @@ export default async function SalesDashboardPage() {
                       <Badge variant="warning">Overdue</Badge>
                     </Link>
                   ))}
-                  {reorderTargets.slice(0, 3).map(({ account, daysSinceLastOrder }) => (
-                    <Link key={account.id} href={`/sales/accounts/${account.id}`} className="flex items-start justify-between gap-4 rounded-2xl border border-slate-200 px-4 py-3 transition-colors hover:bg-slate-50">
+                  {reorderTargets.slice(0, 3).map((followUp) => (
+                    <Link key={followUp.accountId} href={`/sales/accounts/${followUp.accountId}`} className="flex items-start justify-between gap-4 rounded-2xl border border-slate-200 px-4 py-3 transition-colors hover:bg-slate-50">
                       <div>
-                        <p className="font-medium text-slate-900">{account.companyName}</p>
+                        <p className="font-medium text-slate-900">{followUp.companyName}</p>
                         <p className="mt-1 text-xs text-slate-500">
-                          {daysSinceLastOrder == null ? 'No attributed orders yet' : `${daysSinceLastOrder} days since the last attributed order`}
+                          {followUp.reason}
                         </p>
                       </div>
                       <Badge variant="outline">Reorder</Badge>

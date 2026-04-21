@@ -232,6 +232,44 @@ export async function sendInvoicePaidConfirmationEmail({
   })
 }
 
+export async function sendInvoicePaymentReminderEmail({
+  to,
+  companyName,
+  invoiceId,
+  invoiceNumber,
+  total,
+  dueDate,
+  stage,
+}: {
+  to: string | string[]
+  companyName: string
+  invoiceId: string
+  invoiceNumber: string
+  total: string
+  dueDate: string
+  stage: 'five_day' | 'due_today'
+}) {
+  const reminderTitle = stage === 'due_today' ? 'Invoice due today' : 'Invoice due soon'
+  const reminderIntro = stage === 'due_today'
+    ? `Payment is due today for ${companyName}.`
+    : `This is a reminder that payment for ${companyName} is due in 5 days.`
+
+  await sendAutomationEmail({
+    key: 'invoice_payment_reminder',
+    to,
+    recipientName: companyName,
+    variables: {
+      invoice_id: invoiceId,
+      invoice_number: escapeHtml(invoiceNumber),
+      company_name: escapeHtml(companyName),
+      total_currency: formatCurrencyValue(total),
+      due_date: escapeHtml(dueDate),
+      reminder_title: escapeHtml(reminderTitle),
+      reminder_intro: escapeHtml(reminderIntro),
+    },
+  })
+}
+
 export async function sendOrderReceivedEmail({
   to,
   companyName,

@@ -26,6 +26,10 @@
       "schedule": "0 13 * * *"
     },
     {
+      "path": "/api/cron/invoice-payment-reminders",
+      "schedule": "15 13 * * *"
+    },
+    {
       "path": "/api/cron/industry-news",
       "schedule": "0 12 * * *"
     }

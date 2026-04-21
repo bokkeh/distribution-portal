@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm'
+import { asc } from 'drizzle-orm'
 import { db } from '@/db'
 import { emailAutomationTemplates } from '@/db/schema'
 
@@ -28,6 +28,19 @@ export const EMAIL_AUTOMATION_DEFAULTS = [
     bodyTemplate: '<p style="margin: 0 0 12px;"><strong>Invoice:</strong> {{invoice_number}}</p><p style="margin: 0; font-size: 24px; font-weight: 700;">{{total_currency}}</p>',
     ctaLabel: 'View invoices',
     ctaPath: '/customer/invoices',
+  },
+  {
+    key: 'invoice_payment_reminder',
+    label: 'Invoice payment reminder',
+    description: 'Sent before an invoice due date and again on the due date for non-prepaid accounts.',
+    audience: 'Customers',
+    subjectTemplate: 'Payment reminder: {{invoice_number}}',
+    eyebrow: 'Payment reminder',
+    titleTemplate: '{{reminder_title}}',
+    introTemplate: '{{reminder_intro}}',
+    bodyTemplate: '<p style="margin: 0 0 10px;"><strong>Invoice:</strong> {{invoice_number}}</p><p style="margin: 0 0 10px;"><strong>Amount due:</strong> {{total_currency}}</p><p style="margin: 0;"><strong>Due date:</strong> {{due_date}}</p>',
+    ctaLabel: 'View invoice',
+    ctaPath: '/customer/invoices/{{invoice_id}}',
   },
   {
     key: 'order_received',

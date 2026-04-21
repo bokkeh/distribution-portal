@@ -33,6 +33,7 @@ export const TEXT_AUTOMATIONS = [
 export const EMAIL_AUTOMATIONS = [
   { id: 'email:invoice_created', channel: 'Email', audience: 'Customers', name: 'Invoice created', trigger: 'Sent when a new invoice is issued.', portalDestination: '/customer/invoices', adminDestination: '/admin/automations/emails' },
   { id: 'email:invoice_paid', channel: 'Email', audience: 'Customers', name: 'Invoice paid confirmation', trigger: 'Sent when an invoice payment is recorded.', portalDestination: '/customer/invoices', adminDestination: '/admin/automations/emails' },
+  { id: 'email:invoice_payment_reminder', channel: 'Email', audience: 'Customers', name: 'Invoice payment reminder', trigger: 'Sent 5 days before and on the due date for non-prepaid accounts.', portalDestination: '/customer/invoices', adminDestination: '/admin/automations/emails' },
   { id: 'email:order_received', channel: 'Email', audience: 'Customers', name: 'Order received', trigger: 'Sent when a customer submits an order.', portalDestination: '/customer/orders', adminDestination: '/admin/automations/emails' },
   { id: 'email:order_status', channel: 'Email', audience: 'Customers', name: 'Order status update', trigger: 'Sent when an order status changes.', portalDestination: '/customer/orders', adminDestination: '/admin/automations/emails' },
   { id: 'email:shipping_status', channel: 'Email', audience: 'Customers', name: 'Delivery status update', trigger: 'Sent when shipping or delivery status changes.', portalDestination: '/customer/orders', adminDestination: '/admin/automations/emails' },

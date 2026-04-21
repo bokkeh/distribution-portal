@@ -1,12 +1,13 @@
 import { requireRole } from '@/lib/auth/session'
 import { db } from '@/db'
-import { salesMembers, customerAccounts, orders } from '@/db/schema'
-import { eq, desc, sql } from 'drizzle-orm'
+import { salesMembers, customerAccounts } from '@/db/schema'
+import { eq } from 'drizzle-orm'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Building2, MapPin, Phone, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import { PhoneActions } from '@/components/shared/PhoneActions'
+import { getReorderFollowUps, LOW_INVENTORY_CASE_THRESHOLD, SINGLE_CASE_REORDER_DELAY_DAYS } from '@/lib/sales/reorder-follow-ups'
 
 export default async function SalesAccountsPage() {
   const session = await requireRole('sales_rep', 'sales_manager', 'admin')
@@ -34,29 +35,8 @@ export default async function SalesAccountsPage() {
     )
   }
 
-  // Last order date per account for reorder suggestions
-  const accountIds = accounts.map(a => a.id)
-  const lastOrderRows = accountIds.length > 0
-    ? await db
-        .select({
-          customerId: orders.customerId,
-          lastOrderAt: sql<string>`max(${orders.createdAt})`.as('last_order_at'),
-        })
-        .from(orders)
-        .where(sql`${orders.customerId} = ANY(ARRAY[${sql.raw(accountIds.map(id => `'${id}'`).join(','))}]::uuid[])`)
-        .groupBy(orders.customerId)
-    : []
-
-  const lastOrderByAccount = new Map(lastOrderRows.map(r => [r.customerId, new Date(r.lastOrderAt)]))
-
   const now = new Date()
-  const REORDER_THRESHOLD_DAYS = 30
-  const reorderSuggestions = accounts.filter(a => {
-    const last = lastOrderByAccount.get(a.id)
-    if (!last) return true // never ordered
-    const daysSince = (now.getTime() - last.getTime()) / 86400000
-    return daysSince >= REORDER_THRESHOLD_DAYS
-  }).slice(0, 5)
+  const reorderSuggestions = (await getReorderFollowUps(accounts)).slice(0, 5)
 
   return (
     <div className="space-y-6">
@@ -75,22 +55,22 @@ export default async function SalesAccountsPage() {
               <RefreshCw className="w-4 h-4" />
               Reorder Follow-ups ({reorderSuggestions.length})
             </CardTitle>
-            <p className="text-xs text-amber-700">These accounts haven&apos;t ordered in {REORDER_THRESHOLD_DAYS}+ days</p>
+            <p className="text-xs text-amber-700">
+              Triggered when tracked inventory falls to {LOW_INVENTORY_CASE_THRESHOLD} case left, or after {SINGLE_CASE_REORDER_DELAY_DAYS} days for a 1-case order.
+            </p>
           </CardHeader>
           <CardContent className="pt-0">
             <div className="space-y-2">
-              {reorderSuggestions.map(account => {
-                const last = lastOrderByAccount.get(account.id)
-                const daysSince = last ? Math.floor((now.getTime() - last.getTime()) / 86400000) : null
+              {reorderSuggestions.map((followUp) => {
                 return (
-                  <Link key={account.id} href={`/sales/accounts/${account.id}`}>
+                  <Link key={followUp.accountId} href={`/sales/accounts/${followUp.accountId}`}>
                     <div className="flex items-center justify-between gap-3 rounded-lg bg-white border border-amber-100 px-3 py-2.5 hover:bg-amber-50 transition-colors">
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-slate-900 truncate">{account.companyName}</p>
-                        {account.city && <p className="text-xs text-slate-500">{account.city}</p>}
+                        <p className="text-sm font-medium text-slate-900 truncate">{followUp.companyName}</p>
+                        <p className="text-xs text-slate-500">{followUp.reason}</p>
                       </div>
                       <span className="text-xs text-amber-700 font-medium shrink-0">
-                        {daysSince == null ? 'Never ordered' : `${daysSince}d ago`}
+                        {followUp.daysSinceLastOrder == null ? 'Inventory trigger' : `${followUp.daysSinceLastOrder}d ago`}
                       </span>
                     </div>
                   </Link>
