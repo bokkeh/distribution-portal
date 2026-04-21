@@ -19,9 +19,9 @@ export const metadata: Metadata = {
   title: "AHAWC Distribution Portal",
   description: "AHAWC Liquor Distributor Management Portal",
   icons: {
-    icon: "/brand/logo.png",
-    shortcut: "/brand/logo.png",
-    apple: "/brand/logo.png",
+    icon: "/brand/logo-badge.png",
+    shortcut: "/favicon.ico",
+    apple: "/brand/logo-badge.png",
   },
 };
 
