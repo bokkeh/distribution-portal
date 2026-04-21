@@ -1,8 +1,8 @@
-import Image from 'next/image'
 import Link from 'next/link'
 import { ArrowRight, BellRing, Building2, Newspaper, Sparkles } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { AdaptiveNewsThumbnail } from '@/components/news/AdaptiveNewsThumbnail'
 import { getIndustryNewsHighlights, type IndustryNewsAudience } from '@/lib/industry-news'
 
 const audienceHref: Record<IndustryNewsAudience, string> = {
@@ -64,15 +64,13 @@ export async function IndustryNewsWidget({
             className="block overflow-hidden rounded-2xl border border-slate-200 transition-colors hover:bg-slate-50"
           >
             <div className="grid gap-0 sm:grid-cols-[112px_minmax(0,1fr)]">
-              <div className="relative h-36 sm:h-full">
-                <Image
-                  src={story.thumbnailUrl}
-                  alt={story.title}
-                  fill
-                  className="object-cover"
-                  unoptimized
-                />
-              </div>
+              <AdaptiveNewsThumbnail
+                src={story.thumbnailUrl}
+                alt={story.title}
+                className="h-36 sm:h-full"
+                adaptiveAspect={false}
+                seed={story.id}
+              />
               <div className="flex items-start justify-between gap-3 px-4 py-3">
                 <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
