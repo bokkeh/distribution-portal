@@ -12,11 +12,14 @@ import { AddressAutocomplete } from '@/components/shared/AddressAutocomplete'
 import { DocumentUploadField } from '@/components/shared/DocumentUploadField'
 import { CUSTOMER_SEGMENT_LABELS, getCustomerSourceLabel, normalizeCustomerSegment } from '@/lib/customers/account-segmentation'
 import { BUSINESS_TYPE_OPTIONS, normalizeBusinessType } from '@/lib/customers/business-types'
+import type { PipelineStage } from '@/lib/deal-stages'
 
 type Account = {
   id: string
   assignedSalesRepId?: string | null
   companyName: string
+  firstName?: string | null
+  lastName?: string | null
   contactName: string | null
   address: string | null
   city: string | null
@@ -36,6 +39,7 @@ type Account = {
   businessType?: string | null
   creditLimit: string | null
   paymentTerms: string | null
+  dealStage?: string | null
   customerSegment?: string | null
   customerSource?: string | null
   hubspotCompanyId?: string | null
@@ -54,10 +58,12 @@ export function AccountEditForm({
   account,
   mode,
   salesLeadOptions = [],
+  pipelineStages,
 }: {
   account: Account
   mode: 'admin' | 'staff' | 'sales'
   salesLeadOptions?: SalesLeadOption[]
+  pipelineStages: PipelineStage[]
 }) {
   const backPath = mode === 'sales' ? `/sales/accounts/${account.id}` : `/${mode}/crm/${account.id}`
   const formRef = useRef<HTMLFormElement | null>(null)
@@ -113,6 +119,17 @@ export function AccountEditForm({
       <div className="space-y-2">
         <Label htmlFor={`${mode}-companyName`}>Company Name</Label>
         <Input id={`${mode}-companyName`} name="companyName" defaultValue={account.companyName} required />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor={`${mode}-firstName`}>First Name</Label>
+          <Input id={`${mode}-firstName`} name="firstName" defaultValue={account.firstName ?? ''} placeholder="Jane" />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor={`${mode}-lastName`}>Last Name</Label>
+          <Input id={`${mode}-lastName`} name="lastName" defaultValue={account.lastName ?? ''} placeholder="Doe" />
+        </div>
       </div>
 
       {mode === 'admin' ? (
@@ -232,6 +249,19 @@ export function AccountEditForm({
           >
             <option value="b2b_wholesale">{CUSTOMER_SEGMENT_LABELS.b2b_wholesale}</option>
             <option value="b2c_consumer">{CUSTOMER_SEGMENT_LABELS.b2c_consumer}</option>
+          </select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor={`${mode}-dealStage`}>Pipeline Stage</Label>
+          <select
+            id={`${mode}-dealStage`}
+            name="dealStage"
+            defaultValue={account.dealStage ?? pipelineStages[0]?.stageKey ?? 'new_lead'}
+            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            {pipelineStages.map((stage) => (
+              <option key={stage.id} value={stage.stageKey}>{stage.label}</option>
+            ))}
           </select>
         </div>
         <div className="space-y-2">

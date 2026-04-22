@@ -1,7 +1,7 @@
 ﻿import Link from 'next/link'
 import { and, asc, count, desc, eq, inArray } from 'drizzle-orm'
 import { db } from '@/db'
-import { contacts, deliveries, deliveryStops, invoices, orders, salesMembers, salesRegions, smsMessages, tastingReports, tastings, users } from '@/db/schema'
+import { contacts, crmPipelineStages, deliveries, deliveryStops, invoices, orders, salesMembers, salesRegions, smsMessages, tastingReports, tastings, users } from '@/db/schema'
 import { syncToHubSpot } from '@/actions/crm'
 import { getCRMAccountDetail } from '@/lib/crm/account-read'
 import {
@@ -34,6 +34,7 @@ import { AccountRecordTabs } from '@/components/crm/AccountRecordTabs'
 import { AccountSmartInsightsCard } from '@/components/crm/AccountSmartInsightsCard'
 import { ViewAsAccountButton } from '@/components/admin/ViewAsAccountButton'
 import { generateAccountSmartInsights } from '@/lib/crm/smart-insights'
+import { coercePipelineStages } from '@/lib/deal-stages'
 import { ArrowLeft, CalendarDays, FileText, MessageSquare, Plus, Receipt, RefreshCcw, RefreshCw, Truck } from 'lucide-react'
 
 const ACCOUNT_TABS = [
@@ -142,6 +143,18 @@ export async function AccountRecordPage({
 
   const account = await getCRMAccountDetail(accountId)
   if (!account) notFound()
+  const pipelineStages = coercePipelineStages(
+    await db
+      .select({
+        id: crmPipelineStages.id,
+        stageKey: crmPipelineStages.stageKey,
+        label: crmPipelineStages.label,
+        colorToken: crmPipelineStages.colorToken,
+        position: crmPipelineStages.position,
+      })
+      .from(crmPipelineStages)
+      .orderBy(asc(crmPipelineStages.position), asc(crmPipelineStages.label))
+  )
 
   const [assignedRegion] = account.assignedRegionId
     ? await db
@@ -763,7 +776,7 @@ export async function AccountRecordPage({
             <div className="xl:col-span-2">
               <Card id="edit-account">
                 <CardHeader className="pb-3"><CardTitle>Account Setup / Edit</CardTitle></CardHeader>
-                <CardContent><AccountEditForm account={account} mode={mode} salesLeadOptions={salesLeadOptions} /></CardContent>
+                <CardContent><AccountEditForm account={account} mode={mode} salesLeadOptions={salesLeadOptions} pipelineStages={pipelineStages} /></CardContent>
               </Card>
             </div>
             <div className="space-y-6">

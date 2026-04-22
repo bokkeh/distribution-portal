@@ -225,6 +225,13 @@
       "when": 1776868722364,
       "tag": "0046_customer_account_segmentation",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1776883200000,
+      "tag": "0047_crm_pipeline_stages_and_b2c_names",
+      "breakpoints": true
     }
   ]
 }

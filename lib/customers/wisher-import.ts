@@ -3,6 +3,8 @@ type ParsedCsvRow = Record<string, string>
 export type WisherImportRow = {
   externalCustomerId: string | null
   companyName: string
+  firstName: string | null
+  lastName: string | null
   contactName: string | null
   email: string | null
   phone: string | null
@@ -126,6 +128,8 @@ export function parseWisherCustomersCsv(text: string): {
     rows.push({
       externalCustomerId,
       companyName,
+      firstName,
+      lastName,
       contactName,
       email,
       phone,

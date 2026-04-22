@@ -1,28 +1,40 @@
 'use client'
 
-import { useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { updateDealStage } from '@/actions/crm'
-import { DEAL_STAGES, getDealStage } from '@/lib/deal-stages'
+import { getDealStage, type PipelineStage } from '@/lib/deal-stages'
 
 export function DealStageSelect({
   accountId,
   currentStage,
+  stages,
+  onStageChange,
   size = 'md',
 }: {
   accountId: string
   currentStage: string | null | undefined
+  stages: PipelineStage[]
+  onStageChange?: (nextStage: string) => void
   size?: 'sm' | 'md'
 }) {
   const [isPending, startTransition] = useTransition()
-  const current = getDealStage(currentStage)
+  const [optimisticValue, setOptimisticValue] = useState<string | null>(null)
+  const fallbackValue = currentStage ?? stages[0]?.stageKey ?? 'new_lead'
+  const selectedValue = optimisticValue ?? fallbackValue
+
+  const current = getDealStage(selectedValue, stages)
 
   function handleChange(value: string) {
+    setOptimisticValue(value)
     startTransition(async () => {
       try {
         await updateDealStage(accountId, value)
+        onStageChange?.(value)
+        setOptimisticValue(null)
         toast.success('Deal stage updated')
       } catch {
+        setOptimisticValue(null)
         toast.error('Failed to update stage')
       }
     })
@@ -34,13 +46,13 @@ export function DealStageSelect({
 
   return (
     <select
-      value={current.value}
+      value={selectedValue}
       disabled={isPending}
       onChange={e => handleChange(e.target.value)}
-      className={`rounded-md border font-medium focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 ${sizeClass} ${current.color}`}
+      className={`rounded-md border font-medium focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 ${sizeClass} ${current.colorClass}`}
     >
-      {DEAL_STAGES.map(s => (
-        <option key={s.value} value={s.value}>{s.label}</option>
+      {stages.map((stage) => (
+        <option key={stage.id} value={stage.stageKey}>{stage.label}</option>
       ))}
     </select>
   )

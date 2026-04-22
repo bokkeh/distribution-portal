@@ -7,6 +7,8 @@ export const customerAccounts = pgTable('customer_accounts', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
   companyName: text('company_name').notNull(),
+  firstName: text('first_name'),
+  lastName: text('last_name'),
   contactName: text('contact_name'),
   address: text('address'),
   city: text('city'),

@@ -1,10 +1,10 @@
 'use server'
 
 import { db } from '@/db'
-import { accountPreferences, activityEvents, contacts, customerAccounts, deliveryStops, invoices, orders, salesMembers, salesRouteStops, smsThreads, tastings, users } from '@/db/schema'
+import { accountPreferences, activityEvents, contacts, crmPipelineStages, customerAccounts, deliveryStops, invoices, orders, salesMembers, salesRouteStops, smsThreads, tastings, users } from '@/db/schema'
 import { requireAdminOrStaff, requireRole } from '@/lib/auth/session'
 import { geocodeAddress } from '@/lib/maps/geocode'
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, asc, eq, inArray } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { after } from 'next/server'
 import { getHubSpotCompanyContacts, upsertHubSpotContact, getHubSpotCompanies, updateHubSpotCompany } from '@/lib/hubspot/client'
@@ -15,6 +15,7 @@ import { isGeocodeActionRateLimited } from '@/lib/auth/rate-limit'
 import { normalizeBusinessType } from '@/lib/customers/business-types'
 import { normalizeCustomerSegment } from '@/lib/customers/account-segmentation'
 import { parseWisherCustomersCsv } from '@/lib/customers/wisher-import'
+import { coercePipelineStages, getNextPipelineStageColorToken, normalizePipelineStageKey } from '@/lib/deal-stages'
 
 const CRM_EDITOR_ROLES = ['admin', 'staff', 'sales_rep', 'sales_manager'] as const
 const HUBSPOT_COMPANY_SYNC_FIELDS = new Set<string>([
@@ -43,6 +44,27 @@ const HUBSPOT_CONTACT_SYNC_FIELDS = new Set<string>([
   'paymentTerms',
 ] as const)
 
+async function getOrderedPipelineStages() {
+  const stages = await db
+    .select({
+      id: crmPipelineStages.id,
+      stageKey: crmPipelineStages.stageKey,
+      label: crmPipelineStages.label,
+      colorToken: crmPipelineStages.colorToken,
+      position: crmPipelineStages.position,
+    })
+    .from(crmPipelineStages)
+    .orderBy(asc(crmPipelineStages.position), asc(crmPipelineStages.label))
+
+  return coercePipelineStages(stages)
+}
+
+async function resolvePipelineStageKey(value: string | null | undefined) {
+  const normalized = normalizePipelineStageKey(value)
+  const stages = await getOrderedPipelineStages()
+  return stages.find((stage) => stage.stageKey === normalized)?.stageKey ?? stages[0]?.stageKey ?? 'new_lead'
+}
+
 function getSessionRoles(session: Awaited<ReturnType<typeof requireRole>>) {
   return new Set((session.user.roles ?? [session.user.role]).filter(Boolean) as string[])
 }
@@ -54,6 +76,12 @@ function revalidateCRMAccountPaths(accountId: string) {
   revalidatePath(`/staff/crm/${accountId}`)
   revalidatePath('/sales/accounts')
   revalidatePath(`/sales/accounts/${accountId}`)
+}
+
+function revalidateCRMIndexPaths() {
+  revalidatePath('/admin/crm')
+  revalidatePath('/admin/crm/new')
+  revalidatePath('/staff/crm')
 }
 
 async function requireEditableAccountAccess(accountId: string) {
@@ -107,11 +135,134 @@ async function requireEditableContactAccess(contactId: string) {
 
 export async function updateDealStage(accountId: string, dealStage: string) {
   await requireAdminOrStaff()
-  await db.update(customerAccounts).set({ dealStage }).where(eq(customerAccounts.id, accountId))
+  const nextStageKey = await resolvePipelineStageKey(dealStage)
+  await db.update(customerAccounts).set({ dealStage: nextStageKey }).where(eq(customerAccounts.id, accountId))
   revalidatePath('/admin/crm')
   revalidatePath('/staff/crm')
   revalidatePath(`/admin/crm/${accountId}`)
   revalidatePath(`/staff/crm/${accountId}`)
+}
+
+export async function createPipelineStage(label: string) {
+  await requireRole('admin')
+
+  const cleanLabel = label.trim()
+  if (!cleanLabel) {
+    throw new Error('Stage label is required.')
+  }
+
+  const existingStages = await getOrderedPipelineStages()
+  const baseKey = normalizePipelineStageKey(cleanLabel)
+  let stageKey = baseKey
+  let suffix = 2
+  while (existingStages.some((stage) => stage.stageKey === stageKey)) {
+    stageKey = `${baseKey}_${suffix}`
+    suffix += 1
+  }
+
+  const [created] = await db
+    .insert(crmPipelineStages)
+    .values({
+      stageKey,
+      label: cleanLabel,
+      colorToken: getNextPipelineStageColorToken(existingStages.length),
+      position: existingStages.length,
+    })
+    .returning({
+      id: crmPipelineStages.id,
+      stageKey: crmPipelineStages.stageKey,
+      label: crmPipelineStages.label,
+      colorToken: crmPipelineStages.colorToken,
+      position: crmPipelineStages.position,
+    })
+
+  revalidateCRMIndexPaths()
+  return created
+}
+
+export async function renamePipelineStage(stageId: string, label: string) {
+  await requireRole('admin')
+
+  const cleanLabel = label.trim()
+  if (!cleanLabel) {
+    throw new Error('Stage label is required.')
+  }
+
+  const [updated] = await db
+    .update(crmPipelineStages)
+    .set({ label: cleanLabel })
+    .where(eq(crmPipelineStages.id, stageId))
+    .returning({
+      id: crmPipelineStages.id,
+      stageKey: crmPipelineStages.stageKey,
+      label: crmPipelineStages.label,
+      colorToken: crmPipelineStages.colorToken,
+      position: crmPipelineStages.position,
+    })
+
+  if (!updated) {
+    throw new Error('Stage not found.')
+  }
+
+  revalidateCRMIndexPaths()
+  return updated
+}
+
+export async function deletePipelineStage(stageId: string) {
+  await requireRole('admin')
+
+  const stages = await getOrderedPipelineStages()
+  if (stages.length <= 1) {
+    throw new Error('At least one pipeline stage is required.')
+  }
+
+  const stageToDelete = stages.find((stage) => stage.id === stageId)
+  if (!stageToDelete) {
+    throw new Error('Stage not found.')
+  }
+
+  const fallbackStage = stages.find((stage) => stage.id !== stageId)
+  if (!fallbackStage) {
+    throw new Error('A replacement stage is required before deleting this stage.')
+  }
+
+  await db.update(customerAccounts)
+    .set({ dealStage: fallbackStage.stageKey })
+    .where(eq(customerAccounts.dealStage, stageToDelete.stageKey))
+
+  await db.delete(crmPipelineStages).where(eq(crmPipelineStages.id, stageId))
+
+  const remainingStageIds = stages
+    .filter((stage) => stage.id !== stageId)
+    .map((stage) => stage.id)
+
+  await Promise.all(
+    remainingStageIds.map((id, index) =>
+      db.update(crmPipelineStages).set({ position: index }).where(eq(crmPipelineStages.id, id))
+    )
+  )
+
+  revalidateCRMIndexPaths()
+  return { fallbackStageKey: fallbackStage.stageKey }
+}
+
+export async function reorderPipelineStages(stageIds: string[]) {
+  await requireRole('admin')
+
+  const stages = await getOrderedPipelineStages()
+  const existingIds = new Set(stages.map((stage) => stage.id))
+  if (stageIds.length !== stages.length || stageIds.some((id) => !existingIds.has(id))) {
+    throw new Error('Stage order is out of sync. Refresh and try again.')
+  }
+
+  await Promise.all(
+    stageIds.map((id, index) =>
+      db.update(crmPipelineStages).set({ position: index }).where(eq(crmPipelineStages.id, id))
+    )
+  )
+
+  revalidateCRMIndexPaths()
+  return { success: true }
 }
 
 function combineTextValues(...values: Array<string | null | undefined>) {
@@ -221,6 +372,8 @@ export async function mergeCustomerAccounts(formData: FormData) {
 
   const mergedFields = {
     userId: targetAccount.userId ?? sourceAccount.userId,
+    firstName: targetAccount.firstName ?? sourceAccount.firstName,
+    lastName: targetAccount.lastName ?? sourceAccount.lastName,
     contactName: targetAccount.contactName ?? sourceAccount.contactName,
     address: targetAccount.address ?? sourceAccount.address,
     city: targetAccount.city ?? sourceAccount.city,
@@ -680,6 +833,8 @@ export async function importWisherCustomersCsv(
       const normalizedGeography = normalizeAccountGeography({ state: row.state, county: null })
       const upsertValues = {
         companyName: row.companyName,
+        firstName: row.firstName,
+        lastName: row.lastName,
         contactName: row.contactName,
         email: row.email,
         phone: row.phone,
@@ -706,6 +861,8 @@ export async function importWisherCustomersCsv(
         .select({
           id: customerAccounts.id,
           companyName: customerAccounts.companyName,
+          firstName: customerAccounts.firstName,
+          lastName: customerAccounts.lastName,
           contactName: customerAccounts.contactName,
           email: customerAccounts.email,
           phone: customerAccounts.phone,
@@ -728,6 +885,8 @@ export async function importWisherCustomersCsv(
 
       const changed =
         existingAccount.companyName !== upsertValues.companyName
+        || (existingAccount.firstName ?? null) !== upsertValues.firstName
+        || (existingAccount.lastName ?? null) !== upsertValues.lastName
         || (existingAccount.contactName ?? null) !== upsertValues.contactName
         || (existingAccount.email ?? null) !== upsertValues.email
         || (existingAccount.phone ?? null) !== upsertValues.phone
@@ -818,6 +977,8 @@ export async function updateCustomerAccount(
     const canAssignSalesLead = roles.has('admin')
     const hubspotCompanyId = (formData.get('hubspotCompanyId') as string) || null
     const companyName = formData.get('companyName') as string
+    const firstName = ((formData.get('firstName') as string) || '').trim() || null
+    const lastName = ((formData.get('lastName') as string) || '').trim() || null
     const phone = (formData.get('phone') as string) || null
     const email = (formData.get('email') as string) || null
     const address = (formData.get('address') as string) || null
@@ -838,6 +999,7 @@ export async function updateCustomerAccount(
     const creditLimit = formData.get('creditLimit') as string
     const paymentTerms = formData.get('paymentTerms') as string
     const customerSegment = normalizeCustomerSegment(formData.get('customerSegment') as string)
+    const dealStage = await resolvePipelineStageKey(formData.get('dealStage') as string)
     const requestedAssignedSalesRepId = ((formData.get('assignedSalesRepId') as string) || '').trim() || null
     const liquorLicenseNumber = (formData.get('liquorLicenseNumber') as string) || null
     const liquorLicenseState = (formData.get('liquorLicenseState') as string) || null
@@ -880,6 +1042,8 @@ export async function updateCustomerAccount(
 
     const changedFields = [
       ['companyName', existingAccount.companyName, companyName],
+      ['firstName', existingAccount.firstName, firstName],
+      ['lastName', existingAccount.lastName, lastName],
       ['contactName', existingAccount.contactName, contactName],
       ['phone', existingAccount.phone, phone],
       ['email', existingAccount.email, email],
@@ -900,6 +1064,7 @@ export async function updateCustomerAccount(
       ['creditLimit', existingAccount.creditLimit, creditLimit],
       ['paymentTerms', existingAccount.paymentTerms, paymentTerms],
       ['customerSegment', existingAccount.customerSegment, customerSegment],
+      ['dealStage', existingAccount.dealStage, dealStage],
       ['salesLead', existingAccount.assignedSalesRepId, assignedSalesRepId],
       ['liquorLicenseNumber', existingAccount.liquorLicenseNumber, liquorLicenseNumber],
       ['liquorLicenseState', existingAccount.liquorLicenseState, liquorLicenseState],
@@ -919,6 +1084,8 @@ export async function updateCustomerAccount(
 
     const [account] = await db.update(customerAccounts).set({
       companyName,
+      firstName,
+      lastName,
       contactName,
       address,
       city,
@@ -939,6 +1106,7 @@ export async function updateCustomerAccount(
       creditLimit,
       paymentTerms,
       customerSegment,
+      dealStage,
       assignedSalesRepId,
       liquorLicenseNumber,
       liquorLicenseState,
@@ -1036,6 +1204,8 @@ export async function createCustomerAccount(
     const session = await requireAdminOrStaff()
 
     const companyName = (formData.get('companyName') as string | null)?.trim()
+    const firstName = ((formData.get('firstName') as string) || '').trim() || null
+    const lastName = ((formData.get('lastName') as string) || '').trim() || null
     const phone = ((formData.get('phone') as string) || '').trim() || null
     const email = ((formData.get('email') as string) || '').trim() || null
     const address = ((formData.get('address') as string) || '').trim() || null
@@ -1055,6 +1225,7 @@ export async function createCustomerAccount(
     const creditLimit = ((formData.get('creditLimit') as string) || '0').trim() || '0'
     const paymentTerms = ((formData.get('paymentTerms') as string) || 'PREPAID').trim() || 'PREPAID'
     const customerSegment = normalizeCustomerSegment(formData.get('customerSegment') as string)
+    const dealStage = await resolvePipelineStageKey(formData.get('dealStage') as string)
     const normalizedGeography = normalizeAccountGeography({ state, county })
 
     if (!companyName) {
@@ -1063,6 +1234,8 @@ export async function createCustomerAccount(
 
     const [account] = await db.insert(customerAccounts).values({
       companyName,
+      firstName,
+      lastName,
       contactName,
       address,
       city,
@@ -1082,6 +1255,7 @@ export async function createCustomerAccount(
       creditLimit,
       paymentTerms,
       customerSegment,
+      dealStage,
       customerSource: 'manual',
     }).returning({ id: customerAccounts.id })
 

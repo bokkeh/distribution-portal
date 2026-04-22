@@ -1,10 +1,35 @@
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
+import { asc } from 'drizzle-orm'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { CreateAccountForm } from '@/components/crm/CreateAccountForm'
+import { db } from '@/db'
+import { crmPipelineStages } from '@/db/schema'
+import { coercePipelineStages, normalizePipelineStageKey } from '@/lib/deal-stages'
 
-export default function NewAccountPage() {
+export default async function NewAccountPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ stage?: string }>
+}) {
+  const { stage } = await searchParams
+  const pipelineStages = coercePipelineStages(
+    await db
+      .select({
+        id: crmPipelineStages.id,
+        stageKey: crmPipelineStages.stageKey,
+        label: crmPipelineStages.label,
+        colorToken: crmPipelineStages.colorToken,
+        position: crmPipelineStages.position,
+      })
+      .from(crmPipelineStages)
+      .orderBy(asc(crmPipelineStages.position), asc(crmPipelineStages.label))
+  )
+  const defaultDealStage = pipelineStages.find((item) => item.stageKey === normalizePipelineStageKey(stage))?.stageKey
+    ?? pipelineStages[0]?.stageKey
+    ?? 'new_lead'
+
   return (
     <div className="p-4 sm:p-8 space-y-6">
       <div className="flex items-center gap-4">
@@ -22,7 +47,7 @@ export default function NewAccountPage() {
           <CardTitle>New Customer Account</CardTitle>
         </CardHeader>
         <CardContent>
-          <CreateAccountForm />
+          <CreateAccountForm pipelineStages={pipelineStages} defaultDealStage={defaultDealStage} />
         </CardContent>
       </Card>
     </div>

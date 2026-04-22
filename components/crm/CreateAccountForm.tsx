@@ -10,8 +10,15 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AddressAutocomplete } from '@/components/shared/AddressAutocomplete'
 import { CUSTOMER_SEGMENT_LABELS } from '@/lib/customers/account-segmentation'
+import type { PipelineStage } from '@/lib/deal-stages'
 
-export function CreateAccountForm() {
+export function CreateAccountForm({
+  pipelineStages,
+  defaultDealStage,
+}: {
+  pipelineStages: PipelineStage[]
+  defaultDealStage: string
+}) {
   const router = useRouter()
   const [state, action, pending] = useActionState(createCustomerAccount, null)
 
@@ -32,6 +39,17 @@ export function CreateAccountForm() {
       <div className="space-y-2">
         <Label htmlFor="new-companyName">Company Name</Label>
         <Input id="new-companyName" name="companyName" required />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="new-firstName">First Name</Label>
+          <Input id="new-firstName" name="firstName" placeholder="Jane" />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="new-lastName">Last Name</Label>
+          <Input id="new-lastName" name="lastName" placeholder="Doe" />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -120,6 +138,14 @@ export function CreateAccountForm() {
           <select id="new-customerSegment" name="customerSegment" defaultValue="b2b_wholesale" className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
             <option value="b2b_wholesale">{CUSTOMER_SEGMENT_LABELS.b2b_wholesale}</option>
             <option value="b2c_consumer">{CUSTOMER_SEGMENT_LABELS.b2c_consumer}</option>
+          </select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="new-dealStage">Pipeline Stage</Label>
+          <select id="new-dealStage" name="dealStage" defaultValue={defaultDealStage} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+            {pipelineStages.map((stage) => (
+              <option key={stage.id} value={stage.stageKey}>{stage.label}</option>
+            ))}
           </select>
         </div>
         <div className="space-y-2">

@@ -1,5 +1,5 @@
 import { db } from '@/db'
-import { customerAccounts, orders, orderItems, contacts, salesMembers, users } from '@/db/schema'
+import { crmPipelineStages, customerAccounts, orders, orderItems, contacts, salesMembers, users } from '@/db/schema'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { getHubSpotCompanies } from '@/lib/hubspot/client'
@@ -9,12 +9,13 @@ import { LocalPeopleTable } from '@/components/crm/LocalPeopleTable'
 import { CRMEntityMergeCard } from '@/components/crm/CRMEntityMergeCard'
 import { CRMTabs } from '@/components/crm/CRMTabs'
 import { PipelineBoard } from '@/components/crm/PipelineBoard'
-import { sql, eq, and, inArray, max } from 'drizzle-orm'
+import { sql, eq, and, inArray, max, asc } from 'drizzle-orm'
 import Link from 'next/link'
 import { Kanban, LayoutList, Plus, Upload } from 'lucide-react'
 import { requireFeature } from '@/lib/auth/session'
 import { mergeContacts, mergeCustomerAccounts } from '@/actions/crm'
 import { CRM_ACCOUNT_FILTERS, type CRMAccountFilter, normalizeCRMAccountFilter } from '@/lib/customers/account-segmentation'
+import { coercePipelineStages } from '@/lib/deal-stages'
 import { formatCurrency } from '@/lib/utils'
 
 function matchesAccountFilter(account: { customerSegment: string | null; customerSource: string | null }, filter: CRMAccountFilter) {
@@ -49,10 +50,12 @@ export default async function CRMPage({
     'use server'
     await mergeContacts(formData)
   }
-  const [accounts, people, hsResult, currentSalesMember] = await Promise.all([
+  const [accounts, people, hsResult, currentSalesMember, pipelineStageRows] = await Promise.all([
     db.select({
       id: customerAccounts.id,
       companyName: customerAccounts.companyName,
+      firstName: customerAccounts.firstName,
+      lastName: customerAccounts.lastName,
       address: customerAccounts.address,
       city: customerAccounts.city,
       state: customerAccounts.state,
@@ -98,7 +101,17 @@ export default async function CRMPage({
       .where(eq(salesMembers.userId, session.user.id))
       .limit(1)
       .then((rows) => rows[0] ?? null),
+    db.select({
+      id: crmPipelineStages.id,
+      stageKey: crmPipelineStages.stageKey,
+      label: crmPipelineStages.label,
+      colorToken: crmPipelineStages.colorToken,
+      position: crmPipelineStages.position,
+    })
+      .from(crmPipelineStages)
+      .orderBy(asc(crmPipelineStages.position), asc(crmPipelineStages.label)),
   ])
+  const pipelineStages = coercePipelineStages(pipelineStageRows)
 
   // Aggregate order stats per customer
   const accountIds = accounts.map(a => a.id)
@@ -239,7 +252,7 @@ export default async function CRMPage({
       </div>
 
       {isPipeline ? (
-        <PipelineBoard accounts={filteredAccounts} basePath="/admin/crm" />
+        <PipelineBoard accounts={filteredAccounts} basePath="/admin/crm" stages={pipelineStages} canManageStages canCreateAccounts />
       ) : (
       <Card>
         <CardContent className="grid gap-4 border-b p-4 lg:grid-cols-2">
@@ -327,8 +340,8 @@ export default async function CRMPage({
                 { id: 'hubspot', label: 'HubSpot Companies', count: hsCompanies.length },
               ]}
             >
-              <LocalAccountsTable initialAccounts={filteredAccountRows} userId={session.user.id} />
-              <LocalAccountsTable initialAccounts={filteredAssignedToMeRows} userId={session.user.id} />
+              <LocalAccountsTable initialAccounts={filteredAccountRows} userId={session.user.id} pipelineStages={pipelineStages} />
+              <LocalAccountsTable initialAccounts={filteredAssignedToMeRows} userId={session.user.id} pipelineStages={pipelineStages} />
               <LocalPeopleTable people={filteredPeople} basePath="/admin/crm" />
               <HubSpotCompaniesTab
                 companies={hsCompanies}

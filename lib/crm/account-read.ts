@@ -7,6 +7,8 @@ export type CRMAccountDetail = {
   userId: string | null
   assignedSalesRepId: string | null
   companyName: string
+  firstName: string | null
+  lastName: string | null
   contactName: string | null
   address: string | null
   city: string | null
