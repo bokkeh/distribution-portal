@@ -1,6 +1,6 @@
 import { db } from '@/db'
-import { orders, customerAccounts } from '@/db/schema'
-import { eq, desc } from 'drizzle-orm'
+import { orders, customerAccounts, orderItems } from '@/db/schema'
+import { eq, desc, inArray, sql } from 'drizzle-orm'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -16,6 +16,7 @@ export default async function AdminOrdersPage() {
   let allOrders: Array<{
     id: string
     total: string
+    quantity: number
     status: 'pending' | 'confirmed' | 'fulfilled' | 'cancelled'
     shippingStatus: 'not_scheduled' | 'scheduled' | 'out_for_delivery' | 'delivered' | 'issue'
     orderType: 'paid' | 'sample'
@@ -39,6 +40,7 @@ export default async function AdminOrdersPage() {
       .from(orders)
       .leftJoin(customerAccounts, eq(orders.customerId, customerAccounts.id))
       .orderBy(desc(orders.createdAt))
+      .then(rows => rows.map(row => ({ ...row, quantity: 0 })))
   } catch (error) {
     if (!isMissingShippingStatusColumn(error)) throw error
 
@@ -54,8 +56,26 @@ export default async function AdminOrdersPage() {
       .from(orders)
       .leftJoin(customerAccounts, eq(orders.customerId, customerAccounts.id))
       .orderBy(desc(orders.createdAt))
-      .then(rows => rows.map(row => ({ ...row, paymentStatus: 'not_applicable', shippingStatus: 'not_scheduled' as const })))
+      .then(rows => rows.map(row => ({ ...row, quantity: 0, paymentStatus: 'not_applicable', shippingStatus: 'not_scheduled' as const })))
   }
+
+  const orderIds = allOrders.map(order => order.id)
+  const quantityRows = orderIds.length > 0
+    ? await db
+        .select({
+          orderId: orderItems.orderId,
+          quantity: sql<number>`coalesce(sum(${orderItems.quantity}::numeric), 0)::float`.as('quantity'),
+        })
+        .from(orderItems)
+        .where(inArray(orderItems.orderId, orderIds))
+        .groupBy(orderItems.orderId)
+    : []
+
+  const quantityByOrderId = new Map(quantityRows.map(row => [row.orderId, Number(row.quantity ?? 0)]))
+  allOrders = allOrders.map(order => ({
+    ...order,
+    quantity: quantityByOrderId.get(order.id) ?? 0,
+  }))
 
   return (
     <div className="p-4 sm:p-8 space-y-6">
@@ -76,11 +96,12 @@ export default async function AdminOrdersPage() {
       <Card className="overflow-hidden">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-          <table className="w-full min-w-[860px]">
+          <table className="w-full min-w-[940px]">
             <thead className="border-b bg-slate-50 sticky top-0 z-10">
               <tr>
                 <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Order #</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Customer</th>
+                <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Qty</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Type</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Payment</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Order Status</th>
@@ -92,11 +113,12 @@ export default async function AdminOrdersPage() {
             </thead>
             <tbody className="divide-y">
               {allOrders.length === 0 ? (
-                <tr><td colSpan={9}><EmptyState icon={FileText} title="No orders yet" description="New orders will appear here." /></td></tr>
+                <tr><td colSpan={10}><EmptyState icon={FileText} title="No orders yet" description="New orders will appear here." /></td></tr>
               ) : allOrders.map(order => (
                 <tr key={order.id} className="hover:bg-slate-50">
                   <td className="px-6 py-4 text-sm font-mono">#{order.id.slice(-8).toUpperCase()}</td>
                   <td className="px-6 py-4 text-sm font-medium">{order.companyName ?? '-'}</td>
+                  <td className="px-6 py-4 text-sm">{order.quantity}</td>
                   <td className="px-6 py-4"><Badge variant="outline">{order.orderType}</Badge></td>
                   <td className="px-6 py-4"><Badge variant={orderPaymentStatusVariant[order.paymentStatus] ?? 'secondary'}>{formatOrderPaymentStatusLabel(order.paymentStatus)}</Badge></td>
                   <td className="px-6 py-4"><Badge variant={orderStatusVariant[order.status]}>{formatStatusLabel(order.status)}</Badge></td>

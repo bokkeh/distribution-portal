@@ -42,6 +42,12 @@ function getReminderStage(daysUntilDue: number) {
   return null
 }
 
+function hasReminderDueDate<T extends { dueDate: string | Date | null; paymentTerms: string | null; status: string }>(
+  invoice: T,
+): invoice is T & { dueDate: string | Date } {
+  return Boolean(invoice.dueDate) && invoice.paymentTerms !== 'PREPAID' && invoice.status !== 'paid'
+}
+
 function getReminderKind(stage: 'five_day' | 'due_today') {
   return stage === 'due_today' ? 'invoice_payment_reminder_due_date' : 'invoice_payment_reminder_5_day'
 }
@@ -123,7 +129,7 @@ export async function GET(request: NextRequest) {
     .where(inArray(invoices.status, ['sent', 'overdue']))
 
   const candidates = openInvoices
-    .filter(invoice => invoice.dueDate && invoice.paymentTerms !== 'PREPAID' && invoice.status !== 'paid')
+    .filter(hasReminderDueDate)
     .map(invoice => {
       const dueDateKey = typeof invoice.dueDate === 'string'
         ? invoice.dueDate
