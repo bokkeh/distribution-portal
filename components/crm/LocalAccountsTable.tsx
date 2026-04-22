@@ -6,6 +6,7 @@ import { Building2, Settings2, Star, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { toggleStarAccount } from '@/actions/crm'
+import { getCustomerSegmentLabel, getCustomerSourceLabel } from '@/lib/customers/account-segmentation'
 import { formatCurrency } from '@/lib/utils'
 import { PhoneSmsButton } from './PhoneSmsButton'
 
@@ -20,6 +21,8 @@ export interface AccountRow {
   phone: string | null
   contactName: string | null
   businessType: string | null
+  customerSegment: string | null
+  customerSource: string | null
   dealStage: string | null
   creditLimit: string
   balance: string
@@ -43,6 +46,8 @@ const COLUMN_OPTIONS = [
   { key: 'email', label: 'Email' },
   { key: 'contactName', label: 'Primary Contact' },
   { key: 'businessType', label: 'Business Type' },
+  { key: 'segment', label: 'Segment' },
+  { key: 'source', label: 'Source' },
   { key: 'dealStage', label: 'Deal Stage' },
   { key: 'salesLead', label: 'Sales Lead' },
   { key: 'terms', label: 'Terms' },
@@ -56,7 +61,45 @@ const COLUMN_OPTIONS = [
 
 type ColumnKey = (typeof COLUMN_OPTIONS)[number]['key']
 
-const DEFAULT_COLUMNS: ColumnKey[] = ['company', 'location', 'phone', 'terms', 'pendingCases', 'totalPurchased', 'balance', 'health', 'hubspot']
+const DEFAULT_COLUMNS: ColumnKey[] = ['company', 'segment', 'location', 'phone', 'terms', 'pendingCases', 'totalPurchased', 'balance', 'health', 'hubspot']
+
+function readStoredColumns(storageKey: string): ColumnKey[] {
+  if (typeof window === 'undefined') return DEFAULT_COLUMNS
+
+  try {
+    const raw = window.localStorage.getItem(storageKey)
+    if (!raw) return DEFAULT_COLUMNS
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return DEFAULT_COLUMNS
+    const next = parsed.filter((value): value is ColumnKey =>
+      COLUMN_OPTIONS.some((option) => option.key === value)
+    )
+    return next.length ? next : DEFAULT_COLUMNS
+  } catch {
+    return DEFAULT_COLUMNS
+  }
+}
+
+function readStoredView(filterStorageKey: string): {
+  searchQuery: string
+  sortBy: 'company' | 'balance' | 'pendingCases' | 'health'
+} {
+  if (typeof window === 'undefined') {
+    return { searchQuery: '', sortBy: 'company' }
+  }
+
+  try {
+    const raw = window.localStorage.getItem(filterStorageKey)
+    if (!raw) return { searchQuery: '', sortBy: 'company' }
+    const parsed = JSON.parse(raw) as { searchQuery?: string; sortBy?: 'company' | 'balance' | 'pendingCases' | 'health' }
+    return {
+      searchQuery: typeof parsed.searchQuery === 'string' ? parsed.searchQuery : '',
+      sortBy: parsed.sortBy === 'balance' || parsed.sortBy === 'pendingCases' || parsed.sortBy === 'health' ? parsed.sortBy : 'company',
+    }
+  } catch {
+    return { searchQuery: '', sortBy: 'company' }
+  }
+}
 
 function AccountTable({
   accounts,
@@ -96,6 +139,8 @@ function AccountTable({
           {visibleColumns.has('email') && <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Email</th>}
           {visibleColumns.has('contactName') && <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Primary Contact</th>}
           {visibleColumns.has('businessType') && <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Business Type</th>}
+          {visibleColumns.has('segment') && <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Segment</th>}
+          {visibleColumns.has('source') && <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Source</th>}
           {visibleColumns.has('dealStage') && <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Deal Stage</th>}
           {visibleColumns.has('salesLead') && <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Sales Lead</th>}
           {visibleColumns.has('terms') && <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Terms</th>}
@@ -161,6 +206,16 @@ function AccountTable({
             )}
             {visibleColumns.has('businessType') && (
               <td className="px-4 py-3 text-sm text-muted-foreground">{account.businessType ?? '-'}</td>
+            )}
+            {visibleColumns.has('segment') && (
+              <td className="px-4 py-3">
+                <Badge variant={account.customerSegment === 'b2c_consumer' ? 'outline' : 'secondary'}>
+                  {getCustomerSegmentLabel(account.customerSegment)}
+                </Badge>
+              </td>
+            )}
+            {visibleColumns.has('source') && (
+              <td className="px-4 py-3 text-sm text-muted-foreground">{getCustomerSourceLabel(account.customerSource)}</td>
             )}
             {visibleColumns.has('dealStage') && (
               <td className="px-4 py-3 text-sm text-muted-foreground capitalize">{account.dealStage?.replace(/_/g, ' ') ?? '-'}</td>
@@ -248,40 +303,15 @@ export function LocalAccountsTable({
   const [showColumnPicker, setShowColumnPicker] = useState(false)
   const storageKey = useMemo(() => `crm-columns:${userId}:${basePath}`, [userId, basePath])
   const filterStorageKey = useMemo(() => `crm-view:${userId}:${basePath}`, [userId, basePath])
-  const [selectedColumns, setSelectedColumns] = useState<ColumnKey[]>(DEFAULT_COLUMNS)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [sortBy, setSortBy] = useState<'company' | 'balance' | 'pendingCases' | 'health'>('company')
-
-  useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(storageKey)
-      if (!raw) return
-      const parsed = JSON.parse(raw)
-      if (!Array.isArray(parsed)) return
-      const next = parsed.filter((value): value is ColumnKey =>
-        COLUMN_OPTIONS.some(option => option.key === value)
-      )
-      if (next.length) setSelectedColumns(next)
-    } catch {}
-  }, [storageKey])
+  const [selectedColumns, setSelectedColumns] = useState<ColumnKey[]>(() => readStoredColumns(storageKey))
+  const [searchQuery, setSearchQuery] = useState(() => readStoredView(filterStorageKey).searchQuery)
+  const [sortBy, setSortBy] = useState<'company' | 'balance' | 'pendingCases' | 'health'>(() => readStoredView(filterStorageKey).sortBy)
 
   useEffect(() => {
     try {
       window.localStorage.setItem(storageKey, JSON.stringify(selectedColumns))
     } catch {}
   }, [storageKey, selectedColumns])
-
-  useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(filterStorageKey)
-      if (!raw) return
-      const parsed = JSON.parse(raw) as { searchQuery?: string; sortBy?: 'company' | 'balance' | 'pendingCases' | 'health' }
-      if (typeof parsed.searchQuery === 'string') setSearchQuery(parsed.searchQuery)
-      if (parsed.sortBy === 'company' || parsed.sortBy === 'balance' || parsed.sortBy === 'pendingCases' || parsed.sortBy === 'health') {
-        setSortBy(parsed.sortBy)
-      }
-    } catch {}
-  }, [filterStorageKey])
 
   useEffect(() => {
     try {
@@ -317,6 +347,8 @@ export function LocalAccountsTable({
       account.email,
       account.contactName,
       account.businessType,
+      account.customerSegment,
+      account.customerSource,
       account.paymentTerms,
       account.salesLeadName,
     ].some(value => String(value ?? '').toLowerCase().includes(normalizedQuery))

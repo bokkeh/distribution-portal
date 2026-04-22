@@ -40,6 +40,9 @@ export type CRMAccountDetail = {
   creditLimit: string
   balance: string
   paymentTerms: string | null
+  customerSegment: string | null
+  customerSource: string | null
+  sourceExternalId: string | null
   assignedRegionId: string | null
   lat: number | null
   lng: number | null

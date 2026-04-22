@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { useFormDraftAutosave } from '@/hooks/useFormDraftAutosave'
 import { AddressAutocomplete } from '@/components/shared/AddressAutocomplete'
 import { DocumentUploadField } from '@/components/shared/DocumentUploadField'
+import { CUSTOMER_SEGMENT_LABELS, getCustomerSourceLabel, normalizeCustomerSegment } from '@/lib/customers/account-segmentation'
 import { BUSINESS_TYPE_OPTIONS, normalizeBusinessType } from '@/lib/customers/business-types'
 
 type Account = {
@@ -35,6 +36,8 @@ type Account = {
   businessType?: string | null
   creditLimit: string | null
   paymentTerms: string | null
+  customerSegment?: string | null
+  customerSource?: string | null
   hubspotCompanyId?: string | null
   liquorLicenseNumber?: string | null
   liquorLicenseState?: string | null
@@ -218,7 +221,19 @@ export function AccountEditForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="space-y-2">
+          <Label htmlFor={`${mode}-customerSegment`}>Customer Segment</Label>
+          <select
+            id={`${mode}-customerSegment`}
+            name="customerSegment"
+            defaultValue={normalizeCustomerSegment(account.customerSegment)}
+            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            <option value="b2b_wholesale">{CUSTOMER_SEGMENT_LABELS.b2b_wholesale}</option>
+            <option value="b2c_consumer">{CUSTOMER_SEGMENT_LABELS.b2c_consumer}</option>
+          </select>
+        </div>
         <div className="space-y-2">
           <Label htmlFor={`${mode}-businessType`}>Business Type</Label>
           <select
@@ -238,6 +253,10 @@ export function AccountEditForm({
           <Input id={`${mode}-dcAbraNumber`} name="dcAbraNumber" defaultValue={account.dcAbraNumber ?? ''} />
         </div>
       </div>
+
+      {account.customerSource ? (
+        <p className="text-xs text-slate-500">Source: {getCustomerSourceLabel(account.customerSource)}</p>
+      ) : null}
 
       <div id="license-fields" className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4 scroll-mt-24">
         <p className="text-sm font-semibold text-slate-800">Liquor License</p>

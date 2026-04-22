@@ -218,6 +218,13 @@
       "when": 1774800000000,
       "tag": "0031_geographic_pricing",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1776868722364,
+      "tag": "0046_customer_account_segmentation",
+      "breakpoints": true
     }
   ]
 }

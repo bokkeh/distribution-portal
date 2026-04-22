@@ -41,6 +41,9 @@ export const customerAccounts = pgTable('customer_accounts', {
   creditLimit: numeric('credit_limit', { precision: 12, scale: 2 }).notNull().default('0'),
   balance: numeric('balance', { precision: 12, scale: 2 }).notNull().default('0'),
   paymentTerms: text('payment_terms').default('PREPAID'),
+  customerSegment: text('customer_segment', { enum: ['b2b_wholesale', 'b2c_consumer'] }).notNull().default('b2b_wholesale'),
+  customerSource: text('customer_source'),
+  sourceExternalId: text('source_external_id'),
   // Sales assignment
   assignedSalesRepId: uuid('assigned_sales_rep_id').references(() => salesMembers.id, { onDelete: 'set null' }),
   assignedRegionId: uuid('assigned_region_id').references(() => salesRegions.id, { onDelete: 'set null' }),

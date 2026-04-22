@@ -11,19 +11,36 @@ import { CRMTabs } from '@/components/crm/CRMTabs'
 import { PipelineBoard } from '@/components/crm/PipelineBoard'
 import { sql, eq, and, inArray, max } from 'drizzle-orm'
 import Link from 'next/link'
-import { Kanban, LayoutList, Plus } from 'lucide-react'
+import { Kanban, LayoutList, Plus, Upload } from 'lucide-react'
 import { requireFeature } from '@/lib/auth/session'
 import { mergeContacts, mergeCustomerAccounts } from '@/actions/crm'
+import { CRM_ACCOUNT_FILTERS, type CRMAccountFilter, normalizeCRMAccountFilter } from '@/lib/customers/account-segmentation'
 import { formatCurrency } from '@/lib/utils'
+
+function matchesAccountFilter(account: { customerSegment: string | null; customerSource: string | null }, filter: CRMAccountFilter) {
+  if (filter === 'all') return true
+  if (filter === 'b2c') return account.customerSegment === 'b2c_consumer'
+  if (filter === 'wisher') return account.customerSource === 'wisher_vodka_csv'
+  return account.customerSegment !== 'b2c_consumer'
+}
+
+function buildCrmHref(basePath: string, view: 'list' | 'pipeline', filter: CRMAccountFilter) {
+  const params = new URLSearchParams()
+  if (view === 'pipeline') params.set('view', 'pipeline')
+  if (filter !== 'b2b') params.set('segment', filter)
+  const query = params.toString()
+  return query ? `${basePath}?${query}` : basePath
+}
 
 export default async function CRMPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string }>
+  searchParams: Promise<{ view?: string; segment?: string }>
 }) {
   const session = await requireFeature('crm', 'admin')
-  const { view } = await searchParams
+  const { view, segment } = await searchParams
   const isPipeline = view === 'pipeline'
+  const currentFilter = normalizeCRMAccountFilter(segment)
   async function submitAccountMerge(formData: FormData) {
     'use server'
     await mergeCustomerAccounts(formData)
@@ -44,6 +61,8 @@ export default async function CRMPage({
       email: customerAccounts.email,
       contactName: customerAccounts.contactName,
       businessType: customerAccounts.businessType,
+      customerSegment: customerAccounts.customerSegment,
+      customerSource: customerAccounts.customerSource,
       dealStage: customerAccounts.dealStage,
       creditLimit: customerAccounts.creditLimit,
       balance: customerAccounts.balance,
@@ -159,9 +178,14 @@ export default async function CRMPage({
     totalCasesPurchased: totalMap.get(a.id) ?? 0,
     healthScore: computeHealthScore(a),
   }))
+  const filteredAccounts = accounts.filter((account) => matchesAccountFilter(account, currentFilter))
+  const filteredAccountRows = accountRows.filter((account) => matchesAccountFilter(account, currentFilter))
   const assignedToMeRows = currentSalesMember
     ? accountRows.filter((account) => account.assignedSalesRepId === currentSalesMember.id)
     : []
+  const filteredAssignedToMeRows = assignedToMeRows.filter((account) => matchesAccountFilter(account, currentFilter))
+  const filteredAccountIds = new Set(filteredAccounts.map((account) => account.id))
+  const filteredPeople = people.filter((person) => filteredAccountIds.has(person.customerId))
 
   const localAccountIds = new Map<string, string>(
     accounts.filter(a => a.hubspotCompanyId).map(a => [a.hubspotCompanyId!, a.id])
@@ -175,24 +199,36 @@ export default async function CRMPage({
         <div>
           <h1 className="text-2xl font-bold text-slate-900">CRM / Accounts</h1>
           <p className="text-muted-foreground mt-1">
-            {accounts.length} local · {hsCompanies.length} in HubSpot
+            {filteredAccounts.length} shown · {accounts.length} local · {hsCompanies.length} in HubSpot
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1 border rounded-lg p-1 bg-slate-50">
-            <Link href="/admin/crm">
+            <Link href={buildCrmHref('/admin/crm', 'list', currentFilter)}>
               <Button variant={!isPipeline ? 'default' : 'ghost'} size="sm" className="gap-1.5">
                 <LayoutList className="w-4 h-4" />
                 List
               </Button>
             </Link>
-            <Link href="/admin/crm?view=pipeline">
+            <Link href={buildCrmHref('/admin/crm', 'pipeline', currentFilter)}>
               <Button variant={isPipeline ? 'default' : 'ghost'} size="sm" className="gap-1.5">
                 <Kanban className="w-4 h-4" />
                 Pipeline
               </Button>
             </Link>
           </div>
+          <div className="flex items-center gap-1 border rounded-lg p-1 bg-slate-50">
+            {CRM_ACCOUNT_FILTERS.map((filter) => (
+              <Link key={filter.value} href={buildCrmHref('/admin/crm', isPipeline ? 'pipeline' : 'list', filter.value)}>
+                <Button variant={currentFilter === filter.value ? 'default' : 'ghost'} size="sm">
+                  {filter.label}
+                </Button>
+              </Link>
+            ))}
+          </div>
+          <Link href="/admin/crm/import/wisher">
+            <Button variant="outline"><Upload className="w-4 h-4 mr-2" />Import Wisher CSV</Button>
+          </Link>
           <Link href="/admin/crm/sales-routes">
             <Button variant="outline"><Plus className="w-4 h-4 mr-2" />Sales Routes</Button>
           </Link>
@@ -203,7 +239,7 @@ export default async function CRMPage({
       </div>
 
       {isPipeline ? (
-        <PipelineBoard accounts={accounts} basePath="/admin/crm" />
+        <PipelineBoard accounts={filteredAccounts} basePath="/admin/crm" />
       ) : (
       <Card>
         <CardContent className="grid gap-4 border-b p-4 lg:grid-cols-2">
@@ -212,7 +248,7 @@ export default async function CRMPage({
             description="Choose the duplicate account to remove and the account that should survive. All orders, contacts, and data will be moved to the target."
             sourceLabel="Duplicate account (removed)"
             targetLabel="Keep this account"
-            options={accounts.map(a => ({
+            options={filteredAccounts.map(a => ({
               id: a.id,
               label: a.companyName,
               preview: {
@@ -255,7 +291,7 @@ export default async function CRMPage({
             description="Merge a duplicate person into the surviving contact record and preserve the target account link."
             sourceLabel="Duplicate person (removed)"
             targetLabel="Keep this person"
-            options={people.map(p => ({
+            options={filteredPeople.map(p => ({
               id: p.id,
               label: `${p.name} — ${p.companyName}`,
               preview: {
@@ -285,15 +321,15 @@ export default async function CRMPage({
         <CardContent className="p-0">
             <CRMTabs
               tabs={[
-                { id: 'local', label: 'Local Accounts', count: accounts.length },
-                { id: 'assigned', label: 'Assigned To Me', count: assignedToMeRows.length },
-                { id: 'people', label: 'People', count: people.length },
+                { id: 'local', label: 'Local Accounts', count: filteredAccountRows.length },
+                { id: 'assigned', label: 'Assigned To Me', count: filteredAssignedToMeRows.length },
+                { id: 'people', label: 'People', count: filteredPeople.length },
                 { id: 'hubspot', label: 'HubSpot Companies', count: hsCompanies.length },
               ]}
             >
-              <LocalAccountsTable initialAccounts={accountRows} userId={session.user.id} />
-              <LocalAccountsTable initialAccounts={assignedToMeRows} userId={session.user.id} />
-              <LocalPeopleTable people={people} basePath="/admin/crm" />
+              <LocalAccountsTable initialAccounts={filteredAccountRows} userId={session.user.id} />
+              <LocalAccountsTable initialAccounts={filteredAssignedToMeRows} userId={session.user.id} />
+              <LocalPeopleTable people={filteredPeople} basePath="/admin/crm" />
               <HubSpotCompaniesTab
                 companies={hsCompanies}
               importedIds={importedHsIds}

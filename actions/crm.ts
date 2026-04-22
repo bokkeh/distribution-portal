@@ -4,7 +4,7 @@ import { db } from '@/db'
 import { accountPreferences, activityEvents, contacts, customerAccounts, deliveryStops, invoices, orders, salesMembers, salesRouteStops, smsThreads, tastings, users } from '@/db/schema'
 import { requireAdminOrStaff, requireRole } from '@/lib/auth/session'
 import { geocodeAddress } from '@/lib/maps/geocode'
-import { eq } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { after } from 'next/server'
 import { getHubSpotCompanyContacts, upsertHubSpotContact, getHubSpotCompanies, updateHubSpotCompany } from '@/lib/hubspot/client'
@@ -13,6 +13,8 @@ import { createUserNotification } from '@/lib/notifications/in-app'
 import { normalizeAccountGeography } from '@/lib/pricing/geographic-service'
 import { isGeocodeActionRateLimited } from '@/lib/auth/rate-limit'
 import { normalizeBusinessType } from '@/lib/customers/business-types'
+import { normalizeCustomerSegment } from '@/lib/customers/account-segmentation'
+import { parseWisherCustomersCsv } from '@/lib/customers/wisher-import'
 
 const CRM_EDITOR_ROLES = ['admin', 'staff', 'sales_rep', 'sales_manager'] as const
 const HUBSPOT_COMPANY_SYNC_FIELDS = new Set<string>([
@@ -136,6 +138,11 @@ function validateWebsiteUrl(value: string | null): string | null {
   }
 }
 
+function normalizeLookupValue(value: string | null | undefined) {
+  const trimmed = value?.trim().toLowerCase()
+  return trimmed?.length ? trimmed : null
+}
+
 async function syncHubSpotCompanyContactsToLocalAccount(accountId: string, hubspotCompanyId: string) {
   const hubspotContacts = await getHubSpotCompanyContacts(hubspotCompanyId)
   if (!hubspotContacts.length) return { imported: 0, updated: 0 }
@@ -232,6 +239,9 @@ export async function mergeCustomerAccounts(formData: FormData) {
     businessEmail: targetAccount.businessEmail ?? sourceAccount.businessEmail,
     businessPhone: targetAccount.businessPhone ?? sourceAccount.businessPhone,
     notificationPreference: targetAccount.notificationPreference ?? sourceAccount.notificationPreference,
+    customerSegment: targetAccount.customerSegment ?? sourceAccount.customerSegment,
+    customerSource: targetAccount.customerSource ?? sourceAccount.customerSource,
+    sourceExternalId: targetAccount.sourceExternalId ?? sourceAccount.sourceExternalId,
     pocName: targetAccount.pocName ?? sourceAccount.pocName,
     pocPhone: targetAccount.pocPhone ?? sourceAccount.pocPhone,
     pocEmail: targetAccount.pocEmail ?? sourceAccount.pocEmail,
@@ -568,6 +578,8 @@ export async function importHubSpotCompany(hubspotCompanyId: string) {
     creditLimit: '0',
     balance: '0',
     paymentTerms: 'NET30',
+    customerSegment: 'b2b_wholesale',
+    customerSource: 'hubspot',
   }).returning({ id: customerAccounts.id })
 
   if (createdAccount) {
@@ -577,6 +589,180 @@ export async function importHubSpotCompany(hubspotCompanyId: string) {
 
   revalidatePath('/admin/crm')
   return { success: true }
+}
+
+export async function importWisherCustomersCsv(
+  _prev: {
+    success?: boolean
+    error?: string
+    importedCount?: number
+    updatedCount?: number
+    skippedCount?: number
+    invalidRowCount?: number
+  } | null,
+  formData: FormData
+): Promise<{
+  success?: boolean
+  error?: string
+  importedCount?: number
+  updatedCount?: number
+  skippedCount?: number
+  invalidRowCount?: number
+}> {
+  try {
+    await requireRole('admin')
+
+    const file = formData.get('file')
+    if (!(file instanceof File) || file.size === 0) {
+      return { error: 'Choose a CSV file to import.' }
+    }
+
+    const { rows, invalidRows } = parseWisherCustomersCsv(await file.text())
+    if (rows.length === 0) {
+      return { error: 'No importable customer rows were found in the CSV.' }
+    }
+
+    const externalIds = rows
+      .map((row) => row.externalCustomerId)
+      .filter((value): value is string => Boolean(value))
+    const emails = rows
+      .map((row) => normalizeLookupValue(row.email))
+      .filter((value): value is string => Boolean(value))
+
+    const [existingBySourceRows, existingB2CRows] = await Promise.all([
+      externalIds.length === 0
+        ? Promise.resolve([])
+        : db
+          .select({
+            id: customerAccounts.id,
+            sourceExternalId: customerAccounts.sourceExternalId,
+          })
+          .from(customerAccounts)
+          .where(and(
+            eq(customerAccounts.customerSource, 'wisher_vodka_csv'),
+            inArray(customerAccounts.sourceExternalId, externalIds)
+          )),
+      emails.length === 0
+        ? Promise.resolve([])
+        : db
+          .select({
+            id: customerAccounts.id,
+            email: customerAccounts.email,
+            sourceExternalId: customerAccounts.sourceExternalId,
+          })
+          .from(customerAccounts)
+          .where(and(
+            eq(customerAccounts.customerSegment, 'b2c_consumer'),
+            inArray(customerAccounts.email, emails)
+          )),
+    ])
+
+    const existingBySourceId = new Map(
+      existingBySourceRows
+        .filter((row) => row.sourceExternalId)
+        .map((row) => [row.sourceExternalId!, row.id])
+    )
+    const existingB2CByEmail = new Map(
+      existingB2CRows
+        .filter((row) => row.email)
+        .map((row) => [normalizeLookupValue(row.email)!, { id: row.id, sourceExternalId: row.sourceExternalId }])
+    )
+
+    let importedCount = 0
+    let updatedCount = 0
+    let skippedCount = 0
+
+    for (const row of rows) {
+      const lookupEmail = normalizeLookupValue(row.email)
+      const existingId = (row.externalCustomerId ? existingBySourceId.get(row.externalCustomerId) : null)
+        ?? (lookupEmail ? existingB2CByEmail.get(lookupEmail)?.id : null)
+
+      const normalizedGeography = normalizeAccountGeography({ state: row.state, county: null })
+      const upsertValues = {
+        companyName: row.companyName,
+        contactName: row.contactName,
+        email: row.email,
+        phone: row.phone,
+        address: row.address,
+        city: row.city,
+        state: normalizedGeography.state,
+        county: normalizedGeography.county,
+        zip: row.zip,
+        paymentTerms: 'PREPAID',
+        customerSegment: 'b2c_consumer' as const,
+        customerSource: 'wisher_vodka_csv' as const,
+        sourceExternalId: row.externalCustomerId,
+      }
+
+      if (!existingId) {
+        const [created] = await db.insert(customerAccounts).values(upsertValues).returning({ id: customerAccounts.id })
+        importedCount += 1
+        if (row.externalCustomerId) existingBySourceId.set(row.externalCustomerId, created.id)
+        if (lookupEmail) existingB2CByEmail.set(lookupEmail, { id: created.id, sourceExternalId: row.externalCustomerId })
+        continue
+      }
+
+      const [existingAccount] = await db
+        .select({
+          id: customerAccounts.id,
+          companyName: customerAccounts.companyName,
+          contactName: customerAccounts.contactName,
+          email: customerAccounts.email,
+          phone: customerAccounts.phone,
+          address: customerAccounts.address,
+          city: customerAccounts.city,
+          state: customerAccounts.state,
+          zip: customerAccounts.zip,
+          customerSegment: customerAccounts.customerSegment,
+          customerSource: customerAccounts.customerSource,
+          sourceExternalId: customerAccounts.sourceExternalId,
+        })
+        .from(customerAccounts)
+        .where(eq(customerAccounts.id, existingId))
+        .limit(1)
+
+      if (!existingAccount) {
+        skippedCount += 1
+        continue
+      }
+
+      const changed =
+        existingAccount.companyName !== upsertValues.companyName
+        || (existingAccount.contactName ?? null) !== upsertValues.contactName
+        || (existingAccount.email ?? null) !== upsertValues.email
+        || (existingAccount.phone ?? null) !== upsertValues.phone
+        || (existingAccount.address ?? null) !== upsertValues.address
+        || (existingAccount.city ?? null) !== upsertValues.city
+        || (existingAccount.state ?? null) !== upsertValues.state
+        || (existingAccount.zip ?? null) !== upsertValues.zip
+        || (existingAccount.customerSegment ?? null) !== upsertValues.customerSegment
+        || (existingAccount.customerSource ?? null) !== upsertValues.customerSource
+        || (existingAccount.sourceExternalId ?? null) !== upsertValues.sourceExternalId
+
+      if (!changed) {
+        skippedCount += 1
+        continue
+      }
+
+      await db.update(customerAccounts).set(upsertValues).where(eq(customerAccounts.id, existingId))
+      updatedCount += 1
+
+      if (row.externalCustomerId) existingBySourceId.set(row.externalCustomerId, existingId)
+      if (lookupEmail) existingB2CByEmail.set(lookupEmail, { id: existingId, sourceExternalId: row.externalCustomerId })
+    }
+
+    revalidatePath('/admin/crm')
+
+    return {
+      success: true,
+      importedCount,
+      updatedCount,
+      skippedCount,
+      invalidRowCount: invalidRows,
+    }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to import Wisher customers.' }
+  }
 }
 
 export async function updateHubSpotCompanyAction(
@@ -651,6 +837,7 @@ export async function updateCustomerAccount(
     const businessType = normalizeBusinessType(formData.get('businessType') as string) ?? null
     const creditLimit = formData.get('creditLimit') as string
     const paymentTerms = formData.get('paymentTerms') as string
+    const customerSegment = normalizeCustomerSegment(formData.get('customerSegment') as string)
     const requestedAssignedSalesRepId = ((formData.get('assignedSalesRepId') as string) || '').trim() || null
     const liquorLicenseNumber = (formData.get('liquorLicenseNumber') as string) || null
     const liquorLicenseState = (formData.get('liquorLicenseState') as string) || null
@@ -712,6 +899,7 @@ export async function updateCustomerAccount(
       ['businessType', existingAccount.businessType, businessType],
       ['creditLimit', existingAccount.creditLimit, creditLimit],
       ['paymentTerms', existingAccount.paymentTerms, paymentTerms],
+      ['customerSegment', existingAccount.customerSegment, customerSegment],
       ['salesLead', existingAccount.assignedSalesRepId, assignedSalesRepId],
       ['liquorLicenseNumber', existingAccount.liquorLicenseNumber, liquorLicenseNumber],
       ['liquorLicenseState', existingAccount.liquorLicenseState, liquorLicenseState],
@@ -750,6 +938,7 @@ export async function updateCustomerAccount(
       businessType,
       creditLimit,
       paymentTerms,
+      customerSegment,
       assignedSalesRepId,
       liquorLicenseNumber,
       liquorLicenseState,
@@ -865,6 +1054,7 @@ export async function createCustomerAccount(
     const dcAbraNumber = ((formData.get('dcAbraNumber') as string) || '').trim() || null
     const creditLimit = ((formData.get('creditLimit') as string) || '0').trim() || '0'
     const paymentTerms = ((formData.get('paymentTerms') as string) || 'PREPAID').trim() || 'PREPAID'
+    const customerSegment = normalizeCustomerSegment(formData.get('customerSegment') as string)
     const normalizedGeography = normalizeAccountGeography({ state, county })
 
     if (!companyName) {
@@ -891,6 +1081,8 @@ export async function createCustomerAccount(
       dcAbraNumber,
       creditLimit,
       paymentTerms,
+      customerSegment,
+      customerSource: 'manual',
     }).returning({ id: customerAccounts.id })
 
     await logActivityEvent({
