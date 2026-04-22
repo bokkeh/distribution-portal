@@ -2,6 +2,8 @@ import { desc, eq } from 'drizzle-orm'
 import { db } from '@/db'
 import { industryNewsItems, industryNewsSources, userPreferences, users } from '@/db/schema'
 import { createUserNotification } from '@/lib/notifications/in-app'
+import { sendIndustryNewsAlertEmail, sendIndustryNewsDigestEmail } from '@/lib/resend/client'
+import { sendSms } from '@/lib/telnyx/client'
 
 export type IndustryNewsAudience = 'admin' | 'staff' | 'sales' | 'taster' | 'driver' | 'customer'
 export type IndustryNewsCategory =
@@ -95,6 +97,15 @@ const audienceHref: Record<IndustryNewsAudience, string> = {
   taster: '/taster/news',
   driver: '/driver/news',
   customer: '/customer/news',
+}
+
+const audienceLabels: Record<IndustryNewsAudience, string> = {
+  admin: 'Admin',
+  staff: 'Staff',
+  sales: 'Sales',
+  taster: 'Taster',
+  driver: 'Driver',
+  customer: 'Customer',
 }
 
 function isMissingNewsPreferenceColumns(error: unknown) {
@@ -517,6 +528,7 @@ async function notifyUsersAboutNewsItem(item: {
   thumbnailUrl: string | null
   roleTargets: IndustryNewsAudience[]
   priority: 'high' | 'medium' | 'low'
+  whyItMatters: string
   isWisherRelevant: boolean
   isAHAWCRelevant: boolean
   isMarylandRelevant: boolean
@@ -527,9 +539,14 @@ async function notifyUsersAboutNewsItem(item: {
     id: string
     roles: string[]
     active: boolean
+    name: string
+    email: string
+    phone: string | null
     newsNotificationsMuted: boolean | null
     newsInAppEnabled: boolean | null
     inAppNotificationsEnabled: boolean | null
+    newsEmailEnabled: boolean | null
+    newsSmsEnabled: boolean | null
     newsDigestFrequency: string | null
   }>
 
@@ -539,9 +556,14 @@ async function notifyUsersAboutNewsItem(item: {
         id: users.id,
         roles: users.roles,
         active: users.active,
+        name: users.name,
+        email: users.email,
+        phone: users.phone,
         newsNotificationsMuted: userPreferences.newsNotificationsMuted,
         newsInAppEnabled: userPreferences.newsInAppEnabled,
         inAppNotificationsEnabled: userPreferences.inAppNotificationsEnabled,
+        newsEmailEnabled: userPreferences.newsEmailEnabled,
+        newsSmsEnabled: userPreferences.newsSmsEnabled,
         newsDigestFrequency: userPreferences.newsDigestFrequency,
       })
       .from(users)
@@ -554,6 +576,9 @@ async function notifyUsersAboutNewsItem(item: {
         id: users.id,
         roles: users.roles,
         active: users.active,
+        name: users.name,
+        email: users.email,
+        phone: users.phone,
         inAppNotificationsEnabled: userPreferences.inAppNotificationsEnabled,
       })
       .from(users)
@@ -563,6 +588,8 @@ async function notifyUsersAboutNewsItem(item: {
           ...row,
           newsNotificationsMuted: false,
           newsInAppEnabled: true,
+          newsEmailEnabled: true,
+          newsSmsEnabled: false,
           newsDigestFrequency: 'important_only',
         }))
       )
@@ -571,34 +598,52 @@ async function notifyUsersAboutNewsItem(item: {
   const eligibleUsers = recipients.filter((user) => {
     if (!user.active) return false
     if (user.newsNotificationsMuted ?? false) return false
-    if ((user.newsInAppEnabled ?? true) === false) return false
-    if ((user.inAppNotificationsEnabled ?? true) === false) return false
-    if ((user.newsDigestFrequency ?? 'important_only') === 'weekly_digest') return false
-    if ((user.newsDigestFrequency ?? 'important_only') === 'daily_digest') return false
-    return item.roleTargets.some((role) => user.roles.includes(role))
+    if (!shouldSendImmediateNews(user.newsDigestFrequency, item)) return false
+    return userMatchesAnyAudience(user.roles, item.roleTargets)
   })
 
   await Promise.allSettled(
-    eligibleUsers.map((user) =>
-      createUserNotification({
-        userId: user.id,
-        kind: 'industry_news',
-        title: item.title,
-        body: item.summary,
-        href: item.roleTargets.includes('admin')
-          ? '/admin/news'
-          : item.roleTargets.includes('sales')
-            ? '/sales/news'
-            : item.roleTargets.includes('staff')
-              ? '/staff/news'
-              : item.roleTargets.includes('taster')
-                ? '/taster/news'
-                : item.roleTargets.includes('driver')
-              ? '/driver/news'
-              : '/customer/news',
-        imageUrl: resolveThumbnailUrl(item.thumbnailUrl, item.articleUrl),
-      })
-    )
+    eligibleUsers.map(async (user) => {
+      const matchedAudience = pickAudienceForUser(user.roles, item.roleTargets)
+      const href = audienceHref[matchedAudience]
+      const imageUrl = resolveThumbnailUrl(item.thumbnailUrl, item.articleUrl)
+      const tasks: Promise<unknown>[] = []
+
+      if ((user.newsInAppEnabled ?? true) !== false && (user.inAppNotificationsEnabled ?? true) !== false) {
+        tasks.push(createUserNotification({
+          userId: user.id,
+          kind: 'industry_news',
+          title: item.title,
+          body: item.summary,
+          href,
+          imageUrl,
+        }))
+      }
+
+      if ((user.newsEmailEnabled ?? true) !== false && user.email) {
+        tasks.push(sendIndustryNewsAlertEmail({
+          to: user.email,
+          recipientName: user.name,
+          audienceLabel: audienceLabels[matchedAudience],
+          title: item.title,
+          summary: item.summary,
+          whyItMatters: item.whyItMatters,
+          articleUrl: item.articleUrl,
+          imageUrl,
+        }))
+      }
+
+      if ((user.newsSmsEnabled ?? false) && user.phone) {
+        tasks.push(sendSms({
+          to: user.phone,
+          body: buildIndustryNewsSmsBody(item),
+          userId: user.id,
+          contactName: user.name,
+        }))
+      }
+
+      await Promise.allSettled(tasks)
+    })
   )
 }
 
@@ -716,6 +761,7 @@ export async function syncIndustryNews(force = false) {
               thumbnailUrl: storedThumbnailUrl,
               roleTargets: scoring.roleTargets,
               priority: scoring.priority,
+              whyItMatters: scoring.whyItMatters,
               isWisherRelevant: scoring.isWisherRelevant,
               isAHAWCRelevant: scoring.isAHAWCRelevant,
               isMarylandRelevant: scoring.isMarylandRelevant,
@@ -767,6 +813,65 @@ async function syncIfStale() {
 
 function priorityValue(priority: string) {
   return priority === 'high' ? 3 : priority === 'medium' ? 2 : 1
+}
+
+function userMatchesAudience(roles: string[], audience: IndustryNewsAudience) {
+  if (audience === 'sales') return roles.includes('sales_rep') || roles.includes('sales_manager') || roles.includes('admin')
+  if (audience === 'admin') return roles.includes('admin')
+  if (audience === 'staff') return roles.includes('staff') || roles.includes('admin')
+  if (audience === 'taster') return roles.includes('taster') || roles.includes('admin')
+  if (audience === 'driver') return roles.includes('driver') || roles.includes('admin')
+  if (audience === 'customer') return roles.includes('customer') || roles.includes('admin')
+  return false
+}
+
+function userMatchesAnyAudience(roles: string[], audiences: IndustryNewsAudience[]) {
+  return audiences.some((audience) => userMatchesAudience(roles, audience))
+}
+
+function getPrimaryAudienceForRoles(roles: string[]): IndustryNewsAudience {
+  if (roles.includes('admin')) return 'admin'
+  if (roles.includes('staff')) return 'staff'
+  if (roles.includes('sales_manager') || roles.includes('sales_rep')) return 'sales'
+  if (roles.includes('taster')) return 'taster'
+  if (roles.includes('driver')) return 'driver'
+  return 'customer'
+}
+
+function pickAudienceForUser(roles: string[], audiences: IndustryNewsAudience[]) {
+  return audiences.find((audience) => userMatchesAudience(roles, audience)) ?? getPrimaryAudienceForRoles(roles)
+}
+
+function shouldSendImmediateNews(
+  preference: string | null | undefined,
+  item: {
+    priority: 'high' | 'medium' | 'low'
+    isWisherRelevant: boolean
+    isAHAWCRelevant: boolean
+  }
+) {
+  const mode = preference ?? 'important_only'
+  if (mode === 'daily_digest' || mode === 'weekly_digest') return false
+  if (mode === 'urgent_only') return item.priority === 'high'
+  return item.priority === 'high' || item.isWisherRelevant || item.isAHAWCRelevant
+}
+
+function buildIndustryNewsSmsBody(item: {
+  title: string
+  whyItMatters: string
+  articleUrl: string
+}) {
+  return `Industry News: ${item.title}\nWhy it matters: ${item.whyItMatters}\n${item.articleUrl}`
+}
+
+function buildIndustryNewsDigestSmsBody(input: {
+  frequencyLabel: 'Daily' | 'Weekly'
+  count: number
+  titles: string[]
+  portalHref: string
+}) {
+  const preview = input.titles.slice(0, 3).map((title, index) => `${index + 1}. ${title}`).join('\n')
+  return `${input.frequencyLabel} Industry News Digest (${input.count})\n${preview}\n${input.portalHref}`
 }
 
 function toClientItem(row: typeof industryNewsItems.$inferSelect): IndustryNewsItem {
@@ -833,6 +938,139 @@ export function getIndustryNewsNotificationPreview(item: IndustryNewsItem, audie
     href: audienceHref[audience],
     imageUrl: item.thumbnailUrl,
   }
+}
+
+export async function sendIndustryNewsDigests(frequency: 'daily_digest' | 'weekly_digest') {
+  await syncIfStale()
+
+  const now = new Date()
+  const cutoff = new Date(now)
+  cutoff.setDate(cutoff.getDate() - (frequency === 'weekly_digest' ? 7 : 1))
+
+  let recipients: Array<{
+    id: string
+    roles: string[]
+    active: boolean
+    name: string
+    email: string
+    phone: string | null
+    newsNotificationsMuted: boolean | null
+    newsInAppEnabled: boolean | null
+    inAppNotificationsEnabled: boolean | null
+    newsEmailEnabled: boolean | null
+    newsSmsEnabled: boolean | null
+    newsDigestFrequency: string | null
+  }>
+
+  try {
+    recipients = await db
+      .select({
+        id: users.id,
+        roles: users.roles,
+        active: users.active,
+        name: users.name,
+        email: users.email,
+        phone: users.phone,
+        newsNotificationsMuted: userPreferences.newsNotificationsMuted,
+        newsInAppEnabled: userPreferences.newsInAppEnabled,
+        inAppNotificationsEnabled: userPreferences.inAppNotificationsEnabled,
+        newsEmailEnabled: userPreferences.newsEmailEnabled,
+        newsSmsEnabled: userPreferences.newsSmsEnabled,
+        newsDigestFrequency: userPreferences.newsDigestFrequency,
+      })
+      .from(users)
+      .leftJoin(userPreferences, eq(users.id, userPreferences.userId))
+  } catch (error) {
+    if (!isMissingNewsPreferenceColumns(error)) throw error
+    return { sent: 0, failed: 0, total: 0 }
+  }
+
+  const rows = await db
+    .select()
+    .from(industryNewsItems)
+    .orderBy(desc(industryNewsItems.publishedAt), desc(industryNewsItems.createdAt))
+    .limit(200)
+
+  const recentStories = rows
+    .filter((row) => {
+      const publishedAt = row.publishedAt ?? row.createdAt
+      return publishedAt.getTime() >= cutoff.getTime()
+    })
+    .map(toClientItem)
+
+  let sent = 0
+  let failed = 0
+
+  for (const user of recipients) {
+    if (!user.active) continue
+    if ((user.newsNotificationsMuted ?? false) === true) continue
+    if ((user.newsDigestFrequency ?? 'important_only') !== frequency) continue
+
+    const audience = getPrimaryAudienceForRoles(user.roles)
+    const stories = recentStories
+      .filter((story) => userMatchesAnyAudience(user.roles, story.roleTargets))
+      .slice(0, 5)
+
+    if (!stories.length) continue
+
+    const tasks: Promise<unknown>[] = []
+    const portalHref = audienceHref[audience]
+    const frequencyLabel = frequency === 'weekly_digest' ? 'Weekly' : 'Daily'
+
+    if ((user.newsEmailEnabled ?? true) !== false && user.email) {
+      tasks.push(sendIndustryNewsDigestEmail({
+        to: user.email,
+        recipientName: user.name,
+        audienceLabel: audienceLabels[audience],
+        frequencyLabel,
+        stories: stories.map((story) => ({
+          title: story.title,
+          summary: story.summary,
+          whyItMatters: story.whyItMatters,
+          articleUrl: story.articleUrl,
+          publishedAt: story.publishedAt,
+          sourceName: story.sourceName,
+        })),
+        portalPath: portalHref,
+      }))
+    }
+
+    if ((user.newsSmsEnabled ?? false) && user.phone) {
+      tasks.push(sendSms({
+        to: user.phone,
+        body: buildIndustryNewsDigestSmsBody({
+          frequencyLabel,
+          count: stories.length,
+          titles: stories.map((story) => story.title),
+          portalHref: `${process.env.NEXTAUTH_URL ?? 'https://portal.ahawc.com'}${portalHref}`,
+        }),
+        userId: user.id,
+        contactName: user.name,
+      }))
+    }
+
+    if ((user.newsInAppEnabled ?? true) !== false && (user.inAppNotificationsEnabled ?? true) !== false) {
+      tasks.push(createUserNotification({
+        userId: user.id,
+        kind: 'industry_news',
+        title: `${frequencyLabel} industry news digest`,
+        body: `${stories.length} ${stories.length === 1 ? 'story is' : 'stories are'} ready for your ${audienceLabels[audience].toLowerCase()} feed.`,
+        href: portalHref,
+        imageUrl: stories[0]?.thumbnailUrl,
+      }))
+    }
+
+    if (!tasks.length) continue
+
+    const results = await Promise.allSettled(tasks)
+    if (results.some((result) => result.status === 'rejected')) {
+      failed += 1
+    } else {
+      sent += 1
+    }
+  }
+
+  return { sent, failed, total: recipients.length }
 }
 
 export function getIndustryNewsEmailCardHtml(item: IndustryNewsItem) {

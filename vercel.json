@@ -32,6 +32,10 @@
     {
       "path": "/api/cron/industry-news",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/industry-news-digest",
+      "schedule": "30 12 * * *"
     }
   ],
   "headers": [

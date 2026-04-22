@@ -148,9 +148,9 @@ export async function IndustryNewsFeedPage({ audience }: { audience: IndustryNew
                 </p>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="font-medium text-slate-900">Next phase</p>
+                <p className="font-medium text-slate-900">Delivery layer</p>
                 <p className="mt-1 text-xs text-slate-500">
-                  Mute controls, digests, and role-targeted notification delivery can layer onto this feed without changing the page structure.
+                  Immediate alerts now respect role targeting and user channel preferences, while daily and weekly digests can summarize new stories without changing the feed layout.
                 </p>
               </div>
             </CardContent>

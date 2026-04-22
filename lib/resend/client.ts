@@ -850,6 +850,101 @@ export async function sendSalesRepDigestEmail({
   })
 }
 
+export async function sendIndustryNewsAlertEmail({
+  to,
+  recipientName,
+  audienceLabel,
+  title,
+  summary,
+  whyItMatters,
+  articleUrl,
+  imageUrl,
+}: {
+  to: string
+  recipientName?: string | null
+  audienceLabel: string
+  title: string
+  summary: string
+  whyItMatters: string
+  articleUrl: string
+  imageUrl?: string | null
+}) {
+  const imageBlock = imageUrl
+    ? `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(title)}" style="display:block;width:100%;height:auto;max-height:220px;object-fit:cover;border-radius:10px;margin-bottom:16px;" />`
+    : ''
+
+  const html = renderEmailCard({
+    eyebrow: 'Industry News',
+    title: escapeHtml(title),
+    intro: `${escapeHtml(audienceLabel)} update from the portal news feed.`,
+    body: `
+      ${imageBlock}
+      <p style="margin: 0 0 12px;">${escapeHtml(summary)}</p>
+      <p style="margin: 0;"><strong>Why it matters:</strong> ${escapeHtml(whyItMatters)}</p>
+    `,
+    ctaLabel: 'Read story',
+    ctaHref: articleUrl,
+  })
+
+  await sendEmail({
+    to,
+    recipientName,
+    subject: `Industry News: ${title}`,
+    html,
+  })
+}
+
+export async function sendIndustryNewsDigestEmail({
+  to,
+  recipientName,
+  audienceLabel,
+  frequencyLabel,
+  stories,
+  portalPath,
+}: {
+  to: string
+  recipientName?: string | null
+  audienceLabel: string
+  frequencyLabel: 'Daily' | 'Weekly'
+  stories: Array<{
+    title: string
+    summary: string
+    whyItMatters: string
+    articleUrl: string
+    publishedAt: string
+    sourceName: string
+  }>
+  portalPath: string
+}) {
+  const body = stories.length
+    ? stories.map((story) => `
+        <div style="padding: 0 0 16px; margin: 0 0 16px; border-bottom: 1px solid #e2e8f0;">
+          <p style="margin: 0 0 6px; font-size: 12px; color: #64748b;">${escapeHtml(story.sourceName)} · ${escapeHtml(story.publishedAt)}</p>
+          <p style="margin: 0 0 8px; font-size: 18px; font-weight: 700;">${escapeHtml(story.title)}</p>
+          <p style="margin: 0 0 10px;">${escapeHtml(story.summary)}</p>
+          <p style="margin: 0 0 10px;"><strong>Why it matters:</strong> ${escapeHtml(story.whyItMatters)}</p>
+          <p style="margin: 0;"><a href="${escapeHtml(story.articleUrl)}">Open article</a></p>
+        </div>
+      `).join('')
+    : '<p style="margin: 0;">No new industry stories matched your role during this window.</p>'
+
+  const html = renderEmailCard({
+    eyebrow: 'Industry News Digest',
+    title: `${frequencyLabel} ${escapeHtml(audienceLabel)} briefing`,
+    intro: `Your ${frequencyLabel.toLowerCase()} industry news digest from the AHAWC portal.`,
+    body,
+    ctaLabel: 'Open news feed',
+    ctaHref: portalUrl(portalPath),
+  })
+
+  await sendEmail({
+    to,
+    recipientName,
+    subject: `${frequencyLabel} Industry News Digest`,
+    html,
+  })
+}
+
 export async function sendNewOrderStaffNotification({
   to,
   companyName,
