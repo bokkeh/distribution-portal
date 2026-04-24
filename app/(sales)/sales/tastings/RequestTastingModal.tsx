@@ -9,10 +9,21 @@ interface Account {
   companyName: string
 }
 
-export function RequestTastingModal({ accounts }: { accounts: Account[] }) {
-  const [open, setOpen] = useState(false)
-  const [accountId, setAccountId] = useState('')
-  const [date, setDate] = useState('')
+export function RequestTastingModal({
+  accounts,
+  initialAccountId,
+  initialDate,
+}: {
+  accounts: Account[]
+  initialAccountId?: string
+  initialDate?: string
+}) {
+  const normalizedInitialAccountId = initialAccountId && accounts.some((account) => account.id === initialAccountId)
+    ? initialAccountId
+    : ''
+  const [open, setOpen] = useState(Boolean(normalizedInitialAccountId))
+  const [accountId, setAccountId] = useState(normalizedInitialAccountId)
+  const [date, setDate] = useState(initialDate ?? '')
   const [time, setTime] = useState('14:00')
   const [notes, setNotes] = useState('')
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle')
@@ -20,8 +31,8 @@ export function RequestTastingModal({ accounts }: { accounts: Account[] }) {
   const [isPending, startTransition] = useTransition()
 
   function reset() {
-    setAccountId('')
-    setDate('')
+    setAccountId(normalizedInitialAccountId)
+    setDate(initialDate ?? '')
     setTime('14:00')
     setNotes('')
     setStatus('idle')

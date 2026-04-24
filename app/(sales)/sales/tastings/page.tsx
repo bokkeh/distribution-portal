@@ -1,6 +1,6 @@
 import { requireRole } from '@/lib/auth/session'
 import { db } from '@/db'
-import { salesMembers, customerAccounts, tastings, invoices, orders } from '@/db/schema'
+import { salesMembers, customerAccounts, tastings, orders } from '@/db/schema'
 import { eq, and, desc, sql, gte, lt } from 'drizzle-orm'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -16,8 +16,13 @@ function fmtDate(d: Date | string) {
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(d))
 }
 
-export default async function SalesTastingsPage() {
+export default async function SalesTastingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ account?: string; date?: string }>
+}) {
   const session = await requireRole('sales_rep', 'sales_manager', 'admin')
+  const params = await searchParams
 
   const [member] = await db
     .select()
@@ -145,7 +150,6 @@ export default async function SalesTastingsPage() {
   roiRows.sort((a, b) => b.lift - a.lift)
 
   const totalTastings = myTastings.length
-  const completedTastings = myTastings.filter(t => t.status === 'completed').length
   const totalLift = roiRows.reduce((s, r) => s + r.lift, 0)
   const avgLiftPct = roiRows.length > 0
     ? roiRows.reduce((s, r) => s + r.liftPct, 0) / roiRows.length
@@ -159,7 +163,11 @@ export default async function SalesTastingsPage() {
           <h1 className="text-2xl font-bold text-slate-900">Tasting ROI</h1>
           <p className="text-slate-500 mt-1">Revenue impact from in-store tastings (60-day window)</p>
         </div>
-        <RequestTastingModal accounts={myAccounts.map(a => ({ id: a.id, companyName: a.companyName }))} />
+        <RequestTastingModal
+          accounts={myAccounts.map(a => ({ id: a.id, companyName: a.companyName }))}
+          initialAccountId={params.account}
+          initialDate={params.date}
+        />
       </div>
 
       {/* KPI strip */}

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
-import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, isBefore, isSameDay, isSameMonth, startOfMonth, startOfWeek } from 'date-fns'
+import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameDay, isSameMonth, startOfMonth, startOfWeek } from 'date-fns'
 import { CalendarDays, Clock3, MapPin, Store } from 'lucide-react'
 import { createTasting, deleteTasting, reassignTasting, updateTastingStatus } from '@/actions/tastings'
 import { Badge } from '@/components/ui/badge'
@@ -45,6 +45,8 @@ interface Props {
   tasters: Array<{ id: string; name: string; phone: string | null; avatarUrl?: string | null }>
   success?: string
   error?: string
+  initialAccountId?: string
+  initialDate?: string
 }
 
 const statusVariant: Record<string, 'secondary' | 'success' | 'warning' | 'destructive' | 'info'> = {
@@ -68,11 +70,32 @@ function isCalendarVisibleStatus(status: string) {
   return status !== 'cancelled' && status !== 'declined'
 }
 
-export function TastingsPlanner({ mode, tastings, accounts, tasters, success, error }: Props) {
-  const [visibleMonth, setVisibleMonth] = useState(new Date())
-  const [selectedDate, setSelectedDate] = useState(new Date())
-  const [selectedAccountId, setSelectedAccountId] = useState('')
-  const [dateInput, setDateInput] = useState(format(new Date(), 'yyyy-MM-dd'))
+export function TastingsPlanner({
+  mode,
+  tastings,
+  accounts,
+  tasters,
+  success,
+  error,
+  initialAccountId,
+  initialDate,
+}: Props) {
+  const initialSelectedDate = useMemo(() => {
+    if (!initialDate) return new Date()
+    const parsed = new Date(`${initialDate}T12:00:00`)
+    return Number.isNaN(parsed.getTime()) ? new Date() : parsed
+  }, [initialDate])
+  const [visibleMonth, setVisibleMonth] = useState(initialSelectedDate)
+  const [selectedDate, setSelectedDate] = useState(initialSelectedDate)
+  const [selectedAccountId, setSelectedAccountId] = useState(() =>
+    initialAccountId && accounts.some((account) => account.id === initialAccountId) ? initialAccountId : ''
+  )
+  const [now] = useState(() => Date.now())
+  const [dateInput, setDateInput] = useState(() =>
+    initialDate && !Number.isNaN(new Date(`${initialDate}T12:00:00`).getTime())
+      ? initialDate
+      : format(initialSelectedDate, 'yyyy-MM-dd')
+  )
   const [activeTab, setActiveTab] = useState<'upcoming' | 'previous'>('upcoming')
   const [previousFrom, setPreviousFrom] = useState('')
   const [previousTo, setPreviousTo] = useState('')
@@ -82,9 +105,14 @@ export function TastingsPlanner({ mode, tastings, accounts, tasters, success, er
     return eachDayOfInterval({ start, end })
   }, [visibleMonth])
 
-  const calendarVisibleTastings = tastings.filter((tasting) => isCalendarVisibleStatus(tasting.status))
-  const dayTastings = calendarVisibleTastings.filter(tasting => isSameDay(new Date(tasting.scheduledAt), selectedDate))
-  const now = Date.now()
+  const calendarVisibleTastings = useMemo(
+    () => tastings.filter((tasting) => isCalendarVisibleStatus(tasting.status)),
+    [tastings],
+  )
+  const dayTastings = useMemo(
+    () => calendarVisibleTastings.filter((tasting) => isSameDay(new Date(tasting.scheduledAt), selectedDate)),
+    [calendarVisibleTastings, selectedDate],
+  )
   const upcomingTastings = useMemo(
     () =>
       calendarVisibleTastings

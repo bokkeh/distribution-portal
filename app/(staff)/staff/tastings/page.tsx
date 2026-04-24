@@ -21,10 +21,18 @@ function isMissingTastingsTable(error: unknown) {
 export default async function StaffTastingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ success?: string; error?: string }>
+  searchParams: Promise<{ success?: string; error?: string; account?: string; date?: string }>
 }) {
   await requireFeature('tastings', 'admin', 'staff')
   const params = await searchParams
+  let data:
+    | {
+        accounts: Array<{ id: string; companyName: string; address: string | null; city: string | null; state: string | null; zip: string | null }>
+        activeTasters: Array<{ id: string; name: string; phone: string | null; avatarUrl?: string | null }>
+        tastings: Awaited<ReturnType<typeof getTastingsForView>>
+        availability: Awaited<ReturnType<typeof getAvailabilityForUsers>>
+      }
+    | null = null
 
   try {
     const [accounts, tasters, tastings] = await Promise.all([
@@ -48,39 +56,17 @@ export default async function StaffTastingsPage({
     ])
     const activeTasters = tasters.filter(user => user.active && user.roles.includes('taster'))
     const availability = await getAvailabilityForUsers(activeTasters.map((user) => user.id))
-
-    return (
-      <div className="p-4 sm:p-8 space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">Tastings</h1>
-            <p className="text-muted-foreground mt-1">Coordinate upcoming tastings and keep tasters informed by text.</p>
-          </div>
-          <Link href="/staff/tastings/reports">
-            <Button variant="outline">View Reports</Button>
-          </Link>
-        </div>
-        <TasterTeamPanel
-          mode="staff"
-          tastings={tastings}
-          tasters={activeTasters.map(user => ({
-            id: user.id,
-            name: user.name,
-            phone: user.phone,
-            avatarUrl: user.avatarUrl,
-          }))}
-          availability={availability}
-        />
-        <TastingsPlanner
-          mode="staff"
-          tastings={tastings}
-          accounts={accounts}
-          tasters={activeTasters.map(user => ({ id: user.id, name: user.name, phone: user.phone, avatarUrl: user.avatarUrl }))}
-          success={params.success}
-          error={params.error}
-        />
-      </div>
-    )
+    data = {
+      accounts,
+      activeTasters: activeTasters.map(user => ({
+        id: user.id,
+        name: user.name,
+        phone: user.phone,
+        avatarUrl: user.avatarUrl,
+      })),
+      tastings,
+      availability,
+    }
   } catch (error) {
     if (!isMissingTastingsTable(error)) throw error
 
@@ -93,4 +79,36 @@ export default async function StaffTastingsPage({
       </div>
     )
   }
+
+  if (!data) return null
+
+  return (
+    <div className="p-4 sm:p-8 space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Tastings</h1>
+          <p className="text-muted-foreground mt-1">Coordinate upcoming tastings and keep tasters informed by text.</p>
+        </div>
+        <Link href="/staff/tastings/reports">
+          <Button variant="outline">View Reports</Button>
+        </Link>
+      </div>
+      <TasterTeamPanel
+        mode="staff"
+        tastings={data.tastings}
+        tasters={data.activeTasters}
+        availability={data.availability}
+      />
+      <TastingsPlanner
+        mode="staff"
+        tastings={data.tastings}
+        accounts={data.accounts}
+        tasters={data.activeTasters}
+        success={params.success}
+        error={params.error}
+        initialAccountId={params.account}
+        initialDate={params.date}
+      />
+    </div>
+  )
 }
