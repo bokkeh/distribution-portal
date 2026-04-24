@@ -54,7 +54,7 @@ export default async function AdminTastingsPage({
       }).from(users).orderBy(users.name),
       getTastingsForView({}),
     ])
-    const activeTasters = tasters.filter(user => user.active && user.roles.includes('taster'))
+    const activeTasters = tasters.filter((user) => user.active && (user.roles ?? []).includes('taster'))
     const availability = await getAvailabilityForUsers(activeTasters.map((user) => user.id))
     data = {
       accounts,

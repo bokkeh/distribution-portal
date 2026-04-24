@@ -344,7 +344,7 @@ export async function createTasting(formData: FormData) {
     .where(eq(users.id, assignedUserId))
     .limit(1)
 
-  if (!assignedUser || !assignedUser.active || !assignedUser.roles.includes('taster')) {
+  if (!assignedUser || !assignedUser.active || !(assignedUser.roles ?? []).includes('taster')) {
     redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('Choose a valid taster account.')}`)
   }
 
@@ -735,7 +735,7 @@ export async function reassignTasting(formData: FormData) {
     .where(eq(users.id, nextAssignedUserId))
     .limit(1)
 
-  if (!nextTaster || !nextTaster.active || !nextTaster.roles.includes('taster')) {
+  if (!nextTaster || !nextTaster.active || !(nextTaster.roles ?? []).includes('taster')) {
     redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('Choose a valid taster account.')}`)
   }
 
