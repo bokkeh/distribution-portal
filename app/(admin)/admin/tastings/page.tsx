@@ -9,12 +9,18 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 
 function isMissingTastingsTable(error: unknown) {
+  const code = (error as { code?: string; cause?: { code?: string } } | null)?.code
+    ?? (error as { cause?: { code?: string } } | null)?.cause?.code
   const message = (error instanceof Error ? error.message : String(error)).toLowerCase()
   return (
+    code === '42p01' ||
+    code === '42703' ||
     (message.includes('tastings') && message.includes('does not exist')) ||
     (message.includes('tasting_reports') && message.includes('does not exist')) ||
     (message.includes('taster_invoices') && message.includes('does not exist')) ||
-    (message.includes('taster_availability') && message.includes('does not exist'))
+    (message.includes('taster_availability') && message.includes('does not exist')) ||
+    message.includes('relation') ||
+    message.includes('column')
   )
 }
 

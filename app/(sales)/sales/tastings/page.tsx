@@ -16,6 +16,21 @@ function fmtDate(d: Date | string) {
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(d))
 }
 
+function isMissingTastingsSchema(error: unknown) {
+  const code = (error as { code?: string; cause?: { code?: string } } | null)?.code
+    ?? (error as { cause?: { code?: string } } | null)?.cause?.code
+  const message = (error instanceof Error ? error.message : String(error)).toLowerCase()
+
+  return (
+    code === '42p01' ||
+    code === '42703' ||
+    (message.includes('tastings') && message.includes('does not exist')) ||
+    (message.includes('tasting_reports') && message.includes('does not exist')) ||
+    message.includes('relation') ||
+    message.includes('column')
+  )
+}
+
 export default async function SalesTastingsPage({
   searchParams,
 }: {
@@ -23,152 +38,149 @@ export default async function SalesTastingsPage({
 }) {
   const session = await requireRole('sales_rep', 'sales_manager', 'admin')
   const params = await searchParams
-
-  const [member] = await db
-    .select()
-    .from(salesMembers)
-    .where(eq(salesMembers.userId, session.user.id))
-    .limit(1)
-
   const isAdmin = session.user.roles?.includes('admin')
 
-  if (!member) {
-    return (
-      <div className="py-20 text-center text-slate-500">
-        <AlertCircle className="w-10 h-10 mx-auto mb-3 text-amber-400" />
-        <p className="font-medium">No sales member profile found.</p>
-        {isAdmin && (
-          <p className="text-sm mt-1">Use <strong>View as User</strong> on a rep&apos;s profile to see their tasting ROI.</p>
-        )}
-      </div>
-    )
-  }
+  try {
+    const [member] = await db
+      .select()
+      .from(salesMembers)
+      .where(eq(salesMembers.userId, session.user.id))
+      .limit(1)
 
-  // Accounts assigned to this rep
-  const myAccounts = await db
-    .select({ id: customerAccounts.id, companyName: customerAccounts.companyName })
-    .from(customerAccounts)
-    .where(eq(customerAccounts.assignedSalesRepId, member.id))
+    if (!member) {
+      return (
+        <div className="py-20 text-center text-slate-500">
+          <AlertCircle className="w-10 h-10 mx-auto mb-3 text-amber-400" />
+          <p className="font-medium">No sales member profile found.</p>
+          {isAdmin && (
+            <p className="text-sm mt-1">Use <strong>View as User</strong> on a rep&apos;s profile to see their tasting ROI.</p>
+          )}
+        </div>
+      )
+    }
 
-  const accountIds = myAccounts.map(a => a.id)
-  const accountNameById = new Map(myAccounts.map(a => [a.id, a.companyName]))
+    const myAccounts = await db
+      .select({ id: customerAccounts.id, companyName: customerAccounts.companyName })
+      .from(customerAccounts)
+      .where(eq(customerAccounts.assignedSalesRepId, member.id))
 
-  if (accountIds.length === 0) {
+    const accountIds = myAccounts.map(a => a.id)
+    const accountNameById = new Map(myAccounts.map(a => [a.id, a.companyName]))
+
+    if (accountIds.length === 0) {
+      return (
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Tasting ROI</h1>
+            <p className="text-slate-500 mt-1">Revenue impact from in-store tastings</p>
+          </div>
+          <Card>
+            <CardContent className="py-12 text-center text-slate-400">
+              <Wine className="w-10 h-10 mx-auto mb-3 opacity-30" />
+              <p>No accounts assigned yet.</p>
+            </CardContent>
+          </Card>
+        </div>
+      )
+    }
+
+    const myTastings = await db
+      .select({
+        id: tastings.id,
+        customerId: tastings.customerId,
+        eventName: tastings.eventName,
+        scheduledAt: tastings.scheduledAt,
+        status: tastings.status,
+      })
+      .from(tastings)
+      .where(
+        sql`${tastings.customerId} = ANY(ARRAY[${sql.raw(accountIds.map(id => `'${id}'`).join(','))}]::uuid[])`
+      )
+      .orderBy(desc(tastings.scheduledAt))
+
+    const accountsWithTastings = [...new Set(myTastings.map(t => t.customerId))]
+
+    type ROIRow = {
+      accountId: string
+      companyName: string
+      tastingCount: number
+      lastTastingDate: Date
+      revenueBefore: number
+      revenueAfter: number
+      lift: number
+      liftPct: number
+    }
+
+    const roiRows: ROIRow[] = []
+
+    for (const accountId of accountsWithTastings) {
+      const accountTastings = myTastings.filter(t => t.customerId === accountId)
+      const lastTasting = accountTastings[0]
+      if (!lastTasting) continue
+
+      const tastingDate = new Date(lastTasting.scheduledAt)
+      const before60Start = new Date(tastingDate)
+      before60Start.setDate(before60Start.getDate() - 60)
+      const after60End = new Date(tastingDate)
+      after60End.setDate(after60End.getDate() + 60)
+
+      const [beforeRow] = await db
+        .select({ rev: sql<number>`coalesce(sum(${orders.total}::numeric), 0)::float`.as('rev') })
+        .from(orders)
+        .where(and(
+          eq(orders.customerId, accountId),
+          gte(orders.createdAt, before60Start),
+          lt(orders.createdAt, tastingDate),
+        ))
+
+      const [afterRow] = await db
+        .select({ rev: sql<number>`coalesce(sum(${orders.total}::numeric), 0)::float`.as('rev') })
+        .from(orders)
+        .where(and(
+          eq(orders.customerId, accountId),
+          gte(orders.createdAt, tastingDate),
+          lt(orders.createdAt, after60End),
+        ))
+
+      const revBefore = beforeRow?.rev ?? 0
+      const revAfter = afterRow?.rev ?? 0
+      const lift = revAfter - revBefore
+      const liftPct = revBefore > 0 ? (lift / revBefore) * 100 : revAfter > 0 ? 100 : 0
+
+      roiRows.push({
+        accountId,
+        companyName: accountNameById.get(accountId) ?? accountId,
+        tastingCount: accountTastings.length,
+        lastTastingDate: tastingDate,
+        revenueBefore: revBefore,
+        revenueAfter: revAfter,
+        lift,
+        liftPct,
+      })
+    }
+
+    roiRows.sort((a, b) => b.lift - a.lift)
+
+    const totalTastings = myTastings.length
+    const totalLift = roiRows.reduce((s, r) => s + r.lift, 0)
+    const avgLiftPct = roiRows.length > 0
+      ? roiRows.reduce((s, r) => s + r.liftPct, 0) / roiRows.length
+      : 0
+    const positiveImpact = roiRows.filter(r => r.lift > 0).length
+
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Tasting ROI</h1>
-          <p className="text-slate-500 mt-1">Revenue impact from in-store tastings</p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Tasting ROI</h1>
+            <p className="text-slate-500 mt-1">Revenue impact from in-store tastings (60-day window)</p>
+          </div>
+          <RequestTastingModal
+            accounts={myAccounts.map(a => ({ id: a.id, companyName: a.companyName }))}
+            initialAccountId={params.account}
+            initialDate={params.date}
+          />
         </div>
-        <Card>
-          <CardContent className="py-12 text-center text-slate-400">
-            <Wine className="w-10 h-10 mx-auto mb-3 opacity-30" />
-            <p>No accounts assigned yet.</p>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  // All completed tastings for my accounts
-  const myTastings = await db
-    .select({
-      id: tastings.id,
-      customerId: tastings.customerId,
-      eventName: tastings.eventName,
-      scheduledAt: tastings.scheduledAt,
-      status: tastings.status,
-    })
-    .from(tastings)
-    .where(
-      sql`${tastings.customerId} = ANY(ARRAY[${sql.raw(accountIds.map(id => `'${id}'`).join(','))}]::uuid[])`
-    )
-    .orderBy(desc(tastings.scheduledAt))
-
-  // Revenue per account in 60 days AFTER most recent tasting vs 60 days BEFORE
-  const accountsWithTastings = [...new Set(myTastings.map(t => t.customerId))]
-
-  type ROIRow = {
-    accountId: string
-    companyName: string
-    tastingCount: number
-    lastTastingDate: Date
-    revenueBefore: number
-    revenueAfter: number
-    lift: number
-    liftPct: number
-  }
-
-  const roiRows: ROIRow[] = []
-
-  for (const accountId of accountsWithTastings) {
-    const accountTastings = myTastings.filter(t => t.customerId === accountId)
-    const lastTasting = accountTastings[0]
-    if (!lastTasting) continue
-
-    const tastingDate = new Date(lastTasting.scheduledAt)
-    const before60Start = new Date(tastingDate)
-    before60Start.setDate(before60Start.getDate() - 60)
-    const after60End = new Date(tastingDate)
-    after60End.setDate(after60End.getDate() + 60)
-
-    const [beforeRow] = await db
-      .select({ rev: sql<number>`coalesce(sum(${orders.total}::numeric), 0)::float`.as('rev') })
-      .from(orders)
-      .where(and(
-        eq(orders.customerId, accountId),
-        gte(orders.createdAt, before60Start),
-        lt(orders.createdAt, tastingDate),
-      ))
-
-    const [afterRow] = await db
-      .select({ rev: sql<number>`coalesce(sum(${orders.total}::numeric), 0)::float`.as('rev') })
-      .from(orders)
-      .where(and(
-        eq(orders.customerId, accountId),
-        gte(orders.createdAt, tastingDate),
-        lt(orders.createdAt, after60End),
-      ))
-
-    const revBefore = beforeRow?.rev ?? 0
-    const revAfter = afterRow?.rev ?? 0
-    const lift = revAfter - revBefore
-    const liftPct = revBefore > 0 ? (lift / revBefore) * 100 : revAfter > 0 ? 100 : 0
-
-    roiRows.push({
-      accountId,
-      companyName: accountNameById.get(accountId) ?? accountId,
-      tastingCount: accountTastings.length,
-      lastTastingDate: tastingDate,
-      revenueBefore: revBefore,
-      revenueAfter: revAfter,
-      lift,
-      liftPct,
-    })
-  }
-
-  roiRows.sort((a, b) => b.lift - a.lift)
-
-  const totalTastings = myTastings.length
-  const totalLift = roiRows.reduce((s, r) => s + r.lift, 0)
-  const avgLiftPct = roiRows.length > 0
-    ? roiRows.reduce((s, r) => s + r.liftPct, 0) / roiRows.length
-    : 0
-  const positiveImpact = roiRows.filter(r => r.lift > 0).length
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Tasting ROI</h1>
-          <p className="text-slate-500 mt-1">Revenue impact from in-store tastings (60-day window)</p>
-        </div>
-        <RequestTastingModal
-          accounts={myAccounts.map(a => ({ id: a.id, companyName: a.companyName }))}
-          initialAccountId={params.account}
-          initialDate={params.date}
-        />
-      </div>
 
       {/* KPI strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -316,6 +328,23 @@ export default async function SalesTastingsPage({
           </CardContent>
         </Card>
       )}
-    </div>
-  )
+      </div>
+    )
+  } catch (error) {
+    if (!isMissingTastingsSchema(error)) throw error
+
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Tasting ROI</h1>
+          <p className="text-slate-500 mt-1">Revenue impact from in-store tastings (60-day window)</p>
+        </div>
+        <Card>
+          <CardContent className="py-8 text-sm text-amber-800">
+            The tasting tables are not in this database yet. Run `npm run db:migrate` before using tasting scheduling in production.
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 }
