@@ -424,7 +424,9 @@ export async function createTasting(formData: FormData) {
     title: 'Tasting scheduled',
     body: `${account.companyName} was assigned to ${assignedUser.name}.`,
   })
-  redirect(`${tastingRedirectPath(mode)}?success=${encodeURIComponent('Tasting assigned.')}`)
+  redirect(
+    `${tastingRedirectPath(mode)}?success=${encodeURIComponent('Tasting assigned.')}&account=${encodeURIComponent(account.id)}&date=${encodeURIComponent(date)}`,
+  )
 }
 
 export async function updateTastingStatus(formData: FormData) {

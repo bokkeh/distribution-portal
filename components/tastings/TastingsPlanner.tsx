@@ -70,6 +70,11 @@ function isCalendarVisibleStatus(status: string) {
   return status !== 'cancelled' && status !== 'declined'
 }
 
+function parseDateInputValue(dateValue: string) {
+  const parsed = new Date(`${dateValue}T12:00:00`)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
 export function TastingsPlanner({
   mode,
   tastings,
@@ -99,6 +104,14 @@ export function TastingsPlanner({
   const [activeTab, setActiveTab] = useState<'upcoming' | 'previous'>('upcoming')
   const [previousFrom, setPreviousFrom] = useState('')
   const [previousTo, setPreviousTo] = useState('')
+
+  function applySelectedDate(nextDateValue: string) {
+    setDateInput(nextDateValue)
+    const parsed = parseDateInputValue(nextDateValue)
+    if (!parsed) return
+    setSelectedDate(parsed)
+    setVisibleMonth(parsed)
+  }
   const calendarDays = useMemo(() => {
     const start = startOfWeek(startOfMonth(visibleMonth), { weekStartsOn: 0 })
     const end = endOfWeek(endOfMonth(visibleMonth), { weekStartsOn: 0 })
@@ -175,7 +188,7 @@ export function TastingsPlanner({
                   <button
                     key={day.toISOString()}
                     type="button"
-                    onClick={() => setSelectedDate(day)}
+                    onClick={() => applySelectedDate(format(day, 'yyyy-MM-dd'))}
                     className={cn(
                       'min-h-24 rounded-2xl border p-2 text-left transition-colors',
                       isSelected ? 'border-blue-400 bg-blue-50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300',
@@ -235,7 +248,7 @@ export function TastingsPlanner({
                   <TastingScheduleAssistant
                     accountId={selectedAccountId}
                     accountName={accounts.find(a => a.id === selectedAccountId)?.companyName ?? ''}
-                    onSelectSlot={(date) => setDateInput(date)}
+                    onSelectSlot={(date) => applySelectedDate(date)}
                   />
                 )}
 
@@ -254,7 +267,7 @@ export function TastingsPlanner({
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="date">Date</Label>
-                    <Input id="date" name="date" type="date" value={dateInput} onChange={e => setDateInput(e.target.value)} required />
+                    <Input id="date" name="date" type="date" value={dateInput} onChange={e => applySelectedDate(e.target.value)} required />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="time">Start Time (ET)</Label>
