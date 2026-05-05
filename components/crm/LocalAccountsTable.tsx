@@ -27,6 +27,8 @@ import type { PipelineStage } from '@/lib/deal-stages'
 import { PhoneSmsButton } from './PhoneSmsButton'
 import { DealStageSelect } from './DealStageSelect'
 
+const PAGE_SIZE = 200
+
 export interface AccountRow {
   id: string
   companyName: string
@@ -390,11 +392,16 @@ export function LocalAccountsTable({
   const [selectedColumns, setSelectedColumns] = useState<ColumnKey[]>(() => readStoredColumns(storageKey))
   const [searchQuery, setSearchQuery] = useState(() => readStoredView(filterStorageKey).searchQuery)
   const [sortBy, setSortBy] = useState<'company' | 'balance' | 'pendingCases' | 'health'>(() => readStoredView(filterStorageKey).sortBy)
+  const [page, setPage] = useState(1)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
 
   useEffect(() => {
     setAccounts(initialAccounts)
   }, [initialAccounts])
+
+  useEffect(() => {
+    setPage(1)
+  }, [initialAccounts, searchQuery, sortBy])
 
   useEffect(() => {
     try {
@@ -468,11 +475,20 @@ export function LocalAccountsTable({
     return left.companyName.localeCompare(right.companyName)
   })
 
-  const starred = sortedAccounts.filter((account) => account.starred)
-  const rest = sortedAccounts.filter((account) => !account.starred)
+  const totalPages = Math.max(1, Math.ceil(sortedAccounts.length / PAGE_SIZE))
+  const currentPage = Math.min(page, totalPages)
+  const pageStart = (currentPage - 1) * PAGE_SIZE
+  const pageEnd = pageStart + PAGE_SIZE
+  const paginatedAccounts = sortedAccounts.slice(pageStart, pageEnd)
+  const starred = paginatedAccounts.filter((account) => account.starred)
+  const rest = paginatedAccounts.filter((account) => !account.starred)
   const visibleColumnOptions = selectedColumns
     .map((key) => COLUMN_OPTIONS.find((option) => option.key === key))
     .filter((option): option is (typeof COLUMN_OPTIONS)[number] => Boolean(option))
+  const pageNumberStart = Math.max(1, Math.min(currentPage - 2, totalPages - 4))
+  const safePageStart = Number.isFinite(pageNumberStart) ? pageNumberStart : 1
+  const pageNumberEnd = Math.min(totalPages, Math.max(5, safePageStart + 4))
+  const pageNumbers = Array.from({ length: pageNumberEnd - safePageStart + 1 }, (_, index) => safePageStart + index)
 
   return (
     <div className="overflow-x-auto">
@@ -485,13 +501,19 @@ export function LocalAccountsTable({
           <input
             type="search"
             value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
+            onChange={(event) => {
+              setSearchQuery(event.target.value)
+              setPage(1)
+            }}
             placeholder="Search accounts"
             className="h-9 min-w-[220px] rounded-md border border-input bg-white px-3 text-sm"
           />
           <select
             value={sortBy}
-            onChange={(event) => setSortBy(event.target.value as typeof sortBy)}
+            onChange={(event) => {
+              setSortBy(event.target.value as typeof sortBy)
+              setPage(1)
+            }}
             className="h-9 rounded-md border border-input bg-white px-3 text-sm"
           >
             <option value="company">Sort: Company</option>
@@ -547,6 +569,32 @@ export function LocalAccountsTable({
           </div>
         </div>
       </div>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 text-sm text-slate-500">
+        <p>
+          {sortedAccounts.length === 0 ? '0 results' : `Showing ${pageStart + 1}-${Math.min(pageEnd, sortedAccounts.length)} of ${sortedAccounts.length}`}
+        </p>
+        {totalPages > 1 ? (
+          <div className="flex items-center gap-1">
+            <Button type="button" variant="outline" size="sm" onClick={() => setPage((prev) => Math.max(1, prev - 1))} disabled={currentPage === 1}>
+              Prev
+            </Button>
+            {pageNumbers.map((pageNumber) => (
+              <Button
+                key={pageNumber}
+                type="button"
+                variant={pageNumber === currentPage ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setPage(pageNumber)}
+              >
+                {pageNumber}
+              </Button>
+            ))}
+            <Button type="button" variant="outline" size="sm" onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages}>
+              Next
+            </Button>
+          </div>
+        ) : null}
+      </div>
       {starred.length > 0 ? (
         <div className="border-b">
           <div className="flex items-center gap-2 border-b border-yellow-100 bg-yellow-50 px-4 py-2 text-xs font-medium text-yellow-700">
@@ -563,6 +611,19 @@ export function LocalAccountsTable({
         </div>
       ) : rest.length > 0 ? (
         <AccountTable accounts={rest} onStar={handleStar} onStageChange={handleStageChange} basePath={basePath} visibleColumns={selectedColumns} pipelineStages={pipelineStages} />
+      ) : null}
+      {sortedAccounts.length > PAGE_SIZE ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-sm text-slate-500">
+          <p>Page {currentPage} of {totalPages}</p>
+          <div className="flex items-center gap-1">
+            <Button type="button" variant="outline" size="sm" onClick={() => setPage((prev) => Math.max(1, prev - 1))} disabled={currentPage === 1}>
+              Prev
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages}>
+              Next
+            </Button>
+          </div>
+        </div>
       ) : null}
     </div>
   )
