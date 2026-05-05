@@ -30,3 +30,9 @@ export function formatOrderPaymentStatusLabel(value: string) {
   if (value === 'not_applicable') return 'n/a'
   return formatStatusLabel(value)
 }
+
+export function formatOrderTypeLabel(value: string) {
+  if (value === 'paid') return 'Standard order'
+  if (value === 'sample') return 'Sample order'
+  return formatStatusLabel(value)
+}

@@ -7,6 +7,7 @@ import { customerAccounts, invoices, orders, smsMessages } from '@/db/schema'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { formatOrderTypeLabel } from '@/lib/orders/status'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { IndustryNewsWidget } from '@/components/news/IndustryNewsWidget'
 
@@ -210,7 +211,7 @@ export default async function CustomerDashboard() {
                     <div className="flex items-center justify-between gap-4">
                       <div>
                         <p className="text-sm font-semibold text-slate-900">Order #{order.id.slice(-8).toUpperCase()}</p>
-                        <p className="mt-1 text-xs text-slate-500">{formatDate(order.createdAt)} · {order.orderType}</p>
+                        <p className="mt-1 text-xs text-slate-500">{formatDate(order.createdAt)} · {formatOrderTypeLabel(order.orderType)}</p>
                       </div>
                       <div className="flex items-center gap-3">
                         <Badge variant={statusColor[order.status]}>{order.status}</Badge>

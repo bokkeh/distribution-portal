@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { formatOrderPaymentStatusLabel, formatStatusLabel, orderPaymentStatusVariant, orderStatusVariant, shippingStatusVariant } from '@/lib/orders/status'
+import { formatOrderPaymentStatusLabel, formatOrderTypeLabel, formatStatusLabel, orderPaymentStatusVariant, orderStatusVariant, shippingStatusVariant } from '@/lib/orders/status'
 import { isMissingShippingStatusColumn } from '@/lib/orders/shipping-fallback'
 import Link from 'next/link'
 import { ShoppingCart } from 'lucide-react'
@@ -115,7 +115,7 @@ export default async function CustomerOrdersPage() {
                   <div className="space-y-1">
                     <div className="flex items-center gap-3">
                       <p className="font-semibold">Order #{order.id.slice(-8).toUpperCase()}</p>
-                      <Badge variant="outline">{order.orderType}</Badge>
+                      <Badge variant="outline">{formatOrderTypeLabel(order.orderType)}</Badge>
                       <Badge variant={orderPaymentStatusVariant[order.paymentStatus] ?? 'secondary'}>{formatOrderPaymentStatusLabel(order.paymentStatus)}</Badge>
                       <Badge variant={orderStatusVariant[order.status]}>{formatStatusLabel(order.status)}</Badge>
                       <Badge variant={shippingStatusVariant[order.shippingStatus]}>{formatStatusLabel(order.shippingStatus)}</Badge>
