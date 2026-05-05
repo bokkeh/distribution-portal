@@ -71,7 +71,7 @@ function getContactsPath(mode: AccountRecordMode, accountId: string) {
 }
 
 function getCreateOrderPath(mode: AccountRecordMode, accountId: string) {
-  return mode === 'sales' ? null : `/${mode}/orders/new?customer=${accountId}`
+  return mode === 'sales' ? `/sales/orders/new?customer=${accountId}` : `/${mode}/orders/new?customer=${accountId}`
 }
 
 function getOrderDetailPath(mode: AccountRecordMode, orderId: string) {
@@ -738,7 +738,7 @@ export async function AccountRecordPage({
                 <p className="mb-2 text-sm font-medium text-slate-900">Recent SMS / MMS</p>
                 {contactsData.recentTexts.length === 0 ? <p className="text-sm text-slate-500">No communication history found yet.</p> : <div className="space-y-2">{contactsData.recentTexts.map((message) => <div key={message.id} className="rounded-xl border border-slate-100 px-3 py-3"><div className="flex items-center justify-between gap-3"><Badge variant={message.direction === 'inbound' ? 'warning' : 'secondary'}>{message.direction}</Badge><span className="text-xs text-muted-foreground" suppressHydrationWarning>{formatDate(message.createdAt)}</span></div><p className="mt-2 text-sm text-slate-700">{message.body}</p>{message.mediaUrls?.length ? <p className="mt-1 text-xs text-slate-500">{message.mediaUrls.length} media attachment{message.mediaUrls.length === 1 ? '' : 's'}</p> : null}</div>)}</div>}
               </div>
-              <div className="rounded-xl border border-dashed border-slate-300 px-4 py-4 text-sm text-slate-500">Call logs and email logs are not yet centralized in this tab.</div>
+              <div className="rounded-xl border border-dashed border-slate-300 px-4 py-4 text-sm text-slate-500">Use the Notes &amp; Activity tab to log call notes and email summaries for this account.</div>
             </CardContent>
           </Card>
         </div>

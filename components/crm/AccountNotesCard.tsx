@@ -15,6 +15,7 @@ import { formatDate } from '@/lib/utils'
 const NOTE_TYPES = [
   { value: 'general_update', label: 'General update' },
   { value: 'call_note', label: 'Call note' },
+  { value: 'email_log', label: 'Email log' },
   { value: 'delivery_note', label: 'Delivery note' },
   { value: 'tasting_note', label: 'Tasting note' },
   { value: 'account_issue', label: 'Account issue' },
@@ -128,7 +129,7 @@ export function AccountNotesCard({
             <textarea
               value={noteBody}
               onChange={(event) => setNoteBody(event.target.value)}
-              placeholder="Add internal account context, call notes, tasting feedback, or operational updates."
+              placeholder="Add internal account context, call notes, email summaries, tasting feedback, or operational updates."
               className="min-h-24 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm outline-none transition focus:border-slate-400"
             />
             <div className="grid gap-3 md:grid-cols-[1fr_auto_auto]">

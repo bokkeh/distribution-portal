@@ -200,8 +200,8 @@ function buildRuleInsights(input: SmartInsightsInput) {
       description: 'This account has not placed an order yet. Confirm whether an opening order is needed.',
       category: 'Sales Opportunity',
       priority: 'high',
-      actionLabel: mode === 'sales' ? 'View Orders' : 'Create Order',
-      actionHref: mode === 'sales' ? `${basePath}?tab=orders` : `/${mode}/orders/new?customer=${account.id}`,
+      actionLabel: 'Create Order',
+      actionHref: mode === 'sales' ? `/sales/orders/new?customer=${account.id}` : `/${mode}/orders/new?customer=${account.id}`,
       reasoning: ['No orders were found for this account'],
     })
   } else if (daysSinceLastOrder >= 28) {
@@ -224,8 +224,8 @@ function buildRuleInsights(input: SmartInsightsInput) {
       description: 'Inventory on hand is low and there is no recent completed delivery tied to the account.',
       category: 'Inventory Nudge',
       priority: 'medium',
-      actionLabel: mode === 'admin' ? 'Add Delivery' : mode === 'sales' ? 'View Orders' : 'Create Order',
-      actionHref: mode === 'admin' ? '/admin/deliveries/new' : mode === 'sales' ? `${basePath}?tab=orders` : `/${mode}/orders/new?customer=${account.id}`,
+      actionLabel: mode === 'admin' ? 'Add Delivery' : 'Create Order',
+      actionHref: mode === 'admin' ? '/admin/deliveries/new' : mode === 'sales' ? `/sales/orders/new?customer=${account.id}` : `/${mode}/orders/new?customer=${account.id}`,
       reasoning: [`Inventory on hand is ${inventoryCases.toFixed(2)} cases and ${inventoryBottles.toFixed(2)} bottles`, 'No completed delivery was found in recent account activity'],
     })
   }

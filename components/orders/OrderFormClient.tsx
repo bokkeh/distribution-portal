@@ -62,18 +62,21 @@ export default function OrderFormClient({
   products,
   pricingRules,
   mode = 'staff',
+  initialCustomerId,
 }: {
   customers: Customer[]
   products: Product[]
   pricingRules: GeographicPricingRuleInput[]
-  mode?: 'admin' | 'staff'
+  mode?: 'admin' | 'staff' | 'sales'
+  initialCustomerId?: string
 }) {
-  const [customerId, setCustomerId] = useState('')
+  const initialCustomer = customers.find((customer) => customer.id === initialCustomerId) ?? null
+  const [customerId, setCustomerId] = useState(initialCustomer?.id ?? '')
   const [purchaseUnit, setPurchaseUnit] = useState<PurchaseUnit>('case')
   const [lineItems, setLineItems] = useState<LineItem[]>([])
   const [notes, setNotes] = useState('')
   const [search, setSearch] = useState('')
-  const [paymentTerms, setPaymentTerms] = useState('PREPAID')
+  const [paymentTerms, setPaymentTerms] = useState(initialCustomer?.paymentTerms ?? 'PREPAID')
 
   const selectedCustomer = customers.find((customer) => customer.id === customerId) ?? null
 

@@ -7,7 +7,12 @@ import { ArrowLeft } from 'lucide-react'
 import OrderFormClient from '@/components/orders/OrderFormClient'
 import { getPricingRulesForProducts } from '@/lib/pricing/geographic-service'
 
-export default async function NewOrderPage() {
+export default async function NewOrderPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ customer?: string }>
+}) {
+  const { customer } = await searchParams
   const [customers, productList] = await Promise.all([
     db
       .select({
@@ -41,7 +46,13 @@ export default async function NewOrderPage() {
           <p className="text-muted-foreground mt-1">Place a case or bottle order</p>
         </div>
       </div>
-      <OrderFormClient customers={customers} products={productList} pricingRules={pricingRules} mode="staff" />
+      <OrderFormClient
+        customers={customers}
+        products={productList}
+        pricingRules={pricingRules}
+        mode="staff"
+        initialCustomerId={customer}
+      />
     </div>
   )
 }

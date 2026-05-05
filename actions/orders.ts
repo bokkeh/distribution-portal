@@ -2,7 +2,7 @@
 
 import Stripe from 'stripe'
 import { db } from '@/db'
-import { customerAccounts, inventory, orderItems, orders } from '@/db/schema'
+import { customerAccounts, inventory, orderItems, orders, salesMembers } from '@/db/schema'
 import { getEffectiveSession, requireAuth } from '@/lib/auth/session'
 import { eq, inArray } from 'drizzle-orm'
 import { calculateCommissionForOrder, recordCommission } from '@/actions/sales-members'
@@ -46,10 +46,11 @@ export async function createOrder(formData: FormData) {
       throw new Error('Unauthorized')
     }
     const userRoles = session.user.roles ?? [session.user.role as string]
-    const canCreateOrder = userRoles.some(role => ['admin', 'staff', 'customer'].includes(role))
+    const canCreateOrder = userRoles.some(role => ['admin', 'staff', 'customer', 'sales_rep', 'sales_manager'].includes(role))
     if (!canCreateOrder) {
       throw new Error('Unauthorized')
     }
+    const isSalesRepOnly = userRoles.includes('sales_rep') && !userRoles.some((role) => ['admin', 'staff', 'sales_manager'].includes(role))
 
     const customerId = formData.get('customerId') as string
     const purchaseUnit = (formData.get('purchaseUnit') as PurchaseUnit) || 'case'
@@ -87,12 +88,31 @@ export async function createOrder(formData: FormData) {
     } else {
       const [account] = await db
         .select({
+          id: customerAccounts.id,
           businessType: customerAccounts.businessType,
           paymentTerms: customerAccounts.paymentTerms,
+          assignedSalesRepId: customerAccounts.assignedSalesRepId,
         })
         .from(customerAccounts)
         .where(eq(customerAccounts.id, customerId))
         .limit(1)
+
+      if (isSalesRepOnly) {
+        const [member] = await db
+          .select({ id: salesMembers.id })
+          .from(salesMembers)
+          .where(eq(salesMembers.userId, session.user.id))
+          .limit(1)
+
+        if (!member) {
+          throw new Error('No sales member profile found.')
+        }
+
+        if (!account || account.assignedSalesRepId !== member.id) {
+          throw new Error('Unauthorized sales order')
+        }
+      }
+
       customerBusinessType = account?.businessType ?? null
       defaultPaymentTerms = account?.paymentTerms ?? 'PREPAID'
     }
@@ -315,6 +335,8 @@ export async function createOrder(formData: FormData) {
     revalidatePath('/admin/invoicing')
     revalidatePath('/staff/orders')
     revalidatePath('/customer/orders')
+    revalidatePath('/sales/accounts')
+    revalidatePath(`/sales/accounts/${customerId}`)
 
     return {
       success: true as const,
@@ -323,7 +345,9 @@ export async function createOrder(formData: FormData) {
         ? `/customer/orders/${order.id}`
         : userRoles.includes('admin')
           ? `/admin/orders/${order.id}`
-          : `/staff/orders/${order.id}`,
+          : userRoles.some((role) => ['sales_rep', 'sales_manager'].includes(role))
+            ? `/sales/accounts/${customerId}?tab=orders`
+            : `/staff/orders/${order.id}`,
     }
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Failed to create order' }

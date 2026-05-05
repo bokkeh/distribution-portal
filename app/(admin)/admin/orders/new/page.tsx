@@ -7,7 +7,12 @@ import { ArrowLeft } from 'lucide-react'
 import OrderFormClient from '@/components/orders/OrderFormClient'
 import { getPricingRulesForProducts } from '@/lib/pricing/geographic-service'
 
-export default async function NewAdminOrderPage() {
+export default async function NewAdminOrderPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ customer?: string }>
+}) {
+  const { customer } = await searchParams
   const [customers, productList] = await Promise.all([
     db
       .select({
@@ -41,7 +46,13 @@ export default async function NewAdminOrderPage() {
           <p className="text-muted-foreground mt-1">Place an order on behalf of a customer and set payment terms</p>
         </div>
       </div>
-      <OrderFormClient customers={customers} products={productList} pricingRules={pricingRules} mode="admin" />
+      <OrderFormClient
+        customers={customers}
+        products={productList}
+        pricingRules={pricingRules}
+        mode="admin"
+        initialCustomerId={customer}
+      />
     </div>
   )
 }
