@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { deactivateGeographicPricingRule, deleteGeographicPricingRule, upsertGeographicPricingRule } from '@/actions/geographic-pricing'
@@ -126,6 +126,7 @@ export function GeographicPricingManager({
   const [stateFilter, setStateFilter] = useState('all')
   const [ruleTypeFilter, setRuleTypeFilter] = useState('all')
   const [productFilter, setProductFilter] = useState('all')
+  const formCardRef = useRef<HTMLDivElement | null>(null)
 
   const filteredRules = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -169,6 +170,9 @@ export function GeographicPricingManager({
       effectiveEndDate: toDateInputValue(rule.effectiveEndDate),
       isActive: rule.isActive,
       notes: rule.notes ?? '',
+    })
+    window.requestAnimationFrame(() => {
+      formCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     })
   }
 
@@ -230,11 +234,17 @@ export function GeographicPricingManager({
 
   return (
     <div className="space-y-6">
+      <div ref={formCardRef}>
       <Card>
         <CardHeader>
           <CardTitle>{form.id ? 'Edit Pricing Rule' : 'Add Pricing Rule'}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {form.id ? (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+              You are editing an existing pricing rule. Update the fields below, then click `Update Rule`.
+            </div>
+          ) : null}
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
             Create one rule per quantity break. Rule priority is: special pricing by account, county override,
             business type pricing, state pricing, then default catalog price.
@@ -448,6 +458,7 @@ export function GeographicPricingManager({
           </div>
         </CardContent>
       </Card>
+      </div>
 
       <Card>
         <CardHeader>
