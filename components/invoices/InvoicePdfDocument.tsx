@@ -1,5 +1,6 @@
 import { Document, Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer'
 import type { InvoiceDetailData } from '@/lib/invoices/read'
+import { getCustomerPaymentBreakdown } from '@/lib/stripe/fees'
 
 const PAYMENT_TERMS_LABELS: Record<string, string> = {
   PREPAID: 'Prepaid', DUE_ON_RECEIPT: 'Due on Receipt',
@@ -52,6 +53,10 @@ function fmtDate(value: Date | null) {
 }
 
 export function InvoicePdfDocument({ invoice, logoDataUrl }: { invoice: InvoiceDetailData; logoDataUrl?: string | null }) {
+  const baseAmountCents = Math.round(invoice.total * 100)
+  const achBreakdown = getCustomerPaymentBreakdown(baseAmountCents, 'us_bank_account')
+  const cardBreakdown = getCustomerPaymentBreakdown(baseAmountCents, 'card')
+
   return (
     <Document title={invoice.invoiceNumber}>
       <Page size="LETTER" style={styles.page}>
@@ -60,7 +65,7 @@ export function InvoicePdfDocument({ invoice, logoDataUrl }: { invoice: InvoiceD
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 10 }}>
                 {logoDataUrl ? (
-                  <Image src={logoDataUrl} style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: '#ffffff' }} />
+                  <Image src={logoDataUrl} alt="" style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: '#ffffff' }} />
                 ) : null}
                 <Text style={styles.eyebrow}>AHAWC Distribution</Text>
               </View>
@@ -126,6 +131,20 @@ export function InvoicePdfDocument({ invoice, logoDataUrl }: { invoice: InvoiceD
               <Text>Total</Text>
               <Text>{fmtCurrency(invoice.total)}</Text>
             </View>
+            <View style={[styles.totalRow, { borderTopWidth: 1, borderTopColor: '#e2e8f0', paddingTop: 10, marginTop: 6, marginBottom: 4 }]}>
+              <Text>ACH total</Text>
+              <Text>{fmtCurrency(Number(achBreakdown.totalAmount))}</Text>
+            </View>
+            <Text style={{ fontSize: 9, color: '#64748b', marginBottom: 8 }}>
+              Includes {fmtCurrency(Number(achBreakdown.processingFee))} ACH fee.
+            </Text>
+            <View style={[styles.totalRow, { marginBottom: 4 }]}>
+              <Text>Card total</Text>
+              <Text>{fmtCurrency(Number(cardBreakdown.totalAmount))}</Text>
+            </View>
+            <Text style={{ fontSize: 9, color: '#64748b' }}>
+              Includes {fmtCurrency(Number(cardBreakdown.processingFee))} credit card fee.
+            </Text>
           </View>
         </View>
       </Page>

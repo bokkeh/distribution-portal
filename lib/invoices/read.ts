@@ -50,6 +50,7 @@ export async function getInvoiceDetailData(invoiceId: string): Promise<InvoiceDe
       customerEmail: customerAccounts.email,
       customerPhone: customerAccounts.phone,
       paymentTerms: customerAccounts.paymentTerms,
+      orderPaymentTerms: orders.paymentTerms,
       address: customerAccounts.address,
       city: customerAccounts.city,
       state: customerAccounts.state,
@@ -57,6 +58,7 @@ export async function getInvoiceDetailData(invoiceId: string): Promise<InvoiceDe
     })
     .from(invoices)
     .leftJoin(customerAccounts, eq(invoices.customerId, customerAccounts.id))
+    .leftJoin(orders, eq(invoices.orderId, orders.id))
     .where(eq(invoices.id, invoiceId))
     .limit(1)
 
@@ -148,7 +150,7 @@ export async function getInvoiceDetailData(invoiceId: string): Promise<InvoiceDe
     companyName: invoice.companyName ?? 'Customer account',
     customerEmail: invoice.customerEmail,
     customerPhone: invoice.customerPhone,
-    paymentTerms: invoice.paymentTerms,
+    paymentTerms: invoice.orderPaymentTerms ?? invoice.paymentTerms,
     customerAddressLines,
     lineItems,
   }

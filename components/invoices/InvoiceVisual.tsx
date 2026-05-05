@@ -1,4 +1,5 @@
 import Image from 'next/image'
+import { getCustomerPaymentBreakdown } from '@/lib/stripe/fees'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { InvoiceDetailData } from '@/lib/invoices/read'
 
@@ -29,6 +30,10 @@ const statusStyles: Record<string, string> = {
 }
 
 export function InvoiceVisual({ invoice }: { invoice: InvoiceDetailData }) {
+  const baseAmountCents = Math.round(invoice.total * 100)
+  const achBreakdown = getCustomerPaymentBreakdown(baseAmountCents, 'us_bank_account')
+  const cardBreakdown = getCustomerPaymentBreakdown(baseAmountCents, 'card')
+
   return (
     <div className="overflow-hidden rounded-[32px] border border-slate-200 bg-[linear-gradient(180deg,_rgba(255,255,255,0.98),_rgba(248,250,252,0.98))] shadow-[0_24px_70px_-40px_rgba(15,23,42,0.32)]">
       <div className="border-b border-slate-200 bg-[linear-gradient(135deg,_#f8fbff_0%,_#eef4ff_62%,_#fdf8f3_100%)] px-6 py-8 sm:px-8">
@@ -134,6 +139,21 @@ export function InvoiceVisual({ invoice }: { invoice: InvoiceDetailData }) {
           <div className="flex items-center justify-between border-t border-slate-200 pt-3 text-base font-bold">
             <span className="text-slate-900">Total</span>
             <span className="text-blue-700">{formatCurrency(invoice.total)}</span>
+          </div>
+          <div className="border-t border-dashed border-slate-200 pt-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Stripe Checkout Totals</p>
+            <div className="mt-2 space-y-2 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500">ACH total</span>
+                <span className="font-medium text-slate-900">{formatCurrency(achBreakdown.totalAmount)}</span>
+              </div>
+              <p className="text-xs text-slate-500">Includes {formatCurrency(achBreakdown.processingFee)} ACH fee.</p>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500">Card total</span>
+                <span className="font-medium text-slate-900">{formatCurrency(cardBreakdown.totalAmount)}</span>
+              </div>
+              <p className="text-xs text-slate-500">Includes {formatCurrency(cardBreakdown.processingFee)} credit card fee.</p>
+            </div>
           </div>
         </div>
       </div>
