@@ -2,7 +2,7 @@
 
 import { DragEvent, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { ImagePlus, Loader2 } from 'lucide-react'
+import { FileSpreadsheet, FileText, ImagePlus, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { addAccountMedia } from '@/actions/crm-account'
 import { Button } from '@/components/ui/button'
@@ -19,8 +19,89 @@ const ACCOUNT_MEDIA_CATEGORY_OPTIONS = [
   { value: 'events', label: 'Events' },
 ] as const
 
+const SUPPORTED_EXTENSIONS = new Set([
+  'jpg', 'jpeg', 'png', 'webp',
+  'pdf',
+  'doc', 'docx',
+  'xls', 'xlsx', 'csv',
+  'ppt', 'pptx',
+  'txt', 'rtf',
+])
+
+const SUPPORTED_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/csv',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'text/plain',
+  'application/rtf',
+  'text/rtf',
+])
+
+type AccountMediaType = 'image' | 'pdf' | 'word' | 'spreadsheet' | 'presentation' | 'document'
+
 function todayValue() {
   return new Date().toISOString().slice(0, 10)
+}
+
+function getFileExtension(filename: string) {
+  const ext = filename.split('.').pop()
+  return ext ? ext.toLowerCase() : ''
+}
+
+function resolveAccountMediaType(file: File): AccountMediaType | null {
+  const extension = getFileExtension(file.name)
+  const type = file.type.toLowerCase()
+
+  if (type.startsWith('image/') || ['jpg', 'jpeg', 'png', 'webp'].includes(extension)) {
+    return 'image'
+  }
+  if (type === 'application/pdf' || extension === 'pdf') {
+    return 'pdf'
+  }
+  if (
+    type === 'application/msword' ||
+    type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    ['doc', 'docx', 'rtf', 'txt'].includes(extension)
+  ) {
+    return 'word'
+  }
+  if (
+    type === 'application/vnd.ms-excel' ||
+    type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+    type === 'text/csv' ||
+    ['xls', 'xlsx', 'csv'].includes(extension)
+  ) {
+    return 'spreadsheet'
+  }
+  if (
+    type === 'application/vnd.ms-powerpoint' ||
+    type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+    ['ppt', 'pptx'].includes(extension)
+  ) {
+    return 'presentation'
+  }
+  if (SUPPORTED_EXTENSIONS.has(extension) || SUPPORTED_MIME_TYPES.has(type)) {
+    return 'document'
+  }
+
+  return null
+}
+
+function getPreviewMeta(mediaType: AccountMediaType) {
+  if (mediaType === 'image') return { icon: ImagePlus, label: 'Image file' }
+  if (mediaType === 'spreadsheet') return { icon: FileSpreadsheet, label: 'Spreadsheet file' }
+  if (mediaType === 'presentation') return { icon: FileText, label: 'Presentation file' }
+  if (mediaType === 'word') return { icon: FileText, label: 'Word or text document' }
+  if (mediaType === 'pdf') return { icon: FileText, label: 'PDF document' }
+  return { icon: FileText, label: 'Document file' }
 }
 
 export function AccountMediaUploadCard({ accountId }: { accountId: string }) {
@@ -30,13 +111,18 @@ export function AccountMediaUploadCard({ accountId }: { accountId: string }) {
   const [uploading, setUploading] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [mediaUrl, setMediaUrl] = useState('')
+  const [mediaType, setMediaType] = useState<AccountMediaType | null>(null)
+  const [fileName, setFileName] = useState('')
   const [caption, setCaption] = useState('')
   const [category, setCategory] = useState<(typeof ACCOUNT_MEDIA_CATEGORY_OPTIONS)[number]['value']>('store_visit')
   const [taggedDate, setTaggedDate] = useState(todayValue())
 
   async function handleFileSelect(file: File) {
-    if (!file.type.startsWith('image/')) {
-      toast.error('Only image uploads are supported right now.')
+    const resolvedMediaType = resolveAccountMediaType(file)
+    if (!resolvedMediaType) {
+      toast.error('Unsupported file type.', {
+        description: 'Upload JPG, PNG, WEBP, PDF, Word, Excel, CSV, PowerPoint, TXT, or RTF files.',
+      })
       return
     }
 
@@ -63,7 +149,9 @@ export function AccountMediaUploadCard({ accountId }: { accountId: string }) {
       }
 
       setMediaUrl(payload.publicUrl)
-      toast.success('Media uploaded')
+      setMediaType(resolvedMediaType)
+      setFileName(file.name)
+      toast.success('File uploaded')
     } catch (error) {
       toast.error('Upload failed', { description: error instanceof Error ? error.message : undefined })
     } finally {
@@ -97,9 +185,15 @@ export function AccountMediaUploadCard({ accountId }: { accountId: string }) {
     }
   }
 
+  function resetUploadState() {
+    setMediaUrl('')
+    setMediaType(null)
+    setFileName('')
+  }
+
   function handleSave() {
-    if (!mediaUrl) {
-      toast.error('Upload an image first.')
+    if (!mediaUrl || !mediaType) {
+      toast.error('Upload a file first.')
       return
     }
 
@@ -107,7 +201,7 @@ export function AccountMediaUploadCard({ accountId }: { accountId: string }) {
       const formData = new FormData()
       formData.append('accountId', accountId)
       formData.append('mediaUrl', mediaUrl)
-      formData.append('mediaType', 'image')
+      formData.append('mediaType', mediaType)
       formData.append('category', category)
       formData.append('taggedDate', taggedDate)
       formData.append('caption', caption)
@@ -119,13 +213,16 @@ export function AccountMediaUploadCard({ accountId }: { accountId: string }) {
       }
 
       toast.success('Account media saved')
-      setMediaUrl('')
+      resetUploadState()
       setCaption('')
       setCategory('store_visit')
       setTaggedDate(todayValue())
       router.refresh()
     })
   }
+
+  const previewMeta = mediaType ? getPreviewMeta(mediaType) : null
+  const PreviewIcon = previewMeta?.icon ?? FileText
 
   return (
     <Card>
@@ -152,17 +249,17 @@ export function AccountMediaUploadCard({ accountId }: { accountId: string }) {
             >
               {uploading ? <Loader2 className="mb-2 h-6 w-6 animate-spin text-slate-500" /> : <ImagePlus className="mb-2 h-6 w-6 text-slate-500" />}
               <span className="text-sm font-semibold text-slate-900">
-                {mediaUrl ? 'Replace uploaded image' : 'Upload image'}
+                {mediaUrl ? 'Replace uploaded file' : 'Upload image or document'}
               </span>
               <span className="mt-1 text-xs text-slate-500">
-                {isDragging ? 'Drop image here' : 'Drag and drop or click to upload'}
+                {isDragging ? 'Drop file here' : 'Drag and drop or click to upload'}
               </span>
-              <span className="mt-1 text-xs text-slate-400">JPG, PNG, or WEBP up to 10MB</span>
+              <span className="mt-1 text-xs text-slate-400">Images, PDFs, Word, Excel, CSV, PowerPoint, TXT, or RTF up to 10MB</span>
             </span>
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/jpeg,image/png,image/webp"
+              accept="image/jpeg,image/png,image/webp,application/pdf,.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.rtf"
               className="hidden"
               disabled={uploading || isPending}
               onChange={(event) => {
@@ -209,7 +306,7 @@ export function AccountMediaUploadCard({ accountId }: { accountId: string }) {
                 value={caption}
                 disabled={uploading || isPending}
                 onChange={(event) => setCaption(event.target.value)}
-                placeholder="Optional note about the image"
+                placeholder="Optional note about the file"
               />
             </div>
           </div>
@@ -217,14 +314,27 @@ export function AccountMediaUploadCard({ accountId }: { accountId: string }) {
 
         {mediaUrl ? (
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
-            <div className="aspect-[4/3] max-w-sm bg-slate-100">
-              <img src={mediaUrl} alt="Uploaded account media preview" className="h-full w-full object-cover" />
-            </div>
+            {mediaType === 'image' ? (
+              <div className="aspect-[4/3] max-w-sm bg-slate-100">
+                <img src={mediaUrl} alt="Uploaded account media preview" className="h-full w-full object-cover" />
+              </div>
+            ) : (
+              <div className="flex items-center gap-4 px-5 py-5">
+                <PreviewIcon className="h-8 w-8 text-slate-500" />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-slate-900">{fileName || 'Uploaded file'}</p>
+                  <p className="text-xs text-slate-500">{previewMeta?.label ?? 'Document file'}</p>
+                </div>
+                <a href={mediaUrl} target="_blank" rel="noreferrer" className="ml-auto text-sm font-medium text-blue-600 underline">
+                  Open
+                </a>
+              </div>
+            )}
           </div>
         ) : null}
 
         <div className="flex justify-end">
-          <Button type="button" disabled={uploading || isPending || !mediaUrl || !taggedDate} onClick={handleSave}>
+          <Button type="button" disabled={uploading || isPending || !mediaUrl || !mediaType || !taggedDate} onClick={handleSave}>
             {isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             Save Media
           </Button>

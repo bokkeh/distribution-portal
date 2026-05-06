@@ -62,6 +62,11 @@ export function InvoicePdfDocument({ invoice, logoDataUrl }: { invoice: InvoiceD
     appliedTotal !== null
   )
   const totalDisplay = hasAppliedStripeFee ? appliedTotal : invoice.total
+  const dueDateDisplay = invoice.isPrepaidSettled
+    ? 'Paid already'
+    : invoice.dueDate
+      ? fmtDate(invoice.dueDate)
+      : '-'
 
   return (
     <Document title={invoice.invoiceNumber}>
@@ -82,7 +87,7 @@ export function InvoicePdfDocument({ invoice, logoDataUrl }: { invoice: InvoiceD
             <View style={styles.summaryBox}>
               <View style={styles.summaryRow}><Text style={styles.summaryLabel}>Invoice #</Text><Text style={styles.summaryValue}>{invoice.invoiceNumber}</Text></View>
               <View style={styles.summaryRow}><Text style={styles.summaryLabel}>Issue date</Text><Text style={styles.summaryValue}>{fmtDate(invoice.createdAt)}</Text></View>
-              <View style={styles.summaryRow}><Text style={styles.summaryLabel}>Due date</Text><Text style={styles.summaryValue}>{fmtDate(invoice.dueDate)}</Text></View>
+              <View style={styles.summaryRow}><Text style={styles.summaryLabel}>Due date</Text><Text style={styles.summaryValue}>{dueDateDisplay}</Text></View>
             </View>
           </View>
         </View>

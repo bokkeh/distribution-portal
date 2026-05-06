@@ -1,5 +1,5 @@
 ﻿import Link from 'next/link'
-import { and, asc, count, desc, eq, inArray } from 'drizzle-orm'
+import { and, asc, count, desc, eq, inArray, or } from 'drizzle-orm'
 import { db } from '@/db'
 import { contacts, crmPipelineStages, deliveries, deliveryStops, invoices, orders, salesMembers, salesRegions, smsMessages, tastingReports, tastings, users } from '@/db/schema'
 import { syncToHubSpot } from '@/actions/crm'
@@ -279,7 +279,16 @@ export async function AccountRecordPage({
         total: invoices.total,
         status: invoices.status,
       }).from(invoices).where(eq(invoices.customerId, accountId)).orderBy(desc(invoices.createdAt)).limit(5),
-      db.select({ total: count() }).from(orders).where(eq(orders.customerId, accountId)),
+      db
+        .select({ total: count() })
+        .from(orders)
+        .where(and(
+          eq(orders.customerId, accountId),
+          or(
+            eq(orders.status, 'fulfilled'),
+            eq(orders.paymentStatus, 'paid'),
+          ),
+        )),
       db.select({
         deliveryId: deliveries.id,
         status: deliveries.status,

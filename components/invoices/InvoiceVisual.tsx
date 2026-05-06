@@ -39,6 +39,11 @@ export function InvoiceVisual({ invoice }: { invoice: InvoiceDetailData }) {
     appliedTotal !== null
   )
   const totalDisplay = hasAppliedStripeFee ? appliedTotal : invoice.total
+  const dueDateDisplay = invoice.isPrepaidSettled
+    ? 'Paid already'
+    : invoice.dueDate
+      ? formatDate(invoice.dueDate)
+      : '-'
 
   return (
     <div className="overflow-hidden rounded-[32px] border border-slate-200 bg-[linear-gradient(180deg,_rgba(255,255,255,0.98),_rgba(248,250,252,0.98))] shadow-[0_24px_70px_-40px_rgba(15,23,42,0.32)]">
@@ -66,7 +71,7 @@ export function InvoiceVisual({ invoice }: { invoice: InvoiceDetailData }) {
               <span className="text-right text-slate-900">{formatDate(invoice.createdAt)}</span>
 
               <span className="text-slate-500">Due date</span>
-              <span className="text-right text-slate-900">{invoice.dueDate ? formatDate(invoice.dueDate) : '—'}</span>
+              <span className="text-right text-slate-900">{dueDateDisplay}</span>
             </div>
           </div>
         </div>
@@ -121,7 +126,7 @@ export function InvoiceVisual({ invoice }: { invoice: InvoiceDetailData }) {
               {invoice.lineItems.map((item) => (
                 <tr key={item.id}>
                   <td className="px-4 py-4 text-sm font-medium text-slate-900">{item.description}</td>
-                  <td className="px-4 py-4 text-sm text-slate-500">{item.sku ?? '—'}</td>
+                  <td className="px-4 py-4 text-sm text-slate-500">{item.sku ?? '-'}</td>
                   <td className="px-4 py-4 text-right text-sm text-slate-700">{item.quantity}</td>
                   <td className="px-4 py-4 text-right text-sm text-slate-700">{formatCurrency(item.unitPrice)}</td>
                   <td className="px-4 py-4 text-right text-sm font-semibold text-slate-900">{formatCurrency(item.total)}</td>

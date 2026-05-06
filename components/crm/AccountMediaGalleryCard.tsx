@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ImageIcon } from 'lucide-react'
+import { FileSpreadsheet, FileText, ImageIcon } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatDate } from '@/lib/utils'
 
@@ -7,12 +7,25 @@ export type AccountMediaItem = {
   id: string
   url: string
   thumbnailUrl: string
+  mediaType: string
   label: string
   sourceType: string
   sourceLabel: string
   caption: string | null
   createdAt: Date
   relatedHref: string | null
+}
+
+function isImageMedia(mediaType: string) {
+  return mediaType === 'image'
+}
+
+function getDocumentMeta(mediaType: string) {
+  if (mediaType === 'spreadsheet') return { icon: FileSpreadsheet, badge: 'Spreadsheet' }
+  if (mediaType === 'presentation') return { icon: FileText, badge: 'Presentation' }
+  if (mediaType === 'word') return { icon: FileText, badge: 'Word document' }
+  if (mediaType === 'pdf') return { icon: FileText, badge: 'PDF' }
+  return { icon: FileText, badge: 'Document' }
 }
 
 export function AccountMediaGalleryCard({
@@ -39,10 +52,21 @@ export function AccountMediaGalleryCard({
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {items.map((item) => {
+              const imageMedia = isImageMedia(item.mediaType)
+              const documentMeta = imageMedia ? null : getDocumentMeta(item.mediaType)
               const body = (
                 <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm transition hover:border-slate-200">
                   <div className="aspect-[4/3] bg-slate-100">
-                    <img src={item.thumbnailUrl} alt={item.label} className="h-full w-full object-cover" />
+                    {imageMedia ? (
+                      <img src={item.thumbnailUrl} alt={item.label} className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full flex-col items-center justify-center gap-3 px-4 text-center">
+                        {documentMeta ? <documentMeta.icon className="h-10 w-10 text-slate-500" /> : null}
+                        <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
+                          {documentMeta?.badge ?? 'Document'}
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div className="space-y-1 px-3 py-3">
                     <p className="text-sm font-medium text-slate-900">{item.label}</p>

@@ -11,6 +11,7 @@ import type { AccountInventoryItem } from '@/lib/crm/account-detail-data'
 const INTERNAL_ACCOUNT_ROLES = ['admin', 'staff', 'driver', 'taster', 'sales_rep', 'sales_manager'] as const
 const ACCOUNT_MEDIA_UPLOAD_ROLES = ['admin', 'sales_rep', 'sales_manager'] as const
 const ACCOUNT_MEDIA_CATEGORIES = new Set(['tasting', 'store_visit', 'delivery', 'customers', 'employees', 'events'])
+const ACCOUNT_MEDIA_TYPES = new Set(['image', 'pdf', 'word', 'spreadsheet', 'presentation', 'document'])
 
 function normalizeWhitespace(value: FormDataEntryValue | null) {
   return typeof value === 'string' ? value.trim() : ''
@@ -668,6 +669,7 @@ export async function addAccountMedia(formData: FormData) {
 
     if (!accountId) return { error: 'Account is required.' }
     if (!mediaUrl) return { error: 'Media upload is required.' }
+    if (!ACCOUNT_MEDIA_TYPES.has(mediaType)) return { error: 'Choose a valid media type.' }
     if (!ACCOUNT_MEDIA_CATEGORIES.has(category)) return { error: 'Choose a valid media category.' }
     if (!taggedDateInput) return { error: 'Choose a tagged date.' }
 

@@ -38,6 +38,7 @@ export type InvoiceDetailData = {
   tax: number
   total: number
   dueDate: Date | null
+  isPrepaidSettled: boolean
   paidAt: Date | null
   createdAt: Date
   orderId: string | null
@@ -62,11 +63,11 @@ function formatStripePaymentMethodLabel(method: CustomerPaymentMethod | null) {
   return null
 }
 
-async function getInvoiceStripeCheckoutData(invoiceId: string, stripePaymentIntentId: string | null, invoiceTotal: number): Promise<InvoiceStripeCheckoutData> {
+function buildFallbackStripeCheckout(invoiceTotal: number): InvoiceStripeCheckoutData {
   const baseAmountCents = Math.round(invoiceTotal * 100)
   const achBreakdown = getCustomerPaymentBreakdown(baseAmountCents, 'us_bank_account')
   const cardBreakdown = getCustomerPaymentBreakdown(baseAmountCents, 'card')
-  const fallback: InvoiceStripeCheckoutData = {
+  return {
     appliedMethod: null,
     appliedMethodLabel: null,
     appliedProcessingFee: null,
@@ -77,36 +78,66 @@ async function getInvoiceStripeCheckoutData(invoiceId: string, stripePaymentInte
     cardFee: Number(cardBreakdown.processingFee),
     cardTotal: Number(cardBreakdown.totalAmount),
   }
+}
 
-  if (!stripe || !stripePaymentIntentId) return fallback
+function resolveStripeCheckoutFromPaymentIntent(
+  paymentIntent: Stripe.PaymentIntent,
+  baseAmountCents: number,
+  fallback: InvoiceStripeCheckoutData,
+) {
+  const method = resolveStripePaymentMethod(
+    paymentIntent.metadata?.paymentMethod ?? paymentIntent.payment_method_types?.[0] ?? null,
+  )
+  const status = paymentIntent.status ?? null
+
+  if (!method || status === 'canceled' || status === 'requires_payment_method') {
+    return null
+  }
+
+  const metadataFeeValue = paymentIntent.metadata?.processingFeeCents?.trim() ?? ''
+  const metadataFeeCents = metadataFeeValue ? Number(metadataFeeValue) : Number.NaN
+  const processingFeeCents = Number.isFinite(metadataFeeCents)
+    ? metadataFeeCents
+    : Math.max(paymentIntent.amount - baseAmountCents, 0)
+
+  return {
+    ...fallback,
+    appliedMethod: method,
+    appliedMethodLabel: formatStripePaymentMethodLabel(method),
+    appliedProcessingFee: processingFeeCents / 100,
+    appliedTotal: paymentIntent.amount / 100,
+    paymentIntentStatus: status,
+  } satisfies InvoiceStripeCheckoutData
+}
+
+async function getInvoiceStripeCheckoutData(input: {
+  invoiceId: string
+  invoiceTotal: number
+  invoiceStripePaymentIntentId: string | null
+  orderStripePaymentIntentId: string | null
+}): Promise<InvoiceStripeCheckoutData> {
+  const baseAmountCents = Math.round(input.invoiceTotal * 100)
+  const fallback = buildFallbackStripeCheckout(input.invoiceTotal)
+
+  if (!stripe) return fallback
 
   try {
-    const paymentIntent = await stripe.paymentIntents.retrieve(stripePaymentIntentId)
-    if (paymentIntent.metadata?.invoiceId !== invoiceId) return fallback
-
-    const method = resolveStripePaymentMethod(
-      paymentIntent.metadata?.paymentMethod ?? paymentIntent.payment_method_types?.[0] ?? null,
-    )
-    const status = paymentIntent.status ?? null
-
-    if (!method || status === 'canceled' || status === 'requires_payment_method') {
-      return { ...fallback, paymentIntentStatus: status }
+    if (input.invoiceStripePaymentIntentId) {
+      const invoicePaymentIntent = await stripe.paymentIntents.retrieve(input.invoiceStripePaymentIntentId)
+      if (invoicePaymentIntent.metadata?.invoiceId === input.invoiceId) {
+        const resolvedFromInvoice = resolveStripeCheckoutFromPaymentIntent(invoicePaymentIntent, baseAmountCents, fallback)
+        if (resolvedFromInvoice) return resolvedFromInvoice
+      }
     }
 
-    const metadataFeeValue = paymentIntent.metadata?.processingFeeCents?.trim() ?? ''
-    const metadataFeeCents = metadataFeeValue ? Number(metadataFeeValue) : Number.NaN
-    const processingFeeCents = Number.isFinite(metadataFeeCents)
-      ? metadataFeeCents
-      : Math.max(paymentIntent.amount - baseAmountCents, 0)
-
-    return {
-      ...fallback,
-      appliedMethod: method,
-      appliedMethodLabel: formatStripePaymentMethodLabel(method),
-      appliedProcessingFee: processingFeeCents / 100,
-      appliedTotal: paymentIntent.amount / 100,
-      paymentIntentStatus: status,
+    if (input.orderStripePaymentIntentId) {
+      const orderPaymentIntent = await stripe.paymentIntents.retrieve(input.orderStripePaymentIntentId)
+      const resolvedFromOrder = resolveStripeCheckoutFromPaymentIntent(orderPaymentIntent, baseAmountCents, fallback)
+      if (resolvedFromOrder) return resolvedFromOrder
+      return { ...fallback, paymentIntentStatus: orderPaymentIntent.status ?? null }
     }
+
+    return fallback
   } catch {
     return fallback
   }
@@ -149,7 +180,12 @@ export async function getInvoiceDetailData(invoiceId: string): Promise<InvoiceDe
   if (!invoice) return null
 
   const invoiceTotal = Number(invoice.total)
-  const stripeCheckout = await getInvoiceStripeCheckoutData(invoice.id, invoice.stripePaymentIntentId, invoiceTotal)
+  const stripeCheckout = await getInvoiceStripeCheckoutData({
+    invoiceId: invoice.id,
+    invoiceTotal,
+    invoiceStripePaymentIntentId: invoice.stripePaymentIntentId,
+    orderStripePaymentIntentId: invoice.orderStripePaymentIntentId,
+  })
 
   let lineItems: InvoiceLineItem[] = await db
     .select({
@@ -227,6 +263,11 @@ export async function getInvoiceDetailData(invoiceId: string): Promise<InvoiceDe
   ) || (
     invoice.invoiceStatus === 'paid' && stripeCheckout.appliedMethod !== null
   )
+  const isPrepaidSettled = shouldDisplayPrepaid && (
+    invoice.orderPaymentStatus === 'paid' ||
+    invoice.invoiceStatus === 'paid' ||
+    stripeCheckout.paymentIntentStatus === 'succeeded'
+  )
 
   return {
     id: invoice.id,
@@ -236,6 +277,7 @@ export async function getInvoiceDetailData(invoiceId: string): Promise<InvoiceDe
     tax: Number(invoice.tax),
     total: invoiceTotal,
     dueDate: invoice.dueDate ? new Date(invoice.dueDate) : null,
+    isPrepaidSettled,
     paidAt: invoice.paidAt ? new Date(invoice.paidAt) : null,
     createdAt: new Date(invoice.createdAt),
     orderId: invoice.orderId,
