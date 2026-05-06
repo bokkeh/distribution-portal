@@ -11,7 +11,7 @@ import { getPricingRulesForProducts } from '@/lib/pricing/geographic-service'
 export default async function NewInvoicePage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>
+  searchParams: Promise<{ error?: string; success?: string; orderId?: string; customerId?: string }>
 }) {
   const query = await searchParams
   const customers = await db
@@ -50,9 +50,16 @@ export default async function NewInvoicePage({
 
   const invoicedOrderIds = new Set(existingInvoices.map((invoice) => invoice.orderId).filter(Boolean))
   const availableOrders = fulfilledOrders.filter((order) => !invoicedOrderIds.has(order.id))
+  const initialOrder = query.orderId
+    ? availableOrders.find((order) => order.id === query.orderId) ?? null
+    : null
+  const initialCustomerId = query.customerId ?? initialOrder?.customerId ?? ''
 
   return (
     <div className="space-y-6 p-4 sm:p-8">
+      {query.success ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{query.success}</div>
+      ) : null}
       {query.error ? (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{query.error}</div>
       ) : null}
@@ -69,6 +76,8 @@ export default async function NewInvoicePage({
         <CardHeader><CardTitle>Invoice Details</CardTitle></CardHeader>
         <CardContent>
           <AdminInvoiceCreateForm
+            initialCustomerId={initialCustomerId}
+            initialOrderId={initialOrder?.id ?? ''}
             customers={customers}
             orders={availableOrders.map((order) => ({ ...order, total: String(order.total) }))}
             products={productRows.map((product) => ({

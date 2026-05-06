@@ -2,11 +2,11 @@
 
 import { randomBytes } from 'crypto'
 import Stripe from 'stripe'
-import { eq, inArray } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { db } from '@/db'
-import { invoices, invoiceItems, customerAccounts, journalEntries, journalEntryLines, chartOfAccounts, orders, products } from '@/db/schema'
+import { activityEvents, invoices, invoiceItems, customerAccounts, journalEntries, journalEntryLines, chartOfAccounts, orders, products } from '@/db/schema'
 import { requireAdminOrStaff, requireAuth } from '@/lib/auth/session'
 import { logActivityEvent } from '@/lib/activity/log'
 import { resolveInvoiceIdFromPublicToken } from '@/lib/invoices/public-token'
@@ -401,6 +401,73 @@ export async function markInvoicePaid(invoiceId: string) {
     paymentReference: 'manual_mark_paid',
     journalReference: invoiceId,
   })
+}
+
+export async function deleteDraftInvoice(invoiceId: string) {
+  const session = await requireAdminOrStaff()
+
+  const [invoice] = await db
+    .select({
+      id: invoices.id,
+      invoiceNumber: invoices.invoiceNumber,
+      status: invoices.status,
+      orderId: invoices.orderId,
+      customerId: invoices.customerId,
+    })
+    .from(invoices)
+    .where(eq(invoices.id, invoiceId))
+    .limit(1)
+
+  if (!invoice) {
+    redirect('/admin/invoicing?error=' + encodeURIComponent('Invoice not found.'))
+  }
+
+  if (invoice.status !== 'draft') {
+    redirect(`/admin/invoicing/${invoice.id}?error=${encodeURIComponent('Only draft invoices can be deleted.')}`)
+  }
+
+  if (invoice.orderId) {
+    await logActivityEvent({
+      entityType: 'order',
+      entityId: invoice.orderId,
+      actorUserId: session.user.id,
+      kind: 'invoice_deleted',
+      title: 'Draft invoice deleted',
+      body: `${invoice.invoiceNumber} was deleted before it was sent.`,
+      metadata: { invoiceId: invoice.id, invoiceNumber: invoice.invoiceNumber },
+    })
+  }
+
+  await db
+    .delete(activityEvents)
+    .where(and(
+      eq(activityEvents.entityType, 'invoice'),
+      eq(activityEvents.entityId, invoice.id),
+    ))
+
+  await db.delete(invoices).where(eq(invoices.id, invoice.id))
+
+  revalidatePath('/admin/invoicing')
+  revalidatePath('/admin/invoicing/aging')
+  revalidatePath('/staff/invoicing')
+
+  if (invoice.orderId) {
+    revalidatePath(`/admin/orders/${invoice.orderId}`)
+    revalidatePath(`/staff/orders/${invoice.orderId}`)
+  }
+
+  if (invoice.customerId) {
+    revalidatePath(`/admin/crm/${invoice.customerId}`)
+    revalidatePath(`/staff/crm/${invoice.customerId}`)
+    revalidatePath(`/sales/accounts/${invoice.customerId}`)
+  }
+
+  const success = encodeURIComponent(`${invoice.invoiceNumber} was deleted. You can create a new invoice now.`)
+  if (invoice.orderId) {
+    redirect(`/admin/invoicing/new?orderId=${invoice.orderId}&customerId=${invoice.customerId}&success=${success}`)
+  }
+
+  redirect(`/admin/invoicing/new?customerId=${invoice.customerId}&success=${success}`)
 }
 
 export async function recordOfflineInvoicePayment(formData: FormData) {

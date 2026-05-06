@@ -62,18 +62,22 @@ function toAmount(value: string) {
 }
 
 export function AdminInvoiceCreateForm({
+  initialCustomerId = '',
+  initialOrderId = '',
   customers,
   orders,
   products,
   pricingRules,
 }: {
+  initialCustomerId?: string
+  initialOrderId?: string
   customers: CustomerOption[]
   orders: OrderOption[]
   products: ProductOption[]
   pricingRules: GeographicPricingRuleInput[]
 }) {
-  const [customerId, setCustomerId] = useState('')
-  const [orderId, setOrderId] = useState('')
+  const [customerId, setCustomerId] = useState(initialCustomerId)
+  const [orderId, setOrderId] = useState(initialOrderId)
   const [tax, setTax] = useState('0')
   const [lineItems, setLineItems] = useState<LineItemFormRow[]>([createEmptyRow()])
 

@@ -5,11 +5,12 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Download, Send } from 'lucide-react'
 import { CopyPaymentLinkButton } from '@/components/invoices/CopyPaymentLinkButton'
+import { DeleteDraftInvoiceButton } from '@/components/invoices/DeleteDraftInvoiceButton'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatDate } from '@/lib/utils'
-import { createInvoiceAdjustment, markInvoicePaid, recordOfflineInvoicePayment, sendInvoiceEmail } from '@/actions/invoices'
+import { createInvoiceAdjustment, deleteDraftInvoice, markInvoicePaid, recordOfflineInvoicePayment, sendInvoiceEmail } from '@/actions/invoices'
 import { getInvoiceDetailData } from '@/lib/invoices/read'
 import { getInvoicePublicPaymentPath } from '@/lib/invoices/public-token'
 import { InvoiceVisual } from '@/components/invoices/InvoiceVisual'
@@ -107,6 +108,9 @@ export default async function InvoiceDetailPage({
               ) : null}
               {invoice.status !== 'paid' ? (
                 <CopyPaymentLinkButton paymentPath={getInvoicePublicPaymentPath(invoice.id)} />
+              ) : null}
+              {invoice.status === 'draft' ? (
+                <DeleteDraftInvoiceButton action={deleteDraftInvoice.bind(null, invoice.id)} />
               ) : null}
             </CardContent>
           </Card>
