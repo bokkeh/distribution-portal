@@ -65,7 +65,7 @@ export function InvoicePdfDocument({ invoice, logoDataUrl }: { invoice: InvoiceD
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 10 }}>
                 {logoDataUrl ? (
-                  <Image src={logoDataUrl} alt="" style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: '#ffffff' }} />
+                  <Image src={logoDataUrl} style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: '#ffffff' }} />
                 ) : null}
                 <Text style={styles.eyebrow}>AHAWC Distribution</Text>
               </View>
