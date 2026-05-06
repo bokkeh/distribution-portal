@@ -126,12 +126,15 @@ export async function getInvoiceDetailData(invoiceId: string): Promise<InvoiceDe
       createdAt: invoices.createdAt,
       orderId: invoices.orderId,
       stripePaymentIntentId: invoices.stripePaymentIntentId,
+      invoiceStatus: invoices.status,
       customerId: customerAccounts.id,
       companyName: customerAccounts.companyName,
       customerEmail: customerAccounts.email,
       customerPhone: customerAccounts.phone,
       paymentTerms: customerAccounts.paymentTerms,
       orderPaymentTerms: orders.paymentTerms,
+      orderPaymentStatus: orders.paymentStatus,
+      orderStripePaymentIntentId: orders.stripePaymentIntentId,
       address: customerAccounts.address,
       city: customerAccounts.city,
       state: customerAccounts.state,
@@ -218,6 +221,12 @@ export async function getInvoiceDetailData(invoiceId: string): Promise<InvoiceDe
     invoice.address,
     [invoice.city, invoice.state, invoice.zip].filter(Boolean).join(', ') || null,
   ].filter(Boolean) as string[]
+  const storedPaymentTerms = invoice.orderPaymentTerms ?? invoice.paymentTerms
+  const shouldDisplayPrepaid = (
+    invoice.orderPaymentStatus === 'paid' && Boolean(invoice.orderStripePaymentIntentId)
+  ) || (
+    invoice.invoiceStatus === 'paid' && stripeCheckout.appliedMethod !== null
+  )
 
   return {
     id: invoice.id,
@@ -234,7 +243,7 @@ export async function getInvoiceDetailData(invoiceId: string): Promise<InvoiceDe
     companyName: invoice.companyName ?? 'Customer account',
     customerEmail: invoice.customerEmail,
     customerPhone: invoice.customerPhone,
-    paymentTerms: invoice.orderPaymentTerms ?? invoice.paymentTerms,
+    paymentTerms: shouldDisplayPrepaid ? 'PREPAID' : storedPaymentTerms,
     customerAddressLines,
     lineItems,
     stripeCheckout,
