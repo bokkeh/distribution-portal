@@ -1,6 +1,5 @@
 import { Document, Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer'
 import type { InvoiceDetailData } from '@/lib/invoices/read'
-import { getCustomerPaymentBreakdown } from '@/lib/stripe/fees'
 
 const PAYMENT_TERMS_LABELS: Record<string, string> = {
   PREPAID: 'Prepaid', DUE_ON_RECEIPT: 'Due on Receipt',
@@ -53,9 +52,16 @@ function fmtDate(value: Date | null) {
 }
 
 export function InvoicePdfDocument({ invoice, logoDataUrl }: { invoice: InvoiceDetailData; logoDataUrl?: string | null }) {
-  const baseAmountCents = Math.round(invoice.total * 100)
-  const achBreakdown = getCustomerPaymentBreakdown(baseAmountCents, 'us_bank_account')
-  const cardBreakdown = getCustomerPaymentBreakdown(baseAmountCents, 'card')
+  const appliedMethodLabel = invoice.stripeCheckout.appliedMethodLabel
+  const appliedProcessingFee = invoice.stripeCheckout.appliedProcessingFee
+  const appliedTotal = invoice.stripeCheckout.appliedTotal
+  const hasAppliedStripeFee = (
+    invoice.stripeCheckout.appliedMethod !== null &&
+    appliedMethodLabel !== null &&
+    appliedProcessingFee !== null &&
+    appliedTotal !== null
+  )
+  const totalDisplay = hasAppliedStripeFee ? appliedTotal : invoice.total
 
   return (
     <Document title={invoice.invoiceNumber}>
@@ -128,24 +134,38 @@ export function InvoicePdfDocument({ invoice, logoDataUrl }: { invoice: InvoiceD
               <Text>Tax</Text>
               <Text>{fmtCurrency(invoice.tax)}</Text>
             </View>
+            {hasAppliedStripeFee ? (
+              <View style={styles.totalRow}>
+                <Text>{appliedMethodLabel} fee</Text>
+                <Text>{fmtCurrency(appliedProcessingFee)}</Text>
+              </View>
+            ) : null}
             <View style={[styles.totalRow, styles.grandTotal]}>
               <Text>Total</Text>
-              <Text>{fmtCurrency(invoice.total)}</Text>
+              <Text>{fmtCurrency(totalDisplay)}</Text>
             </View>
-            <View style={[styles.totalRow, { borderTopWidth: 1, borderTopColor: '#e2e8f0', paddingTop: 10, marginTop: 6, marginBottom: 4 }]}>
-              <Text>ACH total</Text>
-              <Text>{fmtCurrency(Number(achBreakdown.totalAmount))}</Text>
-            </View>
-            <Text style={{ fontSize: 9, color: '#64748b', marginBottom: 8 }}>
-              Includes {fmtCurrency(Number(achBreakdown.processingFee))} ACH fee.
-            </Text>
-            <View style={[styles.totalRow, { marginBottom: 4 }]}>
-              <Text>Card total</Text>
-              <Text>{fmtCurrency(Number(cardBreakdown.totalAmount))}</Text>
-            </View>
-            <Text style={{ fontSize: 9, color: '#64748b' }}>
-              Includes {fmtCurrency(Number(cardBreakdown.processingFee))} credit card fee.
-            </Text>
+            {hasAppliedStripeFee ? (
+              <Text style={{ fontSize: 9, color: '#64748b', marginTop: 8 }}>
+                Total reflects the Stripe {appliedMethodLabel.toLowerCase()} checkout amount.
+              </Text>
+            ) : (
+              <>
+                <View style={[styles.totalRow, { borderTopWidth: 1, borderTopColor: '#e2e8f0', paddingTop: 10, marginTop: 6, marginBottom: 4 }]}>
+                  <Text>ACH total</Text>
+                  <Text>{fmtCurrency(invoice.stripeCheckout.achTotal)}</Text>
+                </View>
+                <Text style={{ fontSize: 9, color: '#64748b', marginBottom: 8 }}>
+                  Includes {fmtCurrency(invoice.stripeCheckout.achFee)} ACH fee.
+                </Text>
+                <View style={[styles.totalRow, { marginBottom: 4 }]}>
+                  <Text>Card total</Text>
+                  <Text>{fmtCurrency(invoice.stripeCheckout.cardTotal)}</Text>
+                </View>
+                <Text style={{ fontSize: 9, color: '#64748b' }}>
+                  Includes {fmtCurrency(invoice.stripeCheckout.cardFee)} credit card fee.
+                </Text>
+              </>
+            )}
           </View>
         </View>
       </Page>

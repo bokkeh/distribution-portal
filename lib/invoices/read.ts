@@ -1,6 +1,24 @@
+import Stripe from 'stripe'
 import { eq } from 'drizzle-orm'
 import { db } from '@/db'
 import { customerAccounts, invoiceItems, invoices, orderItems, orders, products } from '@/db/schema'
+import { getCustomerPaymentBreakdown, type CustomerPaymentMethod } from '@/lib/stripe/fees'
+
+const stripe = process.env.STRIPE_SECRET_KEY
+  ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2026-02-25.clover' })
+  : null
+
+type InvoiceStripeCheckoutData = {
+  appliedMethod: CustomerPaymentMethod | null
+  appliedMethodLabel: string | null
+  appliedProcessingFee: number | null
+  appliedTotal: number | null
+  paymentIntentStatus: string | null
+  achFee: number
+  achTotal: number
+  cardFee: number
+  cardTotal: number
+}
 
 export type InvoiceLineItem = {
   id: string
@@ -30,6 +48,68 @@ export type InvoiceDetailData = {
   paymentTerms: string | null
   customerAddressLines: string[]
   lineItems: InvoiceLineItem[]
+  stripeCheckout: InvoiceStripeCheckoutData
+}
+
+function resolveStripePaymentMethod(value: string | null | undefined): CustomerPaymentMethod | null {
+  if (value === 'card' || value === 'us_bank_account') return value
+  return null
+}
+
+function formatStripePaymentMethodLabel(method: CustomerPaymentMethod | null) {
+  if (method === 'card') return 'Credit card'
+  if (method === 'us_bank_account') return 'ACH'
+  return null
+}
+
+async function getInvoiceStripeCheckoutData(invoiceId: string, stripePaymentIntentId: string | null, invoiceTotal: number): Promise<InvoiceStripeCheckoutData> {
+  const baseAmountCents = Math.round(invoiceTotal * 100)
+  const achBreakdown = getCustomerPaymentBreakdown(baseAmountCents, 'us_bank_account')
+  const cardBreakdown = getCustomerPaymentBreakdown(baseAmountCents, 'card')
+  const fallback: InvoiceStripeCheckoutData = {
+    appliedMethod: null,
+    appliedMethodLabel: null,
+    appliedProcessingFee: null,
+    appliedTotal: null,
+    paymentIntentStatus: null,
+    achFee: Number(achBreakdown.processingFee),
+    achTotal: Number(achBreakdown.totalAmount),
+    cardFee: Number(cardBreakdown.processingFee),
+    cardTotal: Number(cardBreakdown.totalAmount),
+  }
+
+  if (!stripe || !stripePaymentIntentId) return fallback
+
+  try {
+    const paymentIntent = await stripe.paymentIntents.retrieve(stripePaymentIntentId)
+    if (paymentIntent.metadata?.invoiceId !== invoiceId) return fallback
+
+    const method = resolveStripePaymentMethod(
+      paymentIntent.metadata?.paymentMethod ?? paymentIntent.payment_method_types?.[0] ?? null,
+    )
+    const status = paymentIntent.status ?? null
+
+    if (!method || status === 'canceled' || status === 'requires_payment_method') {
+      return { ...fallback, paymentIntentStatus: status }
+    }
+
+    const metadataFeeValue = paymentIntent.metadata?.processingFeeCents?.trim() ?? ''
+    const metadataFeeCents = metadataFeeValue ? Number(metadataFeeValue) : Number.NaN
+    const processingFeeCents = Number.isFinite(metadataFeeCents)
+      ? metadataFeeCents
+      : Math.max(paymentIntent.amount - baseAmountCents, 0)
+
+    return {
+      ...fallback,
+      appliedMethod: method,
+      appliedMethodLabel: formatStripePaymentMethodLabel(method),
+      appliedProcessingFee: processingFeeCents / 100,
+      appliedTotal: paymentIntent.amount / 100,
+      paymentIntentStatus: status,
+    }
+  } catch {
+    return fallback
+  }
 }
 
 export async function getInvoiceDetailData(invoiceId: string): Promise<InvoiceDetailData | null> {
@@ -45,6 +125,7 @@ export async function getInvoiceDetailData(invoiceId: string): Promise<InvoiceDe
       paidAt: invoices.paidAt,
       createdAt: invoices.createdAt,
       orderId: invoices.orderId,
+      stripePaymentIntentId: invoices.stripePaymentIntentId,
       customerId: customerAccounts.id,
       companyName: customerAccounts.companyName,
       customerEmail: customerAccounts.email,
@@ -63,6 +144,9 @@ export async function getInvoiceDetailData(invoiceId: string): Promise<InvoiceDe
     .limit(1)
 
   if (!invoice) return null
+
+  const invoiceTotal = Number(invoice.total)
+  const stripeCheckout = await getInvoiceStripeCheckoutData(invoice.id, invoice.stripePaymentIntentId, invoiceTotal)
 
   let lineItems: InvoiceLineItem[] = await db
     .select({
@@ -141,7 +225,7 @@ export async function getInvoiceDetailData(invoiceId: string): Promise<InvoiceDe
     status: invoice.status,
     amount: Number(invoice.amount),
     tax: Number(invoice.tax),
-    total: Number(invoice.total),
+    total: invoiceTotal,
     dueDate: invoice.dueDate ? new Date(invoice.dueDate) : null,
     paidAt: invoice.paidAt ? new Date(invoice.paidAt) : null,
     createdAt: new Date(invoice.createdAt),
@@ -153,5 +237,6 @@ export async function getInvoiceDetailData(invoiceId: string): Promise<InvoiceDe
     paymentTerms: invoice.orderPaymentTerms ?? invoice.paymentTerms,
     customerAddressLines,
     lineItems,
+    stripeCheckout,
   }
 }
