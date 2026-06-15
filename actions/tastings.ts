@@ -661,6 +661,56 @@ export async function deleteTasting(formData: FormData) {
   redirect(`${tastingRedirectPath(mode)}?success=${encodeURIComponent('Tasting cancelled and preserved in history.')}`)
 }
 
+export async function updateTastingAccount(formData: FormData) {
+  await requireFeature('tastings', 'admin', 'staff')
+  const tastingId = formData.get('tastingId') as string
+  const customerId = formData.get('customerId') as string
+
+  if (!tastingId || !customerId) {
+    redirect(`/admin/tastings/${tastingId}?error=${encodeURIComponent('Store account is required.')}`)
+  }
+
+  const [account] = await db
+    .select({
+      id: customerAccounts.id,
+      companyName: customerAccounts.companyName,
+      address: customerAccounts.address,
+      city: customerAccounts.city,
+      state: customerAccounts.state,
+      zip: customerAccounts.zip,
+      phone: customerAccounts.phone,
+    })
+    .from(customerAccounts)
+    .where(eq(customerAccounts.id, customerId))
+    .limit(1)
+
+  if (!account) {
+    redirect(`/admin/tastings/${tastingId}?error=${encodeURIComponent('Store account not found.')}`)
+  }
+
+  await db.update(tastings).set({
+    customerId: account.id,
+    eventName: account.companyName,
+    storeAddress: account.address,
+    storeCity: account.city,
+    storeState: account.state,
+    storeZip: account.zip,
+    storePhone: account.phone,
+  }).where(eq(tastings.id, tastingId))
+
+  await logActivityEvent({
+    entityType: 'tasting',
+    entityId: tastingId,
+    kind: 'tasting_status_changed',
+    title: 'Tasting account updated',
+    body: `Account changed to ${account.companyName}.`,
+  })
+
+  revalidatePath('/admin/tastings')
+  revalidatePath(`/admin/tastings/${tastingId}`)
+  redirect(`/admin/tastings/${tastingId}?success=${encodeURIComponent('Account updated.')}`)
+}
+
 export async function reassignTasting(formData: FormData) {
   const session = await requireFeature('tastings', 'admin', 'staff')
   const tastingId = formData.get('tastingId') as string
@@ -963,6 +1013,11 @@ export async function submitTastingReport(formData: FormData) {
   revalidatePath('/admin/tastings')
   revalidatePath('/staff/tastings')
   revalidatePath('/taster/tastings')
+
+  const redirectTo = formData.get('redirectTo') as string | null
+  if (redirectTo?.startsWith('/')) {
+    redirect(`${redirectTo}?success=${encodeURIComponent('Tasting report submitted.')}`)
+  }
   redirect(`/taster/tastings/${tastingId}?success=${encodeURIComponent('Tasting report submitted.')}`)
 }
 

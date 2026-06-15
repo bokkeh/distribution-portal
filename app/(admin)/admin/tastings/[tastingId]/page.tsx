@@ -1,11 +1,11 @@
 import { db } from '@/db'
 import { tastingReports, tasterInvoices, users, customerAccounts } from '@/db/schema'
-import { eq } from 'drizzle-orm'
+import { asc, eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { requireFeature } from '@/lib/auth/session'
 import { getTastingById } from '@/lib/tastings/read'
 import { formatEasternDateTime } from '@/lib/tastings/time'
-import { updateTastingStatus, deleteTasting, reassignTasting } from '@/actions/tastings'
+import { updateTastingStatus, deleteTasting, reassignTasting, updateTastingAccount } from '@/actions/tastings'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ConfirmSubmitButton } from '@/components/ui/confirm-submit-button'
@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { ViewAsButton } from '@/components/admin/ViewAsButton'
 import Link from 'next/link'
 import { ArrowLeft, Calendar, MapPin, Phone, User, FileText, Receipt, StickyNote } from 'lucide-react'
+import { TastingReportFormCard } from '@/components/tastings/TastingReportFormCard'
 
 const STATUS_COLORS: Record<string, string> = {
   requested: 'text-violet-700 border-violet-200 bg-violet-50',
@@ -40,12 +41,17 @@ function isMissingTasterInvoiceReceiptColumn(error: unknown) {
 
 export default async function AdminTastingDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ tastingId: string }>
+  searchParams: Promise<{ success?: string; error?: string }>
 }) {
   await requireFeature('tastings', 'admin', 'staff')
 
   const { tastingId } = await params
+  const sp = await searchParams
+  const success = sp.success
+  const error = sp.error
   const tasting = await getTastingById(tastingId)
   if (!tasting) notFound()
 
@@ -67,6 +73,11 @@ export default async function AdminTastingDetailPage({
   let invoice: (typeof tasterInvoices.$inferSelect & { receiptUrls: string[] }) | null = null
   let allTasters: Array<{ id: string; name: string | null; roles: string[] | null }> = []
   let missingSubmissionTables = false
+
+  const allAccounts = await db
+    .select({ id: customerAccounts.id, companyName: customerAccounts.companyName, city: customerAccounts.city, state: customerAccounts.state })
+    .from(customerAccounts)
+    .orderBy(asc(customerAccounts.companyName))
 
   try {
     ;[account, taster, report, invoice, allTasters] = await Promise.all([
@@ -253,13 +264,13 @@ export default async function AdminTastingDetailPage({
             </CardContent>
           </Card>
 
-          {/* Tasting report */}
+          {/* Tasting report summary (quick view when submitted) */}
           {report && (
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
                   <FileText className="w-4 h-4 text-slate-400" />
-                  Tasting Report
+                  Report Summary
                   <Badge variant="outline" className="ml-auto text-xs text-green-700 border-green-200 bg-green-50">Submitted</Badge>
                 </CardTitle>
               </CardHeader>
@@ -289,6 +300,21 @@ export default async function AdminTastingDetailPage({
                 )}
               </CardContent>
             </Card>
+          )}
+
+          {/* Admin: fill or edit report on behalf of taster */}
+          {!missingSubmissionTables && (
+            <TastingReportFormCard
+              tasting={{
+                id: tastingId,
+                eventName: tasting.eventName,
+                scheduledAt: new Date(tasting.scheduledAt),
+              }}
+              report={report ?? null}
+              success={success}
+              error={error}
+              redirectTo={`/admin/tastings/${tastingId}`}
+            />
           )}
 
           {/* Invoice */}
@@ -323,30 +349,46 @@ export default async function AdminTastingDetailPage({
         {/* Right column: people + actions */}
         <div className="space-y-4">
           {/* Account */}
-          {account && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold text-slate-700">Account</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm space-y-2">
-                <Link href={`/admin/crm/${account.id}`} className="font-medium text-blue-600 hover:underline">
-                  {account.companyName}
-                </Link>
-                {account.phone && (
-                  <div className="flex items-center gap-2 text-slate-600">
-                    <Phone className="w-3.5 h-3.5 text-slate-400" />
-                    <a href={`tel:${account.phone}`} className="hover:text-blue-600">{account.phone}</a>
-                  </div>
-                )}
-                {(account.address || account.city) && (
-                  <div className="flex items-start gap-2 text-slate-600">
-                    <MapPin className="w-3.5 h-3.5 mt-0.5 text-slate-400 shrink-0" />
-                    <span>{[account.address, account.city, account.state].filter(Boolean).join(', ')}</span>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold text-slate-700">Account</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm space-y-2">
+              {account && (
+                <>
+                  <Link href={`/admin/crm/${account.id}`} className="font-medium text-blue-600 hover:underline">
+                    {account.companyName}
+                  </Link>
+                  {account.phone && (
+                    <div className="flex items-center gap-2 text-slate-600">
+                      <Phone className="w-3.5 h-3.5 text-slate-400" />
+                      <a href={`tel:${account.phone}`} className="hover:text-blue-600">{account.phone}</a>
+                    </div>
+                  )}
+                  {(account.address || account.city) && (
+                    <div className="flex items-start gap-2 text-slate-600">
+                      <MapPin className="w-3.5 h-3.5 mt-0.5 text-slate-400 shrink-0" />
+                      <span>{[account.address, account.city, account.state].filter(Boolean).join(', ')}</span>
+                    </div>
+                  )}
+                </>
+              )}
+              <form action={updateTastingAccount} className="pt-2 border-t">
+                <input type="hidden" name="tastingId" value={tastingId} />
+                <label className="block text-xs text-slate-500 mb-1">Change account</label>
+                <div className="flex gap-2">
+                  <select name="customerId" defaultValue={tasting.customerId} className="flex-1 rounded-md border border-input bg-transparent px-2 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                    {allAccounts.map(a => (
+                      <option key={a.id} value={a.id}>
+                        {a.companyName}{a.city ? ` — ${a.city}${a.state ? `, ${a.state}` : ''}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <Button type="submit" size="sm" variant="outline" className="text-xs shrink-0">Save</Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
 
           {/* Taster */}
           {taster && (

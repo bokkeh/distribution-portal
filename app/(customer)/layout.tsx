@@ -18,7 +18,7 @@ export default async function CustomerLayout({ children }: { children: React.Rea
         {children}
       </main>
       {isSuperAdmin ? (
-        <div className="fixed bottom-4 left-4 z-40">
+        <div className="fixed bottom-40 left-4 z-40 sm:bottom-4">
           <SuperAdminViewSwitcher />
         </div>
       ) : null}

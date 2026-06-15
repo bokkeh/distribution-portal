@@ -22,7 +22,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
         </div>
       </main>
       {isSuperAdmin ? (
-        <div className="fixed bottom-4 left-4 z-40 md:hidden">
+        <div className="fixed bottom-40 left-4 z-40 md:hidden">
           <SuperAdminViewSwitcher />
         </div>
       ) : null}

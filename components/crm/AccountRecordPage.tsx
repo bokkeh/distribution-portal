@@ -29,6 +29,7 @@ import { AccountMediaGalleryCard } from '@/components/crm/AccountMediaGalleryCar
 import { AccountMediaInsightsCard } from '@/components/crm/AccountMediaInsightsCard'
 import { AccountMediaUploadCard } from '@/components/crm/AccountMediaUploadCard'
 import { AccountNotesCard } from '@/components/crm/AccountNotesCard'
+import { AccountOrderHistoryPanel } from '@/components/crm/AccountOrderHistoryPanel'
 import { AccountPortalPricingCard } from '@/components/crm/AccountPortalPricingCard'
 import { AccountRecordTabs } from '@/components/crm/AccountRecordTabs'
 import { AccountSmartInsightsCard } from '@/components/crm/AccountSmartInsightsCard'
@@ -181,6 +182,7 @@ export async function AccountRecordPage({
   const invoicingIndexHref = getInvoicingIndexPath(mode)
   const canUploadAccountMedia = currentUserRoles.some((role) => ['admin', 'sales_rep', 'sales_manager'].includes(role))
   const canUseMediaInsights = currentUserRoles.some((role) => ['admin', 'staff', 'sales_rep', 'sales_manager'].includes(role))
+  const canManageOrderPlacedDates = currentUserRoles.some((role) => ['admin', 'staff', 'sales_rep', 'sales_manager'].includes(role))
 
   const quickActions = [
     ...(createOrderHref ? [{ label: 'Create Order', href: createOrderHref, icon: Plus }] : []),
@@ -362,7 +364,7 @@ export async function AccountRecordPage({
         status: orders.status,
         total: orders.total,
         createdAt: orders.createdAt,
-      }).from(orders).where(eq(orders.customerId, accountId)).orderBy(desc(orders.createdAt)).limit(20),
+      }).from(orders).where(eq(orders.customerId, accountId)).orderBy(desc(orders.createdAt)),
       db.select({
         id: invoices.id,
         invoiceNumber: invoices.invoiceNumber,
@@ -703,14 +705,14 @@ export async function AccountRecordPage({
 
       {tab === 'orders' && ordersData ? (
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-          <Card>
-            <CardHeader className="pb-3"><CardTitle>Order History</CardTitle></CardHeader>
-            <CardContent>{ordersData.recentOrders.length === 0 ? <p className="text-sm text-slate-500">No orders yet.</p> : <div className="space-y-2">{ordersData.recentOrders.map((order) => {
-              const orderHref = getOrderDetailPath(mode, order.id)
-              const content = <div className={`flex items-center justify-between rounded-xl border border-slate-100 px-3 py-3 ${orderHref ? 'hover:bg-slate-50' : ''}`}><div><p className="text-sm font-medium">#{order.id.slice(-8).toUpperCase()}</p><p className="text-xs text-muted-foreground" suppressHydrationWarning>{formatDate(order.createdAt)}</p></div><div className="text-right"><p className="text-sm font-semibold">{formatCurrency(order.total)}</p><Badge variant="secondary" className="text-xs">{order.status}</Badge></div></div>
-              return orderHref ? <Link key={order.id} href={orderHref}>{content}</Link> : <div key={order.id}>{content}</div>
-            })}</div>}</CardContent>
-          </Card>
+          <AccountOrderHistoryPanel
+            className="xl:col-span-2"
+            orders={ordersData.recentOrders.map((order) => ({
+              ...order,
+              orderHref: getOrderDetailPath(mode, order.id),
+            }))}
+            canManagePlacedDates={canManageOrderPlacedDates}
+          />
           <Card>
             <CardHeader className="pb-3"><CardTitle>Invoices</CardTitle></CardHeader>
             <CardContent>{ordersData.recentInvoices.length === 0 ? <p className="text-sm text-slate-500">No invoices yet.</p> : <div className="space-y-2">{ordersData.recentInvoices.map((invoice) => <div key={invoice.id} className="flex items-center justify-between rounded-xl border border-slate-100 px-3 py-3"><div><p className="text-sm font-medium">{invoice.invoiceNumber}</p>{invoice.dueDate ? <p className="text-xs text-muted-foreground">Due {formatDate(invoice.dueDate)}</p> : null}</div><div className="text-right"><p className="text-sm font-semibold">{formatCurrency(invoice.total)}</p><Badge variant={invoice.status === 'paid' ? 'success' : invoice.status === 'overdue' ? 'destructive' : invoice.status === 'sent' ? 'info' : 'secondary'} className="text-xs">{invoice.status}</Badge></div></div>)}</div>}</CardContent>

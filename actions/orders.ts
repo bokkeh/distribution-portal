@@ -3,7 +3,7 @@
 import Stripe from 'stripe'
 import { db } from '@/db'
 import { customerAccounts, inventory, orderItems, orders, salesMembers } from '@/db/schema'
-import { getEffectiveSession, requireAuth } from '@/lib/auth/session'
+import { getEffectiveSession, requireAuth, requireRole } from '@/lib/auth/session'
 import { eq, inArray } from 'drizzle-orm'
 import { calculateCommissionForOrder, recordCommission } from '@/actions/sales-members'
 import { revalidatePath } from 'next/cache'
@@ -15,6 +15,7 @@ import { logActivityEvent } from '@/lib/activity/log'
 import { formatPaymentTerms } from '@/lib/orders/payment-terms'
 import { buildPricedLineItems, computeDeliveryFee, type CheckoutOrderType, type PurchaseUnit } from '@/lib/orders/checkout'
 import type { OrderPaymentStatus } from '@/db/schema'
+import { formatDate } from '@/lib/utils'
 
 function uniqueEmails(...values: Array<string | null | undefined>) {
   return Array.from(new Set(values.map((value) => value?.trim()).filter(Boolean) as string[]))
@@ -36,6 +37,119 @@ function resolveOrderPaymentStatus(status: Stripe.PaymentIntent.Status): OrderPa
       return 'failed'
     default:
       return 'requires_action'
+  }
+}
+
+function revalidateOrderDatePaths(orderId: string, customerId: string) {
+  revalidatePath('/admin/dashboard')
+  revalidatePath('/staff/dashboard')
+  revalidatePath('/sales/dashboard')
+  revalidatePath('/sales/forecast')
+  revalidatePath('/customer/dashboard')
+  revalidatePath('/admin/orders')
+  revalidatePath(`/admin/orders/${orderId}`)
+  revalidatePath('/staff/orders')
+  revalidatePath(`/staff/orders/${orderId}`)
+  revalidatePath('/customer/orders')
+  revalidatePath(`/customer/orders/${orderId}`)
+  revalidatePath('/admin/crm')
+  revalidatePath(`/admin/crm/${customerId}`)
+  revalidatePath('/staff/crm')
+  revalidatePath(`/staff/crm/${customerId}`)
+  revalidatePath('/sales/accounts')
+  revalidatePath(`/sales/accounts/${customerId}`)
+}
+
+function parsePlacedDateInput(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim())
+  if (!match) {
+    throw new Error('Choose a valid order date.')
+  }
+
+  const year = Number(match[1])
+  const month = Number(match[2])
+  const day = Number(match[3])
+  const parsed = new Date(Date.UTC(year, month - 1, day, 12, 0, 0))
+
+  if (
+    Number.isNaN(parsed.getTime()) ||
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    throw new Error('Choose a valid order date.')
+  }
+
+  return parsed
+}
+
+export async function updateOrderPlacedDate(input: { orderId: string; placedDate: string }) {
+  try {
+    const session = await requireRole('admin', 'staff', 'sales_rep', 'sales_manager')
+    const userRoles = session.user.roles ?? [session.user.role as string]
+    const canManageAny = userRoles.some((role) => ['admin', 'staff', 'sales_manager'].includes(role))
+
+    const [order] = await db
+      .select({
+        id: orders.id,
+        customerId: orders.customerId,
+        createdAt: orders.createdAt,
+        assignedSalesRepId: customerAccounts.assignedSalesRepId,
+      })
+      .from(orders)
+      .innerJoin(customerAccounts, eq(orders.customerId, customerAccounts.id))
+      .where(eq(orders.id, input.orderId))
+      .limit(1)
+
+    if (!order) {
+      throw new Error('Order not found.')
+    }
+
+    if (!canManageAny) {
+      const [member] = await db
+        .select({ id: salesMembers.id })
+        .from(salesMembers)
+        .where(eq(salesMembers.userId, session.user.id))
+        .limit(1)
+
+      if (!member || order.assignedSalesRepId !== member.id) {
+        throw new Error('Unauthorized sales order')
+      }
+    }
+
+    const nextCreatedAt = parsePlacedDateInput(input.placedDate)
+    const previousDateValue = order.createdAt.toISOString().slice(0, 10)
+
+    if (previousDateValue === input.placedDate.trim()) {
+      return { success: true as const, createdAt: order.createdAt.toISOString() }
+    }
+
+    await db
+      .update(orders)
+      .set({ createdAt: nextCreatedAt })
+      .where(eq(orders.id, order.id))
+
+    await logActivityEvent({
+      entityType: 'order',
+      entityId: order.id,
+      actorUserId: session.user.id,
+      kind: 'order_placed_date_updated',
+      title: 'Order placed date updated',
+      body: `Placed date changed from ${formatDate(order.createdAt)} to ${formatDate(nextCreatedAt)}.`,
+      metadata: {
+        previousCreatedAt: order.createdAt.toISOString(),
+        nextCreatedAt: nextCreatedAt.toISOString(),
+      },
+    })
+
+    revalidateOrderDatePaths(order.id, order.customerId)
+
+    return {
+      success: true as const,
+      createdAt: nextCreatedAt.toISOString(),
+    }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Failed to update order date' }
   }
 }
 

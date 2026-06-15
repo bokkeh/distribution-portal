@@ -22,7 +22,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { toggleStarAccount } from '@/actions/crm'
 import { getCustomerSegmentLabel, getCustomerSourceLabel } from '@/lib/customers/account-segmentation'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, formatDate } from '@/lib/utils'
 import type { PipelineStage } from '@/lib/deal-stages'
 import { PhoneSmsButton } from './PhoneSmsButton'
 import { DealStageSelect } from './DealStageSelect'
@@ -56,6 +56,7 @@ export interface AccountRow {
   pendingCases: number
   totalCasesPurchased: number
   healthScore: number
+  lastActivityAt: string | Date | null
 }
 
 const COLUMN_OPTIONS = [
@@ -78,14 +79,43 @@ const COLUMN_OPTIONS = [
   { key: 'pendingCases', label: 'Pending Cases' },
   { key: 'totalPurchased', label: 'Total Purchased' },
   { key: 'balance', label: 'Balance' },
+  { key: 'lastActivity', label: 'Last Activity' },
   { key: 'hubspot', label: 'HubSpot' },
   { key: 'health', label: 'Health Score' },
 ] as const
 
 type ColumnKey = (typeof COLUMN_OPTIONS)[number]['key']
+type SortKey = 'company' | 'dealStage' | 'salesLead' | 'lastActivity' | 'balance' | 'pendingCases' | 'totalPurchased' | 'health'
+type ActivityWindowKey = 'all' | '1d' | '3d' | '7d' | '14d' | '30d'
 
 const DEFAULT_COLUMNS: ColumnKey[] = ['company', 'segment', 'location', 'phone', 'dealStage', 'terms', 'pendingCases', 'totalPurchased', 'balance', 'health', 'hubspot']
 const NUMERIC_COLUMNS = new Set<ColumnKey>(['creditLimit', 'pendingCases', 'totalPurchased', 'balance', 'health'])
+const ACTIVITY_WINDOW_OPTIONS: Array<{ value: ActivityWindowKey; label: string }> = [
+  { value: 'all', label: 'Touched: Anytime' },
+  { value: '1d', label: 'Touched: Yesterday' },
+  { value: '3d', label: 'Touched: Last 3 Days' },
+  { value: '7d', label: 'Touched: Last 7 Days' },
+  { value: '14d', label: 'Touched: Last 14 Days' },
+  { value: '30d', label: 'Touched: Last 30 Days' },
+]
+
+function normalizeDate(value: string | Date | null | undefined) {
+  if (!value) return null
+  const parsed = value instanceof Date ? value : new Date(value)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function getActivityThreshold(window: ActivityWindowKey) {
+  if (window === 'all') return null
+
+  const days = window === '1d' ? 1 : Number(window.replace('d', ''))
+  if (!Number.isFinite(days)) return null
+
+  const now = new Date()
+  now.setHours(0, 0, 0, 0)
+  now.setDate(now.getDate() - days)
+  return now
+}
 
 function readStoredColumns(storageKey: string): ColumnKey[] {
   if (typeof window === 'undefined') return DEFAULT_COLUMNS
@@ -106,22 +136,26 @@ function readStoredColumns(storageKey: string): ColumnKey[] {
 
 function readStoredView(filterStorageKey: string): {
   searchQuery: string
-  sortBy: 'company' | 'balance' | 'pendingCases' | 'health'
+  sortBy: SortKey
+  activityWindow: ActivityWindowKey
 } {
   if (typeof window === 'undefined') {
-    return { searchQuery: '', sortBy: 'company' }
+    return { searchQuery: '', sortBy: 'company', activityWindow: 'all' }
   }
 
   try {
     const raw = window.localStorage.getItem(filterStorageKey)
-    if (!raw) return { searchQuery: '', sortBy: 'company' }
-    const parsed = JSON.parse(raw) as { searchQuery?: string; sortBy?: 'company' | 'balance' | 'pendingCases' | 'health' }
+    if (!raw) return { searchQuery: '', sortBy: 'company', activityWindow: 'all' }
+    const parsed = JSON.parse(raw) as { searchQuery?: string; sortBy?: SortKey; activityWindow?: ActivityWindowKey }
+    const validSortBy: SortKey[] = ['company', 'dealStage', 'salesLead', 'lastActivity', 'balance', 'pendingCases', 'totalPurchased', 'health']
+    const validActivityWindows: ActivityWindowKey[] = ['all', '1d', '3d', '7d', '14d', '30d']
     return {
       searchQuery: typeof parsed.searchQuery === 'string' ? parsed.searchQuery : '',
-      sortBy: parsed.sortBy === 'balance' || parsed.sortBy === 'pendingCases' || parsed.sortBy === 'health' ? parsed.sortBy : 'company',
+      sortBy: parsed.sortBy && validSortBy.includes(parsed.sortBy) ? parsed.sortBy : 'company',
+      activityWindow: parsed.activityWindow && validActivityWindows.includes(parsed.activityWindow) ? parsed.activityWindow : 'all',
     }
   } catch {
-    return { searchQuery: '', sortBy: 'company' }
+    return { searchQuery: '', sortBy: 'company', activityWindow: 'all' }
   }
 }
 
@@ -269,6 +303,12 @@ function renderAccountCell({
       )
     case 'balance':
       return <td key={column} className="px-4 py-3 text-right text-sm font-medium">{formatCurrency(account.balance ?? '0')}</td>
+    case 'lastActivity':
+      return (
+        <td key={column} className="px-4 py-3 text-sm text-muted-foreground" suppressHydrationWarning>
+          {account.lastActivityAt ? formatDate(account.lastActivityAt) : '-'}
+        </td>
+      )
     case 'hubspot':
       return (
         <td key={column} className="px-4 py-3">
@@ -391,7 +431,8 @@ export function LocalAccountsTable({
   const filterStorageKey = useMemo(() => `crm-view:${userId}:${basePath}`, [userId, basePath])
   const [selectedColumns, setSelectedColumns] = useState<ColumnKey[]>(() => readStoredColumns(storageKey))
   const [searchQuery, setSearchQuery] = useState(() => readStoredView(filterStorageKey).searchQuery)
-  const [sortBy, setSortBy] = useState<'company' | 'balance' | 'pendingCases' | 'health'>(() => readStoredView(filterStorageKey).sortBy)
+  const [sortBy, setSortBy] = useState<SortKey>(() => readStoredView(filterStorageKey).sortBy)
+  const [activityWindow, setActivityWindow] = useState<ActivityWindowKey>(() => readStoredView(filterStorageKey).activityWindow)
   const [page, setPage] = useState(1)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
 
@@ -401,7 +442,7 @@ export function LocalAccountsTable({
 
   useEffect(() => {
     setPage(1)
-  }, [initialAccounts, searchQuery, sortBy])
+  }, [activityWindow, initialAccounts, searchQuery, sortBy])
 
   useEffect(() => {
     try {
@@ -411,9 +452,9 @@ export function LocalAccountsTable({
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(filterStorageKey, JSON.stringify({ searchQuery, sortBy }))
+      window.localStorage.setItem(filterStorageKey, JSON.stringify({ searchQuery, sortBy, activityWindow }))
     } catch {}
-  }, [filterStorageKey, searchQuery, sortBy])
+  }, [activityWindow, filterStorageKey, searchQuery, sortBy])
 
   function handleStar(id: string, val: boolean) {
     setAccounts((prev) => prev.map((account) => account.id === id ? { ...account, starred: val } : account))
@@ -447,9 +488,9 @@ export function LocalAccountsTable({
   }
 
   const normalizedQuery = searchQuery.trim().toLowerCase()
+  const activityThreshold = getActivityThreshold(activityWindow)
   const filteredAccounts = accounts.filter((account) => {
-    if (!normalizedQuery) return true
-    return [
+    const matchesSearch = !normalizedQuery || [
       account.companyName,
       account.firstName,
       account.lastName,
@@ -466,11 +507,33 @@ export function LocalAccountsTable({
       account.paymentTerms,
       account.salesLeadName,
     ].some((value) => String(value ?? '').toLowerCase().includes(normalizedQuery))
+    if (!matchesSearch) return false
+
+    if (!activityThreshold) return true
+    const lastActivityAt = normalizeDate(account.lastActivityAt)
+    return Boolean(lastActivityAt && lastActivityAt.getTime() >= activityThreshold.getTime())
   })
 
+  const stageOrder = new Map(pipelineStages.map((stage, index) => [stage.stageKey, index]))
   const sortedAccounts = [...filteredAccounts].sort((left, right) => {
+    if (sortBy === 'dealStage') {
+      const leftIndex = left.dealStage ? (stageOrder.get(left.dealStage) ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER
+      const rightIndex = right.dealStage ? (stageOrder.get(right.dealStage) ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER
+      if (leftIndex !== rightIndex) return leftIndex - rightIndex
+      return left.companyName.localeCompare(right.companyName)
+    }
+    if (sortBy === 'salesLead') {
+      return (left.salesLeadName ?? '').localeCompare(right.salesLeadName ?? '') || left.companyName.localeCompare(right.companyName)
+    }
+    if (sortBy === 'lastActivity') {
+      const leftTime = normalizeDate(left.lastActivityAt)?.getTime() ?? 0
+      const rightTime = normalizeDate(right.lastActivityAt)?.getTime() ?? 0
+      if (leftTime !== rightTime) return rightTime - leftTime
+      return left.companyName.localeCompare(right.companyName)
+    }
     if (sortBy === 'balance') return Number(right.balance ?? 0) - Number(left.balance ?? 0)
     if (sortBy === 'pendingCases') return right.pendingCases - left.pendingCases
+    if (sortBy === 'totalPurchased') return right.totalCasesPurchased - left.totalCasesPurchased
     if (sortBy === 'health') return right.healthScore - left.healthScore
     return left.companyName.localeCompare(right.companyName)
   })
@@ -511,15 +574,33 @@ export function LocalAccountsTable({
           <select
             value={sortBy}
             onChange={(event) => {
-              setSortBy(event.target.value as typeof sortBy)
+              setSortBy(event.target.value as SortKey)
               setPage(1)
             }}
             className="h-9 rounded-md border border-input bg-white px-3 text-sm"
           >
             <option value="company">Sort: Company</option>
+            <option value="dealStage">Sort: Deal Stage</option>
+            <option value="salesLead">Sort: Sales Lead</option>
+            <option value="lastActivity">Sort: Last Activity</option>
             <option value="balance">Sort: Balance</option>
             <option value="pendingCases">Sort: Pending Cases</option>
+            <option value="totalPurchased">Sort: Total Purchased</option>
             <option value="health">Sort: Health Score</option>
+          </select>
+          <select
+            value={activityWindow}
+            onChange={(event) => {
+              setActivityWindow(event.target.value as ActivityWindowKey)
+              setPage(1)
+            }}
+            className="h-9 rounded-md border border-input bg-white px-3 text-sm"
+          >
+            {ACTIVITY_WINDOW_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
           <div className="relative">
             <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => setShowColumnPicker((prev) => !prev)}>

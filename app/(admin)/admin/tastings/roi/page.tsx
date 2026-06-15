@@ -28,6 +28,7 @@ export default async function TastingROIPage({
   const rows = await db
     .select({
       tastingId: tastings.id,
+      customerId: tastings.customerId,
       eventName: tastings.eventName,
       scheduledAt: tastings.scheduledAt,
       status: tastings.status,
@@ -70,6 +71,23 @@ export default async function TastingROIPage({
     byTaster[name].events += 1
   }
   const tasterRankings = Object.values(byTaster).sort((a, b) => b.bottles - a.bottles)
+
+  // Leaderboard 2: avg bottles per tasting by taster
+  const avgBottlesByTaster = Object.values(byTaster)
+    .map(t => ({ ...t, avg: t.events > 0 ? t.bottles / t.events : 0 }))
+    .sort((a, b) => b.avg - a.avg)
+
+  // Leaderboard 3: avg bottles per tasting by store
+  const byStore: Record<string, { name: string; bottles: number; events: number; city: string | null; state: string | null }> = {}
+  for (const r of rows) {
+    const key = r.customerId ?? r.eventName ?? 'Unknown'
+    if (!byStore[key]) byStore[key] = { name: r.eventName ?? 'Unknown', bottles: 0, events: 0, city: r.storeCity ?? null, state: r.storeState ?? null }
+    byStore[key].bottles += r.bottlesSold ?? 0
+    byStore[key].events += 1
+  }
+  const storeRankings = Object.values(byStore)
+    .map(s => ({ ...s, avg: s.events > 0 ? s.bottles / s.events : 0 }))
+    .sort((a, b) => b.avg - a.avg)
 
   return (
     <div className="space-y-6">
@@ -142,38 +160,105 @@ export default async function TastingROIPage({
         </Card>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-3">
-        {/* Taster leaderboard */}
-        {tasterRankings.length > 0 && (
-          <Card className="xl:col-span-1">
-            <CardHeader><CardTitle className="text-base">Taster Leaderboard</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              {tasterRankings.map((t, i) => (
-                <div key={t.name} className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5">
-                    <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold
-                      ${i === 0 ? 'bg-amber-100 text-amber-700' : i === 1 ? 'bg-slate-100 text-slate-600' : i === 2 ? 'bg-orange-100 text-orange-700' : 'bg-slate-50 text-slate-500'}`}>
-                      {i + 1}
-                    </span>
-                    <div>
-                      <p className="text-sm font-medium text-slate-900">{t.name}</p>
-                      <p className="text-xs text-muted-foreground">{t.events} events · {formatCurrency(t.cost)}</p>
-                    </div>
+      {/* Leaderboards */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Leaderboard 1: total bottles by taster */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Taster Leaderboard</CardTitle>
+            <p className="text-xs text-muted-foreground">Total bottles sold</p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {tasterRankings.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No data yet.</p>
+            ) : tasterRankings.map((t, i) => (
+              <div key={t.name} className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold
+                    ${i === 0 ? 'bg-amber-100 text-amber-700' : i === 1 ? 'bg-slate-100 text-slate-600' : i === 2 ? 'bg-orange-100 text-orange-700' : 'bg-slate-50 text-slate-500'}`}>
+                    {i + 1}
+                  </span>
+                  <div>
+                    <p className="text-sm font-medium text-slate-900">{t.name}</p>
+                    <p className="text-xs text-muted-foreground">{t.events} tastings · {formatCurrency(t.cost)}</p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-bold text-slate-900">{t.bottles} bottles</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-bold text-slate-900">{t.bottles} btl</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t.cost > 0 && t.bottles > 0 ? `${formatCurrency(t.cost / t.bottles)}/btl` : '—'}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        {/* Leaderboard 2: avg bottles per tasting by taster */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Avg Bottles / Tasting</CardTitle>
+            <p className="text-xs text-muted-foreground">Bottles sold ÷ tastings performed</p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {avgBottlesByTaster.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No data yet.</p>
+            ) : avgBottlesByTaster.map((t, i) => (
+              <div key={t.name} className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold
+                    ${i === 0 ? 'bg-amber-100 text-amber-700' : i === 1 ? 'bg-slate-100 text-slate-600' : i === 2 ? 'bg-orange-100 text-orange-700' : 'bg-slate-50 text-slate-500'}`}>
+                    {i + 1}
+                  </span>
+                  <div>
+                    <p className="text-sm font-medium text-slate-900">{t.name}</p>
+                    <p className="text-xs text-muted-foreground">{t.events} tastings · {t.bottles} total btl</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-bold text-slate-900">{t.avg.toFixed(1)} btl</p>
+                  <p className="text-xs text-muted-foreground">per tasting</p>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        {/* Leaderboard 3: avg bottles per tasting by store */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Best Stores</CardTitle>
+            <p className="text-xs text-muted-foreground">Avg bottles sold per tasting by account</p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {storeRankings.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No data yet.</p>
+            ) : storeRankings.map((s, i) => (
+              <div key={s.name + i} className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold
+                    ${i === 0 ? 'bg-amber-100 text-amber-700' : i === 1 ? 'bg-slate-100 text-slate-600' : i === 2 ? 'bg-orange-100 text-orange-700' : 'bg-slate-50 text-slate-500'}`}>
+                    {i + 1}
+                  </span>
+                  <div>
+                    <p className="text-sm font-medium text-slate-900 leading-tight">{s.name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {t.cost > 0 && t.bottles > 0 ? `${formatCurrency(t.cost / t.bottles)}/btl` : '—'}
+                      {[s.city, s.state].filter(Boolean).join(', ') || '—'} · {s.events} tasting{s.events !== 1 ? 's' : ''}
                     </p>
                   </div>
                 </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
+                <div className="text-right">
+                  <p className="text-sm font-bold text-slate-900">{s.avg.toFixed(1)} btl</p>
+                  <p className="text-xs text-muted-foreground">per tasting</p>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
 
-        {/* Per-tasting table */}
-        <Card className="xl:col-span-2">
+      {/* Per-tasting table */}
+      <Card>
           <CardHeader><CardTitle className="text-base">All Completed Tastings</CardTitle></CardHeader>
           <CardContent className="p-0">
             {rows.length === 0 ? (
@@ -234,7 +319,6 @@ export default async function TastingROIPage({
             )}
           </CardContent>
         </Card>
-      </div>
     </div>
   )
 }

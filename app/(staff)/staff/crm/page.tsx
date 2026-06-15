@@ -1,6 +1,6 @@
 import { db } from '@/db'
-import { crmPipelineStages, customerAccounts, orders, orderItems, contacts, salesMembers, users } from '@/db/schema'
-import { sql, eq, and, inArray, asc } from 'drizzle-orm'
+import { activityEvents, contacts, crmPipelineStages, customerAccounts, deliveries, deliveryStops, invoices, orderItems, orders, salesMembers, tastings, users } from '@/db/schema'
+import { sql, eq, and, inArray, asc, max } from 'drizzle-orm'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { getHubSpotCompanies } from '@/lib/hubspot/client'
@@ -31,6 +31,21 @@ function buildCrmHref(basePath: string, view: 'list' | 'pipeline', filter: CRMAc
   if (filter !== 'b2b') params.set('segment', filter)
   const query = params.toString()
   return query ? `${basePath}?${query}` : basePath
+}
+
+function getMostRecentDate(...values: Array<Date | string | null | undefined>) {
+  let latest: Date | null = null
+
+  for (const value of values) {
+    if (!value) continue
+    const parsed = value instanceof Date ? value : new Date(value)
+    if (Number.isNaN(parsed.getTime())) continue
+    if (!latest || parsed.getTime() > latest.getTime()) {
+      latest = parsed
+    }
+  }
+
+  return latest
 }
 
 export default async function StaffCRMPage({
@@ -116,7 +131,7 @@ export default async function StaffCRMPage({
 
   // Order stats per customer
   const accountIds = accounts.map(a => a.id)
-  const [pendingStats, totalStats] = await Promise.all([
+  const [pendingStats, totalStats, lastOrderStats, accountActivityStats, orderActivityStats, invoiceActivityStats, tastingActivityStats, deliveryActivityStats] = await Promise.all([
     accountIds.length === 0 ? [] : db
       .select({
         customerId: orders.customerId,
@@ -135,16 +150,83 @@ export default async function StaffCRMPage({
       .innerJoin(orderItems, eq(orderItems.orderId, orders.id))
       .where(and(inArray(orders.customerId, accountIds), inArray(orders.status, ['confirmed', 'fulfilled'])))
       .groupBy(orders.customerId),
+    accountIds.length === 0 ? [] : db
+      .select({
+        customerId: orders.customerId,
+        lastOrderAt: max(orders.createdAt).as('last_order_at'),
+      })
+      .from(orders)
+      .where(inArray(orders.customerId, accountIds))
+      .groupBy(orders.customerId),
+    accountIds.length === 0 ? [] : db
+      .select({
+        customerId: activityEvents.entityId,
+        lastActivityAt: max(activityEvents.createdAt).as('last_activity_at'),
+      })
+      .from(activityEvents)
+      .where(and(eq(activityEvents.entityType, 'account'), inArray(activityEvents.entityId, accountIds)))
+      .groupBy(activityEvents.entityId),
+    accountIds.length === 0 ? [] : db
+      .select({
+        customerId: orders.customerId,
+        lastActivityAt: max(activityEvents.createdAt).as('last_activity_at'),
+      })
+      .from(activityEvents)
+      .innerJoin(orders, eq(activityEvents.entityId, orders.id))
+      .where(and(eq(activityEvents.entityType, 'order'), inArray(orders.customerId, accountIds)))
+      .groupBy(orders.customerId),
+    accountIds.length === 0 ? [] : db
+      .select({
+        customerId: invoices.customerId,
+        lastActivityAt: max(activityEvents.createdAt).as('last_activity_at'),
+      })
+      .from(activityEvents)
+      .innerJoin(invoices, eq(activityEvents.entityId, invoices.id))
+      .where(and(eq(activityEvents.entityType, 'invoice'), inArray(invoices.customerId, accountIds)))
+      .groupBy(invoices.customerId),
+    accountIds.length === 0 ? [] : db
+      .select({
+        customerId: tastings.customerId,
+        lastActivityAt: max(activityEvents.createdAt).as('last_activity_at'),
+      })
+      .from(activityEvents)
+      .innerJoin(tastings, eq(activityEvents.entityId, tastings.id))
+      .where(and(eq(activityEvents.entityType, 'tasting'), inArray(tastings.customerId, accountIds)))
+      .groupBy(tastings.customerId),
+    accountIds.length === 0 ? [] : db
+      .select({
+        customerId: deliveryStops.customerId,
+        lastActivityAt: max(activityEvents.createdAt).as('last_activity_at'),
+      })
+      .from(activityEvents)
+      .innerJoin(deliveries, eq(activityEvents.entityId, deliveries.id))
+      .innerJoin(deliveryStops, eq(deliveryStops.deliveryId, deliveries.id))
+      .where(and(eq(activityEvents.entityType, 'delivery'), inArray(deliveryStops.customerId, accountIds)))
+      .groupBy(deliveryStops.customerId),
   ])
 
   const pendingMap = new Map(pendingStats.map(r => [r.customerId, Number(r.cases)]))
   const totalMap = new Map(totalStats.map(r => [r.customerId, Number(r.cases)]))
+  const lastOrderMap = new Map(lastOrderStats.map(r => [r.customerId, r.lastOrderAt]))
+  const accountActivityMap = new Map(accountActivityStats.map(r => [r.customerId, r.lastActivityAt]))
+  const orderActivityMap = new Map(orderActivityStats.map(r => [r.customerId, r.lastActivityAt]))
+  const invoiceActivityMap = new Map(invoiceActivityStats.map(r => [r.customerId, r.lastActivityAt]))
+  const tastingActivityMap = new Map(tastingActivityStats.map(r => [r.customerId, r.lastActivityAt]))
+  const deliveryActivityMap = new Map(deliveryActivityStats.map(r => [r.customerId, r.lastActivityAt]))
 
   const accountRows = accounts.map(a => ({
     ...a,
     pendingCases: pendingMap.get(a.id) ?? 0,
     totalCasesPurchased: totalMap.get(a.id) ?? 0,
     healthScore: 0,
+    lastActivityAt: getMostRecentDate(
+      accountActivityMap.get(a.id),
+      orderActivityMap.get(a.id),
+      invoiceActivityMap.get(a.id),
+      tastingActivityMap.get(a.id),
+      deliveryActivityMap.get(a.id),
+      lastOrderMap.get(a.id),
+    ),
   }))
   const filteredAccounts = accounts.filter((account) => matchesAccountFilter(account, currentFilter))
   const filteredAccountRows = accountRows.filter((account) => matchesAccountFilter(account, currentFilter))

@@ -37,6 +37,7 @@ export function TastingReportFormCard({
   success,
   error,
   compact = false,
+  redirectTo,
 }: {
   tasting: {
     id: string
@@ -47,6 +48,7 @@ export function TastingReportFormCard({
   success?: string
   error?: string
   compact?: boolean
+  redirectTo?: string
 }) {
   const reportFormRef = useRef<HTMLFormElement | null>(null)
   const reportDraft = useFormDraftAutosave(reportFormRef, `tasting-report:${tasting.id}`)
@@ -174,6 +176,7 @@ export function TastingReportFormCard({
 
         <form ref={reportFormRef} action={submitTastingReport} className="space-y-4">
           <input type="hidden" name="tastingId" value={tasting.id} />
+          {redirectTo && <input type="hidden" name="redirectTo" value={redirectTo} />}
           {/* Photo URL hidden inputs — kept in sync with state */}
           <input type="hidden" name="setupPhotoUrl" value={setupPhotoUrl} />
           <input type="hidden" name="shelfPhotoUrls" value={JSON.stringify(shelfPhotoUrls.filter(Boolean))} />
