@@ -1,16 +1,13 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { CartItem } from '@/types'
-import { normalizeCaseQuantity } from '@/lib/orders/minimums'
 
 interface CartStore {
   cartScopeKey: string | null
   items: CartItem[]
   orderType: 'paid' | 'sample'
-  businessType: string | null
   setCartScope: (scopeKey: string | null) => void
   setOrderType: (type: 'paid' | 'sample') => void
-  setBusinessType: (type: string | null) => void
   addItem: (item: Omit<CartItem, 'quantity'>) => void
   removeItem: (productId: string) => void
   updateQuantity: (productId: string, quantity: number) => void
@@ -25,7 +22,6 @@ export const useCart = create<CartStore>()(
       cartScopeKey: null,
       items: [],
       orderType: 'paid',
-      businessType: null,
       setCartScope: (scopeKey) => set((state) => {
         if (!scopeKey || state.cartScopeKey === scopeKey) {
           return state
@@ -35,11 +31,9 @@ export const useCart = create<CartStore>()(
           cartScopeKey: scopeKey,
           items: [],
           orderType: 'paid',
-          businessType: null,
         }
       }),
       setOrderType: (type) => set({ orderType: type, items: [] }),
-      setBusinessType: (type) => set({ businessType: type }),
       addItem: (newItem) => set((state) => {
         const existing = state.items.find(i => i.productId === newItem.productId)
         if (existing) {
@@ -48,7 +42,7 @@ export const useCart = create<CartStore>()(
               if (i.productId !== newItem.productId) return i
               return {
                 ...i,
-                quantity: normalizeCaseQuantity(i, i.quantity + 1, state.businessType),
+                quantity: i.quantity + 1,
               }
             }),
           }
@@ -58,7 +52,7 @@ export const useCart = create<CartStore>()(
             ...state.items,
             {
               ...newItem,
-              quantity: normalizeCaseQuantity(newItem, 1, state.businessType),
+              quantity: 1,
             },
           ],
         }
@@ -71,7 +65,7 @@ export const useCart = create<CartStore>()(
             if (i.productId !== productId) return i
             return {
               ...i,
-              quantity: normalizeCaseQuantity(i, quantity, state.businessType),
+              quantity,
             }
           }),
         }

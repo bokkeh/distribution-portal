@@ -31,7 +31,6 @@ export default async function CheckoutPage() {
       <CheckoutClient
         customerId={account?.id ?? ''}
         customerName={session.user.name ?? ''}
-        businessType={account?.businessType}
         pricingRules={pricingRules}
         pricingAccountId={pricingContext.accountId}
         pricingBusinessType={pricingContext.businessType}

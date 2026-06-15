@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { Check, ImageIcon, Plus, ShoppingCart } from 'lucide-react'
@@ -10,7 +10,6 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency } from '@/lib/utils'
 import { useCart } from '@/hooks/useCart'
-import { getMinimumCaseQuantity, isWisherVodkaProduct } from '@/lib/orders/minimums'
 import { describePricingSource, type GeographicPricingSource } from '@/lib/pricing/geographic'
 
 interface Product {
@@ -31,19 +30,13 @@ interface Product {
 export default function CustomerProductCatalog({
   products,
   categories,
-  businessType,
 }: {
   products: Product[]
   categories: string[]
-  businessType?: string | null
 }) {
   const [search, setSearch] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
-  const { items, addItem, itemCount, setBusinessType } = useCart()
-
-  useEffect(() => {
-    setBusinessType(businessType ?? null)
-  }, [businessType, setBusinessType])
+  const { items, addItem, itemCount } = useCart()
 
   const filtered = products.filter((product) => {
     const matchesSearch =
@@ -101,8 +94,6 @@ export default function CustomerProductCatalog({
           const stock = product.quantityPaid
           const inCart = isInCart(product.id)
           const outOfStock = (stock ?? 0) <= 0
-          const hasMinimumCaseRequirement = isWisherVodkaProduct(product)
-          const minCases = getMinimumCaseQuantity(product, businessType)
 
           return (
             <Card
@@ -136,9 +127,6 @@ export default function CustomerProductCatalog({
                   </div>
                   <span className="text-xs text-muted-foreground">{stock ?? 0} avail.</span>
                 </div>
-                {hasMinimumCaseRequirement ? (
-                  <p className="text-xs text-amber-700">Minimum order: {minCases} cases</p>
-                ) : null}
                 <Button
                   className="w-full"
                   size="sm"
@@ -164,7 +152,7 @@ export default function CustomerProductCatalog({
                   ) : (
                     <>
                       <Plus className="mr-1 h-4 w-4" />
-                      {hasMinimumCaseRequirement ? `Add ${minCases} Cases` : 'Add to Order'}
+                      Add to Order
                     </>
                   )}
                 </Button>

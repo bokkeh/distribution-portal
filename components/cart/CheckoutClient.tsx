@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useCart } from '@/hooks/useCart'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -11,7 +11,6 @@ import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-
 import { createOrder } from '@/actions/orders'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { getMinimumCaseQuantity, isWisherVodkaProduct } from '@/lib/orders/minimums'
 import { getCustomerPaymentBreakdown, type CustomerPaymentMethod } from '@/lib/stripe/fees'
 import { resolveGeographicCasePrice, type GeographicPricingRuleInput } from '@/lib/pricing/geographic'
 
@@ -124,7 +123,6 @@ function PaymentForm({ customerId, orderType, items, total, notes, deliveryTimin
 export default function CheckoutClient({
   customerId,
   customerName,
-  businessType,
   pricingRules,
   pricingAccountId,
   pricingBusinessType,
@@ -133,7 +131,6 @@ export default function CheckoutClient({
 }: {
   customerId: string
   customerName: string
-  businessType?: string | null
   pricingRules: GeographicPricingRuleInput[]
   pricingAccountId: string | null
   pricingBusinessType: string | null
@@ -154,19 +151,7 @@ export default function CheckoutClient({
   const [processingFee, setProcessingFee] = useState(0)
   const router = useRouter()
 
-  const minimumViolation = useMemo(
-    () => items.find(item => isWisherVodkaProduct(item) && item.quantity < getMinimumCaseQuantity(item, businessType)),
-    [items, businessType]
-  )
-
   async function initializePayment() {
-    if (minimumViolation) {
-      toast.error('Minimum order not met', {
-        description: `${minimumViolation.name} requires at least ${getMinimumCaseQuantity(minimumViolation, businessType)} cases.`,
-      })
-      return
-    }
-
     try {
       setLoading(true)
       const res = await fetch('/api/stripe/payment-intent', {
@@ -220,16 +205,11 @@ export default function CheckoutClient({
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <Card>
+        <Card>
         <CardHeader><CardTitle>Order Summary</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">Customer: {customerName}</p>
           <p className="text-sm text-muted-foreground">Order Type: <strong>{orderType}</strong></p>
-          {minimumViolation && (
-            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              {minimumViolation.name} requires a minimum of {getMinimumCaseQuantity(minimumViolation, businessType)} cases before checkout.
-            </div>
-          )}
           <div className="space-y-2 border-t pt-3">
             {items.map(item => {
               const price = getDisplayedPrice(item, orderType, pricingRules, pricingAccountId, pricingBusinessType, pricingState, pricingCounty)
@@ -390,7 +370,7 @@ export default function CheckoutClient({
                   <span>{paymentMethod === 'card' ? formatCurrency(cardBreakdown.totalAmount) : formatCurrency(achBreakdown.totalAmount)}</span>
                 </div>
               </div>
-              <Button className="w-full" onClick={initializePayment} disabled={loading || !!minimumViolation}>
+              <Button className="w-full" onClick={initializePayment} disabled={loading}>
                 {loading ? 'Preparing...' : `Continue to ${paymentMethod === 'card' ? 'Card Payment' : 'ACH Payment'}`}
               </Button>
             </div>

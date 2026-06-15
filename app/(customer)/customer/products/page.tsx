@@ -71,7 +71,7 @@ export default async function CustomerProductsPage() {
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white/90 p-6 shadow-sm">
             <p className="text-sm font-semibold text-slate-900">Ordering tips</p>
-            <p className="mt-2 text-sm text-slate-500">Use search and category filters to narrow the list. Product cards show current stock and any case minimums before you add them to your cart.</p>
+            <p className="mt-2 text-sm text-slate-500">Use search and category filters to narrow the list. Product cards show current stock and pricing before you add them to your cart.</p>
             <div className="mt-4 flex flex-wrap gap-2">
               <Link href="/customer/cart"><Button variant="outline">View Cart</Button></Link>
               <Link href="/customer/orders"><Button variant="ghost">Order History</Button></Link>
@@ -79,7 +79,7 @@ export default async function CustomerProductsPage() {
           </div>
         </div>
       </section>
-      <CustomerProductCatalog products={pricedProducts} categories={categories as string[]} businessType={account?.businessType} />
+      <CustomerProductCatalog products={pricedProducts} categories={categories as string[]} />
     </div>
   )
 }

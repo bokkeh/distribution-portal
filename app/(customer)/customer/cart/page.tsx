@@ -23,7 +23,6 @@ export default async function CartPage() {
 
   return (
     <CustomerCartPage
-      businessType={account?.businessType}
       pricingRules={pricingRules}
       pricingAccountId={pricingContext.accountId}
       pricingBusinessType={pricingContext.businessType}

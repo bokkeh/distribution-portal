@@ -1,7 +1,6 @@
 import { eq, inArray } from 'drizzle-orm'
 import { db } from '@/db'
 import { customerAccounts, inventory, orderItems, products } from '@/db/schema'
-import { getMinimumCaseQuantity, isWisherVodkaProduct } from '@/lib/orders/minimums'
 import { getPricingRulesForProducts, normalizeAccountGeography, resolveProductCasePrice } from '@/lib/pricing/geographic-service'
 import type { GeographicPricingSource } from '@/lib/pricing/geographic'
 
@@ -99,14 +98,6 @@ export async function buildPricedLineItems(input: {
 
     if (item.quantity > availableQuantity) {
       throw new Error(`Not enough ${input.purchaseUnit}s in stock for ${product.name}`)
-    }
-
-    if (
-      input.purchaseUnit === 'case' &&
-      isWisherVodkaProduct(product) &&
-      item.quantity < getMinimumCaseQuantity(product, input.customerBusinessType)
-    ) {
-      throw new Error(`${product.name} requires a minimum order of ${getMinimumCaseQuantity(product, input.customerBusinessType)} cases`)
     }
 
     const paidPricing = input.orderType === 'paid'

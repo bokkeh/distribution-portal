@@ -8,7 +8,6 @@ import { formatCurrency } from '@/lib/utils'
 import { Trash2, Plus, Minus, ShoppingCart, ArrowRight, ImageIcon } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { getMinimumCaseQuantity, getMinimumCaseQuantityMessage, isWisherVodkaProduct } from '@/lib/orders/minimums'
 import { resolveGeographicCasePrice, type GeographicPricingRuleInput } from '@/lib/pricing/geographic'
 
 function getDisplayedPrice(
@@ -35,14 +34,12 @@ function getDisplayedPrice(
 }
 
 export default function CustomerCartPage({
-  businessType,
   pricingRules,
   pricingAccountId,
   pricingBusinessType,
   pricingState,
   pricingCounty,
 }: {
-  businessType?: string | null
   pricingRules: GeographicPricingRuleInput[]
   pricingAccountId: string | null
   pricingBusinessType: string | null
@@ -77,9 +74,6 @@ export default function CustomerCartPage({
         <div className="space-y-3 lg:col-span-2">
           {items.map(item => {
             const price = getDisplayedPrice(item, orderType, pricingRules, pricingAccountId, pricingBusinessType, pricingState, pricingCounty)
-            const minimumMessage = getMinimumCaseQuantityMessage(item, businessType)
-            const min = getMinimumCaseQuantity(item, businessType)
-            const isLockedAtMinimum = isWisherVodkaProduct(item) && item.quantity <= min
 
             return (
               <Card key={item.productId}>
@@ -106,9 +100,8 @@ export default function CustomerCartPage({
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => updateQuantity(item.productId, item.quantity - 1)}
-                        className="flex h-7 w-7 items-center justify-center rounded border hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
-                        disabled={isLockedAtMinimum}
-                        title={isLockedAtMinimum ? `Wisher Vodka has a ${min}-case minimum. Use remove to delete it.` : 'Decrease quantity'}
+                        className="flex h-7 w-7 items-center justify-center rounded border hover:bg-slate-100"
+                        title="Decrease quantity"
                       >
                         <Minus className="h-3 w-3" />
                       </button>
@@ -124,11 +117,6 @@ export default function CustomerCartPage({
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
-                  {minimumMessage && (
-                    <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                      {minimumMessage}
-                    </p>
-                  )}
                 </CardContent>
               </Card>
             )
