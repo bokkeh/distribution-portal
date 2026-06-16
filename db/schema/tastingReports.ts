@@ -1,4 +1,4 @@
-import { boolean, integer, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
+import { boolean, integer, jsonb, numeric, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
 import { tastings } from './tastings'
 import { users } from './users'
 
@@ -11,7 +11,10 @@ export const tastingReports = pgTable('tasting_reports', {
   samplesServed: integer('samples_served'),
   bottlesSold: integer('bottles_sold'),
   casesSold: integer('cases_sold'),
+  missedCustomers: integer('missed_customers'),
   consumerInteractions: integer('consumer_interactions'),
+  bottlePriceOnShelf: numeric('bottle_price_on_shelf', { precision: 10, scale: 2 }),
+  bottlesInStock: integer('bottles_in_stock'),
   accountFeedback: text('account_feedback'),
   highlights: text('highlights'),
   issues: text('issues'),

@@ -114,6 +114,29 @@ function parseNonNegativeDecimalField(
   }
 }
 
+function parseNonNegativeIntegerField(
+  value: FormDataEntryValue | null,
+  fieldLabel: string,
+  maxValue?: number,
+): { ok: false; error: string } | { ok: true; numericValue: number } {
+  const rawValue = String(value ?? '').trim()
+  const parsedValue = Number(rawValue || '0')
+
+  if (!Number.isFinite(parsedValue) || !Number.isInteger(parsedValue)) {
+    return { ok: false, error: `Enter a whole number for ${fieldLabel.toLowerCase()}.` }
+  }
+
+  if (parsedValue < 0) {
+    return { ok: false, error: `${fieldLabel} cannot be negative.` }
+  }
+
+  if (maxValue != null && parsedValue > maxValue) {
+    return { ok: false, error: `${fieldLabel} looks too high. Please review it and try again.` }
+  }
+
+  return { ok: true, numericValue: parsedValue }
+}
+
 async function getSalesMemberIdForUser(userId: string) {
   const [member] = await db
     .select({ id: salesMembers.id, status: salesMembers.status })
@@ -884,6 +907,8 @@ export async function reassignTasting(formData: FormData) {
 export async function submitTastingReport(formData: FormData) {
   const session = await requireFeature('tastings', 'taster', 'admin')
   const tastingId = formData.get('tastingId') as string
+  const redirectTo = (formData.get('redirectTo') as string | null)?.trim()
+  const redirectBase = redirectTo?.startsWith('/') ? redirectTo : `/taster/tastings/${tastingId}`
 
   const [tasting] = await db
     .select({
@@ -909,14 +934,46 @@ export async function submitTastingReport(formData: FormData) {
     shelfPhotoUrls = JSON.parse(raw).filter(Boolean)
   } catch { /* ignore parse errors */ }
 
+  const samplesServedResult = parseNonNegativeIntegerField(formData.get('samplesServed'), 'Samples served', 100000)
+  if (!samplesServedResult.ok) {
+    redirect(`${redirectBase}?error=${encodeURIComponent(samplesServedResult.error)}`)
+  }
+
+  const bottlesSoldResult = parseNonNegativeIntegerField(formData.get('bottlesSold'), 'Bottles sold', 100000)
+  if (!bottlesSoldResult.ok) {
+    redirect(`${redirectBase}?error=${encodeURIComponent(bottlesSoldResult.error)}`)
+  }
+
+  const missedCustomersResult = parseNonNegativeIntegerField(formData.get('missedCustomers'), 'Customers missed', 100000)
+  if (!missedCustomersResult.ok) {
+    redirect(`${redirectBase}?error=${encodeURIComponent(missedCustomersResult.error)}`)
+  }
+
+  const consumerInteractionsResult = parseNonNegativeIntegerField(formData.get('consumerInteractions'), 'Consumer interactions', 100000)
+  if (!consumerInteractionsResult.ok) {
+    redirect(`${redirectBase}?error=${encodeURIComponent(consumerInteractionsResult.error)}`)
+  }
+
+  const bottlesInStockResult = parseNonNegativeIntegerField(formData.get('bottlesInStock'), 'Number of bottles in stock', 100000)
+  if (!bottlesInStockResult.ok) {
+    redirect(`${redirectBase}?error=${encodeURIComponent(bottlesInStockResult.error)}`)
+  }
+
+  const bottlePriceOnShelfResult = parseNonNegativeDecimalField(formData.get('bottlePriceOnShelf'), 'Bottle price on shelf', 10000)
+  if (!bottlePriceOnShelfResult.ok) {
+    redirect(`${redirectBase}?error=${encodeURIComponent(bottlePriceOnShelfResult.error)}`)
+  }
+
   const payload = {
     submittedByUserId: session.user.id,
     actualStartTime: ((formData.get('actualStartTime') as string) || '').trim() || null,
     actualEndTime: ((formData.get('actualEndTime') as string) || '').trim() || null,
-    samplesServed: Number(formData.get('samplesServed') || 0) || 0,
-    bottlesSold: Number(formData.get('bottlesSold') || 0) || 0,
-    casesSold: Number(formData.get('casesSold') || 0) || 0,
-    consumerInteractions: Number(formData.get('consumerInteractions') || 0) || 0,
+    samplesServed: samplesServedResult.numericValue,
+    bottlesSold: bottlesSoldResult.numericValue,
+    missedCustomers: missedCustomersResult.numericValue,
+    consumerInteractions: consumerInteractionsResult.numericValue,
+    bottlePriceOnShelf: bottlePriceOnShelfResult.formattedValue,
+    bottlesInStock: bottlesInStockResult.numericValue,
     accountFeedback: ((formData.get('accountFeedback') as string) || '').trim() || null,
     highlights: ((formData.get('highlights') as string) || '').trim() || null,
     issues: ((formData.get('issues') as string) || '').trim() || null,
@@ -1014,7 +1071,6 @@ export async function submitTastingReport(formData: FormData) {
   revalidatePath('/staff/tastings')
   revalidatePath('/taster/tastings')
 
-  const redirectTo = formData.get('redirectTo') as string | null
   if (redirectTo?.startsWith('/')) {
     redirect(`${redirectTo}?success=${encodeURIComponent('Tasting report submitted.')}`)
   }

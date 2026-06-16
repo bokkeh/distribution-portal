@@ -278,14 +278,21 @@ export default async function AdminTastingDetailPage({
                 {[
                   { label: 'Samples Served', value: report.samplesServed },
                   { label: 'Bottles Sold', value: report.bottlesSold },
-                  { label: 'Cases Sold', value: report.casesSold },
+                  { label: 'Customers Missed', value: report.missedCustomers },
                   { label: 'Consumer Interactions', value: report.consumerInteractions },
+                  { label: 'Bottles In Stock', value: report.bottlesInStock },
                 ].map(({ label, value }) => value != null && (
                   <div key={label} className="bg-slate-50 rounded-lg p-2.5">
                     <span className="text-xs text-slate-400">{label}</span>
                     <p className="font-semibold text-slate-900 mt-0.5">{value}</p>
                   </div>
                 ))}
+                {report.bottlePriceOnShelf != null && (
+                  <div className="bg-slate-50 rounded-lg p-2.5">
+                    <span className="text-xs text-slate-400">Bottle Price On Shelf</span>
+                    <p className="font-semibold text-slate-900 mt-0.5">${report.bottlePriceOnShelf}</p>
+                  </div>
+                )}
                 {report.accountFeedback && (
                   <div className="col-span-full">
                     <span className="text-xs text-slate-400">Account Feedback</span>

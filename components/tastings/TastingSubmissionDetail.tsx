@@ -18,8 +18,10 @@ type ReportRecord = {
   actualEndTime: string | null
   samplesServed: number | null
   bottlesSold: number | null
-  casesSold: number | null
+  missedCustomers: number | null
   consumerInteractions: number | null
+  bottlePriceOnShelf: string | null
+  bottlesInStock: number | null
   accountFeedback: string | null
   highlights: string | null
   issues: string | null

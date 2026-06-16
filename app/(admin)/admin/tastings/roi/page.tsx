@@ -37,7 +37,6 @@ export default async function TastingROIPage({
       tasterName: users.name,
       // report data
       bottlesSold: tastingReports.bottlesSold,
-      casesSold: tastingReports.casesSold,
       samplesServed: tastingReports.samplesServed,
       consumerInteractions: tastingReports.consumerInteractions,
       // invoice data
@@ -54,7 +53,6 @@ export default async function TastingROIPage({
   // Aggregate stats
   const withReport = rows.filter(r => r.bottlesSold != null)
   const totalBottles = withReport.reduce((s, r) => s + (r.bottlesSold ?? 0), 0)
-  const totalCases = withReport.reduce((s, r) => s + (r.casesSold ?? 0), 0)
   const totalSamples = withReport.reduce((s, r) => s + (r.samplesServed ?? 0), 0)
   const totalCost = rows.reduce((s, r) => s + Number(r.invoiceCost ?? 0), 0)
   const totalInteractions = withReport.reduce((s, r) => s + (r.consumerInteractions ?? 0), 0)
@@ -126,7 +124,7 @@ export default async function TastingROIPage({
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Bottles Sold</p>
                 <p className="mt-2 text-3xl font-bold text-slate-900">{totalBottles}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{totalCases} cases · {totalSamples} samples</p>
+                <p className="mt-1 text-xs text-muted-foreground">{totalSamples} samples · {totalInteractions} interactions</p>
               </div>
               <div className="rounded-xl bg-violet-50 p-3"><Wine className="h-5 w-5 text-violet-500" /></div>
             </div>

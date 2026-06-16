@@ -232,6 +232,13 @@
       "when": 1776883200000,
       "tag": "0047_crm_pipeline_stages_and_b2c_names",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1781600400000,
+      "tag": "0048_tasting_report_shelf_metrics",
+      "breakpoints": true
     }
   ]
 }

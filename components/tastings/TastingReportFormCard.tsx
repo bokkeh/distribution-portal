@@ -17,8 +17,10 @@ type ReportRecord = {
   actualEndTime: string | null
   samplesServed: number | null
   bottlesSold: number | null
-  casesSold: number | null
+  missedCustomers: number | null
   consumerInteractions: number | null
+  bottlePriceOnShelf: string | null
+  bottlesInStock: number | null
   accountFeedback: string | null
   highlights: string | null
   issues: string | null
@@ -209,8 +211,28 @@ export function TastingReportFormCard({
               <Input id="bottlesSold" name="bottlesSold" type="number" min="0" defaultValue={report?.bottlesSold ?? 0} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="casesSold">Cases Sold</Label>
-              <Input id="casesSold" name="casesSold" type="number" min="0" defaultValue={report?.casesSold ?? 0} />
+              <Label htmlFor="missedCustomers">Customers Missed</Label>
+              <Input id="missedCustomers" name="missedCustomers" type="number" min="0" defaultValue={report?.missedCustomers ?? 0} />
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="bottlePriceOnShelf">Bottle Price On Shelf</Label>
+              <Input
+                id="bottlePriceOnShelf"
+                name="bottlePriceOnShelf"
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min="0"
+                defaultValue={report?.bottlePriceOnShelf ?? ''}
+                placeholder="24.99"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="bottlesInStock">Number Of Bottles In Stock</Label>
+              <Input id="bottlesInStock" name="bottlesInStock" type="number" min="0" defaultValue={report?.bottlesInStock ?? ''} />
             </div>
           </div>
 

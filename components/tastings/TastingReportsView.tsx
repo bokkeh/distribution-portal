@@ -1,3 +1,5 @@
+'use client'
+
 import Image from 'next/image'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -17,14 +19,15 @@ export type TastingReportRow = {
   storeState: string | null
   storeZip: string | null
   tasterName: string | null
-  // report
   reportId: string | null
   actualStartTime: string | null
   actualEndTime: string | null
   samplesServed: number | null
   bottlesSold: number | null
-  casesSold: number | null
+  missedCustomers: number | null
   consumerInteractions: number | null
+  bottlePriceOnShelf: string | null
+  bottlesInStock: number | null
   accountFeedback: string | null
   highlights: string | null
   issues: string | null
@@ -33,7 +36,6 @@ export type TastingReportRow = {
   reportSubmittedAt: Date | null
   setupPhotoUrl: string | null
   shelfPhotoUrls: string[] | null
-  // invoice
   invoiceId: string | null
   payeeName: string | null
   hourlyRate: string | null
@@ -65,9 +67,9 @@ export function TastingReportsView({
   rows: TastingReportRow[]
   analysesMap?: Record<string, SerializedTastingAnalysis>
 }) {
-  const withReport = rows.filter(r => r.reportId)
-  const withInvoice = rows.filter(r => r.invoiceId)
-  const followUp = rows.filter(r => r.followUpNeeded)
+  const withReport = rows.filter((r) => r.reportId)
+  const withInvoice = rows.filter((r) => r.invoiceId)
+  const followUp = rows.filter((r) => r.followUpNeeded)
   const totalPayout = withInvoice.reduce((sum, r) => sum + Number(r.totalAmount ?? 0), 0)
 
   return (
@@ -104,15 +106,14 @@ export function TastingReportsView({
         <Card><CardContent className="p-6 text-sm text-muted-foreground">No tastings found.</CardContent></Card>
       ) : (
         <div className="space-y-4">
-          {rows.map(row => (
+          {rows.map((row) => (
             <Card key={row.tastingId}>
-              <CardContent className="p-5 space-y-4">
-                {/* Header */}
+              <CardContent className="space-y-4 p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-base font-semibold text-slate-900">{row.eventName}</p>
                     <p className="mt-0.5 text-sm text-muted-foreground">
-                      {formatEasternDateTime(row.scheduledAt)} &middot; {row.tasterName ?? 'Unassigned'}
+                      {formatEasternDateTime(row.scheduledAt)} · {row.tasterName ?? 'Unassigned'}
                     </p>
                     <p className="text-sm text-muted-foreground">
                       {[row.storeAddress, row.storeCity, row.storeState, row.storeZip].filter(Boolean).join(', ') || 'No address'}
@@ -120,41 +121,50 @@ export function TastingReportsView({
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Badge variant={statusVariant(row.status)}>{row.status}</Badge>
-                    {row.reportId
-                      ? <Badge variant="success">Report submitted</Badge>
-                      : <Badge variant="secondary">No report</Badge>
-                    }
-                    {row.invoiceId
-                      ? <Badge variant={invoiceStatusVariant(row.invoiceStatus)}>Invoice: {row.invoiceStatus}</Badge>
-                      : <Badge variant="secondary">No invoice</Badge>
-                    }
+                    {row.reportId ? <Badge variant="success">Report submitted</Badge> : <Badge variant="secondary">No report</Badge>}
+                    {row.invoiceId ? (
+                      <Badge variant={invoiceStatusVariant(row.invoiceStatus)}>Invoice: {row.invoiceStatus}</Badge>
+                    ) : (
+                      <Badge variant="secondary">No invoice</Badge>
+                    )}
                     {row.followUpNeeded && <Badge variant="warning">Follow-up needed</Badge>}
                   </div>
                 </div>
 
-                {/* Report details */}
                 {row.reportId ? (
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-4">
+                  <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Event Report &middot; submitted {formatEasternDateTime(row.reportSubmittedAt!)}
+                      Event Report · submitted {formatEasternDateTime(row.reportSubmittedAt!)}
                     </p>
                     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                       {[
                         { label: 'Samples Served', value: row.samplesServed },
                         { label: 'Bottles Sold', value: row.bottlesSold },
-                        { label: 'Cases Sold', value: row.casesSold },
+                        { label: 'Customers Missed', value: row.missedCustomers },
                         { label: 'Consumer Interactions', value: row.consumerInteractions },
                       ].map(({ label, value }) => (
                         <div key={label} className="space-y-0.5">
                           <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-                          <p className="text-lg font-semibold text-slate-900">{value ?? '—'}</p>
+                          <p className="text-lg font-semibold text-slate-900">{value ?? '-'}</p>
                         </div>
                       ))}
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-0.5">
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Bottle Price On Shelf</p>
+                        <p className="text-lg font-semibold text-slate-900">
+                          {row.bottlePriceOnShelf != null ? formatCurrency(Number(row.bottlePriceOnShelf)) : '-'}
+                        </p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Bottles In Stock</p>
+                        <p className="text-lg font-semibold text-slate-900">{row.bottlesInStock ?? '-'}</p>
+                      </div>
                     </div>
                     {row.actualStartTime || row.actualEndTime ? (
                       <div className="space-y-0.5">
                         <p className="text-xs uppercase tracking-wide text-muted-foreground">Actual Times</p>
-                        <p className="text-sm text-slate-900">{row.actualStartTime ?? '?'} – {row.actualEndTime ?? '?'}</p>
+                        <p className="text-sm text-slate-900">{row.actualStartTime ?? '?'} - {row.actualEndTime ?? '?'}</p>
                       </div>
                     ) : null}
                     {[
@@ -170,21 +180,43 @@ export function TastingReportsView({
                       ) : null
                     )}
 
-                    {/* Captured photos */}
                     {(row.setupPhotoUrl || (row.shelfPhotoUrls && row.shelfPhotoUrls.length > 0)) && (
                       <div className="space-y-1.5">
                         <p className="text-xs uppercase tracking-wide text-muted-foreground">Captured Photos</p>
                         <div className="flex flex-wrap gap-2">
                           {row.setupPhotoUrl && (
-                            <a href={signedPhotoUrl(row.setupPhotoUrl) ?? row.setupPhotoUrl} target="_blank" rel="noreferrer"
-                              className="block h-14 w-14 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
-                              <Image src={signedPhotoUrl(row.setupPhotoUrl) ?? row.setupPhotoUrl} alt="Setup" width={56} height={56} className="h-full w-full object-cover" unoptimized />
+                            <a
+                              href={signedPhotoUrl(row.setupPhotoUrl) ?? row.setupPhotoUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="block h-14 w-14 overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
+                            >
+                              <Image
+                                src={signedPhotoUrl(row.setupPhotoUrl) ?? row.setupPhotoUrl}
+                                alt="Setup"
+                                width={56}
+                                height={56}
+                                className="h-full w-full object-cover"
+                                unoptimized
+                              />
                             </a>
                           )}
                           {(row.shelfPhotoUrls ?? []).map((url, i) => (
-                            <a key={i} href={signedPhotoUrl(url) ?? url} target="_blank" rel="noreferrer"
-                              className="block h-14 w-14 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
-                              <Image src={signedPhotoUrl(url) ?? url} alt={`Shelf ${i + 1}`} width={56} height={56} className="h-full w-full object-cover" unoptimized />
+                            <a
+                              key={i}
+                              href={signedPhotoUrl(url) ?? url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="block h-14 w-14 overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
+                            >
+                              <Image
+                                src={signedPhotoUrl(url) ?? url}
+                                alt={`Shelf ${i + 1}`}
+                                width={56}
+                                height={56}
+                                className="h-full w-full object-cover"
+                                unoptimized
+                              />
                             </a>
                           ))}
                         </div>
@@ -192,7 +224,7 @@ export function TastingReportsView({
                     )}
 
                     {row.followUpNeeded && (
-                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-0.5">
+                      <div className="space-y-0.5 rounded-lg border border-amber-200 bg-amber-50 p-3">
                         <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Follow-up Required</p>
                         {row.followUpNotes && <p className="text-sm text-amber-900">{row.followUpNotes}</p>}
                       </div>
@@ -204,7 +236,6 @@ export function TastingReportsView({
                   </div>
                 )}
 
-                {/* AI Tasting Analysis — shown when report exists */}
                 {row.reportId && (
                   <TastingInsightsCard
                     tastingId={row.tastingId}
@@ -212,15 +243,14 @@ export function TastingReportsView({
                   />
                 )}
 
-                {/* Invoice details */}
                 {row.invoiceId && (
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                  <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Invoice &middot; {row.payeeName} &middot; submitted {formatEasternDateTime(row.invoiceSubmittedAt!)}
+                      Invoice · {row.payeeName} · submitted {formatEasternDateTime(row.invoiceSubmittedAt!)}
                     </p>
                     <div className="grid gap-3 sm:grid-cols-3">
                       <div className="space-y-0.5">
-                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Hours × Rate</p>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Hours x Rate</p>
                         <p className="text-sm text-slate-900">{Number(row.hoursWorked ?? 0).toFixed(2)} hrs @ {formatCurrency(Number(row.hourlyRate ?? 0))}/hr</p>
                       </div>
                       <div className="space-y-0.5">
