@@ -165,6 +165,7 @@ export async function createOrder(formData: FormData) {
       throw new Error('Unauthorized')
     }
     const isSalesRepOnly = userRoles.includes('sales_rep') && !userRoles.some((role) => ['admin', 'staff', 'sales_manager'].includes(role))
+    const isCustomerOrder = userRoles.includes('customer') && !userRoles.some((role) => ['admin', 'staff', 'sales_rep', 'sales_manager'].includes(role))
 
     const customerId = formData.get('customerId') as string
     const purchaseUnit = (formData.get('purchaseUnit') as PurchaseUnit) || 'case'
@@ -175,15 +176,17 @@ export async function createOrder(formData: FormData) {
     const preferredDeliveryTime = (formData.get('preferredDeliveryTime') as string | null)?.trim() || null
     const deliveryRequirements = (formData.get('deliveryRequirements') as string | null)?.trim() || null
     const requestedPaymentTerms = (formData.get('paymentTerms') as string | null)?.trim() || null
+    const orderedDateInput = (formData.get('orderedDate') as string | null)?.trim() || null
     const paymentMethod = (formData.get('paymentMethod') as string | null) ?? null
     const processingFee = Number((formData.get('processingFee') as string | null) ?? '0')
     const paymentIntentId = (formData.get('paymentIntentId') as string | null)?.trim() || null
     const itemsJson = formData.get('items') as string
     const items: { productId: string; quantity: number }[] = JSON.parse(itemsJson)
+    const orderDate = !isCustomerOrder && orderedDateInput ? parsePlacedDateInput(orderedDateInput) : new Date()
 
     let customerBusinessType: string | null = null
     let defaultPaymentTerms = 'PREPAID'
-    if (userRoles.includes('customer')) {
+    if (isCustomerOrder) {
       const [account] = await db
         .select({
           id: customerAccounts.id,
@@ -231,14 +234,14 @@ export async function createOrder(formData: FormData) {
       defaultPaymentTerms = account?.paymentTerms ?? 'PREPAID'
     }
 
-    const paymentTerms = userRoles.includes('customer')
+    const paymentTerms = isCustomerOrder
       ? defaultPaymentTerms
       : (requestedPaymentTerms || defaultPaymentTerms)
 
     const { lineItems, subtotal, productMap, inventoryMap } = await buildPricedLineItems({
       customerId,
       purchaseUnit,
-      orderDate: new Date(),
+      orderDate,
       orderType,
       items,
       customerBusinessType,
@@ -251,7 +254,7 @@ export async function createOrder(formData: FormData) {
     let paymentStatus: OrderPaymentStatus = 'not_applicable'
     let paidAt: Date | null = null
 
-    if (userRoles.includes('customer')) {
+    if (isCustomerOrder) {
       if (!paymentIntentId) {
         throw new Error('Missing payment confirmation. Please restart checkout.')
       }
@@ -308,7 +311,7 @@ export async function createOrder(formData: FormData) {
       sanitizedProcessingFee > 0
         ? `Stripe ${paymentMethod === 'card' ? 'card' : 'ACH'} processing fee paid by customer: $${sanitizedProcessingFee.toFixed(2)}.`
         : null,
-      userRoles.includes('customer') && paymentStatus === 'processing'
+      isCustomerOrder && paymentStatus === 'processing'
         ? 'Payment status: awaiting Stripe confirmation before funds settle.'
         : null,
     ].filter(Boolean).join('\n')
@@ -316,6 +319,7 @@ export async function createOrder(formData: FormData) {
     const [order] = await db.insert(orders).values({
       customerId,
       createdBy: session.user.id,
+      createdAt: orderDate,
       orderType,
       paymentTerms,
       stripePaymentIntentId: paymentIntentId,
@@ -455,7 +459,7 @@ export async function createOrder(formData: FormData) {
     return {
       success: true as const,
       paymentStatus,
-      redirectTo: userRoles.includes('customer')
+      redirectTo: isCustomerOrder
         ? `/customer/orders/${order.id}`
         : userRoles.includes('admin')
           ? `/admin/orders/${order.id}`

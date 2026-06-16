@@ -45,6 +45,14 @@ interface LineItem {
   pricingSource: GeographicPricingSource | null
 }
 
+function getTodayInputValue() {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 function getBottlePrice(product: Product, casePriceOverride?: number) {
   const explicitBottlePrice = parseFloat(product.bottlePrice || '0')
   if (explicitBottlePrice > 0) return explicitBottlePrice
@@ -77,6 +85,7 @@ export default function OrderFormClient({
   const [notes, setNotes] = useState('')
   const [search, setSearch] = useState('')
   const [paymentTerms, setPaymentTerms] = useState(initialCustomer?.paymentTerms ?? 'PREPAID')
+  const [orderedDate, setOrderedDate] = useState(getTodayInputValue())
 
   const selectedCustomer = customers.find((customer) => customer.id === customerId) ?? null
 
@@ -86,7 +95,12 @@ export default function OrderFormClient({
     (product.brand ?? '').toLowerCase().includes(search.toLowerCase())
   )
 
-  function getResolvedCasePrice(product: Product, customer: Customer | null, quantityCases?: number | null) {
+  function getResolvedCasePrice(
+    product: Product,
+    customer: Customer | null,
+    quantityCases?: number | null,
+    asOf: string = orderedDate
+  ) {
     return resolveGeographicCasePrice({
       productId: product.id,
       baseCasePrice: product.price,
@@ -95,16 +109,21 @@ export default function OrderFormClient({
       state: customer?.state,
       county: customer?.county,
       rules: pricingRules,
-      asOf: new Date(),
+      asOf,
       quantityCases,
     })
   }
 
-  function repriceLineItems(nextCustomer: Customer | null, nextUnit: PurchaseUnit) {
+  function repriceLineItems(nextCustomer: Customer | null, nextUnit: PurchaseUnit, nextOrderedDate: string = orderedDate) {
     setLineItems(prev => prev.map(item => {
       const product = products.find(candidate => candidate.id === item.productId)
       if (!product) return item
-      const resolvedCasePrice = getResolvedCasePrice(product, nextCustomer, nextUnit === 'case' ? item.quantity : null)
+      const resolvedCasePrice = getResolvedCasePrice(
+        product,
+        nextCustomer,
+        nextUnit === 'case' ? item.quantity : null,
+        nextOrderedDate
+      )
 
       return {
         ...item,
@@ -175,6 +194,7 @@ export default function OrderFormClient({
     formData.append('customerId', customerId)
     formData.append('purchaseUnit', purchaseUnit)
     formData.append('notes', notes)
+    formData.append('orderedDate', orderedDate)
     if (mode === 'admin') {
       formData.append('paymentTerms', paymentTerms)
     }
@@ -231,6 +251,21 @@ export default function OrderFormClient({
                     Bottles
                   </Button>
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="orderedDate">Date Ordered</Label>
+                <Input
+                  id="orderedDate"
+                  type="date"
+                  value={orderedDate}
+                  onChange={e => {
+                    const nextOrderedDate = e.target.value || getTodayInputValue()
+                    setOrderedDate(nextOrderedDate)
+                    repriceLineItems(selectedCustomer, purchaseUnit, nextOrderedDate)
+                  }}
+                  max="9999-12-31"
+                />
               </div>
 
               {mode === 'admin' ? (
