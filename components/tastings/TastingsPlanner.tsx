@@ -70,6 +70,12 @@ function isCalendarVisibleStatus(status: string) {
   return status !== 'cancelled' && status !== 'declined'
 }
 
+function getReportActionLabel(tasting: Pick<TastingRow, 'status' | 'reportSubmittedAt'>) {
+  if (tasting.reportSubmittedAt) return 'Edit Report'
+  if (tasting.status === 'completed') return 'Complete Report'
+  return 'Add Report'
+}
+
 function parseDateInputValue(dateValue: string) {
   const parsed = new Date(`${dateValue}T12:00:00`)
   return Number.isNaN(parsed.getTime()) ? null : parsed
@@ -509,6 +515,15 @@ export function TastingsPlanner({
                   <Link href={`/taster/tastings/${tasting.id}`}>
                     <Button size="sm">Open Report</Button>
                   </Link>
+                ) : mode === 'admin' ? (
+                  <div className="flex flex-wrap gap-2 md:justify-end">
+                    <Link href={`/admin/tastings/${tasting.id}#report`}>
+                      <Button size="sm">{getReportActionLabel(tasting)}</Button>
+                    </Link>
+                    <Link href={`/admin/tastings/${tasting.id}`}>
+                      <Button size="sm" variant="outline">View Details</Button>
+                    </Link>
+                  </div>
                 ) : null}
               </div>
             </div>
