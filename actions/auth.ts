@@ -204,6 +204,32 @@ export async function registerCustomerAccount(input: {
   return { success: true as const, email }
 }
 
+export async function registerAndSignInPartner(formData: FormData) {
+  const input = {
+    name: (formData.get('name') as string) ?? '',
+    companyName: (formData.get('companyName') as string) ?? '',
+    email: (formData.get('email') as string) ?? '',
+    password: (formData.get('password') as string) ?? '',
+    businessType: (formData.get('businessType') as string) ?? '',
+    phone: (formData.get('phone') as string) ?? '',
+    address: (formData.get('address') as string) ?? '',
+    city: (formData.get('city') as string) ?? '',
+    state: (formData.get('state') as string) ?? '',
+    zip: (formData.get('zip') as string) ?? '',
+  }
+
+  const result = await registerCustomerAccount(input)
+  if ('error' in result) return result
+
+  try {
+    await signIn('credentials', { email: input.email, password: input.password, redirect: false })
+  } catch {
+    // sign-in errors don't block — user can log in manually
+  }
+
+  redirect('/customer/products')
+}
+
 export async function logout() {
   await signOut({ redirectTo: '/login' })
 }

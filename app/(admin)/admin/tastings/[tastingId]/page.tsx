@@ -383,15 +383,15 @@ export default async function AdminTastingDetailPage({
               <form action={updateTastingAccount} className="pt-2 border-t">
                 <input type="hidden" name="tastingId" value={tastingId} />
                 <label className="block text-xs text-slate-500 mb-1">Change account</label>
-                <div className="flex gap-2">
-                  <select name="customerId" defaultValue={tasting.customerId} className="flex-1 rounded-md border border-input bg-transparent px-2 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                <div className="flex flex-col gap-2">
+                  <select name="customerId" defaultValue={tasting.customerId} className="w-full rounded-md border border-input bg-transparent px-2 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
                     {allAccounts.map(a => (
                       <option key={a.id} value={a.id}>
                         {a.companyName}{a.city ? ` — ${a.city}${a.state ? `, ${a.state}` : ''}` : ''}
                       </option>
                     ))}
                   </select>
-                  <Button type="submit" size="sm" variant="outline" className="text-xs shrink-0">Save</Button>
+                  <Button type="submit" size="sm" variant="outline" className="text-xs w-full">Save</Button>
                 </div>
               </form>
             </CardContent>
