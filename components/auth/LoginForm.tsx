@@ -20,6 +20,7 @@ import { Label } from '@/components/ui/label'
 
 interface Props {
   onSuccess?: () => void
+  defaultMode?: 'signin' | 'create'
 }
 
 async function getPostLoginDestination() {
@@ -31,14 +32,14 @@ async function getPostLoginDestination() {
   return getDashboardForRoles(roles, role)
 }
 
-export function LoginForm({ onSuccess }: Props) {
+export function LoginForm({ onSuccess, defaultMode }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const defaultEmail = searchParams.get('email') ?? ''
   const authError = searchParams.get('error') ?? ''
   const fromTasterSignup = searchParams.get('from') === 'taster-signup'
   const fromSalesRepSignup = searchParams.get('from') === 'sales-rep-signup'
-  const [mode, setMode] = useState<'signin' | 'create'>(fromTasterSignup ? 'signin' : 'signin')
+  const [mode, setMode] = useState<'signin' | 'create'>(fromTasterSignup ? 'signin' : (defaultMode ?? 'signin'))
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)

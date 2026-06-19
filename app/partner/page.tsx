@@ -1,6 +1,8 @@
 import Image from 'next/image'
 import Link from 'next/link'
-import { PartnerSignupForm } from '@/components/auth/PartnerSignupForm'
+import { Suspense } from 'react'
+import { LoginForm } from '@/components/auth/LoginForm'
+import { Card, CardContent } from '@/components/ui/card'
 import { Package, TrendingUp, Users, CheckCircle2 } from 'lucide-react'
 
 export const metadata = {
@@ -30,10 +32,6 @@ export default function PartnerPage() {
             />
             <span className="text-sm font-bold tracking-wide text-slate-900">AHAWC</span>
           </div>
-          <Link href="/login" className="text-sm text-slate-600 transition-colors hover:text-slate-900">
-            Already a partner?{' '}
-            <span className="font-medium underline underline-offset-2">Sign in</span>
-          </Link>
         </div>
       </header>
 
@@ -69,10 +67,15 @@ export default function PartnerPage() {
             </div>
           </div>
 
-          {/* Right: form */}
-          <div className="rounded-2xl border border-slate-200 bg-white/90 p-6 shadow-xl backdrop-blur lg:sticky lg:top-8">
-            <h2 className="mb-6 text-xl font-bold text-slate-900">Create your account</h2>
-            <PartnerSignupForm />
+          {/* Right: auth form defaulting to Create Account */}
+          <div className="lg:sticky lg:top-8">
+            <Card className="shadow-xl">
+              <CardContent className="pt-6">
+                <Suspense>
+                  <LoginForm defaultMode="create" />
+                </Suspense>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </main>
