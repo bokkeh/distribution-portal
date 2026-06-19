@@ -219,11 +219,7 @@ export function LoginForm({ onSuccess, defaultMode }: Props) {
             <div className="h-px flex-1 bg-border" />
           </div>
         </>
-      ) : (
-        <div className="rounded-lg border border-blue-200 bg-blue-50 px-3.5 py-3 text-sm text-blue-800">
-          Create new wholesale accounts with the form below so we can match them to the correct CRM record before access is granted.
-        </div>
-      )}
+      ) : null}
 
       {mode === 'create' && !fromTasterSignup ? (
         <form onSubmit={handleCreateAccount} autoComplete="on" className="space-y-3">
