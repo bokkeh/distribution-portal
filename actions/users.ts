@@ -1,5 +1,6 @@
 'use server'
 
+import { randomBytes } from 'crypto'
 import bcrypt from 'bcryptjs'
 import { eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
@@ -12,6 +13,10 @@ import { notify } from '@/lib/notifications/dispatch'
 const ALL_ROLES = ['admin', 'staff', 'driver', 'customer', 'taster', 'sales_rep', 'sales_manager'] as const
 type UserRole = typeof ALL_ROLES[number]
 const WELCOME_ELIGIBLE_ROLES: UserRole[] = ['driver', 'customer', 'taster', 'sales_rep', 'sales_manager']
+
+function generateTemporaryPassword() {
+  return `AHAWC-${randomBytes(6).toString('hex')}`
+}
 
 function parseRoles(formData: FormData, primaryRole: UserRole) {
   const selectedRoles = formData.getAll('roles').map(value => String(value)) as UserRole[]
@@ -243,6 +248,47 @@ export async function setTasterHourlyRate(
     await db.update(users).set({ tasterHourlyRate: rate }).where(eq(users.id, userId))
     revalidatePath(`/admin/users/${userId}`)
     return { success: true }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+export async function resetUserPassword(
+  _prev: { error?: string; success?: boolean; temporaryPassword?: string } | null,
+  formData: FormData
+): Promise<{ error?: string; success?: boolean; temporaryPassword?: string }> {
+  try {
+    await requireAdmin()
+
+    const userId = formData.get('userId') as string
+    const rawPassword = formData.get('newPassword')
+    const customPassword = typeof rawPassword === 'string' && rawPassword.trim().length > 0
+      ? rawPassword
+      : null
+    const temporaryPassword = customPassword ?? generateTemporaryPassword()
+
+    if (temporaryPassword.length < 8) {
+      return { error: 'Password must be at least 8 characters.' }
+    }
+
+    const [user] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1)
+
+    if (!user) {
+      return { error: 'User not found.' }
+    }
+
+    const passwordHash = await bcrypt.hash(temporaryPassword, 12)
+
+    await db.update(users).set({ passwordHash }).where(eq(users.id, userId))
+
+    revalidatePath('/admin/users')
+    revalidatePath(`/admin/users/${userId}`)
+
+    return { success: true, temporaryPassword }
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) }
   }

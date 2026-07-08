@@ -11,6 +11,7 @@ import { getRecentUserAccessEvents, getUserAccessSummaryMap } from '@/lib/auth/a
 import { UserRoleForm } from './user-role-form'
 import { UserNotificationPrefsForm } from './user-notification-prefs-form'
 import { UserProfileCard } from '@/components/admin/UserProfileCard'
+import { UserPasswordResetCard } from '@/components/admin/UserPasswordResetCard'
 import { TasterRateCard } from '@/components/admin/TasterRateCard'
 import { ViewAsButton } from '@/components/admin/ViewAsButton'
 import { auth } from '@/lib/auth/config'
@@ -95,6 +96,8 @@ export default async function UserDetailPage({ params }: { params: Promise<{ use
           user={{ id: user.id, role: user.role, roles: user.roles, phone: user.phone, active: user.active, featureFlags: featureSettings?.features ?? null }}
           accountId={account?.id}
         />
+
+        <UserPasswordResetCard userId={user.id} email={user.email} />
 
         <Card>
           <CardHeader><CardTitle>Role Summary</CardTitle></CardHeader>
