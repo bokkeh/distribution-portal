@@ -1,5 +1,11 @@
 export const EASTERN_TIME_ZONE = 'America/New_York'
 
+function coerceValidDate(value: Date | string | null | undefined) {
+  if (!value) return null
+  const parsed = typeof value === 'string' ? new Date(value) : value
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
 function getFormatter(
   options: Intl.DateTimeFormatOptions,
   timeZone = EASTERN_TIME_ZONE,
@@ -71,30 +77,36 @@ export function parseDateTimeInTimeZone(
 }
 
 export function formatEasternDate(date: Date | string) {
-  const parsed = typeof date === 'string' ? new Date(date) : date
+  const parsed = coerceValidDate(date)
+  if (!parsed) return 'Date unavailable'
   return getFormatter({ dateStyle: 'medium' }).format(parsed)
 }
 
 export function formatEasternTime(date: Date | string) {
-  const parsed = typeof date === 'string' ? new Date(date) : date
+  const parsed = coerceValidDate(date)
+  if (!parsed) return 'Time unavailable'
   return `${getFormatter({ timeStyle: 'short' }).format(parsed)} ET`
 }
 
 export function formatEasternTimeInput(date: Date | string) {
-  const parsed = typeof date === 'string' ? new Date(date) : date
+  const parsed = coerceValidDate(date)
+  if (!parsed) return ''
   const parts = getTimeZoneParts(parsed)
   return `${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}`
 }
 
 export function formatEasternDateTime(date: Date | string) {
-  const parsed = typeof date === 'string' ? new Date(date) : date
+  const parsed = coerceValidDate(date)
+  if (!parsed) return 'Date unavailable'
   return `${getFormatter({ dateStyle: 'medium', timeStyle: 'short' }).format(parsed)} ET`
 }
 
 export function formatEasternTimeRange(start: Date | string, end: Date | string | null) {
-  const parsedStart = typeof start === 'string' ? new Date(start) : start
+  const parsedStart = coerceValidDate(start)
+  if (!parsedStart) return 'Time unavailable'
   if (!end) return formatEasternTime(parsedStart)
-  const parsedEnd = typeof end === 'string' ? new Date(end) : end
+  const parsedEnd = coerceValidDate(end)
+  if (!parsedEnd) return formatEasternTime(parsedStart)
 
   const fmt = (h: number, m: number) => {
     const period = h >= 12 ? 'PM' : 'AM'
@@ -114,7 +126,8 @@ export function formatEasternTimeRange(start: Date | string, end: Date | string 
 }
 
 export function getEasternDateKey(date: Date | string) {
-  const parsed = typeof date === 'string' ? new Date(date) : date
+  const parsed = coerceValidDate(date)
+  if (!parsed) return ''
   const parts = getTimeZoneParts(parsed)
   return `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`
 }

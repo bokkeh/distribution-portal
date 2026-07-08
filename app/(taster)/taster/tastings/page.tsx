@@ -13,6 +13,16 @@ function isMissingTastingsTable(error: unknown) {
   )
 }
 
+async function loadTasterTastings(assignedUserId?: string) {
+  try {
+    const tastings = await getTastingsForView({ assignedUserId })
+    return { tastings, missingTables: false }
+  } catch (error) {
+    if (!isMissingTastingsTable(error)) throw error
+    return { tastings: [], missingTables: true }
+  }
+}
+
 export default async function TasterTastingsPage({
   searchParams,
 }: {
@@ -20,29 +30,11 @@ export default async function TasterTastingsPage({
 }) {
   const session = await requireFeature('tastings', 'taster', 'admin')
   const params = await searchParams
+  const { tastings, missingTables } = await loadTasterTastings(
+    session.user.roles.includes('admin') ? undefined : session.user.id,
+  )
 
-  try {
-    const tastings = await getTastingsForView({
-      assignedUserId: session.user.roles.includes('admin') ? undefined : session.user.id,
-    })
-
-    return (
-      <div className="space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">My Tastings</h1>
-            <p className="text-muted-foreground mt-1">See upcoming and past tastings, then complete reports and invoices from one place.</p>
-          </div>
-          <Link href="/taster/tastings/reports">
-            <Button variant="outline">Review Reports</Button>
-          </Link>
-        </div>
-        <TasterTastingsHub tastings={tastings} success={params.success} error={params.error} />
-      </div>
-    )
-  } catch (error) {
-    if (!isMissingTastingsTable(error)) throw error
-
+  if (missingTables) {
     return (
       <div className="space-y-4">
         <h1 className="text-2xl font-bold text-slate-900">My Tastings</h1>
@@ -52,4 +44,24 @@ export default async function TasterTastingsPage({
       </div>
     )
   }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">My Tastings</h1>
+          <p className="text-muted-foreground mt-1">See upcoming and past tastings, then complete reports and invoices from one place.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/taster/tastings/log-missing">
+            <Button variant="outline">Log Missing Tasting</Button>
+          </Link>
+          <Link href="/taster/tastings/reports">
+            <Button variant="outline">Review Reports</Button>
+          </Link>
+        </div>
+      </div>
+      <TasterTastingsHub tastings={tastings} success={params.success} error={params.error} />
+    </div>
+  )
 }

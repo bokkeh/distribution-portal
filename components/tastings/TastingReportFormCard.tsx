@@ -29,7 +29,7 @@ type ReportRecord = {
   followUpNotes: string | null
   setupPhotoUrl: string | null
   shelfPhotoUrls: string[] | null
-  submittedAt: Date
+  submittedAt: Date | null
 } | null
 
 const MAX_SHELF_PHOTOS = 4

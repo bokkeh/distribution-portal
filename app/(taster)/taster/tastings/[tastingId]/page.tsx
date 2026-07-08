@@ -13,6 +13,12 @@ import { ActivityTimeline } from '@/components/activity/ActivityTimeline'
 import { confirmTastingAssignment, declineTastingAssignment } from '@/actions/tastings'
 import { buildGoogleCalendarUrl } from '@/lib/calendar'
 
+function coerceDateOrNull(value: Date | string | null | undefined) {
+  if (!value) return null
+  const parsed = value instanceof Date ? value : new Date(value)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
 function isMissingSubmissionTables(error: unknown) {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
   return (
@@ -155,7 +161,7 @@ export default async function TasterTastingDetailPage({
             followUpNotes: report.followUpNotes,
             setupPhotoUrl: report.setupPhotoUrl ?? null,
             shelfPhotoUrls: (report.shelfPhotoUrls as string[] | null) ?? null,
-            submittedAt: report.submittedAt,
+            submittedAt: coerceDateOrNull(report.submittedAt),
           } : null}
           invoice={invoice ? {
             payeeName: invoice.payeeName,
@@ -168,7 +174,7 @@ export default async function TasterTastingDetailPage({
             receiptUrls: (invoice.receiptUrls as string[] | null) ?? null,
             notes: invoice.notes,
             status: invoice.status,
-            submittedAt: invoice.submittedAt,
+            submittedAt: coerceDateOrNull(invoice.submittedAt),
           } : null}
           user={{ name: session.user.name, email: session.user.email, phone: assignedUser?.phone ?? null }}
           adminHourlyRate={assignedUser?.tasterHourlyRate ?? null}

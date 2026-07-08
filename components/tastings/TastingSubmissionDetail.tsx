@@ -30,7 +30,7 @@ type ReportRecord = {
   followUpNotes: string | null
   setupPhotoUrl: string | null
   shelfPhotoUrls: string[] | null
-  submittedAt: Date
+  submittedAt: Date | null
 } | null
 
 type InvoiceRecord = {
@@ -44,7 +44,7 @@ type InvoiceRecord = {
   receiptUrls: string[] | null
   notes: string | null
   status: string
-  submittedAt: Date
+  submittedAt: Date | null
 } | null
 
 function parseTimeToMinutes(value: string | null | undefined) {
@@ -285,7 +285,7 @@ export function TastingSubmissionDetail({
 
               {invoice ? (
                 <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                  Submitted {formatEasternDateTime(invoice.submittedAt)} • Status: <span className="font-medium text-slate-900">{invoice.status}</span>
+                  Submitted {invoice.submittedAt ? formatEasternDateTime(invoice.submittedAt) : 'date unavailable'} • Status: <span className="font-medium text-slate-900">{invoice.status}</span>
                 </div>
               ) : null}
 

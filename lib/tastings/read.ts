@@ -13,10 +13,49 @@ function isMissingTastingColumn(error: unknown) {
     || message.includes('training_day')
 }
 
+function coerceDateOrNull(value: Date | string | null | undefined) {
+  if (!value) return null
+  const parsed = value instanceof Date ? value : new Date(value)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function sanitizeTastingRecord<T extends {
+  id: string
+  scheduledAt: Date | string | null
+  endAt?: Date | string | null
+  checkedInAt?: Date | string | null
+  reportSubmittedAt?: Date | string | null
+  invoiceSubmittedAt?: Date | string | null
+  createdAt?: Date | string | null
+}>(row: T): (T & {
+  scheduledAt: Date
+  endAt: Date | null
+  checkedInAt?: Date | null
+  reportSubmittedAt?: Date | null
+  invoiceSubmittedAt?: Date | null
+  createdAt?: Date | null
+}) | null {
+  const scheduledAt = coerceDateOrNull(row.scheduledAt)
+  if (!scheduledAt) {
+    console.error('[tastings] Skipping tasting with invalid scheduledAt:', row.id, row.scheduledAt)
+    return null
+  }
+
+  return {
+    ...row,
+    scheduledAt,
+    endAt: 'endAt' in row ? coerceDateOrNull(row.endAt ?? null) : null,
+    ...(Object.prototype.hasOwnProperty.call(row, 'checkedInAt') ? { checkedInAt: coerceDateOrNull(row.checkedInAt ?? null) } : {}),
+    ...(Object.prototype.hasOwnProperty.call(row, 'reportSubmittedAt') ? { reportSubmittedAt: coerceDateOrNull(row.reportSubmittedAt ?? null) } : {}),
+    ...(Object.prototype.hasOwnProperty.call(row, 'invoiceSubmittedAt') ? { invoiceSubmittedAt: coerceDateOrNull(row.invoiceSubmittedAt ?? null) } : {}),
+    ...(Object.prototype.hasOwnProperty.call(row, 'createdAt') ? { createdAt: coerceDateOrNull(row.createdAt ?? null) } : {}),
+  }
+}
+
 export async function getTastingById(tastingId: string) {
   try {
     const [tasting] = await db.select().from(tastings).where(eq(tastings.id, tastingId)).limit(1)
-    return tasting ?? null
+    return tasting ? sanitizeTastingRecord(tasting) : null
   } catch (error) {
     if (!isMissingTastingColumn(error)) throw error
 
@@ -41,7 +80,7 @@ export async function getTastingById(tastingId: string) {
       .where(eq(tastings.id, tastingId))
       .limit(1)
 
-    return tasting ? { ...tasting, endAt: null, checkedInAt: null, trainingDay: false } : null
+    return tasting ? sanitizeTastingRecord({ ...tasting, endAt: null, checkedInAt: null, trainingDay: false }) : null
   }
 }
 
@@ -80,7 +119,10 @@ export async function getTastingsForViewWithFallback({ assignedUserId }: { assig
     const rows = assignedUserId
       ? await base.where(eq(tastings.assignedUserId, assignedUserId)).orderBy(desc(tastings.scheduledAt))
       : await base.orderBy(desc(tastings.scheduledAt))
-    return assignedUserId ? rows.filter((row) => row.status !== 'requested') : rows
+    const sanitizedRows = rows
+      .map((row) => sanitizeTastingRecord(row))
+      .filter((row): row is NonNullable<typeof row> => Boolean(row))
+    return assignedUserId ? sanitizedRows.filter((row) => row.status !== 'requested') : sanitizedRows
   } catch (error) {
     if (!isMissingTastingColumn(error)) throw error
 
@@ -115,7 +157,9 @@ export async function getTastingsForViewWithFallback({ assignedUserId }: { assig
       ? await base.where(eq(tastings.assignedUserId, assignedUserId)).orderBy(desc(tastings.scheduledAt))
       : await base.orderBy(desc(tastings.scheduledAt))
 
-    const hydratedRows = rows.map(row => ({ ...row, endAt: null, trainingDay: false }))
+    const hydratedRows = rows
+      .map(row => sanitizeTastingRecord({ ...row, endAt: null, trainingDay: false }))
+      .filter((row): row is NonNullable<typeof row> => Boolean(row))
     return assignedUserId ? hydratedRows.filter((row) => row.status !== 'requested') : hydratedRows
   }
 }

@@ -452,6 +452,104 @@ export async function createTasting(formData: FormData) {
   )
 }
 
+export async function createTasterBackupTasting(formData: FormData) {
+  const session = await requireFeature('tastings', 'taster', 'admin')
+  const customerId = ((formData.get('customerId') as string) || '').trim()
+  const date = ((formData.get('date') as string) || '').trim()
+  const time = ((formData.get('time') as string) || '17:00').trim()
+  const endTime = ((formData.get('endTime') as string) || '').trim()
+  const notes = ((formData.get('notes') as string) || '').trim()
+  const redirectBase = '/taster/tastings/log-missing'
+
+  if (!customerId || !date) {
+    redirect(`${redirectBase}?error=${encodeURIComponent('Store account, event date, and start time are required.')}`)
+  }
+
+  const scheduledAt = parseDateTimeInTimeZone(date, time)
+  if (Number.isNaN(scheduledAt.getTime())) {
+    redirect(`${redirectBase}?error=${encodeURIComponent('Choose a valid tasting date and start time.')}`)
+  }
+
+  const endAt = endTime ? parseDateTimeInTimeZone(date, endTime) : null
+  if (endAt && Number.isNaN(endAt.getTime())) {
+    redirect(`${redirectBase}?error=${encodeURIComponent('Choose a valid tasting end time.')}`)
+  }
+  if (endAt && endAt <= scheduledAt) {
+    redirect(`${redirectBase}?error=${encodeURIComponent('End time must be after the start time.')}`)
+  }
+  if (scheduledAt.getTime() > Date.now() + (15 * 60 * 1000)) {
+    redirect(`${redirectBase}?error=${encodeURIComponent('Backup entries are only for tastings that already happened or are happening now.')}`)
+  }
+
+  const [account] = await db
+    .select({
+      id: customerAccounts.id,
+      companyName: customerAccounts.companyName,
+      address: customerAccounts.address,
+      city: customerAccounts.city,
+      state: customerAccounts.state,
+      zip: customerAccounts.zip,
+      phone: customerAccounts.phone,
+    })
+    .from(customerAccounts)
+    .where(eq(customerAccounts.id, customerId))
+    .limit(1)
+
+  if (!account) {
+    redirect(`${redirectBase}?error=${encodeURIComponent('Store account not found.')}`)
+  }
+
+  const backupNote = [
+    'Backup tasting entry created from the taster portal because the original assignment was missing from the portal.',
+    notes || null,
+  ].filter(Boolean).join('\n\n')
+
+  const tasting = await insertTastingWithFallback({
+    customerId: account.id,
+    assignedUserId: session.user.id,
+    createdByUserId: session.user.id,
+    eventName: account.companyName,
+    scheduledAt,
+    endAt,
+    status: 'completed',
+    storeAddress: account.address ?? null,
+    storeCity: account.city ?? null,
+    storeState: account.state ?? null,
+    storeZip: account.zip ?? null,
+    storePhone: account.phone ?? null,
+    notes: backupNote,
+  })
+
+  await logActivityEvent({
+    entityType: 'tasting',
+    entityId: tasting.id,
+    actorUserId: session.user.id,
+    relatedUserId: session.user.id,
+    kind: 'tasting_manual_backup_created',
+    title: 'Backup tasting entry created',
+    body: 'Created from the taster portal because the original assignment was missing.',
+  })
+
+  await createNotificationsForRoles({
+    roles: ['admin', 'staff'],
+    kind: 'tasting_manual_backup_created',
+    title: `Backup tasting logged - ${account.companyName}`,
+    body: `${session.user.name ?? 'A taster'} created a backup tasting entry for ${formatEasternDateTime(scheduledAt)}.`,
+    href: `/admin/tastings/${tasting.id}`,
+  })
+
+  revalidatePath('/admin/tastings')
+  revalidatePath('/staff/tastings')
+  revalidatePath('/taster/tastings')
+  revalidatePath('/taster/tastings/reports')
+  revalidatePath('/taster/payouts')
+  revalidatePath(`/taster/tastings/${tasting.id}`)
+
+  redirect(
+    `/taster/tastings/${tasting.id}?reportMode=manual&invoiceMode=manual&success=${encodeURIComponent('Backup tasting entry created. Complete the report and invoice below.')}`,
+  )
+}
+
 export async function updateTastingStatus(formData: FormData) {
   const session = await requireRole('admin', 'staff', 'taster')
   const tastingId = formData.get('tastingId') as string
