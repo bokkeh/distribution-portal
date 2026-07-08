@@ -108,7 +108,7 @@ export default async function TasterProfilePage({
       ) : null}
       <div>
         <h1 className="text-2xl font-bold text-slate-900">My Profile</h1>
-        <p className="text-muted-foreground mt-1">Keep your phone number current so tasting assignments reach you by text.</p>
+        <p className="text-muted-foreground mt-1">Keep your phone number and mailing address current so assignments, travel records, and payout follow-up stay accurate.</p>
       </div>
       <SimpleProfileForm user={user} preferences={preferences} />
       <Card className="max-w-lg">

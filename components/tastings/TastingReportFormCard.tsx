@@ -1,9 +1,10 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { submitTastingReport } from '@/actions/tastings'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -40,6 +41,9 @@ export function TastingReportFormCard({
   error,
   compact = false,
   redirectTo,
+  reportMode = 'default',
+  startFromScratchHref,
+  standardHref,
 }: {
   tasting: {
     id: string
@@ -51,19 +55,32 @@ export function TastingReportFormCard({
   error?: string
   compact?: boolean
   redirectTo?: string
+  reportMode?: 'default' | 'manual'
+  startFromScratchHref?: string
+  standardHref?: string
 }) {
+  const usingManualReport = reportMode === 'manual'
+  const activeReport = usingManualReport ? null : report
   const reportFormRef = useRef<HTMLFormElement | null>(null)
-  const reportDraft = useFormDraftAutosave(reportFormRef, `tasting-report:${tasting.id}`)
+  const reportDraft = useFormDraftAutosave(
+    reportFormRef,
+    usingManualReport ? `tasting-report:${tasting.id}:manual` : `tasting-report:${tasting.id}`,
+  )
 
   // Photo state
-  const [setupPhotoUrl, setSetupPhotoUrl] = useState(report?.setupPhotoUrl ?? '')
-  const [shelfPhotoUrls, setShelfPhotoUrls] = useState<string[]>(report?.shelfPhotoUrls ?? [])
+  const [setupPhotoUrl, setSetupPhotoUrl] = useState(activeReport?.setupPhotoUrl ?? '')
+  const [shelfPhotoUrls, setShelfPhotoUrls] = useState<string[]>(activeReport?.shelfPhotoUrls ?? [])
   const [uploadingSetup, setUploadingSetup] = useState(false)
   const [uploadingShelf, setUploadingShelf] = useState<boolean[]>([false, false, false, false])
 
   useEffect(() => {
     if (success === 'Tasting report submitted.') reportDraft.clearDraft()
   }, [reportDraft, success])
+
+  useEffect(() => {
+    setSetupPhotoUrl(activeReport?.setupPhotoUrl ?? '')
+    setShelfPhotoUrls(activeReport?.shelfPhotoUrls ?? [])
+  }, [activeReport])
 
   async function handleUploadSetup(file: File) {
     if (file.size > 10 * 1024 * 1024) {
@@ -119,12 +136,31 @@ export function TastingReportFormCard({
 
   return (
     <Card id="report">
-      <CardHeader>
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <CardTitle>{compact ? `Quick Report: ${tasting.eventName}` : 'Submit Tasting Report'}</CardTitle>
+        <div className="flex flex-wrap gap-2">
+          {usingManualReport && standardHref ? (
+            <Link href={standardHref} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+              Use Standard Form
+            </Link>
+          ) : null}
+          {!usingManualReport && startFromScratchHref ? (
+            <Link href={startFromScratchHref} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+              Start From Scratch
+            </Link>
+          ) : null}
+        </div>
       </CardHeader>
       <CardContent>
         {success ? <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</div> : null}
         {error ? <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
+        {usingManualReport ? (
+          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            {report
+              ? 'You are using a blank backup report form. Saving it will replace the current report values.'
+              : 'You are using a blank backup report form with no automatic prefills.'}
+          </div>
+        ) : null}
 
         {/* Photo Upload Section */}
         <div className="mb-6 space-y-3">
@@ -176,7 +212,12 @@ export function TastingReportFormCard({
           </div>
         </div>
 
-        <form ref={reportFormRef} action={submitTastingReport} className="space-y-4">
+        <form
+          key={`${reportMode}:${report?.submittedAt?.toISOString() ?? 'new'}`}
+          ref={reportFormRef}
+          action={submitTastingReport}
+          className="space-y-4"
+        >
           <input type="hidden" name="tastingId" value={tasting.id} />
           {redirectTo && <input type="hidden" name="redirectTo" value={redirectTo} />}
           {/* Photo URL hidden inputs — kept in sync with state */}
@@ -186,33 +227,33 @@ export function TastingReportFormCard({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="actualStartTime">Actual Start Time</Label>
-              <Input id="actualStartTime" name="actualStartTime" type="time" defaultValue={report?.actualStartTime ?? formatEasternTimeInput(tasting.scheduledAt)} />
+              <Input id="actualStartTime" name="actualStartTime" type="time" defaultValue={activeReport?.actualStartTime ?? (usingManualReport ? '' : formatEasternTimeInput(tasting.scheduledAt))} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="actualEndTime">Actual End Time</Label>
-              <Input id="actualEndTime" name="actualEndTime" type="time" defaultValue={report?.actualEndTime ?? ''} />
+              <Input id="actualEndTime" name="actualEndTime" type="time" defaultValue={activeReport?.actualEndTime ?? ''} />
             </div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="samplesServed">Samples Served</Label>
-              <Input id="samplesServed" name="samplesServed" type="number" min="0" defaultValue={report?.samplesServed ?? 0} />
+              <Input id="samplesServed" name="samplesServed" type="number" min="0" defaultValue={activeReport?.samplesServed ?? (usingManualReport ? '' : 0)} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="consumerInteractions">Consumer Interactions</Label>
-              <Input id="consumerInteractions" name="consumerInteractions" type="number" min="0" defaultValue={report?.consumerInteractions ?? 0} />
+              <Input id="consumerInteractions" name="consumerInteractions" type="number" min="0" defaultValue={activeReport?.consumerInteractions ?? (usingManualReport ? '' : 0)} />
             </div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="bottlesSold">Bottles Sold</Label>
-              <Input id="bottlesSold" name="bottlesSold" type="number" min="0" defaultValue={report?.bottlesSold ?? 0} />
+              <Input id="bottlesSold" name="bottlesSold" type="number" min="0" defaultValue={activeReport?.bottlesSold ?? (usingManualReport ? '' : 0)} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="missedCustomers">Customers Missed</Label>
-              <Input id="missedCustomers" name="missedCustomers" type="number" min="0" defaultValue={report?.missedCustomers ?? 0} />
+              <Input id="missedCustomers" name="missedCustomers" type="number" min="0" defaultValue={activeReport?.missedCustomers ?? (usingManualReport ? '' : 0)} />
             </div>
           </div>
 
@@ -226,45 +267,49 @@ export function TastingReportFormCard({
                 inputMode="decimal"
                 step="0.01"
                 min="0"
-                defaultValue={report?.bottlePriceOnShelf ?? ''}
+                defaultValue={activeReport?.bottlePriceOnShelf ?? ''}
                 placeholder="24.99"
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="bottlesInStock">Number Of Bottles In Stock</Label>
-              <Input id="bottlesInStock" name="bottlesInStock" type="number" min="0" defaultValue={report?.bottlesInStock ?? ''} />
+              <Input id="bottlesInStock" name="bottlesInStock" type="number" min="0" defaultValue={activeReport?.bottlesInStock ?? ''} />
             </div>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="accountFeedback">Store Feedback</Label>
-            <textarea id="accountFeedback" name="accountFeedback" className="min-h-24 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm" defaultValue={report?.accountFeedback ?? ''} placeholder="What did the store team say? Any requests or notable comments?" />
+            <textarea id="accountFeedback" name="accountFeedback" className="min-h-24 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm" defaultValue={activeReport?.accountFeedback ?? ''} placeholder="What did the store team say? Any requests or notable comments?" />
           </div>
           <div className="space-y-2">
             <Label htmlFor="highlights">What Went Well</Label>
-            <textarea id="highlights" name="highlights" className="min-h-24 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm" defaultValue={report?.highlights ?? ''} placeholder="Quick summary of the tasting, top moments, and what moved product." />
+            <textarea id="highlights" name="highlights" className="min-h-24 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm" defaultValue={activeReport?.highlights ?? ''} placeholder="Quick summary of the tasting, top moments, and what moved product." />
           </div>
           <div className="space-y-2">
             <Label htmlFor="issues">Issues Or Constraints</Label>
-            <textarea id="issues" name="issues" className="min-h-24 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm" defaultValue={report?.issues ?? ''} placeholder="Any supply issues, staffing issues, or problems during the event." />
+            <textarea id="issues" name="issues" className="min-h-24 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm" defaultValue={activeReport?.issues ?? ''} placeholder="Any supply issues, staffing issues, or problems during the event." />
           </div>
           <div className="space-y-2">
             <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-              <input type="checkbox" name="followUpNeeded" defaultChecked={report?.followUpNeeded ?? false} className="rounded" />
+              <input type="checkbox" name="followUpNeeded" defaultChecked={activeReport?.followUpNeeded ?? false} className="rounded" />
               Follow-up needed from staff
             </label>
           </div>
           <div className="space-y-2">
             <Label htmlFor="followUpNotes">Follow-up Notes</Label>
-            <textarea id="followUpNotes" name="followUpNotes" className="min-h-20 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm" defaultValue={report?.followUpNotes ?? ''} placeholder="List anything staff needs to action after this tasting." />
+            <textarea id="followUpNotes" name="followUpNotes" className="min-h-20 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm" defaultValue={activeReport?.followUpNotes ?? ''} placeholder="List anything staff needs to action after this tasting." />
           </div>
 
           <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs">
             <span className="text-slate-500">{reportDraft.statusText || 'Report draft saves locally while you type.'}</span>
-            <span className="text-slate-500">{report ? 'Saved report exists' : 'Draft mode'}</span>
+            <span className="text-slate-500">
+              {report ? 'Saved report exists' : usingManualReport ? 'Blank manual form' : 'Draft mode'}
+            </span>
           </div>
 
-          <Button type="submit" className="w-full">{report ? 'Update Report' : 'Submit Report'}</Button>
+          <Button type="submit" className="w-full">
+            {report ? (usingManualReport ? 'Replace Report' : 'Update Report') : 'Submit Report'}
+          </Button>
         </form>
       </CardContent>
     </Card>

@@ -13,6 +13,8 @@ import Stripe from 'stripe'
 import { redirect } from 'next/navigation'
 import { isRedirectError } from 'next/dist/client/components/redirect-error'
 import { normalizeBusinessType } from '@/lib/customers/business-types'
+import { getStaffEmailsForNotification } from '@/lib/notifications/recipients'
+import { sendTasterAddressChangeNotification } from '@/lib/resend/client'
 
 if (!process.env.STRIPE_SECRET_KEY) throw new Error('Missing STRIPE_SECRET_KEY')
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2026-02-25.clover' })
@@ -39,6 +41,38 @@ function isMissingPreferencesTable(error: unknown) {
   const message = error instanceof Error ? error.message.toLowerCase() : ''
 
   return code === '42P01' || message.includes('user_preferences') || message.includes('account_preferences')
+}
+
+type MailingAddress = {
+  address: string | null
+  city: string | null
+  state: string | null
+  zip: string | null
+}
+
+function normalizeOptionalText(value: FormDataEntryValue | string | null | undefined) {
+  const normalized = typeof value === 'string' ? value.trim() : String(value ?? '').trim()
+  return normalized || null
+}
+
+function normalizeMailingAddress(address: Partial<MailingAddress> | null | undefined): MailingAddress {
+  return {
+    address: normalizeOptionalText(address?.address),
+    city: normalizeOptionalText(address?.city),
+    state: normalizeOptionalText(address?.state),
+    zip: normalizeOptionalText(address?.zip),
+  }
+}
+
+function mailingAddressChanged(previousAddress: MailingAddress, nextAddress: MailingAddress) {
+  return previousAddress.address !== nextAddress.address
+    || previousAddress.city !== nextAddress.city
+    || previousAddress.state !== nextAddress.state
+    || previousAddress.zip !== nextAddress.zip
+}
+
+function formatMailingAddress(address: MailingAddress) {
+  return [address.address, address.city, address.state, address.zip].filter(Boolean).join(', ') || 'No address on file'
 }
 
 export async function updateProfile(
@@ -221,25 +255,54 @@ export async function updateSimpleProfile(
     const roles = session.user.roles ?? [session.user.role]
     if (session.user.id !== userId) throw new Error('Unauthorized')
 
+    const nextName = (formData.get('name') as string) || session.user.name || 'Taster'
+    const nextEmail = (formData.get('email') as string) || session.user.email || ''
+    const nextPhone = normalizeOptionalText(formData.get('phone'))
+    const nextAvatarUrl = normalizeOptionalText(formData.get('avatarUrl'))
+    const nextAddress = normalizeMailingAddress({
+      address: formData.get('address') as string | null,
+      city: formData.get('city') as string | null,
+      state: formData.get('state') as string | null,
+      zip: formData.get('zip') as string | null,
+    })
+
+    let previousAddress: MailingAddress | null = null
+    try {
+      const [existingUser] = await db
+        .select({
+          address: users.address,
+          city: users.city,
+          state: users.state,
+          zip: users.zip,
+        })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1)
+
+      previousAddress = normalizeMailingAddress(existingUser)
+    } catch (error) {
+      if (!isMissingUserAddressColumn(error)) throw error
+    }
+
     try {
       await db.update(users).set({
-        name: formData.get('name') as string,
-        email: formData.get('email') as string,
-        phone: (formData.get('phone') as string) || null,
-        avatarUrl: (formData.get('avatarUrl') as string) || null,
-        address: (formData.get('address') as string) || null,
-        city: (formData.get('city') as string) || null,
-        state: (formData.get('state') as string) || null,
-        zip: (formData.get('zip') as string) || null,
+        name: nextName,
+        email: nextEmail,
+        phone: nextPhone,
+        avatarUrl: nextAvatarUrl,
+        address: nextAddress.address,
+        city: nextAddress.city,
+        state: nextAddress.state,
+        zip: nextAddress.zip,
       }).where(eq(users.id, userId))
     } catch (error) {
       if (!isMissingUserAddressColumn(error)) throw error
 
       await db.update(users).set({
-        name: formData.get('name') as string,
-        email: formData.get('email') as string,
-        phone: (formData.get('phone') as string) || null,
-        avatarUrl: (formData.get('avatarUrl') as string) || null,
+        name: nextName,
+        email: nextEmail,
+        phone: nextPhone,
+        avatarUrl: nextAvatarUrl,
       }).where(eq(users.id, userId))
     }
 
@@ -271,6 +334,28 @@ export async function updateSimpleProfile(
       })
     } catch (error) {
       if (!isMissingPreferencesTable(error)) throw error
+    }
+
+    if (roles.includes('taster') && previousAddress && mailingAddressChanged(previousAddress, nextAddress)) {
+      try {
+        const adminEmails = await getStaffEmailsForNotification(['admin']).catch(() => [])
+        const recipients = Array.from(new Set([
+          ...adminEmails,
+          (process.env.ORDER_NOTIFY_KRISTEN_EMAIL ?? '').trim(),
+        ].filter(Boolean)))
+
+        await sendTasterAddressChangeNotification({
+          to: recipients,
+          tasterName: nextName,
+          tasterEmail: nextEmail,
+          tasterPhone: nextPhone,
+          previousAddress: formatMailingAddress(previousAddress),
+          newAddress: formatMailingAddress(nextAddress),
+          profilePath: `/admin/users/${userId}`,
+        })
+      } catch (error) {
+        console.error('Failed to send taster address change notification:', error)
+      }
     }
 
     revalidatePath('/admin/profile')

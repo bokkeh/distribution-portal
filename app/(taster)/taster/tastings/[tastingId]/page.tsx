@@ -26,11 +26,13 @@ export default async function TasterTastingDetailPage({
   searchParams,
 }: {
   params: Promise<{ tastingId: string }>
-  searchParams: Promise<{ success?: string; error?: string }>
+  searchParams: Promise<{ success?: string; error?: string; reportMode?: string; invoiceMode?: string }>
 }) {
   const session = await requireFeature('tastings', 'taster', 'admin')
   const { tastingId } = await params
   const query = await searchParams
+  const reportMode = query.reportMode === 'manual' ? 'manual' : 'default'
+  const invoiceMode = query.invoiceMode === 'manual' ? 'manual' : 'default'
 
   const tasting = await getTastingById(tastingId)
 
@@ -49,6 +51,23 @@ export default async function TasterTastingDetailPage({
     start,
     end,
   })
+
+  function buildModeHref({
+    nextReportMode,
+    nextInvoiceMode,
+    hash,
+  }: {
+    nextReportMode?: 'manual'
+    nextInvoiceMode?: 'manual'
+    hash: 'report' | 'invoice'
+  }) {
+    const params = new URLSearchParams()
+    if (nextReportMode === 'manual') params.set('reportMode', 'manual')
+    if (nextInvoiceMode === 'manual') params.set('invoiceMode', 'manual')
+    const queryString = params.toString()
+
+    return `/taster/tastings/${tastingId}${queryString ? `?${queryString}` : ''}#${hash}`
+  }
 
   try {
     const [report, invoice, assignedUser] = await Promise.all([
@@ -94,7 +113,32 @@ export default async function TasterTastingDetailPage({
           </div>
         ) : null}
         <TastingSubmissionDetail
+          key={`${tasting.id}:${reportMode}:${invoiceMode}`}
           tasting={tasting}
+          reportMode={reportMode}
+          invoiceMode={invoiceMode}
+          reportBlankHref={buildModeHref({
+            nextReportMode: 'manual',
+            nextInvoiceMode: invoiceMode === 'manual' ? 'manual' : undefined,
+            hash: 'report',
+          })}
+          reportStandardHref={reportMode === 'manual'
+            ? buildModeHref({
+                nextInvoiceMode: invoiceMode === 'manual' ? 'manual' : undefined,
+                hash: 'report',
+              })
+            : undefined}
+          invoiceBlankHref={buildModeHref({
+            nextReportMode: reportMode === 'manual' ? 'manual' : undefined,
+            nextInvoiceMode: 'manual',
+            hash: 'invoice',
+          })}
+          invoiceStandardHref={invoiceMode === 'manual'
+            ? buildModeHref({
+                nextReportMode: reportMode === 'manual' ? 'manual' : undefined,
+                hash: 'invoice',
+              })
+            : undefined}
           report={report ? {
             actualStartTime: report.actualStartTime,
             actualEndTime: report.actualEndTime,

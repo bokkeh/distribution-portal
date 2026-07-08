@@ -81,8 +81,9 @@ export function SimpleProfileForm({ user, preferences }: Props) {
             <Input name="phone" type="tel" defaultValue={user.phone ?? ''} placeholder="+1 (555) 000-0000" />
           </div>
           <div className="space-y-1.5">
-            <Label>Address</Label>
+            <Label>Mailing Address</Label>
             <Input name="address" defaultValue={user.address ?? ''} placeholder="123 Main St" />
+            <p className="text-xs text-slate-500">Address changes automatically notify Kris and the admin team.</p>
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="space-y-1.5">

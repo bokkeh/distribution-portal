@@ -801,6 +801,44 @@ export async function sendTasterInvoiceNotification({
   })
 }
 
+export async function sendTasterAddressChangeNotification({
+  to,
+  tasterName,
+  tasterEmail,
+  tasterPhone,
+  previousAddress,
+  newAddress,
+  profilePath,
+}: {
+  to: string[]
+  tasterName: string
+  tasterEmail: string
+  tasterPhone: string | null
+  previousAddress: string
+  newAddress: string
+  profilePath?: string
+}) {
+  await sendEmail({
+    to,
+    recipientName: tasterName,
+    subject: `Taster address updated - ${tasterName}`,
+    html: renderEmailCard({
+      eyebrow: 'Taster update',
+      title: 'Taster address updated',
+      intro: `${escapeHtml(tasterName)} updated their address in the tasting portal.`,
+      body: `
+        <p style="margin: 0 0 10px;"><strong>Taster:</strong> ${escapeHtml(tasterName)}</p>
+        <p style="margin: 0 0 10px;"><strong>Email:</strong> ${escapeHtml(tasterEmail || '-')}</p>
+        <p style="margin: 0 0 10px;"><strong>Phone:</strong> ${escapeHtml(tasterPhone ?? '-')}</p>
+        <p style="margin: 0 0 10px;"><strong>Previous address:</strong> ${escapeHtml(previousAddress)}</p>
+        <p style="margin: 0;"><strong>New address:</strong> ${escapeHtml(newAddress)}</p>
+      `,
+      ctaLabel: profilePath ? 'Open taster profile' : undefined,
+      ctaHref: profilePath ? portalUrl(profilePath) : undefined,
+    }),
+  })
+}
+
 export async function sendSalesRepDigestEmail({
   to,
   repName,

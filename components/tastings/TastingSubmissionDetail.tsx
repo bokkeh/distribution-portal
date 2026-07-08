@@ -1,9 +1,10 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { submitTasterInvoice } from '@/actions/tastings'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -80,6 +81,12 @@ export function TastingSubmissionDetail({
   adminHourlyRate,
   success,
   error,
+  reportMode = 'default',
+  invoiceMode = 'default',
+  reportBlankHref,
+  reportStandardHref,
+  invoiceBlankHref,
+  invoiceStandardHref,
 }: {
   tasting: {
     id: string
@@ -103,11 +110,23 @@ export function TastingSubmissionDetail({
   adminHourlyRate?: string | null
   success?: string
   error?: string
+  reportMode?: 'default' | 'manual'
+  invoiceMode?: 'default' | 'manual'
+  reportBlankHref?: string
+  reportStandardHref?: string
+  invoiceBlankHref?: string
+  invoiceStandardHref?: string
 }) {
   const invoiceLocked = invoice?.status === 'approved' || invoice?.status === 'paid'
-  const defaultHoursWorked = useMemo(() => getDefaultHoursWorked(report, invoice), [invoice, report])
-  const [hoursWorked, setHoursWorked] = useState(() => invoice?.hoursWorked ?? defaultHoursWorked)
-  const [expenseAmount, setExpenseAmount] = useState(() => invoice?.expenseAmount ?? '0.00')
+  const usingManualInvoice = invoiceMode === 'manual'
+  const activeInvoice = usingManualInvoice ? null : invoice
+  const defaultHoursWorked = useMemo(() => {
+    if (usingManualInvoice) return ''
+    return getDefaultHoursWorked(report, activeInvoice)
+  }, [activeInvoice, report, usingManualInvoice])
+  const defaultExpenseAmount = activeInvoice?.expenseAmount ?? (usingManualInvoice ? '' : '0.00')
+  const [hoursWorked, setHoursWorked] = useState(() => activeInvoice?.hoursWorked ?? defaultHoursWorked)
+  const [expenseAmount, setExpenseAmount] = useState(() => defaultExpenseAmount)
   const totalEstimate = useMemo(() => {
     const rate = Number(adminHourlyRate ?? invoice?.hourlyRate ?? '25')
     const hours = Number(hoursWorked || '0')
@@ -116,7 +135,10 @@ export function TastingSubmissionDetail({
   }, [adminHourlyRate, expenseAmount, hoursWorked, invoice?.hourlyRate])
 
   const invoiceFormRef = useRef<HTMLFormElement | null>(null)
-  const invoiceDraft = useFormDraftAutosave(invoiceFormRef, `tasting-invoice:${tasting.id}`)
+  const invoiceDraft = useFormDraftAutosave(
+    invoiceFormRef,
+    usingManualInvoice ? `tasting-invoice:${tasting.id}:manual` : `tasting-invoice:${tasting.id}`,
+  )
 
   useEffect(() => {
     if (success === 'Invoice submitted to accounting.') invoiceDraft.clearDraft()
@@ -158,29 +180,60 @@ export function TastingSubmissionDetail({
       </Card>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <TastingReportFormCard tasting={tasting} report={report} />
+        <TastingReportFormCard
+          key={`${tasting.id}:${reportMode}`}
+          tasting={tasting}
+          report={report}
+          reportMode={reportMode}
+          startFromScratchHref={reportBlankHref}
+          standardHref={reportStandardHref}
+        />
 
         <Card id="invoice">
-          <CardHeader>
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <CardTitle>Submit Invoice To Accounting</CardTitle>
+            <div className="flex flex-wrap gap-2">
+              {usingManualInvoice && invoiceStandardHref ? (
+                <Link href={invoiceStandardHref} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+                  Use Standard Form
+                </Link>
+              ) : null}
+              {!usingManualInvoice && invoiceBlankHref && !invoiceLocked ? (
+                <Link href={invoiceBlankHref} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+                  Start From Scratch
+                </Link>
+              ) : null}
+            </div>
           </CardHeader>
           <CardContent>
-            <form ref={invoiceFormRef} action={submitTasterInvoice} className="space-y-4">
+            {usingManualInvoice ? (
+              <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                {invoice
+                  ? 'You are using a blank backup invoice form. Saving it will replace the current invoice values.'
+                  : 'You are using a blank backup invoice form with no automatic prefills.'}
+              </div>
+            ) : null}
+            <form
+              key={`${invoiceMode}:${invoice?.submittedAt?.toISOString() ?? 'new'}`}
+              ref={invoiceFormRef}
+              action={submitTasterInvoice}
+              className="space-y-4"
+            >
               <input type="hidden" name="tastingId" value={tasting.id} />
               <fieldset disabled={invoiceLocked} className="space-y-4 disabled:opacity-70">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="payeeName">Payee Name</Label>
-                  <Input id="payeeName" name="payeeName" defaultValue={invoice?.payeeName ?? user.name ?? ''} required />
+                  <Input id="payeeName" name="payeeName" defaultValue={activeInvoice?.payeeName ?? user.name ?? ''} required />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="payeeEmail">Payee Email</Label>
-                  <Input id="payeeEmail" name="payeeEmail" type="email" defaultValue={invoice?.payeeEmail ?? user.email ?? ''} required />
+                  <Input id="payeeEmail" name="payeeEmail" type="email" defaultValue={activeInvoice?.payeeEmail ?? user.email ?? ''} required />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="payeePhone">Payee Phone</Label>
-                <Input id="payeePhone" name="payeePhone" type="tel" defaultValue={invoice?.payeePhone ?? user.phone ?? ''} />
+                <Input id="payeePhone" name="payeePhone" type="tel" defaultValue={activeInvoice?.payeePhone ?? user.phone ?? ''} />
               </div>
 
               <div className="space-y-2">
@@ -196,7 +249,7 @@ export function TastingSubmissionDetail({
                   required
                 />
                 <p className="text-xs text-slate-500">
-                  Adjust this to match the actual shift length. {report?.actualStartTime && report?.actualEndTime ? 'Prefilled from your report times.' : 'Use 15-minute increments if possible.'}
+                  Adjust this to match the actual shift length. {usingManualInvoice ? 'Manual mode starts blank.' : report?.actualStartTime && report?.actualEndTime ? 'Prefilled from your report times.' : 'Use 15-minute increments if possible.'}
                 </p>
               </div>
 
@@ -213,7 +266,7 @@ export function TastingSubmissionDetail({
                 />
               </div>
 
-              <TasterInvoiceReceiptField value={invoice?.receiptUrls ?? []} disabled={invoiceLocked} />
+              <TasterInvoiceReceiptField value={activeInvoice?.receiptUrls ?? []} disabled={invoiceLocked} />
 
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
                 <span className="text-slate-500">Estimated total: </span>
@@ -226,7 +279,7 @@ export function TastingSubmissionDetail({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="notes">Invoice Notes</Label>
-                <textarea id="notes" name="notes" className="min-h-24 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm" defaultValue={invoice?.notes ?? ''} placeholder="Anything accounting should know about this payment." />
+                <textarea id="notes" name="notes" className="min-h-24 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm" defaultValue={activeInvoice?.notes ?? ''} placeholder="Anything accounting should know about this payment." />
               </div>
               </fieldset>
 
@@ -254,10 +307,14 @@ export function TastingSubmissionDetail({
 
               <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs">
                 <span className="text-slate-500">{invoiceDraft.statusText || 'Invoice draft saves locally while you type.'}</span>
-                <span className="text-slate-500">{invoice ? `Status: ${invoice.status}` : 'Draft mode'}</span>
+                <span className="text-slate-500">
+                  {invoice ? `Status: ${invoice.status}` : usingManualInvoice ? 'Blank manual form' : 'Draft mode'}
+                </span>
               </div>
 
-              <Button type="submit" className="w-full" disabled={invoiceLocked}>{invoice ? 'Update Invoice' : 'Submit Invoice'}</Button>
+              <Button type="submit" className="w-full" disabled={invoiceLocked}>
+                {invoice ? (usingManualInvoice ? 'Replace Invoice' : 'Update Invoice') : 'Submit Invoice'}
+              </Button>
             </form>
           </CardContent>
         </Card>
