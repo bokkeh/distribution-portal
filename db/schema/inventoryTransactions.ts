@@ -9,7 +9,7 @@ export const inventoryTransactions = pgTable('inventory_transactions', {
   actorUserId: uuid('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
   orderId: uuid('order_id').references(() => orders.id, { onDelete: 'set null' }),
   type: text('type', {
-    enum: ['product_created', 'manual_adjustment', 'sample_adjustment', 'order_allocation'],
+    enum: ['product_created', 'manual_adjustment', 'sample_adjustment', 'order_allocation', 'inventory_transfer', 'sample_checkout', 'sample_return', 'sample_disposition'],
   }).notNull(),
   reason: text('reason'),
   deltaPaid: integer('delta_paid').notNull().default(0),
@@ -18,6 +18,11 @@ export const inventoryTransactions = pgTable('inventory_transactions', {
   quantityPaidAfter: integer('quantity_paid_after').notNull().default(0),
   quantitySampleAfter: integer('quantity_sample_after').notNull().default(0),
   looseBottlePaidAfter: integer('loose_bottle_paid_after').notNull().default(0),
+  deltaWarehouseBottles: integer('delta_warehouse_bottles').notNull().default(0),
+  deltaSampleBottles: integer('delta_sample_bottles').notNull().default(0),
+  warehouseBottlesAfter: integer('warehouse_bottles_after').notNull().default(0),
+  sampleBottlesAfter: integer('sample_bottles_after').notNull().default(0),
+  checkedOutBottlesAfter: integer('checked_out_bottles_after').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

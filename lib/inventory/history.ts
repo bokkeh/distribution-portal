@@ -26,11 +26,16 @@ export async function logInventoryTransaction({
   quantityPaidAfter = 0,
   quantitySampleAfter = 0,
   looseBottlePaidAfter = 0,
+  deltaWarehouseBottles = 0,
+  deltaSampleBottles = 0,
+  warehouseBottlesAfter = 0,
+  sampleBottlesAfter = 0,
+  checkedOutBottlesAfter = 0,
 }: {
   productId: string
   actorUserId?: string | null
   orderId?: string | null
-  type: 'product_created' | 'manual_adjustment' | 'sample_adjustment' | 'order_allocation'
+  type: 'product_created' | 'manual_adjustment' | 'sample_adjustment' | 'order_allocation' | 'inventory_transfer' | 'sample_checkout' | 'sample_return' | 'sample_disposition'
   reason?: string | null
   deltaPaid?: number
   deltaSample?: number
@@ -38,6 +43,11 @@ export async function logInventoryTransaction({
   quantityPaidAfter?: number
   quantitySampleAfter?: number
   looseBottlePaidAfter?: number
+  deltaWarehouseBottles?: number
+  deltaSampleBottles?: number
+  warehouseBottlesAfter?: number
+  sampleBottlesAfter?: number
+  checkedOutBottlesAfter?: number
 }) {
   try {
     await db.insert(inventoryTransactions).values({
@@ -52,6 +62,11 @@ export async function logInventoryTransaction({
       quantityPaidAfter,
       quantitySampleAfter,
       looseBottlePaidAfter,
+      deltaWarehouseBottles,
+      deltaSampleBottles,
+      warehouseBottlesAfter,
+      sampleBottlesAfter,
+      checkedOutBottlesAfter,
     })
   } catch (error) {
     if (isMissingInventoryTransactionsTable(error)) {

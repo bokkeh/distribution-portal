@@ -1,15 +1,14 @@
 import { db } from '@/db'
 import { geographicPricingRules, inventory, inventoryTransactions, inventorySampleHolders, products, users } from '@/db/schema'
 import { asc, desc, eq, inArray, sql } from 'drizzle-orm'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { toDisplayAvatarUrl } from '@/lib/users/avatar'
 import { formatCurrency } from '@/lib/utils'
 import Link from 'next/link'
 import { Plus, AlertTriangle } from 'lucide-react'
 import { AdminInventoryRowActions } from '@/components/inventory/AdminInventoryRowActions'
-import SampleHoldersPanel from '@/components/inventory/SampleHoldersPanel'
+import { toBottles } from '@/lib/inventory/units'
 
 export default async function InventoryPage() {
   // Fetch staff/admin users for the assign dropdown
@@ -26,6 +25,7 @@ export default async function InventoryPage() {
       productId: inventorySampleHolders.productId,
       userId: inventorySampleHolders.userId,
       quantity: inventorySampleHolders.quantity,
+      looseBottleQuantity: inventorySampleHolders.looseBottleQuantity,
       notes: inventorySampleHolders.notes,
       checkedOutAt: inventorySampleHolders.checkedOutAt,
       productName: products.name,
@@ -55,6 +55,7 @@ export default async function InventoryPage() {
       quantityPaid: inventory.quantityPaid,
       quantitySample: inventory.quantitySample,
       looseBottlePaid: inventory.looseBottlePaid,
+      looseBottleSample: inventory.looseBottleSample,
       reorderLevel: inventory.reorderLevel,
       sku: products.sku,
       name: products.name,
@@ -79,6 +80,11 @@ export default async function InventoryPage() {
     deltaLooseBottlePaid: number
     quantityPaidAfter: number
     quantitySampleAfter: number
+    deltaWarehouseBottles: number
+    deltaSampleBottles: number
+    warehouseBottlesAfter: number
+    sampleBottlesAfter: number
+    checkedOutBottlesAfter: number
     createdAt: Date
     productName: string
     sku: string
@@ -97,6 +103,11 @@ export default async function InventoryPage() {
         deltaLooseBottlePaid: inventoryTransactions.deltaLooseBottlePaid,
         quantityPaidAfter: inventoryTransactions.quantityPaidAfter,
         quantitySampleAfter: inventoryTransactions.quantitySampleAfter,
+        deltaWarehouseBottles: inventoryTransactions.deltaWarehouseBottles,
+        deltaSampleBottles: inventoryTransactions.deltaSampleBottles,
+        warehouseBottlesAfter: inventoryTransactions.warehouseBottlesAfter,
+        sampleBottlesAfter: inventoryTransactions.sampleBottlesAfter,
+        checkedOutBottlesAfter: inventoryTransactions.checkedOutBottlesAfter,
         createdAt: inventoryTransactions.createdAt,
         productName: products.name,
         sku: products.sku,
@@ -141,21 +152,34 @@ export default async function InventoryPage() {
       + (Number(item.looseBottlePaid ?? 0) * maxBottlePrice)
   }, 0)
 
+  const inventoryTotals = items.reduce((totals, item) => {
+    const bottlesPerCase = item.bottlesPerCase ?? 12
+    totals.warehouse += toBottles(item.quantityPaid ?? 0, item.looseBottlePaid ?? 0, bottlesPerCase)
+    totals.samples += toBottles(item.quantitySample ?? 0, item.looseBottleSample ?? 0, bottlesPerCase)
+    return totals
+  }, { warehouse: 0, samples: 0 })
+  const checkedOutTotal = sampleHolders.reduce((sum, holder) => {
+    const product = items.find(item => (item.productId ?? item.id) === holder.productId)
+    return sum + toBottles(holder.quantity, holder.looseBottleQuantity, product?.bottlesPerCase ?? 12)
+  }, 0)
+
   return (
     <div className="p-4 sm:p-8 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Inventory</h1>
-          <div className="mt-1 space-y-1">
-            <p className="text-muted-foreground">{items.length} products available</p>
-            <p className="text-sm font-medium text-slate-700">
-              Total inventory potential revenue at max price point: <span className="font-semibold text-slate-900">{formatCurrency(totalPotentialRevenue)}</span>
-            </p>
-          </div>
+          <p className="mt-1 text-muted-foreground">Allocate warehouse and sample stock in cases or bottles.</p>
         </div>
         <Link href="/admin/inventory/new">
           <Button><Plus className="w-4 h-4 mr-2" />Add Product</Button>
         </Link>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Card><CardContent className="p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Warehouse</p><p className="mt-1 text-2xl font-semibold">{inventoryTotals.warehouse.toLocaleString()} bottles</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Samples available</p><p className="mt-1 text-2xl font-semibold">{inventoryTotals.samples.toLocaleString()} bottles</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Samples checked out</p><p className="mt-1 text-2xl font-semibold">{checkedOutTotal.toLocaleString()} bottles</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Potential revenue</p><p className="mt-1 text-2xl font-semibold">{formatCurrency(totalPotentialRevenue)}</p></CardContent></Card>
       </div>
 
       {lowStockItems.length > 0 && (
@@ -190,8 +214,9 @@ export default async function InventoryPage() {
                 <tr>
                   <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Product</th>
                   <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">SKU</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Paid Cases</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Sample Cases</th>
+                  <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Warehouse</th>
+                  <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Samples Available</th>
+                  <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Checked Out</th>
                   <th className="text-right px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Actions</th>
                   <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Price</th>
                   <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wide">Status</th>
@@ -199,7 +224,7 @@ export default async function InventoryPage() {
               </thead>
               <tbody className="divide-y">
                 {items.length === 0 ? (
-                  <tr><td colSpan={7} className="px-6 py-12 text-center text-muted-foreground">No products in inventory. Add your first product.</td></tr>
+                  <tr><td colSpan={8} className="px-6 py-12 text-center text-muted-foreground">No products in inventory. Add your first product.</td></tr>
                 ) : items.map(item => {
                   return (
                   <tr key={item.id} className="hover:bg-slate-50 transition-colors">
@@ -212,10 +237,18 @@ export default async function InventoryPage() {
                       <td className="px-6 py-4 text-sm font-mono text-muted-foreground">{item.sku}</td>
                       <AdminInventoryRowActions
                         productId={item.productId ?? item.id}
-                        quantityPaid={item.quantityPaid ?? 0}
-                        quantitySample={item.quantitySample ?? 0}
-                        looseBottlePaid={item.looseBottlePaid ?? 0}
-                        reorderLevel={item.reorderLevel ?? 10}
+                        productName={item.name}
+                        warehouseBottles={toBottles(item.quantityPaid ?? 0, item.looseBottlePaid ?? 0, item.bottlesPerCase ?? 12)}
+                        sampleBottles={toBottles(item.quantitySample ?? 0, item.looseBottleSample ?? 0, item.bottlesPerCase ?? 12)}
+                        bottlesPerCase={item.bottlesPerCase ?? 12}
+                        holders={sampleHolders.filter(holder => holder.productId === (item.productId ?? item.id)).map(holder => ({
+                          id: holder.id,
+                          userId: holder.userId!,
+                          userName: holder.userName,
+                          bottles: toBottles(holder.quantity, holder.looseBottleQuantity, item.bottlesPerCase ?? 12),
+                          notes: holder.notes,
+                        }))}
+                        staffUsers={staffUsers}
                       />
                       <td className="px-6 py-4 text-sm">{formatCurrency(item.price)}</td>
                       <td className="px-6 py-4">
@@ -227,29 +260,6 @@ export default async function InventoryPage() {
               </tbody>
             </table>
           </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Sample Holders</CardTitle>
-          <p className="text-sm text-muted-foreground">Track which users currently have sample cases checked out.</p>
-        </CardHeader>
-        <CardContent>
-          <SampleHoldersPanel
-            holders={sampleHolders.map(h => ({
-              ...h,
-              userId: h.userId!,
-              userAvatarUrl: toDisplayAvatarUrl(h.userAvatarUrl),
-            }))}
-            products={items.map(i => ({
-              id: i.productId ?? i.id,
-              name: i.name,
-              sku: i.sku,
-              quantitySample: i.quantitySample ?? 0,
-            }))}
-            staffUsers={staffUsers}
-          />
         </CardContent>
       </Card>
 
@@ -274,16 +284,16 @@ export default async function InventoryPage() {
                   <p className="mt-1 text-xs text-muted-foreground">By {tx.actorName ?? 'System'} • {new Date(tx.createdAt).toLocaleString()}</p>
                 </div>
                 <div className="text-right text-xs">
-                  <p className={tx.deltaPaid === 0 ? 'text-muted-foreground' : tx.deltaPaid > 0 ? 'text-green-600' : 'text-red-600'}>
-                    Paid: {tx.deltaPaid > 0 ? `+${tx.deltaPaid}` : tx.deltaPaid}
-                  </p>
-                  <p className={tx.deltaSample === 0 ? 'text-muted-foreground' : tx.deltaSample > 0 ? 'text-green-600' : 'text-red-600'}>
-                    Sample: {tx.deltaSample > 0 ? `+${tx.deltaSample}` : tx.deltaSample}
-                  </p>
-                  <p className={tx.deltaLooseBottlePaid === 0 ? 'text-muted-foreground' : tx.deltaLooseBottlePaid > 0 ? 'text-green-600' : 'text-red-600'}>
-                    Loose: {tx.deltaLooseBottlePaid > 0 ? `+${tx.deltaLooseBottlePaid}` : tx.deltaLooseBottlePaid}
-                  </p>
-                  <p className="mt-1 text-muted-foreground">After: {tx.quantityPaidAfter} paid / {tx.quantitySampleAfter} sample</p>
+                  {['inventory_transfer', 'sample_checkout', 'sample_return', 'sample_disposition'].includes(tx.type) ? <>
+                    <p className={tx.deltaWarehouseBottles === 0 ? 'text-muted-foreground' : tx.deltaWarehouseBottles > 0 ? 'text-green-600' : 'text-red-600'}>Warehouse: {tx.deltaWarehouseBottles > 0 ? '+' : ''}{tx.deltaWarehouseBottles} bottles</p>
+                    <p className={tx.deltaSampleBottles === 0 ? 'text-muted-foreground' : tx.deltaSampleBottles > 0 ? 'text-green-600' : 'text-red-600'}>Samples: {tx.deltaSampleBottles > 0 ? '+' : ''}{tx.deltaSampleBottles} bottles</p>
+                    <p className="mt-1 text-muted-foreground">After: {tx.warehouseBottlesAfter} warehouse / {tx.sampleBottlesAfter} sample / {tx.checkedOutBottlesAfter} out</p>
+                  </> : <>
+                    <p className={tx.deltaPaid === 0 ? 'text-muted-foreground' : tx.deltaPaid > 0 ? 'text-green-600' : 'text-red-600'}>Warehouse cases: {tx.deltaPaid > 0 ? `+${tx.deltaPaid}` : tx.deltaPaid}</p>
+                    <p className={tx.deltaSample === 0 ? 'text-muted-foreground' : tx.deltaSample > 0 ? 'text-green-600' : 'text-red-600'}>Sample cases: {tx.deltaSample > 0 ? `+${tx.deltaSample}` : tx.deltaSample}</p>
+                    <p className={tx.deltaLooseBottlePaid === 0 ? 'text-muted-foreground' : tx.deltaLooseBottlePaid > 0 ? 'text-green-600' : 'text-red-600'}>Loose bottles: {tx.deltaLooseBottlePaid > 0 ? `+${tx.deltaLooseBottlePaid}` : tx.deltaLooseBottlePaid}</p>
+                    <p className="mt-1 text-muted-foreground">After: {tx.quantityPaidAfter} warehouse / {tx.quantitySampleAfter} sample cases</p>
+                  </>}
                 </div>
               </div>
             ))}

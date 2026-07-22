@@ -239,6 +239,13 @@
       "when": 1781600400000,
       "tag": "0048_tasting_report_shelf_metrics",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1784696400000,
+      "tag": "0049_inventory_bottle_allocations",
+      "breakpoints": true
     }
   ]
 }
