@@ -253,6 +253,13 @@
       "when": 1784743200000,
       "tag": "0050_inventory_disposition_undo",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1784753400000,
+      "tag": "0051_repair_tasting_report_shelf_metrics",
+      "breakpoints": true
     }
   ]
 }

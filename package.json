@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "npm run db:repair:migrations && drizzle-kit migrate",
+    "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:repair:migrations": "node --env-file=.env.local -e \"require('tsx/cjs');require('./db/repair-migration-history.ts')\"",
     "db:repair:platform-ops": "node --env-file=.env.local -e \"require('tsx/cjs');require('./db/repair-platform-ops.ts')\"",
