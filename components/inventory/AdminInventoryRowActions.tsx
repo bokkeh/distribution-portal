@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
@@ -11,8 +12,9 @@ import { deleteSku } from '@/actions/inventory'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { formatStock } from '@/lib/inventory/units'
+import { toDisplayAvatarUrl } from '@/lib/users/avatar'
 
-type Holder = { id: string; userId: string; userName: string; bottles: number; notes: string | null }
+type Holder = { id: string; userId: string; userName: string; userAvatarUrl: string | null; bottles: number; notes: string | null }
 type StaffUser = { id: string; name: string; role: string }
 
 export function AdminInventoryRowActions({
@@ -167,7 +169,11 @@ export function AdminInventoryRowActions({
                   <label className="block space-y-1.5"><span className="text-sm font-medium">Notes <span className="font-normal text-muted-foreground">(optional)</span></span><Input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Event, account, or purpose" /></label>
                 </div>
               )}
-              {holders.length > 0 && <div className="space-y-3 border-t pt-6"><div><h3 className="font-semibold">Current sample holders</h3><p className="text-sm text-muted-foreground">Return unused stock or record samples that were consumed, damaged, or lost.</p></div>{holders.map(holder => <div key={holder.id} className="rounded-xl border p-4"><div className="flex items-start justify-between gap-4"><div><p className="font-medium">{holder.userName}</p><p className="text-sm text-muted-foreground">{formatStock(holder.bottles, bottlesPerCase)}{holder.notes ? ` · ${holder.notes}` : ''}</p></div><div className="flex flex-wrap justify-end gap-2"><Button size="sm" variant="outline" onClick={() => closeAssignment(holder.id, 'returned')} disabled={isPending}>Return</Button><select aria-label="Close sample assignment" className="h-9 rounded-md border bg-white px-2 text-xs" defaultValue="" onChange={e => { if (e.target.value) closeAssignment(holder.id, e.target.value) }}><option value="" disabled>Other…</option><option value="consumed">Consumed</option><option value="damaged">Damaged</option><option value="lost">Lost</option></select></div></div></div>)}</div>}
+              {holders.length > 0 && <div className="space-y-3 border-t pt-6"><div><h3 className="font-semibold">Current sample holders</h3><p className="text-sm text-muted-foreground">Return unused stock or record samples that were consumed, damaged, or lost.</p></div>{holders.map(holder => {
+                const avatarUrl = toDisplayAvatarUrl(holder.userAvatarUrl)
+                const initials = holder.userName.split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase()
+                return <div key={holder.id} className="rounded-xl border p-4"><div className="flex items-start justify-between gap-4"><div className="flex min-w-0 items-start gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-200 text-xs font-semibold text-slate-600">{avatarUrl ? <Image src={avatarUrl} alt={`${holder.userName} profile picture`} width={40} height={40} className="h-10 w-10 object-cover" unoptimized /> : initials}</div><div className="min-w-0"><p className="font-medium">{holder.userName}</p><p className="text-sm text-muted-foreground">{formatStock(holder.bottles, bottlesPerCase)}{holder.notes ? ` · ${holder.notes}` : ''}</p></div></div><div className="flex flex-wrap justify-end gap-2"><Button size="sm" variant="outline" onClick={() => closeAssignment(holder.id, 'returned')} disabled={isPending}>Return</Button><select aria-label="Close sample assignment" className="h-9 rounded-md border bg-white px-2 text-xs" defaultValue="" onChange={e => { if (e.target.value) closeAssignment(holder.id, e.target.value) }}><option value="" disabled>Other…</option><option value="consumed">Consumed</option><option value="damaged">Damaged</option><option value="lost">Lost</option></select></div></div></div>
+              })}</div>}
             </div>
             <div className="sticky bottom-0 mt-auto flex justify-end gap-3 border-t bg-white p-6"><Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button onClick={submit} disabled={isPending || !quantity || requestedBottles < 1 || (mode === 'transfer' ? requestedBottles > sourceBottles : !userId || requestedBottles > sampleBottles)}>{isPending ? 'Saving…' : mode === 'transfer' ? 'Confirm allocation' : <><PackageCheck className="mr-2 h-4 w-4" />Check out samples</>}</Button></div>
           </div>

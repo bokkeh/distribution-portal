@@ -249,6 +249,7 @@ export default async function InventoryPage() {
                           id: holder.id,
                           userId: holder.userId!,
                           userName: holder.userName,
+                          userAvatarUrl: holder.userAvatarUrl,
                           bottles: toBottles(holder.quantity, holder.looseBottleQuantity, item.bottlesPerCase ?? 12),
                           notes: holder.notes,
                         }))}
