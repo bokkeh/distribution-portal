@@ -31,11 +31,13 @@ export async function logInventoryTransaction({
   warehouseBottlesAfter = 0,
   sampleBottlesAfter = 0,
   checkedOutBottlesAfter = 0,
+  sampleHolderUserId,
+  sampleBottles = 0,
 }: {
   productId: string
   actorUserId?: string | null
   orderId?: string | null
-  type: 'product_created' | 'manual_adjustment' | 'sample_adjustment' | 'order_allocation' | 'inventory_transfer' | 'sample_checkout' | 'sample_return' | 'sample_disposition'
+  type: 'product_created' | 'manual_adjustment' | 'sample_adjustment' | 'order_allocation' | 'inventory_transfer' | 'sample_checkout' | 'sample_return' | 'sample_disposition' | 'sample_disposition_undo'
   reason?: string | null
   deltaPaid?: number
   deltaSample?: number
@@ -48,6 +50,8 @@ export async function logInventoryTransaction({
   warehouseBottlesAfter?: number
   sampleBottlesAfter?: number
   checkedOutBottlesAfter?: number
+  sampleHolderUserId?: string | null
+  sampleBottles?: number
 }) {
   try {
     await db.insert(inventoryTransactions).values({
@@ -67,6 +71,8 @@ export async function logInventoryTransaction({
       warehouseBottlesAfter,
       sampleBottlesAfter,
       checkedOutBottlesAfter,
+      sampleHolderUserId: sampleHolderUserId ?? null,
+      sampleBottles,
     })
   } catch (error) {
     if (isMissingInventoryTransactionsTable(error)) {

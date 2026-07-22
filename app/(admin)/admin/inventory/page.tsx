@@ -10,6 +10,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { Plus, AlertTriangle } from 'lucide-react'
 import { AdminInventoryRowActions } from '@/components/inventory/AdminInventoryRowActions'
+import { UndoInventoryTransactionButton } from '@/components/inventory/UndoInventoryTransactionButton'
 import { toBottles } from '@/lib/inventory/units'
 
 export default async function InventoryPage() {
@@ -92,6 +93,9 @@ export default async function InventoryPage() {
     sku: string
     actorName: string | null
     actorAvatarUrl: string | null
+    sampleHolderUserId: string | null
+    sampleBottles: number
+    reversedAt: Date | null
   }> = []
   let inventoryHistoryUnavailable = false
 
@@ -116,6 +120,9 @@ export default async function InventoryPage() {
         sku: products.sku,
         actorName: users.name,
         actorAvatarUrl: users.avatarUrl,
+        sampleHolderUserId: inventoryTransactions.sampleHolderUserId,
+        sampleBottles: inventoryTransactions.sampleBottles,
+        reversedAt: inventoryTransactions.reversedAt,
       })
       .from(inventoryTransactions)
       .innerJoin(products, eq(inventoryTransactions.productId, products.id))
@@ -313,6 +320,11 @@ export default async function InventoryPage() {
                     <p className={tx.deltaLooseBottlePaid === 0 ? 'text-muted-foreground' : tx.deltaLooseBottlePaid > 0 ? 'text-green-600' : 'text-red-600'}>Loose bottles: {tx.deltaLooseBottlePaid > 0 ? `+${tx.deltaLooseBottlePaid}` : tx.deltaLooseBottlePaid}</p>
                     <p className="mt-1 text-muted-foreground">After: {tx.quantityPaidAfter} warehouse / {tx.quantitySampleAfter} sample cases</p>
                   </>}
+                  {tx.type === 'sample_disposition' && tx.sampleHolderUserId && tx.sampleBottles > 0 && (
+                    <div className="mt-2 flex justify-end">
+                      {tx.reversedAt ? <Badge variant="secondary">Undone</Badge> : <UndoInventoryTransactionButton transactionId={tx.id} />}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

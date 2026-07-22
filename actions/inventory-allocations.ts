@@ -3,7 +3,7 @@
 import { auth } from '@/lib/auth/config'
 import { requireAdminOrStaff } from '@/lib/auth/session'
 import { db } from '@/db'
-import { inventory, inventorySampleHolders, products } from '@/db/schema'
+import { inventory, inventorySampleHolders, inventoryTransactions, products } from '@/db/schema'
 import { and, eq, sql } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { logInventoryTransaction } from '@/lib/inventory/history'
@@ -117,7 +117,7 @@ export async function closeSampleAssignment(formData: FormData): Promise<Allocat
   await requireAdminOrStaff()
   const holderId = String(formData.get('holderId') ?? '')
   const disposition = String(formData.get('disposition') ?? 'returned')
-  const [holder] = await db.select({ id: inventorySampleHolders.id, productId: inventorySampleHolders.productId, quantity: inventorySampleHolders.quantity, loose: inventorySampleHolders.looseBottleQuantity, bottlesPerCase: products.bottlesPerCase })
+  const [holder] = await db.select({ id: inventorySampleHolders.id, productId: inventorySampleHolders.productId, userId: inventorySampleHolders.userId, quantity: inventorySampleHolders.quantity, loose: inventorySampleHolders.looseBottleQuantity, bottlesPerCase: products.bottlesPerCase })
     .from(inventorySampleHolders).innerJoin(products, eq(products.id, inventorySampleHolders.productId)).where(eq(inventorySampleHolders.id, holderId)).limit(1)
   if (!holder) return { error: 'Sample assignment was not found.' }
   const amount = toBottles(holder.quantity, holder.loose, holder.bottlesPerCase)
@@ -138,7 +138,70 @@ export async function closeSampleAssignment(formData: FormData): Promise<Allocat
     await db.delete(inventorySampleHolders).where(eq(inventorySampleHolders.id, holderId))
   }
   const after = await snapshot(holder.productId, holder.bottlesPerCase)
-  await logInventoryTransaction({ productId: holder.productId, actorUserId: (await auth())?.user?.id ?? null, type: disposition === 'returned' ? 'sample_return' : 'sample_disposition', reason: disposition === 'returned' ? 'Samples returned to stock' : `Samples marked ${disposition}`, deltaSampleBottles: disposition === 'returned' ? amount : 0, warehouseBottlesAfter: after.warehouse, sampleBottlesAfter: after.samples, checkedOutBottlesAfter: after.checkedOut })
+  await logInventoryTransaction({ productId: holder.productId, actorUserId: (await auth())?.user?.id ?? null, type: disposition === 'returned' ? 'sample_return' : 'sample_disposition', reason: disposition === 'returned' ? 'Samples returned to stock' : `Samples marked ${disposition}`, deltaSampleBottles: disposition === 'returned' ? amount : 0, warehouseBottlesAfter: after.warehouse, sampleBottlesAfter: after.samples, checkedOutBottlesAfter: after.checkedOut, sampleHolderUserId: holder.userId, sampleBottles: amount })
+  revalidatePath('/admin/inventory')
+  return { success: true }
+}
+
+export async function undoSampleDisposition(formData: FormData): Promise<AllocationResult> {
+  await requireAdminOrStaff()
+  const transactionId = String(formData.get('transactionId') ?? '')
+  const actorUserId = (await auth())?.user?.id ?? null
+  if (!transactionId || !actorUserId) return { error: 'A valid inventory action is required.' }
+
+  const [transaction] = await db.select({
+    productId: inventoryTransactions.productId,
+    type: inventoryTransactions.type,
+    reason: inventoryTransactions.reason,
+    sampleHolderUserId: inventoryTransactions.sampleHolderUserId,
+    sampleBottles: inventoryTransactions.sampleBottles,
+    reversedAt: inventoryTransactions.reversedAt,
+    bottlesPerCase: products.bottlesPerCase,
+  }).from(inventoryTransactions)
+    .innerJoin(products, eq(products.id, inventoryTransactions.productId))
+    .where(eq(inventoryTransactions.id, transactionId))
+    .limit(1)
+
+  if (!transaction || transaction.type !== 'sample_disposition') return { error: 'Only a sample disposition can be undone.' }
+  if (transaction.reversedAt) return { error: 'This action has already been undone.' }
+  if (!transaction.sampleHolderUserId || transaction.sampleBottles < 1) return { error: 'This older action does not contain enough information to undo automatically.' }
+
+  const result = await db.execute(sql`
+    WITH reversible AS (
+      UPDATE inventory_transactions
+      SET reversed_at = now(), reversed_by_user_id = ${actorUserId}
+      WHERE id = ${transactionId}
+        AND type = 'sample_disposition'
+        AND reversed_at IS NULL
+        AND sample_holder_user_id IS NOT NULL
+        AND sample_bottles > 0
+      RETURNING product_id, sample_holder_user_id, sample_bottles
+    )
+    INSERT INTO inventory_sample_holders (product_id, user_id, quantity, loose_bottle_quantity, notes)
+    SELECT product_id, sample_holder_user_id,
+      floor(sample_bottles::numeric / ${transaction.bottlesPerCase})::integer,
+      sample_bottles % ${transaction.bottlesPerCase},
+      'Restored from undone disposition'
+    FROM reversible
+    ON CONFLICT (product_id, user_id) DO UPDATE SET
+      quantity = floor(((inventory_sample_holders.quantity * ${transaction.bottlesPerCase} + inventory_sample_holders.loose_bottle_quantity) + EXCLUDED.quantity * ${transaction.bottlesPerCase} + EXCLUDED.loose_bottle_quantity)::numeric / ${transaction.bottlesPerCase})::integer,
+      loose_bottle_quantity = ((inventory_sample_holders.quantity * ${transaction.bottlesPerCase} + inventory_sample_holders.loose_bottle_quantity) + EXCLUDED.quantity * ${transaction.bottlesPerCase} + EXCLUDED.loose_bottle_quantity) % ${transaction.bottlesPerCase}
+    RETURNING product_id
+  `)
+  if ((result.rows?.length ?? 0) === 0) return { error: 'This action was already undone or changed. Refresh and try again.' }
+
+  const after = await snapshot(transaction.productId, transaction.bottlesPerCase)
+  await logInventoryTransaction({
+    productId: transaction.productId,
+    actorUserId,
+    type: 'sample_disposition_undo',
+    reason: `Undid: ${transaction.reason ?? 'sample disposition'}`,
+    warehouseBottlesAfter: after.warehouse,
+    sampleBottlesAfter: after.samples,
+    checkedOutBottlesAfter: after.checkedOut,
+    sampleHolderUserId: transaction.sampleHolderUserId,
+    sampleBottles: transaction.sampleBottles,
+  })
   revalidatePath('/admin/inventory')
   return { success: true }
 }

@@ -9,7 +9,7 @@ export const inventoryTransactions = pgTable('inventory_transactions', {
   actorUserId: uuid('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
   orderId: uuid('order_id').references(() => orders.id, { onDelete: 'set null' }),
   type: text('type', {
-    enum: ['product_created', 'manual_adjustment', 'sample_adjustment', 'order_allocation', 'inventory_transfer', 'sample_checkout', 'sample_return', 'sample_disposition'],
+    enum: ['product_created', 'manual_adjustment', 'sample_adjustment', 'order_allocation', 'inventory_transfer', 'sample_checkout', 'sample_return', 'sample_disposition', 'sample_disposition_undo'],
   }).notNull(),
   reason: text('reason'),
   deltaPaid: integer('delta_paid').notNull().default(0),
@@ -23,6 +23,10 @@ export const inventoryTransactions = pgTable('inventory_transactions', {
   warehouseBottlesAfter: integer('warehouse_bottles_after').notNull().default(0),
   sampleBottlesAfter: integer('sample_bottles_after').notNull().default(0),
   checkedOutBottlesAfter: integer('checked_out_bottles_after').notNull().default(0),
+  sampleHolderUserId: uuid('sample_holder_user_id').references(() => users.id, { onDelete: 'set null' }),
+  sampleBottles: integer('sample_bottles').notNull().default(0),
+  reversedAt: timestamp('reversed_at', { withTimezone: true }),
+  reversedByUserId: uuid('reversed_by_user_id').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
