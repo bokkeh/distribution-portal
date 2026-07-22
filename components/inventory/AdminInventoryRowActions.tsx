@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowRightLeft, MoreHorizontal, PackageCheck, X } from 'lucide-react'
@@ -101,13 +102,32 @@ export function AdminInventoryRowActions({
       <td className="px-6 py-4">
         <div className="flex items-center justify-end gap-2">
           <Button size="sm" onClick={() => setOpen(true)}><ArrowRightLeft className="mr-2 h-4 w-4" />Allocate</Button>
-          <details className="relative">
-            <summary className="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-md border hover:bg-slate-50"><MoreHorizontal className="h-4 w-4" /></summary>
-            <div className="absolute right-0 z-20 mt-1 w-36 rounded-md border bg-white p-1 shadow-lg">
-              <Link className="block rounded px-3 py-2 text-sm hover:bg-slate-50" href={editHref ?? `/admin/inventory/${productId}`}>Edit product</Link>
-              <button className="block w-full rounded px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50" onClick={handleDelete}>Delete / retire</button>
-            </div>
-          </details>
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger asChild>
+              <Button type="button" variant="outline" size="icon" aria-label={`Actions for ${productName}`}>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content
+                align="end"
+                sideOffset={6}
+                collisionPadding={12}
+                className="z-[100] min-w-40 rounded-md border bg-white p-1 shadow-lg"
+              >
+                <DropdownMenu.Item asChild>
+                  <Link className="block cursor-pointer rounded px-3 py-2 text-sm outline-none hover:bg-slate-50 focus:bg-slate-50" href={editHref ?? `/admin/inventory/${productId}`}>Edit product</Link>
+                </DropdownMenu.Item>
+                <DropdownMenu.Item
+                  className="cursor-pointer rounded px-3 py-2 text-sm text-red-600 outline-none hover:bg-red-50 focus:bg-red-50 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
+                  disabled={isPending}
+                  onSelect={() => handleDelete()}
+                >
+                  Delete / retire
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
         </div>
       </td>
 
