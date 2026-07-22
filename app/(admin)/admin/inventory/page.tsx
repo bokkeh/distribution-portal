@@ -5,6 +5,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency } from '@/lib/utils'
+import { toDisplayAvatarUrl } from '@/lib/users/avatar'
+import Image from 'next/image'
 import Link from 'next/link'
 import { Plus, AlertTriangle } from 'lucide-react'
 import { AdminInventoryRowActions } from '@/components/inventory/AdminInventoryRowActions'
@@ -89,6 +91,7 @@ export default async function InventoryPage() {
     productName: string
     sku: string
     actorName: string | null
+    actorAvatarUrl: string | null
   }> = []
   let inventoryHistoryUnavailable = false
 
@@ -112,6 +115,7 @@ export default async function InventoryPage() {
         productName: products.name,
         sku: products.sku,
         actorName: users.name,
+        actorAvatarUrl: users.avatarUrl,
       })
       .from(inventoryTransactions)
       .innerJoin(products, eq(inventoryTransactions.productId, products.id))
@@ -278,10 +282,24 @@ export default async function InventoryPage() {
               </p>
             ) : recentTransactions.map(tx => (
               <div key={tx.id} className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-slate-200 p-3">
-                <div>
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-200 text-xs font-semibold text-slate-600" title={tx.actorName ?? 'System'}>
+                    {toDisplayAvatarUrl(tx.actorAvatarUrl) ? (
+                      <Image
+                        src={toDisplayAvatarUrl(tx.actorAvatarUrl)!}
+                        alt={`${tx.actorName ?? 'System'} profile picture`}
+                        width={36}
+                        height={36}
+                        className="h-9 w-9 object-cover"
+                        unoptimized
+                      />
+                    ) : (tx.actorName ?? 'System').split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
                   <p className="text-sm font-medium text-slate-900">{tx.productName} <span className="text-xs font-mono text-muted-foreground">{tx.sku}</span></p>
                   <p className="mt-1 text-xs text-muted-foreground">{tx.reason ?? tx.type}</p>
                   <p className="mt-1 text-xs text-muted-foreground">By {tx.actorName ?? 'System'} • {new Date(tx.createdAt).toLocaleString()}</p>
+                  </div>
                 </div>
                 <div className="text-right text-xs">
                   {['inventory_transfer', 'sample_checkout', 'sample_return', 'sample_disposition'].includes(tx.type) ? <>
