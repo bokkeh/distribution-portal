@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameDay, isSameMonth, startOfMonth, startOfWeek } from 'date-fns'
 import { CalendarDays, Clock3, MapPin, Store } from 'lucide-react'
 import { createTasting, deleteTasting, reassignTasting, updateTastingStatus } from '@/actions/tastings'
@@ -79,6 +79,18 @@ function getReportActionLabel(tasting: Pick<TastingRow, 'status' | 'reportSubmit
 function parseDateInputValue(dateValue: string) {
   const parsed = new Date(`${dateValue}T12:00:00`)
   return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function YearMarker({ year }: { year: string }) {
+  return (
+    <div className="flex items-center gap-3 py-2" role="separator" aria-label={`Tastings from ${year}`}>
+      <div className="h-px flex-1 bg-slate-200" />
+      <span className="rounded-full border border-slate-200 bg-slate-50 px-4 py-1 text-sm font-semibold text-slate-600">
+        {year}
+      </span>
+      <div className="h-px flex-1 bg-slate-200" />
+    </div>
+  )
 }
 
 export function TastingsPlanner({
@@ -478,56 +490,67 @@ export function TastingsPlanner({
             </div>
           ) : null}
 
-          {(activeTab === 'upcoming' ? upcomingTastings : filteredPreviousTastings).length ? (activeTab === 'upcoming' ? upcomingTastings : filteredPreviousTastings).map(tasting => (
-            <div key={tasting.id} className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
-              <div className="flex items-start gap-4">
-                <div className="flex min-w-[84px] flex-col items-center rounded-2xl border border-blue-100 bg-blue-50 px-3 py-3 text-center">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-700">
-                    {format(new Date(tasting.scheduledAt), 'MMM')}
-                  </span>
-                  <span className="mt-1 text-3xl font-bold leading-none text-slate-900">
-                    {format(new Date(tasting.scheduledAt), 'd')}
-                  </span>
-                  <span className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-500">
-                    {format(new Date(tasting.scheduledAt), 'EEE')}
-                  </span>
-                  <span className="mt-3 rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-blue-700 shadow-sm">
-                    {formatTastingTimeRange(new Date(tasting.scheduledAt), tasting.endAt ? new Date(tasting.endAt) : null)}
-                  </span>
+          {(activeTab === 'upcoming' ? upcomingTastings : filteredPreviousTastings).length ? (activeTab === 'upcoming' ? upcomingTastings : filteredPreviousTastings).map((tasting, index, visibleTastings) => {
+            const tastingYear = format(new Date(tasting.scheduledAt), 'yyyy')
+            const previousTastingYear = index > 0
+              ? format(new Date(visibleTastings[index - 1].scheduledAt), 'yyyy')
+              : null
+            const showYearMarker = activeTab === 'previous' && tastingYear !== previousTastingYear
+
+            return (
+              <Fragment key={tasting.id}>
+                {showYearMarker ? <YearMarker year={tastingYear} /> : null}
+                <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
+                  <div className="flex items-start gap-4">
+                    <div className="flex min-w-[84px] flex-col items-center rounded-2xl border border-blue-100 bg-blue-50 px-3 py-3 text-center">
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-700">
+                        {format(new Date(tasting.scheduledAt), 'MMM')}
+                      </span>
+                      <span className="mt-1 text-3xl font-bold leading-none text-slate-900">
+                        {format(new Date(tasting.scheduledAt), 'd')}
+                      </span>
+                      <span className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-500">
+                        {format(new Date(tasting.scheduledAt), 'EEE')}
+                      </span>
+                      <span className="mt-3 rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-blue-700 shadow-sm">
+                        {formatTastingTimeRange(new Date(tasting.scheduledAt), tasting.endAt ? new Date(tasting.endAt) : null)}
+                      </span>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-slate-900">{tasting.eventName}</p>
+                        <Badge variant={statusVariant[tasting.status] ?? 'secondary'}>{tasting.status}</Badge>
+                      </div>
+                      <p className="text-sm text-slate-500">with {tasting.tasterName}</p>
+                      <p className="text-sm text-slate-500">{[tasting.storeAddress, tasting.storeCity, tasting.storeState, tasting.storeZip].filter(Boolean).join(', ') || 'Store address not provided'}</p>
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {tasting.reportSubmittedAt ? <Badge variant="success">Report Submitted</Badge> : null}
+                        {isMissingReport(tasting) ? <Badge variant="warning">Missing Report</Badge> : null}
+                        {tasting.invoiceSubmittedAt ? <Badge variant="info">Invoice {tasting.invoiceStatus ?? 'submitted'}</Badge> : null}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-start gap-2 md:items-end">
+                    <div className="text-sm text-slate-500">{tasting.storePhone ?? 'No store phone on file'}</div>
+                    {mode === 'taster' ? (
+                      <Link href={`/taster/tastings/${tasting.id}`}>
+                        <Button size="sm">Open Report</Button>
+                      </Link>
+                    ) : mode === 'admin' ? (
+                      <div className="flex flex-wrap gap-2 md:justify-end">
+                        <Link href={`/admin/tastings/${tasting.id}#report`}>
+                          <Button size="sm">{getReportActionLabel(tasting)}</Button>
+                        </Link>
+                        <Link href={`/admin/tastings/${tasting.id}`}>
+                          <Button size="sm" variant="outline">View Details</Button>
+                        </Link>
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <p className="font-semibold text-slate-900">{tasting.eventName}</p>
-                    <Badge variant={statusVariant[tasting.status] ?? 'secondary'}>{tasting.status}</Badge>
-                  </div>
-                  <p className="text-sm text-slate-500">with {tasting.tasterName}</p>
-                  <p className="text-sm text-slate-500">{[tasting.storeAddress, tasting.storeCity, tasting.storeState, tasting.storeZip].filter(Boolean).join(', ') || 'Store address not provided'}</p>
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    {tasting.reportSubmittedAt ? <Badge variant="success">Report Submitted</Badge> : null}
-                    {isMissingReport(tasting) ? <Badge variant="warning">Missing Report</Badge> : null}
-                    {tasting.invoiceSubmittedAt ? <Badge variant="info">Invoice {tasting.invoiceStatus ?? 'submitted'}</Badge> : null}
-                  </div>
-                </div>
-              </div>
-              <div className="flex flex-col items-start gap-2 md:items-end">
-                <div className="text-sm text-slate-500">{tasting.storePhone ?? 'No store phone on file'}</div>
-                {mode === 'taster' ? (
-                  <Link href={`/taster/tastings/${tasting.id}`}>
-                    <Button size="sm">Open Report</Button>
-                  </Link>
-                ) : mode === 'admin' ? (
-                  <div className="flex flex-wrap gap-2 md:justify-end">
-                    <Link href={`/admin/tastings/${tasting.id}#report`}>
-                      <Button size="sm">{getReportActionLabel(tasting)}</Button>
-                    </Link>
-                    <Link href={`/admin/tastings/${tasting.id}`}>
-                      <Button size="sm" variant="outline">View Details</Button>
-                    </Link>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          )) : (
+              </Fragment>
+            )
+          }) : (
             <p className="text-sm text-slate-500">
               {activeTab === 'upcoming' ? 'No upcoming tastings scheduled yet.' : 'No previous tastings match this date range.'}
             </p>
