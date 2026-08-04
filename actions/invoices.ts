@@ -6,7 +6,7 @@ import { and, eq, inArray } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { db } from '@/db'
-import { activityEvents, invoices, invoiceItems, customerAccounts, journalEntries, journalEntryLines, chartOfAccounts, orders, products } from '@/db/schema'
+import { activityEvents, invoices, invoiceItems, customerAccounts, journalEntries, journalEntryLines, chartOfAccounts, orders, products, repAssistedOrders } from '@/db/schema'
 import { requireAdminOrStaff, requireAuth } from '@/lib/auth/session'
 import { logActivityEvent } from '@/lib/activity/log'
 import { resolveInvoiceIdFromPublicToken } from '@/lib/invoices/public-token'
@@ -109,6 +109,11 @@ async function applyInvoicePaid(
     status: 'paid',
     paidAt: new Date(),
   }).where(eq(invoices.id, invoiceId))
+  await db.update(repAssistedOrders).set({
+    status: 'paid',
+    paymentCompletedAt: new Date(),
+    updatedAt: new Date(),
+  }).where(eq(repAssistedOrders.invoiceId, invoiceId))
 
   await logActivityEvent({
     entityType: 'invoice',

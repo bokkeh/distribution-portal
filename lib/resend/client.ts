@@ -110,7 +110,7 @@ async function sendEmail({
   recipientName?: string | null
 }) {
   const recipients = Array.isArray(to) ? to.filter(Boolean) : [to].filter(Boolean)
-  if (!recipients.length) return
+  if (!recipients.length) return false
 
   try {
     await resend.emails.send({
@@ -129,6 +129,7 @@ async function sendEmail({
         status: 'sent',
       }),
     ))
+    return true
   } catch (error) {
     console.error('Resend email failed:', error)
 
@@ -141,7 +142,48 @@ async function sendEmail({
         status: 'failed',
       }),
     ))
+    return false
   }
+}
+
+export async function sendRepAssistedOrderEmail({
+  to,
+  businessName,
+  orderNumber,
+  invoiceNumber,
+  total,
+  salesRepName,
+  reviewUrl,
+  expiresAt,
+}: {
+  to: string
+  businessName: string
+  orderNumber: string
+  invoiceNumber: string
+  total: string
+  salesRepName: string
+  reviewUrl: string
+  expiresAt: Date
+}) {
+  return sendEmail({
+    to,
+    recipientName: businessName,
+    subject: `Your order from AHAWC is ready to review`,
+    html: renderEmailCard({
+      eyebrow: 'Rep-assisted order',
+      title: 'Your order is ready to review',
+      intro: `${escapeHtml(salesRepName)} prepared an order for ${escapeHtml(businessName)}.`,
+      body: `
+        <p style="margin:0 0 8px"><strong>Order:</strong> ${escapeHtml(orderNumber)}</p>
+        <p style="margin:0 0 8px"><strong>Invoice:</strong> ${escapeHtml(invoiceNumber)}</p>
+        <p style="margin:0 0 14px"><strong>Total:</strong> ${escapeHtml(formatCurrencyValue(total))}</p>
+        <p style="margin:0 0 10px">Review the order and invoice, confirm your information, and pay securely online. You may be asked to sign in or activate your portal account.</p>
+        <p style="margin:0;color:#64748b;font-size:13px">This private link expires ${escapeHtml(expiresAt.toLocaleString('en-US', { timeZone: 'America/New_York' }))} ET. Contact ${escapeHtml(salesRepName)} or AHAWC if you have questions.</p>
+      `,
+      ctaLabel: 'Review and Pay',
+      ctaHref: reviewUrl,
+    }),
+  })
 }
 
 async function sendAutomationEmail({

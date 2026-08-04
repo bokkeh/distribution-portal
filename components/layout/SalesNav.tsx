@@ -3,7 +3,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Building2, Map, User, LogOut, DollarSign, Wine, TrendingUp, Menu, X, Star } from 'lucide-react'
+import { LayoutDashboard, Building2, Map, User, LogOut, DollarSign, Wine, TrendingUp, Menu, X, Star, ShoppingCart } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { signOut } from 'next-auth/react'
 import { useState, useEffect } from 'react'
@@ -13,6 +13,7 @@ import { NotificationBell } from '@/components/notifications/NotificationBell'
 const navItems = [
   { href: '/sales/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/sales/accounts', label: 'My Accounts', icon: Building2 },
+  { href: '/sales/orders/assisted', label: 'Orders', icon: ShoppingCart },
   { href: '/sales/routes', label: 'Routes', icon: Map },
   { href: '/sales/tastings', label: 'Tastings', icon: Wine },
   { href: '/sales/promotion-catalog', label: 'Promotion Catalog', icon: Star },
@@ -35,7 +36,6 @@ export default function SalesNav({ userName, notifications = [], unreadCount = 0
   const [dialpadOpen, setDialpadOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
 
-  useEffect(() => { setMenuOpen(false) }, [pathname])
   useEffect(() => {
     document.body.style.overflow = menuOpen ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
@@ -140,6 +140,7 @@ export default function SalesNav({ userName, notifications = [], unreadCount = 0
                   <Link
                     key={href}
                     href={href}
+                    onClick={() => setMenuOpen(false)}
                     className={cn(
                       'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors',
                       active ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
