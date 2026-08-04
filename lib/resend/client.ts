@@ -1055,3 +1055,25 @@ export async function sendNewOrderStaffNotification({
   })
   await sendEmail({ to: recipients, subject, html })
 }
+
+export async function sendMonthlyInventoryReportEmail({
+  to,
+  reportMonth,
+  summary,
+  reportId,
+}: {
+  to: string
+  reportMonth: string
+  summary: { movementCount: number; totalEstimatedCost: number; lowStockCount: number; failedExportCount: number }
+  reportId: string
+}) {
+  const html = renderEmailCard({
+    eyebrow: 'Monthly Inventory Report',
+    title: escapeHtml(reportMonth),
+    intro: 'The prior month sample inventory and accounting report is ready.',
+    body: `<p><strong>Movements:</strong> ${summary.movementCount}</p><p><strong>Estimated sample cost:</strong> ${formatCurrencyValue(summary.totalEstimatedCost)}</p><p><strong>Open low-stock alerts:</strong> ${summary.lowStockCount}</p><p><strong>QuickBooks items needing attention:</strong> ${summary.failedExportCount}</p>`,
+    ctaLabel: 'Download CSV report',
+    ctaHref: portalUrl(`/api/sample-inventory/reports/${reportId}/csv`),
+  })
+  return sendEmail({ to, subject: `Sample Inventory Report - ${reportMonth}`, html })
+}

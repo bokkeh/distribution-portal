@@ -267,6 +267,13 @@
       "when": 1785733200000,
       "tag": "0054_rep_assisted_orders",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1785805200000,
+      "tag": "0055_sample_inventory_management",
+      "breakpoints": true
     }
   ]
 }

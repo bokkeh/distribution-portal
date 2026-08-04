@@ -36,6 +36,10 @@
     {
       "path": "/api/cron/industry-news-digest",
       "schedule": "30 12 * * *"
+    },
+    {
+      "path": "/api/cron/monthly-inventory-report",
+      "schedule": "0 13 1 * *"
     }
   ],
   "headers": [

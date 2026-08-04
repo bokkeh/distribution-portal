@@ -22,6 +22,7 @@ const navItems = [
   { href: '/staff/crm',       label: 'Accounts',  icon: Building2, feature: 'crm' },
   { href: '/staff/inbox',     label: 'SMS Inbox', icon: MessageSquare, feature: 'inbox' },
   { href: '/staff/inventory', label: 'Inventory', icon: Package, feature: 'inventory' },
+  { href: '/staff/sample-inventory', label: 'Sample Inventory', icon: Package, feature: 'inventory' },
   { href: '/staff/tastings',  label: 'Tastings',  icon: CalendarDays, feature: 'tastings' },
   { href: '/staff/profile',   label: 'My Profile', icon: UserCircle, feature: 'profile' },
 ]
