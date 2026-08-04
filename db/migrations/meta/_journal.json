@@ -260,6 +260,20 @@
       "when": 1784753400000,
       "tag": "0051_repair_tasting_report_shelf_metrics",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1785733200000,
+      "tag": "0054_rep_assisted_orders",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1785805200000,
+      "tag": "0055_sample_inventory_management",
+      "breakpoints": true
     }
   ]
 }

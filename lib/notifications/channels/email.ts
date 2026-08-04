@@ -186,12 +186,27 @@ export async function handleEmailChannel<E extends NotificationEvent>(
 
     case 'tasting.report_received': {
       const p = payload as NotificationEventPayloads['tasting.report_received']
-      if (!(await checkEmailEnabled(p.userId))) break
-      await sendTastingReportReceivedEmail({
-        to: p.tasterEmail,
-        tasterName: p.tasterName,
-        storeName: p.storeName,
-      })
+      const tasterEmailEnabled = await checkEmailEnabled(p.userId)
+      const kristenEmail = process.env.ORDER_NOTIFY_KRISTEN_EMAIL?.trim()
+
+      await Promise.all([
+        tasterEmailEnabled && p.tasterEmail
+          ? sendTastingReportReceivedEmail({
+              to: p.tasterEmail,
+              tasterName: p.tasterName,
+              storeName: p.storeName,
+            })
+          : Promise.resolve(),
+        kristenEmail
+          ? sendInternalAlertEmail({
+              to: [kristenEmail],
+              subject: `Tasting report submitted - ${p.storeName}`,
+              title: 'Tasting report submitted',
+              body: `${p.tasterName || 'A taster'} submitted a report for ${p.storeName}.`,
+              href: `/admin/tastings/${p.tastingId}`,
+            })
+          : Promise.resolve(),
+      ])
       break
     }
 

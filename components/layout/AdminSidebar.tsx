@@ -52,6 +52,7 @@ const navSections = [
     title: 'Operations',
     items: [
       { href: '/admin/inventory', label: 'Inventory', icon: Package, feature: 'inventory' },
+      { href: '/admin/sample-inventory', label: 'Sample Inventory', icon: ClipboardList, feature: 'inventory' },
       { href: '/admin/pricing', label: 'Geographic Pricing', icon: FileText, feature: 'inventory' },
       { href: '/admin/tastings', label: 'Tastings', icon: CalendarDays, feature: 'tastings' },
       { href: '/admin/tastings/roi', label: 'Tasting ROI', icon: TrendingUp, feature: 'tastings' },
