@@ -2,7 +2,7 @@
 
 import { randomBytes } from 'crypto'
 import bcrypt from 'bcryptjs'
-import { eq } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { db } from '@/db'
@@ -48,6 +48,21 @@ export async function createUser(formData: FormData) {
   const roles = parseRoles(formData, role)
   const phone = formData.get('phone') as string | null
   const features = parseFeatures(formData)
+  const existingCustomerAccountId = String(formData.get('existingCustomerAccountId') ?? '').trim()
+  const requestedCompanyName = String(formData.get('companyName') ?? '').trim()
+
+  if (roles.includes('customer') && existingCustomerAccountId) {
+    const [account] = await db
+      .select({ userId: customerAccounts.userId })
+      .from(customerAccounts)
+      .where(eq(customerAccounts.id, existingCustomerAccountId))
+      .limit(1)
+    if (!account) throw new Error('The selected CRM account does not exist.')
+    if (account.userId) throw new Error('The selected CRM account is already linked to a portal user.')
+  }
+  if (roles.includes('customer') && !existingCustomerAccountId && !requestedCompanyName) {
+    throw new Error('Select an existing CRM account or enter a company name for a customer user.')
+  }
 
   const passwordHash = await bcrypt.hash(password, 12)
 
@@ -61,8 +76,15 @@ export async function createUser(formData: FormData) {
   }).returning()
 
   if (roles.includes('customer')) {
-    const companyName = formData.get('companyName') as string
-    if (companyName) {
+    const companyName = requestedCompanyName
+    if (existingCustomerAccountId) {
+      await db.update(customerAccounts).set({
+        userId: user.id,
+        email: email.toLowerCase(),
+        contactName: (formData.get('contactName') as string) || name,
+        phone: phone || null,
+      }).where(and(eq(customerAccounts.id, existingCustomerAccountId), isNull(customerAccounts.userId)))
+    } else if (companyName) {
       await db.insert(customerAccounts).values({
         userId: user.id,
         companyName,

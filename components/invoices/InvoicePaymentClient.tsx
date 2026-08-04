@@ -66,11 +66,13 @@ export default function InvoicePaymentClient({
   total,
   returnUrl = '/customer/invoices',
   paymentIntentAction = createPaymentIntent,
+  waiveAchFee = false,
 }: {
   invoiceId: string
   total: string
   returnUrl?: string
   paymentIntentAction?: PaymentIntentAction
+  waiveAchFee?: boolean
 }) {
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -79,7 +81,7 @@ export default function InvoicePaymentClient({
   const [processingFee, setProcessingFee] = useState('0.00')
   const router = useRouter()
   const baseAmountCents = Math.round(Number(total) * 100)
-  const achBreakdown = getCustomerPaymentBreakdown(baseAmountCents, 'us_bank_account')
+  const achBreakdown = getCustomerPaymentBreakdown(baseAmountCents, 'us_bank_account', { waiveFee: waiveAchFee })
   const cardBreakdown = getCustomerPaymentBreakdown(baseAmountCents, 'card')
 
   async function initPayment() {
@@ -100,13 +102,18 @@ export default function InvoicePaymentClient({
       <CardContent>
         {!clientSecret ? (
           <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">Pay securely by bank transfer (ACH) or credit card via Stripe. Stripe processing fees are passed through to the customer.</p>
+            <p className="text-sm text-muted-foreground">
+              Pay securely by bank transfer (ACH) or credit card via Stripe.
+              {waiveAchFee ? ' The ACH processing fee has been waived for this invoice.' : ' Stripe processing fees are passed through to the customer.'}
+            </p>
             <div className="grid gap-2">
               {([
                 {
                   value: 'us_bank_account',
                   title: 'Bank transfer (ACH)',
-                  description: `Includes a ${formatCurrency(achBreakdown.processingFee)} Stripe ACH fee.`,
+                  description: waiveAchFee
+                    ? 'ACH processing fee waived.'
+                    : `Includes a ${formatCurrency(achBreakdown.processingFee)} Stripe ACH fee.`,
                   totalLabel: formatCurrency(achBreakdown.totalAmount),
                 },
                 {

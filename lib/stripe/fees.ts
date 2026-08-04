@@ -16,10 +16,16 @@ export function calculateCardProcessingFeeCents(baseAmountCents: number) {
   )
 }
 
-export function getCustomerPaymentBreakdown(baseAmountCents: number, method: CustomerPaymentMethod) {
-  const processingFeeCents = method === 'card'
-    ? calculateCardProcessingFeeCents(baseAmountCents)
-    : ACH_FIXED_FEE_CENTS
+export function getCustomerPaymentBreakdown(
+  baseAmountCents: number,
+  method: CustomerPaymentMethod,
+  options: { waiveFee?: boolean } = {},
+) {
+  const processingFeeCents = options.waiveFee
+    ? 0
+    : method === 'card'
+      ? calculateCardProcessingFeeCents(baseAmountCents)
+      : ACH_FIXED_FEE_CENTS
   const totalAmountCents = baseAmountCents + processingFeeCents
 
   return {

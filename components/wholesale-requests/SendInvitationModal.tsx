@@ -16,6 +16,8 @@ interface Props {
   triggerVariant?: 'default' | 'outline' | 'secondary' | 'ghost' | 'destructive'
   title?: string
   description?: string
+  requestId?: string
+  accountId?: string
 }
 
 export function SendInvitationModal({
@@ -27,6 +29,8 @@ export function SendInvitationModal({
   triggerVariant = 'outline',
   title = 'Send Invitation',
   description = 'Invite someone to request a wholesale account.',
+  requestId,
+  accountId,
 }: Props) {
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
@@ -82,6 +86,8 @@ export function SendInvitationModal({
             </div>
 
             <form ref={formRef} action={handleSubmit} className="space-y-4 px-6 py-5">
+              {requestId ? <input type="hidden" name="requestId" value={requestId} /> : null}
+              {accountId ? <input type="hidden" name="accountId" value={accountId} /> : null}
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-slate-900">
                   Email address <span className="text-red-500">*</span>
@@ -110,7 +116,7 @@ export function SendInvitationModal({
                 />
                 <p className="text-xs text-muted-foreground">
                   {mode === 'approval'
-                    ? 'This message will appear in the approval email along with a link to the sign-in page.'
+                    ? 'This message will appear with a fresh, secure account activation link.'
                     : 'This message will appear in the invitation email along with a link to the signup form.'}
                 </p>
               </div>

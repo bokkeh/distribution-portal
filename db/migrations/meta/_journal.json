@@ -264,6 +264,20 @@
     {
       "idx": 37,
       "version": "7",
+      "when": 1785384000000,
+      "tag": "0052_invoice_ach_fee_waiver",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1785387600000,
+      "tag": "0053_customer_portal_invites",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
       "when": 1785733200000,
       "tag": "0054_rep_assisted_orders",
       "breakpoints": true

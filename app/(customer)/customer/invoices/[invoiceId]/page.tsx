@@ -68,7 +68,7 @@ export default async function CustomerInvoiceDetailPage({ params }: { params: Pr
       </Card>
 
       {invoice.status !== 'paid' ? (
-        <InvoicePaymentClient invoiceId={invoice.id} total={invoice.total} />
+        <InvoicePaymentClient invoiceId={invoice.id} total={invoice.total} waiveAchFee={invoiceVisual.waiveAchFee} />
       ) : null}
     </div>
   )

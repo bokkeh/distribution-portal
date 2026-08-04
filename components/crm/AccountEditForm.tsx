@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useActionState, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { updateCustomerAccount } from '@/actions/crm'
@@ -65,6 +66,7 @@ export function AccountEditForm({
   salesLeadOptions?: SalesLeadOption[]
   pipelineStages: PipelineStage[]
 }) {
+  const router = useRouter()
   const backPath = mode === 'sales' ? `/sales/accounts/${account.id}` : `/${mode}/crm/${account.id}`
   const formRef = useRef<HTMLFormElement | null>(null)
   const lastHandledResultRef = useRef<string | null>(null)
@@ -95,10 +97,11 @@ export function AccountEditForm({
       return
     }
     clearDraft()
+    router.refresh()
     toast.success('Account saved', {
       description: state.changedFields?.length ? `${state.changedFields.length} field(s) updated.` : 'No account fields changed.',
     })
-  }, [clearDraft, state])
+  }, [clearDraft, router, state])
 
   return (
     <form ref={formRef} action={action} className="space-y-4">

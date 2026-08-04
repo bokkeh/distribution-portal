@@ -9,7 +9,7 @@ import { db } from '@/db'
 import { activityEvents, invoices, invoiceItems, customerAccounts, journalEntries, journalEntryLines, chartOfAccounts, orders, products, repAssistedOrders } from '@/db/schema'
 import { requireAdminOrStaff, requireAuth } from '@/lib/auth/session'
 import { logActivityEvent } from '@/lib/activity/log'
-import { resolveInvoiceIdFromPublicToken } from '@/lib/invoices/public-token'
+import { getInvoicePublicPaymentPath, resolveInvoiceIdFromPublicToken } from '@/lib/invoices/public-token'
 import { notify } from '@/lib/notifications/dispatch'
 import { getPricingRulesForProducts, normalizeAccountGeography } from '@/lib/pricing/geographic-service'
 import { resolveProductUnitPrice } from '@/lib/pricing/product-price'
@@ -84,6 +84,7 @@ async function getInvoiceSettlementContext(invoiceId: string) {
       businessEmail: customerAccounts.businessEmail,
       pocEmail: customerAccounts.pocEmail,
       accountUserId: customerAccounts.userId,
+      waiveAchFee: invoices.waiveAchFee,
     })
     .from(invoices)
     .leftJoin(customerAccounts, eq(invoices.customerId, customerAccounts.id))
@@ -399,6 +400,34 @@ export async function sendInvoiceEmail(invoiceId: string) {
   revalidatePath(`/admin/invoicing/${invoiceId}`)
 }
 
+export async function setInvoiceAchFeeWaiver(invoiceId: string, waiveAchFee: boolean) {
+  const session = await requireAdminOrStaff()
+
+  const [invoice] = await db
+    .update(invoices)
+    .set({ waiveAchFee })
+    .where(eq(invoices.id, invoiceId))
+    .returning({ id: invoices.id, invoiceNumber: invoices.invoiceNumber })
+
+  if (!invoice) {
+    redirect('/admin/invoicing?error=' + encodeURIComponent('Invoice not found.'))
+  }
+
+  await logActivityEvent({
+    entityType: 'invoice',
+    entityId: invoice.id,
+    actorUserId: session.user.id,
+    kind: 'invoice_ach_fee_waiver_updated',
+    title: waiveAchFee ? 'ACH fee waived' : 'ACH fee restored',
+    body: `${invoice.invoiceNumber} will ${waiveAchFee ? 'not charge' : 'charge'} the standard ACH processing fee.`,
+    metadata: { waiveAchFee },
+  })
+
+  revalidatePath(`/admin/invoicing/${invoice.id}`)
+  revalidatePath(`/customer/invoices/${invoice.id}`)
+  revalidatePath(getInvoicePublicPaymentPath(invoice.id))
+}
+
 export async function markInvoicePaid(invoiceId: string) {
   const session = await requireAdminOrStaff()
   await applyInvoicePaid(invoiceId, {
@@ -629,7 +658,9 @@ async function _createPaymentIntent(
   }
 
   const baseAmountCents = Math.round(Number(invoice.total) * 100)
-  const breakdown = getCustomerPaymentBreakdown(baseAmountCents, paymentMethod)
+  const breakdown = getCustomerPaymentBreakdown(baseAmountCents, paymentMethod, {
+    waiveFee: paymentMethod === 'us_bank_account' && invoice.waiveAchFee,
+  })
 
   const paymentIntent = await stripe.paymentIntents.create({
     amount: breakdown.totalAmountCents,

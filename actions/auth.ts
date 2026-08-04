@@ -47,6 +47,12 @@ export async function registerCustomerAccount(input: {
   state?: string
   zip?: string
 }) {
+  if (process.env.ALLOW_PUBLIC_CUSTOMER_REGISTRATION !== 'true') {
+    return {
+      error: 'New wholesale customers must request access and use the secure activation link sent after approval.',
+    }
+  }
+
   const name = input.name.trim()
   const companyName = input.companyName.trim()
   const email = input.email.trim().toLowerCase()

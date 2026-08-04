@@ -753,6 +753,73 @@ export async function sendWholesalerApprovalEmail({
   })
 }
 
+export async function sendCustomerPortalActivationEmail({
+  to,
+  businessName,
+  senderName,
+  inviteUrl,
+  expiresAt,
+  personalMessage,
+}: {
+  to: string
+  businessName: string
+  senderName: string
+  inviteUrl: string
+  expiresAt: Date
+  personalMessage?: string | null
+}): Promise<void> {
+  const expiresLabel = expiresAt.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+  await sendEmail({
+    to,
+    recipientName: businessName,
+    subject: `Activate ${businessName}'s AHAWC portal account`,
+    html: renderEmailCard({
+      eyebrow: 'Approved',
+      title: 'Create your customer portal password',
+      intro: `${escapeHtml(senderName)} approved ${escapeHtml(businessName)} for the AHAWC Distribution Portal.`,
+      body: `
+        ${personalMessage ? `<p style="margin: 0 0 14px;">${escapeHtml(personalMessage)}</p>` : ''}
+        <p style="margin: 0 0 10px;">Use this private link to set your password. Your login will be connected directly to the approved CRM account.</p>
+        <p style="margin: 0 0 10px;"><strong>Email:</strong> ${escapeHtml(to)}</p>
+        <p style="margin: 0;"><strong>Link expires:</strong> ${escapeHtml(expiresLabel)}</p>
+      `,
+      ctaLabel: 'Set Up Portal Access',
+      ctaHref: inviteUrl,
+    }),
+  })
+}
+
+export async function sendCustomerPortalReadyEmail({
+  to,
+  businessName,
+  senderName,
+}: {
+  to: string
+  businessName: string
+  senderName: string
+}): Promise<void> {
+  await sendEmail({
+    to,
+    recipientName: businessName,
+    subject: `${businessName}'s AHAWC portal access is ready`,
+    html: renderEmailCard({
+      eyebrow: 'Access Ready',
+      title: 'Your customer portal is ready',
+      intro: `${escapeHtml(senderName)} connected your existing portal user to ${escapeHtml(businessName)}.`,
+      body: `
+        <p style="margin: 0 0 10px;">Sign in using <strong>${escapeHtml(to)}</strong> and your existing password.</p>
+        <p style="margin: 0;">If you do not remember it, use the password reset option on the sign-in page.</p>
+      `,
+      ctaLabel: 'Open Sign In',
+      ctaHref: portalUrl(`/login?email=${encodeURIComponent(to)}`),
+    }),
+  })
+}
+
 export async function sendSalesRepInviteEmail({
   to,
   invitedName,

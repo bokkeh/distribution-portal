@@ -32,14 +32,14 @@ async function getPostLoginDestination() {
   return getDashboardForRoles(roles, role)
 }
 
-export function LoginForm({ onSuccess, defaultMode }: Props) {
+export function LoginForm({ onSuccess }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const defaultEmail = searchParams.get('email') ?? ''
   const authError = searchParams.get('error') ?? ''
   const fromTasterSignup = searchParams.get('from') === 'taster-signup'
   const fromSalesRepSignup = searchParams.get('from') === 'sales-rep-signup'
-  const [mode, setMode] = useState<'signin' | 'create'>(fromTasterSignup ? 'signin' : (defaultMode ?? 'signin'))
+  const [mode, setMode] = useState<'signin' | 'create'>('signin')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
@@ -196,12 +196,11 @@ export function LoginForm({ onSuccess, defaultMode }: Props) {
           <button
             type="button"
             onClick={() => {
-              setMode('create')
-              setError('')
+              router.push('/join')
             }}
-            className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${mode === 'create' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            className="flex-1 rounded-md px-3 py-2 text-sm font-medium text-slate-500 transition-colors hover:text-slate-700"
           >
-            Create Account
+            Request Access
           </button>
         </div>
       )}
@@ -306,7 +305,7 @@ export function LoginForm({ onSuccess, defaultMode }: Props) {
       )}
 
       <p className="text-center text-xs text-muted-foreground">
-        Google sign-in is available for existing accounts. New wholesale accounts should use the portal signup form above.
+        Google sign-in is available for existing accounts. New wholesale customers must request access and activate the approved account by email.
       </p>
     </div>
   )

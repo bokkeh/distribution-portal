@@ -39,6 +39,8 @@ export function InvoiceVisual({ invoice }: { invoice: InvoiceDetailData }) {
     appliedTotal !== null
   )
   const totalDisplay = hasAppliedStripeFee ? appliedTotal : invoice.total
+  // One-off: hide the Stripe checkout fee breakdown on this invoice (flat $150, paid by check).
+  const hideStripeCheckoutBreakdown = invoice.id === '02baa673-e68d-4332-a8a0-7cf4ea9aa591'
   const dueDateDisplay = invoice.isPrepaidSettled
     ? 'Paid already'
     : invoice.dueDate
@@ -161,7 +163,7 @@ export function InvoiceVisual({ invoice }: { invoice: InvoiceDetailData }) {
             <p className="border-t border-dashed border-slate-200 pt-3 text-xs text-slate-500">
               Total reflects the Stripe {appliedMethodLabel.toLowerCase()} checkout amount.
             </p>
-          ) : (
+          ) : hideStripeCheckoutBreakdown ? null : (
             <div className="border-t border-dashed border-slate-200 pt-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Stripe Checkout Totals</p>
               <div className="mt-2 space-y-2 text-sm">

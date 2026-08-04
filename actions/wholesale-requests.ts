@@ -6,7 +6,8 @@ import { db } from '@/db'
 import { activityEvents, customerAccounts, users, wholesaleAccountRequests } from '@/db/schema'
 import { requireAdmin, requireAdminOrStaff } from '@/lib/auth/session'
 import { logActivityEvent } from '@/lib/activity/log'
-import { sendWholesalerApprovalEmail, sendWholesalerInvitationEmail } from '@/lib/resend/client'
+import { sendWholesalerInvitationEmail } from '@/lib/resend/client'
+import { provisionCustomerPortalAccess } from '@/actions/customer-portal-invites'
 
 export async function updateWholesaleRequestWorkflow(formData: FormData) {
   const session = await requireAdmin()
@@ -40,6 +41,9 @@ export async function updateWholesaleRequestWorkflow(formData: FormData) {
 
   if (attachedAccountSelection && !attachedAccountId) {
     return { error: 'Choose an attached CRM account from the suggested list.' }
+  }
+  if (status === 'approved' && !attachedAccountId) {
+    return { error: 'Attach the correct CRM account before approving portal access.' }
   }
 
   if (attachedAccountId) {
@@ -92,6 +96,19 @@ export async function updateWholesaleRequestWorkflow(formData: FormData) {
     resolved: 'Wholesale request resolved',
   }
 
+  let portalAccessResult: Awaited<ReturnType<typeof provisionCustomerPortalAccess>> | null = null
+  if (status === 'approved' && (previousStatus !== 'approved' || previousAttachedAccountId !== attachedAccountId)) {
+    portalAccessResult = await provisionCustomerPortalAccess({
+      requestId: request.id,
+      accountId: attachedAccountId!,
+      email: request.businessEmail,
+      businessName: request.businessName,
+      invitedByUserId: session.user.id,
+      senderName: session.user.name ?? 'The AHAWC Team',
+      personalMessage: notes || null,
+    })
+  }
+
   await logActivityEvent({
     entityType: 'wholesale_request',
     entityId: request.id,
@@ -114,23 +131,19 @@ export async function updateWholesaleRequestWorkflow(formData: FormData) {
     },
   })
 
-  if (status === 'approved' && (previousStatus !== 'approved' || previousAttachedAccountId !== attachedAccountId)) {
-    await sendWholesalerApprovalEmail({
-      to: request.businessEmail,
-      businessName: request.businessName,
-      senderName: session.user.name ?? 'The AHAWC Team',
-      personalMessage: notes || null,
-    })
-
+  if (portalAccessResult) {
     await logActivityEvent({
       entityType: 'wholesale_request',
       entityId: request.id,
       actorUserId: session.user.id,
       kind: 'wholesale_request_approval_sent',
-      title: 'Wholesale approval email sent',
-      body: `Approval email sent to ${request.businessEmail}.`,
+      title: portalAccessResult.kind === 'invited' ? 'Customer activation email sent' : 'Existing portal user linked',
+      body: portalAccessResult.kind === 'invited'
+        ? `A secure activation link was sent to ${request.businessEmail}.`
+        : `${request.businessEmail} can now access the attached CRM account.`,
       metadata: {
         email: request.businessEmail,
+        accessResult: portalAccessResult.kind,
       },
     })
   }
@@ -163,14 +176,28 @@ export async function resendWholesalerApprovalEmail(formData: FormData) {
   const email = ((formData.get('email') as string) || '').trim().toLowerCase()
   const businessName = ((formData.get('businessName') as string) || '').trim() || 'Your business'
   const personalMessage = ((formData.get('personalMessage') as string) || '').trim() || null
+  const requestId = String(formData.get('requestId') ?? '').trim()
+  const accountId = String(formData.get('accountId') ?? '').trim()
 
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return { error: 'Please enter a valid email address.' }
   }
+  if (!requestId || !accountId) {
+    return { error: 'Attach a CRM account before resending customer activation.' }
+  }
 
-  await sendWholesalerApprovalEmail({
-    to: email,
+  const [request] = await db.select({ businessEmail: wholesaleAccountRequests.businessEmail })
+    .from(wholesaleAccountRequests).where(eq(wholesaleAccountRequests.id, requestId)).limit(1)
+  if (!request || request.businessEmail.toLowerCase() !== email) {
+    return { error: 'The email must match the approved wholesale request.' }
+  }
+
+  await provisionCustomerPortalAccess({
+    requestId,
+    accountId,
+    email,
     businessName,
+    invitedByUserId: session.user.id,
     senderName: session.user.name ?? 'The AHAWC Team',
     personalMessage,
   })

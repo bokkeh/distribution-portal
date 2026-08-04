@@ -47,6 +47,7 @@ export type InvoiceDetailData = {
   customerEmail: string | null
   customerPhone: string | null
   paymentTerms: string | null
+  waiveAchFee: boolean
   customerAddressLines: string[]
   lineItems: InvoiceLineItem[]
   stripeCheckout: InvoiceStripeCheckoutData
@@ -63,9 +64,9 @@ function formatStripePaymentMethodLabel(method: CustomerPaymentMethod | null) {
   return null
 }
 
-function buildFallbackStripeCheckout(invoiceTotal: number): InvoiceStripeCheckoutData {
+function buildFallbackStripeCheckout(invoiceTotal: number, waiveAchFee: boolean): InvoiceStripeCheckoutData {
   const baseAmountCents = Math.round(invoiceTotal * 100)
-  const achBreakdown = getCustomerPaymentBreakdown(baseAmountCents, 'us_bank_account')
+  const achBreakdown = getCustomerPaymentBreakdown(baseAmountCents, 'us_bank_account', { waiveFee: waiveAchFee })
   const cardBreakdown = getCustomerPaymentBreakdown(baseAmountCents, 'card')
   return {
     appliedMethod: null,
@@ -115,9 +116,10 @@ async function getInvoiceStripeCheckoutData(input: {
   invoiceTotal: number
   invoiceStripePaymentIntentId: string | null
   orderStripePaymentIntentId: string | null
+  waiveAchFee: boolean
 }): Promise<InvoiceStripeCheckoutData> {
   const baseAmountCents = Math.round(input.invoiceTotal * 100)
-  const fallback = buildFallbackStripeCheckout(input.invoiceTotal)
+  const fallback = buildFallbackStripeCheckout(input.invoiceTotal, input.waiveAchFee)
 
   if (!stripe) return fallback
 
@@ -157,6 +159,7 @@ export async function getInvoiceDetailData(invoiceId: string): Promise<InvoiceDe
       createdAt: invoices.createdAt,
       orderId: invoices.orderId,
       stripePaymentIntentId: invoices.stripePaymentIntentId,
+      waiveAchFee: invoices.waiveAchFee,
       invoiceStatus: invoices.status,
       customerId: customerAccounts.id,
       companyName: customerAccounts.companyName,
@@ -185,6 +188,7 @@ export async function getInvoiceDetailData(invoiceId: string): Promise<InvoiceDe
     invoiceTotal,
     invoiceStripePaymentIntentId: invoice.stripePaymentIntentId,
     orderStripePaymentIntentId: invoice.orderStripePaymentIntentId,
+    waiveAchFee: invoice.waiveAchFee,
   })
 
   let lineItems: InvoiceLineItem[] = await db
@@ -286,6 +290,7 @@ export async function getInvoiceDetailData(invoiceId: string): Promise<InvoiceDe
     customerEmail: invoice.customerEmail,
     customerPhone: invoice.customerPhone,
     paymentTerms: shouldDisplayPrepaid ? 'PREPAID' : storedPaymentTerms,
+    waiveAchFee: invoice.waiveAchFee,
     customerAddressLines,
     lineItems,
     stripeCheckout,

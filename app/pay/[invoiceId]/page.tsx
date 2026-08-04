@@ -49,6 +49,7 @@ export default async function PublicPayPage({ params }: { params: Promise<{ invo
             total={String(invoice.total)}
             returnUrl={`/pay/${token}/success`}
             paymentIntentAction={createPublicPaymentIntent}
+            waiveAchFee={invoice.waiveAchFee}
           />
         )}
 

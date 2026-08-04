@@ -246,6 +246,8 @@ export default async function WholesaleRequestsPage() {
                         triggerVariant="outline"
                         title={status === 'approved' ? 'Resend Approval Email' : 'Send Invitation'}
                         description={status === 'approved' ? 'Resend the login email if the customer cannot find it.' : 'Send this request a portal invitation email.'}
+                        requestId={request.id}
+                        accountId={workflow?.attachedAccountId ?? undefined}
                       />
                     </div>
                   </div>

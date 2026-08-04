@@ -6,6 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ALL_FEATURES } from '@/lib/users/features'
+import { db } from '@/db'
+import { customerAccounts } from '@/db/schema'
+import { asc, isNull } from 'drizzle-orm'
 
 const allRoles = [
   { value: 'admin', label: 'Admin' },
@@ -17,7 +20,12 @@ const allRoles = [
   { value: 'sales_manager', label: 'Sales Manager' },
 ]
 
-export default function NewUserPage() {
+export default async function NewUserPage() {
+  const availableCustomerAccounts = await db
+    .select({ id: customerAccounts.id, companyName: customerAccounts.companyName, email: customerAccounts.email })
+    .from(customerAccounts)
+    .where(isNull(customerAccounts.userId))
+    .orderBy(asc(customerAccounts.companyName))
   return (
     <div className="p-4 sm:p-8 space-y-6">
       <div className="flex items-center gap-4">
@@ -101,6 +109,18 @@ export default function NewUserPage() {
 
             <div className="border-t pt-4 space-y-4">
               <p className="text-sm font-medium text-muted-foreground">Customer Account Fields (used if customer role is selected)</p>
+              <div className="space-y-2">
+                <Label htmlFor="existingCustomerAccountId">Link Existing CRM Account</Label>
+                <select name="existingCustomerAccountId" id="existingCustomerAccountId" className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm">
+                  <option value="">Create a new CRM account from the fields below</option>
+                  {availableCustomerAccounts.map(account => (
+                    <option key={account.id} value={account.id}>
+                      {account.companyName}{account.email ? ` — ${account.email}` : ''}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground">Choose this when the business already exists in CRM. This prevents a duplicate account.</p>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="companyName">Company Name</Label>
                 <Input name="companyName" id="companyName" placeholder="ABC Liquors LLC" />

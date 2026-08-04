@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, numeric, date, timestamp } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, numeric, date, timestamp, boolean } from 'drizzle-orm/pg-core'
 import { customerAccounts } from './customers'
 import { orders } from './orders'
 import { products } from './products'
@@ -15,6 +15,7 @@ export const invoices = pgTable('invoices', {
   dueDate: date('due_date'),
   paidAt: timestamp('paid_at', { withTimezone: true }),
   stripePaymentIntentId: text('stripe_payment_intent_id'),
+  waiveAchFee: boolean('waive_ach_fee').notNull().default(false),
   pdfUrl: text('pdf_url'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
