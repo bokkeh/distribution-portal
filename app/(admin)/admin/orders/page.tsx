@@ -8,7 +8,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { formatOrderPaymentStatusLabel, formatStatusLabel, orderPaymentStatusVariant, orderStatusVariant, shippingStatusVariant } from '@/lib/orders/status'
 import { isMissingShippingStatusColumn } from '@/lib/orders/shipping-fallback'
 import Link from 'next/link'
-import { Plus, FileText } from 'lucide-react'
+import { Plus, FileText, Send } from 'lucide-react'
 import { BulkOrderStatusForm } from '@/components/orders/BulkOrderStatusForm'
 import { EmptyState } from '@/components/ui/empty-state'
 
@@ -84,7 +84,11 @@ export default async function AdminOrdersPage() {
           <h1 className="text-2xl font-bold text-slate-900">Orders</h1>
           <p className="text-muted-foreground mt-1">{allOrders.length} total orders</p>
         </div>
-        <Link href="/admin/orders/new"><Button><Plus className="w-4 h-4 mr-2" />New Order</Button></Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/sales/orders/assisted"><Button variant="outline">Track Assisted Orders</Button></Link>
+          <Link href="/sales/orders/assisted/new"><Button variant="outline"><Send className="w-4 h-4 mr-2" />Create Customer Link</Button></Link>
+          <Link href="/admin/orders/new"><Button><Plus className="w-4 h-4 mr-2" />New Order</Button></Link>
+        </div>
       </div>
       <BulkOrderStatusForm
         mode="admin"
