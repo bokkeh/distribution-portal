@@ -6,8 +6,7 @@ import { users } from '@/db/schema'
 import { applyWebhookInvoicePaid } from '@/actions/invoices'
 import { applyWebhookOrderPaymentUpdate } from '@/actions/orders'
 
-if (!process.env.STRIPE_SECRET_KEY) throw new Error('Missing STRIPE_SECRET_KEY')
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2026-02-25.clover' })
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? 'sk_test_missing_configuration', { apiVersion: '2026-02-25.clover' })
 
 export async function POST(req: NextRequest) {
   const body = await req.text()

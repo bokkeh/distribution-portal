@@ -21,8 +21,7 @@ function uniqueEmails(...values: Array<string | null | undefined>) {
   return Array.from(new Set(values.map((value) => value?.trim()).filter(Boolean) as string[]))
 }
 
-if (!process.env.STRIPE_SECRET_KEY) throw new Error('Missing STRIPE_SECRET_KEY')
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2026-02-25.clover' })
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? 'sk_test_missing_configuration', { apiVersion: '2026-02-25.clover' })
 
 function resolveOrderPaymentStatus(status: Stripe.PaymentIntent.Status): OrderPaymentStatus {
   switch (status) {

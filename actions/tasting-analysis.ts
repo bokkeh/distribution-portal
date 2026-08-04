@@ -8,7 +8,7 @@ import type { TastingAnalysis } from '@/db/schema'
 import { requireAdminOrStaff } from '@/lib/auth/session'
 import { generateSignedReadUrl } from '@/lib/gcs/client'
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null
 
 function extractGCSFilePath(url: string): string | null {
   if (url.startsWith('/api/image')) {
@@ -154,6 +154,7 @@ async function callGPT4o(
   imageUrls: string[],
   priorAnalysis: TastingAnalysis | null,
 ): Promise<GPTResult> {
+  if (!openai) throw new Error('OPENAI_API_KEY is not configured')
   const imageContent: OpenAI.Chat.ChatCompletionContentPart[] = []
 
   for (const url of imageUrls) {

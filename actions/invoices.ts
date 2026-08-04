@@ -15,8 +15,7 @@ import { getPricingRulesForProducts, normalizeAccountGeography } from '@/lib/pri
 import { resolveProductUnitPrice } from '@/lib/pricing/product-price'
 import { getCustomerPaymentBreakdown, type CustomerPaymentMethod } from '@/lib/stripe/fees'
 
-if (!process.env.STRIPE_SECRET_KEY) throw new Error('Missing STRIPE_SECRET_KEY')
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2026-02-25.clover' })
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? 'sk_test_missing_configuration', { apiVersion: '2026-02-25.clover' })
 
 function generateInvoiceNumber() {
   const now = new Date()

@@ -8,7 +8,7 @@ import type { ShelfAnalysis } from '@/db/schema'
 import { requireAdminOrStaff } from '@/lib/auth/session'
 import { generateSignedReadUrl } from '@/lib/gcs/client'
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null
 
 function extractGCSFilePath(url: string): string | null {
   // /api/image?path=deliveries%2FFILE.jpg  (proxy format used when storing)
@@ -100,6 +100,7 @@ interface ClaudeResult {
 }
 
 async function callGPT4oVision(imageUrls: string[], priorAnalysis: ShelfAnalysis | null): Promise<ClaudeResult> {
+  if (!openai) throw new Error('OPENAI_API_KEY is not configured')
   const imageContent: OpenAI.Chat.ChatCompletionContentPart[] = []
 
   for (const url of imageUrls) {

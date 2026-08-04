@@ -9,8 +9,7 @@ import {
 } from '@/lib/resend/email-templates'
 import { Resend } from 'resend'
 
-if (!process.env.RESEND_API_KEY) throw new Error('Missing RESEND_API_KEY')
-const resend = new Resend(process.env.RESEND_API_KEY)
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
 
 function portalUrl(path: string) {
   const base = process.env.NEXTAUTH_URL ?? 'https://portal.ahawc.com'
@@ -111,6 +110,19 @@ async function sendEmail({
 }) {
   const recipients = Array.isArray(to) ? to.filter(Boolean) : [to].filter(Boolean)
   if (!recipients.length) return false
+  if (!resend) {
+    console.error('Email delivery skipped: RESEND_API_KEY is not configured')
+    await Promise.all(recipients.map((recipient) =>
+      logEmailNotification({
+        userId,
+        recipient,
+        recipientName,
+        message: subject,
+        status: 'failed',
+      }),
+    ))
+    return false
+  }
 
   try {
     await resend.emails.send({

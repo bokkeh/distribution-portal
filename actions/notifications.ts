@@ -7,8 +7,7 @@ import { requireAdminOrStaff } from '@/lib/auth/session'
 import { sendSms } from '@/lib/telnyx/client'
 import { Resend } from 'resend'
 
-if (!process.env.RESEND_API_KEY) throw new Error('Missing RESEND_API_KEY')
-const resend = new Resend(process.env.RESEND_API_KEY)
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
 
 export async function sendQuickEmail(
   to: string,
@@ -18,6 +17,7 @@ export async function sendQuickEmail(
 ) {
   const session = await requireAdminOrStaff()
   if (!to || !subject.trim() || !body.trim()) return { error: 'To, subject, and message are required.' }
+  if (!resend) return { error: 'Email service is not configured.' }
 
   const fromDomain = process.env.RESEND_FROM_EMAIL ?? 'noreply@ahawc.com'
   const html = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px">
