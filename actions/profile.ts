@@ -16,8 +16,7 @@ import { normalizeBusinessType } from '@/lib/customers/business-types'
 import { getStaffEmailsForNotification } from '@/lib/notifications/recipients'
 import { sendTasterAddressChangeNotification } from '@/lib/resend/client'
 
-if (!process.env.STRIPE_SECRET_KEY) throw new Error('Missing STRIPE_SECRET_KEY')
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2026-02-25.clover' })
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? 'sk_test_missing_configuration', { apiVersion: '2026-02-25.clover' })
 
 function isMissingUserAddressColumn(error: unknown) {
   const dbError = error as { code?: string; message?: string; cause?: unknown } | null

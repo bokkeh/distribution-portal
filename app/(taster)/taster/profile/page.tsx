@@ -10,8 +10,7 @@ import Stripe from 'stripe'
 import { createTasterStripeOnboardingLink } from '@/actions/profile'
 import { getUserPreferences } from '@/lib/preferences/read'
 
-if (!process.env.STRIPE_SECRET_KEY) throw new Error('Missing STRIPE_SECRET_KEY')
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2026-02-25.clover' })
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? 'sk_test_missing_configuration', { apiVersion: '2026-02-25.clover' })
 
 function isMissingStripeConnectColumn(error: unknown) {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
