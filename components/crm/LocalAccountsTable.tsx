@@ -37,6 +37,7 @@ export interface AccountRow {
   address: string | null
   city: string | null
   state: string | null
+  county: string | null
   zip: string | null
   email: string | null
   phone: string | null
@@ -64,6 +65,7 @@ const COLUMN_OPTIONS = [
   { key: 'firstName', label: 'First Name' },
   { key: 'lastName', label: 'Last Name' },
   { key: 'location', label: 'City / State' },
+  { key: 'county', label: 'County' },
   { key: 'address', label: 'Street Address' },
   { key: 'zip', label: 'Zip Code' },
   { key: 'phone', label: 'Phone' },
@@ -85,7 +87,7 @@ const COLUMN_OPTIONS = [
 ] as const
 
 type ColumnKey = (typeof COLUMN_OPTIONS)[number]['key']
-type SortKey = 'company' | 'dealStage' | 'salesLead' | 'lastActivity' | 'balance' | 'pendingCases' | 'totalPurchased' | 'health'
+type SortKey = 'company' | 'city' | 'county' | 'dealStage' | 'salesLead' | 'lastActivity' | 'balance' | 'pendingCases' | 'totalPurchased' | 'health'
 type ActivityWindowKey = 'all' | '1d' | '3d' | '7d' | '14d' | '30d'
 
 const DEFAULT_COLUMNS: ColumnKey[] = ['company', 'segment', 'location', 'phone', 'dealStage', 'terms', 'pendingCases', 'totalPurchased', 'balance', 'health', 'hubspot']
@@ -98,6 +100,15 @@ const ACTIVITY_WINDOW_OPTIONS: Array<{ value: ActivityWindowKey; label: string }
   { value: '14d', label: 'Touched: Last 14 Days' },
   { value: '30d', label: 'Touched: Last 30 Days' },
 ]
+
+function compareTextWithBlanksLast(left: string | null | undefined, right: string | null | undefined) {
+  const leftValue = left?.trim() ?? ''
+  const rightValue = right?.trim() ?? ''
+  if (!leftValue && !rightValue) return 0
+  if (!leftValue) return 1
+  if (!rightValue) return -1
+  return leftValue.localeCompare(rightValue, undefined, { sensitivity: 'base' })
+}
 
 function normalizeDate(value: string | Date | null | undefined) {
   if (!value) return null
@@ -147,7 +158,7 @@ function readStoredView(filterStorageKey: string): {
     const raw = window.localStorage.getItem(filterStorageKey)
     if (!raw) return { searchQuery: '', sortBy: 'company', activityWindow: 'all' }
     const parsed = JSON.parse(raw) as { searchQuery?: string; sortBy?: SortKey; activityWindow?: ActivityWindowKey }
-    const validSortBy: SortKey[] = ['company', 'dealStage', 'salesLead', 'lastActivity', 'balance', 'pendingCases', 'totalPurchased', 'health']
+    const validSortBy: SortKey[] = ['company', 'city', 'county', 'dealStage', 'salesLead', 'lastActivity', 'balance', 'pendingCases', 'totalPurchased', 'health']
     const validActivityWindows: ActivityWindowKey[] = ['all', '1d', '3d', '7d', '14d', '30d']
     return {
       searchQuery: typeof parsed.searchQuery === 'string' ? parsed.searchQuery : '',
@@ -233,6 +244,8 @@ function renderAccountCell({
       return <td key={column} className="px-4 py-3 text-sm text-muted-foreground">{account.lastName ?? '-'}</td>
     case 'location':
       return <td key={column} className="px-4 py-3 text-sm text-muted-foreground">{[account.city, account.state].filter(Boolean).join(', ') || '-'}</td>
+    case 'county':
+      return <td key={column} className="px-4 py-3 text-sm text-muted-foreground">{account.county ?? '-'}</td>
     case 'address':
       return <td key={column} className="px-4 py-3 text-sm text-muted-foreground">{account.address ?? '-'}</td>
     case 'zip':
@@ -496,6 +509,7 @@ export function LocalAccountsTable({
       account.lastName,
       account.city,
       account.state,
+      account.county,
       account.address,
       account.zip,
       account.phone,
@@ -516,6 +530,9 @@ export function LocalAccountsTable({
 
   const stageOrder = new Map(pipelineStages.map((stage, index) => [stage.stageKey, index]))
   const sortedAccounts = [...filteredAccounts].sort((left, right) => {
+    if (sortBy === 'city' || sortBy === 'county') {
+      return compareTextWithBlanksLast(left[sortBy], right[sortBy]) || left.companyName.localeCompare(right.companyName)
+    }
     if (sortBy === 'dealStage') {
       const leftIndex = left.dealStage ? (stageOrder.get(left.dealStage) ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER
       const rightIndex = right.dealStage ? (stageOrder.get(right.dealStage) ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER
@@ -580,6 +597,8 @@ export function LocalAccountsTable({
             className="h-9 rounded-md border border-input bg-white px-3 text-sm"
           >
             <option value="company">Sort: Company</option>
+            <option value="city">Sort: City</option>
+            <option value="county">Sort: County</option>
             <option value="dealStage">Sort: Deal Stage</option>
             <option value="salesLead">Sort: Sales Lead</option>
             <option value="lastActivity">Sort: Last Activity</option>

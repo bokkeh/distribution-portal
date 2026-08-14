@@ -205,7 +205,7 @@ function StageColumn({
         {(canCreateAccounts || canManageStages) ? (
           <div className="mt-2 flex flex-wrap items-center gap-2">
             {canCreateAccounts ? (
-              <Link href={`/admin/crm/new?stage=${encodeURIComponent(stage.stageKey)}`}>
+              <Link href={`${basePath}/new?stage=${encodeURIComponent(stage.stageKey)}`}>
                 <Button variant="secondary" size="sm" className="h-7 gap-1.5 px-2 text-[11px]">
                   <Plus className="h-3.5 w-3.5" />
                   New

@@ -74,6 +74,7 @@ export default async function CRMPage({
       address: customerAccounts.address,
       city: customerAccounts.city,
       state: customerAccounts.state,
+      county: customerAccounts.county,
       zip: customerAccounts.zip,
       phone: customerAccounts.phone,
       email: customerAccounts.email,

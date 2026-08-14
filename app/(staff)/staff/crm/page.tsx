@@ -11,7 +11,7 @@ import { CRMEntityMergeCard } from '@/components/crm/CRMEntityMergeCard'
 import { CRMTabs } from '@/components/crm/CRMTabs'
 import { PipelineBoard } from '@/components/crm/PipelineBoard'
 import Link from 'next/link'
-import { LayoutList, Kanban } from 'lucide-react'
+import { LayoutList, Kanban, Plus } from 'lucide-react'
 import { requireFeature } from '@/lib/auth/session'
 import { mergeContacts, mergeCustomerAccounts } from '@/actions/crm'
 import { CRM_ACCOUNT_FILTERS, type CRMAccountFilter, normalizeCRMAccountFilter } from '@/lib/customers/account-segmentation'
@@ -75,6 +75,7 @@ export default async function StaffCRMPage({
       address: customerAccounts.address,
       city: customerAccounts.city,
       state: customerAccounts.state,
+      county: customerAccounts.county,
       zip: customerAccounts.zip,
       phone: customerAccounts.phone,
       email: customerAccounts.email,
@@ -276,11 +277,14 @@ export default async function StaffCRMPage({
               </Link>
             ))}
           </div>
+          <Link href="/staff/crm/new">
+            <Button><Plus className="w-4 h-4 mr-2" />Add Account</Button>
+          </Link>
         </div>
       </div>
 
       {isPipeline ? (
-        <PipelineBoard accounts={filteredAccounts} basePath="/staff/crm" stages={pipelineStages} />
+        <PipelineBoard accounts={filteredAccounts} basePath="/staff/crm" stages={pipelineStages} canCreateAccounts />
       ) : (
         <Card>
           <CardContent className="grid gap-4 border-b p-4 lg:grid-cols-2">

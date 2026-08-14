@@ -82,6 +82,7 @@ function revalidateCRMIndexPaths() {
   revalidatePath('/admin/crm')
   revalidatePath('/admin/crm/new')
   revalidatePath('/staff/crm')
+  revalidatePath('/staff/crm/new')
 }
 
 async function requireEditableAccountAccess(accountId: string) {

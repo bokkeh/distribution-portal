@@ -15,9 +15,11 @@ import type { PipelineStage } from '@/lib/deal-stages'
 export function CreateAccountForm({
   pipelineStages,
   defaultDealStage,
+  basePath = '/admin/crm',
 }: {
   pipelineStages: PipelineStage[]
   defaultDealStage: string
+  basePath?: string
 }) {
   const router = useRouter()
   const [state, action, pending] = useActionState(createCustomerAccount, null)
@@ -30,9 +32,9 @@ export function CreateAccountForm({
     }
     if (state.success && state.accountId) {
       toast.success('Account created')
-      router.push(`/admin/crm/${state.accountId}`)
+      router.push(`${basePath}/${state.accountId}`)
     }
-  }, [router, state])
+  }, [basePath, router, state])
 
   return (
     <form action={action} className="space-y-4">
@@ -178,7 +180,7 @@ export function CreateAccountForm({
 
       <div className="flex gap-3">
         <Button type="submit" disabled={pending}>{pending ? 'Creating...' : 'Create Account'}</Button>
-        <Link href="/admin/crm" className={buttonVariants({ variant: 'outline' })}>Cancel</Link>
+        <Link href={basePath} className={buttonVariants({ variant: 'outline' })}>Cancel</Link>
       </div>
     </form>
   )
