@@ -3,7 +3,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Building2, Map, User, LogOut, DollarSign, Wine, TrendingUp, Menu, X, Star, ShoppingCart } from 'lucide-react'
+import { LayoutDashboard, Building2, Map, User, LogOut, DollarSign, Wine, TrendingUp, Menu, X, Star, ShoppingCart, Gauge } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { signOut } from 'next-auth/react'
 import { useState, useEffect } from 'react'
@@ -13,6 +13,7 @@ import { NotificationBell } from '@/components/notifications/NotificationBell'
 const navItems = [
   { href: '/sales/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/sales/accounts', label: 'My Accounts', icon: Building2 },
+  { href: '/sales/pull-through', label: 'Pull-Through', icon: Gauge },
   { href: '/sales/orders/assisted', label: 'Orders', icon: ShoppingCart },
   { href: '/sales/routes', label: 'Routes', icon: Map },
   { href: '/sales/tastings', label: 'Tastings', icon: Wine },
