@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, ShoppingCart, Building2, Package,
-  LogOut, ChevronRight, Menu, X, UserCircle, CalendarDays, MessageSquare, FileText,
+  LogOut, ChevronRight, Menu, X, UserCircle, CalendarDays, MessageSquare, FileText, Gauge,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { signOut } from 'next-auth/react'
@@ -20,6 +20,7 @@ const navItems = [
   { href: '/staff/orders',    label: 'Orders',    icon: ShoppingCart, feature: 'orders' },
   { href: '/staff/invoicing', label: 'Invoicing', icon: FileText, feature: 'invoicing' },
   { href: '/staff/crm',       label: 'Accounts',  icon: Building2, feature: 'crm' },
+  { href: '/staff/pull-through', label: 'Pull-Through', icon: Gauge, feature: 'crm' },
   { href: '/staff/inbox',     label: 'SMS Inbox', icon: MessageSquare, feature: 'inbox' },
   { href: '/staff/inventory', label: 'Inventory', icon: Package, feature: 'inventory' },
   { href: '/staff/sample-inventory', label: 'Sample Inventory', icon: Package, feature: 'inventory' },

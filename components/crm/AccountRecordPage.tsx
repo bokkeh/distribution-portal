@@ -35,11 +35,14 @@ import { AccountRecordTabs } from '@/components/crm/AccountRecordTabs'
 import { AccountSmartInsightsCard } from '@/components/crm/AccountSmartInsightsCard'
 import { ViewAsAccountButton } from '@/components/admin/ViewAsAccountButton'
 import { generateAccountSmartInsights } from '@/lib/crm/smart-insights'
+import { SalesIntelligenceSection } from '@/components/pull-through/SalesIntelligenceSection'
+import { loadAccountIntelligence, type AccountIntelligence, type PullThroughScope } from '@/lib/pull-through/data'
 import { coercePipelineStages } from '@/lib/deal-stages'
 import { ArrowLeft, CalendarDays, FileText, MessageSquare, Plus, Receipt, RefreshCcw, RefreshCw, Truck } from 'lucide-react'
 
 const ACCOUNT_TABS = [
   { id: 'overview', label: 'Overview' },
+  { id: 'sales-intelligence', label: 'Sales Intelligence' },
   { id: 'orders', label: 'Orders' },
   { id: 'contacts', label: 'Contacts' },
   { id: 'inventory', label: 'Inventory' },
@@ -418,6 +421,21 @@ export async function AccountRecordPage({
     contactsData = { accountContacts, recentTexts }
   }
 
+  // Sales Intelligence reads the same connected records the other tabs read; access is
+  // already gated by whoever rendered this account record.
+  let salesIntelligence: AccountIntelligence | null = null
+  if (tab === 'sales-intelligence') {
+    const scope: PullThroughScope = {
+      mode,
+      accountIds: [accountId],
+      canSeeAllAccounts: false,
+      salesMemberId: null,
+      visibleSalesMemberIds: null,
+      viewerLabel: account.companyName,
+    }
+    salesIntelligence = await loadAccountIntelligence(accountId, scope)
+  }
+
   if (tab === 'inventory') {
     const [inventoryItems, inventoryHistory, productOptions] = await Promise.all([
       getAccountInventoryOnHand(accountId),
@@ -702,6 +720,18 @@ export async function AccountRecordPage({
           </>
         )
       })() : null}
+
+      {tab === 'sales-intelligence' ? (
+        salesIntelligence ? (
+          <SalesIntelligenceSection intelligence={salesIntelligence} mode={mode} basePath={basePath} />
+        ) : (
+          <Card>
+            <CardContent className="py-12 text-center text-sm text-muted-foreground">
+              Sales intelligence is unavailable for this account.
+            </CardContent>
+          </Card>
+        )
+      ) : null}
 
       {tab === 'orders' && ordersData ? (
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">

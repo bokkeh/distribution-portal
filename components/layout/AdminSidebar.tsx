@@ -7,7 +7,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, FileText, BookOpen, Users, Package,
   Truck, Building2, LogOut, ChevronRight, Menu, X, UserCircle, CalendarDays, MessageSquare, HeartPulse, ClipboardList, Workflow, BarChart3, TrendingUp, UserCheck, DollarSign, Globe, Receipt, ShoppingCart, Star, Cpu, Activity,
-  Newspaper,
+  Newspaper, Gauge,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { signOut } from 'next-auth/react'
@@ -63,6 +63,7 @@ const navSections = [
     title: 'Customers',
     items: [
       { href: '/admin/crm', label: 'CRM / Accounts', icon: Building2, feature: 'crm' },
+      { href: '/admin/pull-through', label: 'Pull-Through', icon: Gauge, feature: 'crm' },
       { href: '/admin/inbox', label: 'SMS Inbox', icon: MessageSquare, feature: 'inbox' },
     ],
   },
