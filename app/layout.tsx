@@ -1,18 +1,27 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Big_Shoulders, DM_Sans, IBM_Plex_Mono } from "next/font/google";
 import { Toaster } from 'sonner'
 import { PublicAgeGate } from '@/components/layout/PublicAgeGate'
 import { CallShell } from '@/components/call/CallShell'
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const displayFont = Big_Shoulders({
+  variable: "--font-ahawc-display",
   subsets: ["latin"],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const interfaceFont = DM_Sans({
+  variable: "--font-ahawc-interface",
   subsets: ["latin"],
+  display: "swap",
+});
+
+const dataFont = IBM_Plex_Mono({
+  variable: "--font-ahawc-data",
+  weight: ["400", "500", "600", "700"],
+  subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -33,12 +42,24 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${displayFont.variable} ${interfaceFont.variable} ${dataFont.variable} antialiased`}
       >
         <CallShell>
           <PublicAgeGate>{children}</PublicAgeGate>
         </CallShell>
-        <Toaster richColors position="top-right" />
+        <Toaster
+          closeButton
+          position="top-right"
+          toastOptions={{
+            classNames: {
+              toast: "ahawc-toast",
+              title: "ahawc-toast-title",
+              description: "ahawc-toast-description",
+              actionButton: "ahawc-toast-action",
+              cancelButton: "ahawc-toast-cancel",
+            },
+          }}
+        />
       </body>
     </html>
   );

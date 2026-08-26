@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import { format, isBefore } from 'date-fns'
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { ClipboardCheck, Clock3, FileText, Receipt, Store } from 'lucide-react'
-import { formatEasternDate, formatEasternTimeRange } from '@/lib/tastings/time'
+import { ClipboardCheck, MapPin, Phone, Receipt } from 'lucide-react'
+import { formatEasternTimeRange } from '@/lib/tastings/time'
+import { cn } from '@/lib/utils'
 import { TastingMapPanel } from './TastingMapPanel'
 
 type TastingRow = {
@@ -22,6 +23,7 @@ type TastingRow = {
   storeZip: string | null
   storePhone: string | null
   notes: string | null
+  tasterName?: string | null
   reportSubmittedAt?: Date | null
   invoiceSubmittedAt?: Date | null
   invoiceStatus?: string | null
@@ -31,93 +33,128 @@ function formatTimeRange(start: Date, end: Date | null) {
   return formatEasternTimeRange(start, end)
 }
 
-const statusVariant: Record<string, 'secondary' | 'success' | 'warning' | 'destructive' | 'info'> = {
-  requested: 'secondary',
-  scheduled: 'info',
-  confirmed: 'warning',
-  completed: 'success',
-  cancelled: 'destructive',
-  declined: 'destructive',
+const statusClasses: Record<string, string> = {
+  requested: 'border-[#181615] bg-[#181615] text-white',
+  scheduled: 'border-amber-200 bg-amber-50 text-amber-700',
+  confirmed: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  completed: 'border-emerald-500 bg-emerald-50 text-emerald-700',
+  cancelled: 'border-red-500 bg-red-50 text-red-700',
+  declined: 'border-red-500 bg-red-50 text-red-700',
 }
 
-function TastingCard({ tasting, compact = false }: { tasting: TastingRow; compact?: boolean }) {
+function StatusBadge({ status }: { status: string }) {
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        'whitespace-nowrap rounded-[4px] px-2 py-1 font-mono text-[10px] font-bold uppercase leading-none tracking-[0.04em] shadow-none',
+        statusClasses[status] ?? statusClasses.requested,
+      )}
+    >
+      {status}
+    </Badge>
+  )
+}
+
+function TastingDateTile({ tasting }: { tasting: Pick<TastingRow, 'scheduledAt' | 'endAt'> }) {
   const tastingDate = new Date(tasting.scheduledAt)
+
+  return (
+    <div className="flex min-h-[150px] min-w-[96px] flex-col items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-4 text-center shadow-[0_1px_2px_rgba(24,22,21,0.03)]">
+      <span className="font-mono text-xs font-bold uppercase tracking-[0.08em] text-[#ff4f00]">
+        {format(tastingDate, 'MMM')}
+      </span>
+      <span className="font-display mt-1 text-4xl font-bold leading-none text-[#181615]">
+        {format(tastingDate, 'dd')}
+      </span>
+      <span className="mt-2 font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-stone-500">
+        {format(tastingDate, 'EEE')}
+      </span>
+      <span className="mt-3 whitespace-nowrap font-mono text-[10px] font-bold uppercase tracking-[0.04em] text-[#ff4f00]">
+        {formatTimeRange(tastingDate, tasting.endAt ? new Date(tasting.endAt) : null)}
+      </span>
+    </div>
+  )
+}
+
+function YearMarker({ year }: { year: string }) {
+  return (
+    <div className="flex items-center gap-3 py-2" role="separator" aria-label={`Tastings from ${year}`}>
+      <div className="h-px flex-1 bg-slate-200" />
+      <span className="rounded-full border border-slate-200 bg-slate-50 px-4 py-1 text-sm font-semibold text-slate-600">
+        {year}
+      </span>
+      <div className="h-px flex-1 bg-slate-200" />
+    </div>
+  )
+}
+
+function getReportActionLabel(tasting: Pick<TastingRow, 'status' | 'reportSubmittedAt'>) {
+  if (tasting.reportSubmittedAt) return 'View Report'
+  if (tasting.status === 'completed') return 'Complete Report'
+  return 'Add Report'
+}
+
+function TastingCard({ tasting }: { tasting: TastingRow }) {
   const missingReport = tasting.status === 'completed' && !tasting.reportSubmittedAt
   const invoiceEligible = Boolean(tasting.reportSubmittedAt) || tasting.status === 'completed'
   const missingInvoice = invoiceEligible && !tasting.invoiceSubmittedAt
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-start gap-4">
-          <div className="flex min-w-[88px] flex-col items-center rounded-2xl border border-blue-100 bg-blue-50 px-3 py-3 text-center">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-700">
-              {format(tastingDate, 'MMM')}
-            </span>
-            <span className="mt-1 text-3xl font-bold leading-none text-slate-900">
-              {format(tastingDate, 'd')}
-            </span>
-            <span className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-500">
-              {format(tastingDate, 'EEE')}
-            </span>
-            <span className="mt-3 rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-blue-700 shadow-sm">
-              {formatTimeRange(tastingDate, tasting.endAt ? new Date(tasting.endAt) : null)}
-            </span>
-          </div>
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <p className="font-semibold text-slate-900">{tasting.eventName}</p>
-              <Badge variant={statusVariant[tasting.status] ?? 'secondary'}>{tasting.status}</Badge>
-            </div>
-            <p className="text-sm text-slate-500">{formatEasternDate(tastingDate)}</p>
-          </div>
+    <div className="grid gap-5 rounded-2xl border border-slate-200 bg-[#faf9f7] p-4 transition-colors hover:border-stone-300 sm:p-5 md:grid-cols-[104px_minmax(0,1fr)_auto] md:items-center md:gap-6">
+      <TastingDateTile tasting={tasting} />
+      <div className="min-w-0 space-y-2">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <p className="text-lg font-bold text-[#181615] sm:text-xl">{tasting.eventName}</p>
+          <StatusBadge status={tasting.status} />
         </div>
-        <div className="flex flex-wrap gap-2">
+        {tasting.tasterName ? (
+          <p className="text-sm text-stone-600">
+            Assigned to <span className="font-semibold text-[#181615]">{tasting.tasterName}</span>
+          </p>
+        ) : null}
+        <p className="flex items-start gap-2 text-sm text-stone-500">
+          <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-stone-400" aria-hidden="true" />
+          <span>{[tasting.storeAddress, tasting.storeCity, tasting.storeState, tasting.storeZip].filter(Boolean).join(', ') || 'Store address not provided'}</span>
+        </p>
+        {tasting.notes ? (
+          <p className="rounded-lg border border-stone-200 bg-white/70 px-3 py-2 text-sm text-stone-600">{tasting.notes}</p>
+        ) : null}
+        <div className="flex flex-wrap gap-2 pt-1">
           {tasting.reportSubmittedAt ? <Badge variant="success">Report Submitted</Badge> : null}
           {missingReport ? <Badge variant="warning">Missing Report</Badge> : null}
           {tasting.invoiceSubmittedAt ? <Badge variant="info">Invoice {tasting.invoiceStatus ?? 'submitted'}</Badge> : null}
           {missingInvoice ? <Badge variant="warning">Invoice Needed</Badge> : null}
         </div>
       </div>
-
-      <div className="mt-3 grid gap-3 text-sm text-slate-600 md:grid-cols-2">
-        <p className="flex items-start gap-2">
-          <Store className="mt-0.5 h-4 w-4 text-slate-400" />
-          <span>{[tasting.storeAddress, tasting.storeCity, tasting.storeState, tasting.storeZip].filter(Boolean).join(', ') || 'Store address not provided'}</span>
-        </p>
-        <p className="flex items-start gap-2">
-          <Clock3 className="mt-0.5 h-4 w-4 text-slate-400" />
-          <span>{tasting.storePhone ?? 'No store phone on file'}</span>
-        </p>
-      </div>
-
-      {tasting.notes ? (
-        <div className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
-          {tasting.notes}
-        </div>
-      ) : null}
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Link href={`/taster/tastings/${tasting.id}#report`}>
-          <Button size="sm" variant={missingReport ? 'default' : 'outline'} className="gap-2">
-            <ClipboardCheck className="h-4 w-4" />
-            {tasting.reportSubmittedAt ? 'View Report' : 'Complete Report'}
+      <div className="flex flex-col items-start gap-4 md:min-w-[280px] md:items-end">
+        {tasting.storePhone ? (
+          <a href={`tel:${tasting.storePhone}`} className="inline-flex items-center gap-2 text-sm text-stone-500 transition-colors hover:text-[#181615]">
+            <Phone className="h-4 w-4 text-stone-700" aria-hidden="true" />
+            {tasting.storePhone}
+          </a>
+        ) : (
+          <span className="text-sm text-stone-400">No store phone on file</span>
+        )}
+        <div className="flex flex-wrap gap-2.5 md:justify-end">
+          <Button asChild className="font-display h-10 px-4 text-xs uppercase tracking-[0.03em]">
+            <Link href={`/taster/tastings/${tasting.id}#report`}>
+              <ClipboardCheck className="h-4 w-4" />
+              {getReportActionLabel(tasting)}
+            </Link>
           </Button>
-        </Link>
-        <Link href={`/taster/tastings/${tasting.id}#invoice`}>
-          <Button size="sm" variant={missingInvoice ? 'default' : 'outline'} className="gap-2">
-            <Receipt className="h-4 w-4" />
-            {tasting.invoiceSubmittedAt ? 'View Invoice' : 'Submit Invoice'}
-          </Button>
-        </Link>
-        {!compact ? (
-          <Link href={`/taster/tastings/${tasting.id}`}>
-            <Button size="sm" variant="ghost" className="gap-2">
-              <FileText className="h-4 w-4" />
-              Open Details
+          {invoiceEligible ? (
+            <Button asChild className="font-display h-10 border-[#181615] px-4 text-xs uppercase tracking-[0.03em] text-[#181615]" variant="outline">
+              <Link href={`/taster/tastings/${tasting.id}#invoice`}>
+                <Receipt className="h-4 w-4" />
+                {tasting.invoiceSubmittedAt ? 'View Invoice' : 'Submit Invoice'}
+              </Link>
             </Button>
-          </Link>
-        ) : null}
+          ) : null}
+          <Button asChild className="font-display h-10 border-[#181615] px-4 text-xs uppercase tracking-[0.03em] text-[#181615]" variant="outline">
+            <Link href={`/taster/tastings/${tasting.id}`}>View Details</Link>
+          </Button>
+        </div>
       </div>
     </div>
   )
@@ -152,6 +189,7 @@ export function TasterTastingsHub({
     }
     return true
   })
+  const displayedTastings = activeTab === 'upcoming' ? upcoming : filteredPast
 
   return (
     <div className="space-y-6">
@@ -173,35 +211,54 @@ export function TasterTastingsHub({
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
+      <Card className="overflow-hidden rounded-[22px] border-slate-200 bg-white shadow-none">
+        <CardHeader className="px-5 pb-4 pt-6 sm:px-7 sm:pt-7">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <CardTitle>{activeTab === 'upcoming' ? 'Upcoming Tastings' : 'Previous Tastings'}</CardTitle>
-            <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+            <CardTitle className="font-display text-2xl uppercase tracking-[-0.02em] text-[#181615]">
+              {activeTab === 'upcoming' ? 'Upcoming Tastings' : 'Previous Tastings'}
+            </CardTitle>
+            <div className="inline-flex gap-2" role="tablist" aria-label="Tasting history">
               <button
+                id="taster-upcoming-tastings-tab"
                 type="button"
+                role="tab"
+                aria-selected={activeTab === 'upcoming'}
+                aria-controls="taster-tasting-list-panel"
                 onClick={() => setActiveTab('upcoming')}
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                  activeTab === 'upcoming' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                }`}
+                className={cn(
+                  'rounded-lg border px-4 py-2 text-sm font-semibold transition-colors',
+                  activeTab === 'upcoming'
+                    ? 'border-[#181615] bg-[#181615] text-white'
+                    : 'border-slate-200 bg-white text-stone-500 hover:border-stone-400 hover:text-[#181615]'
+                )}
               >
-                Upcoming
-                <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs">{upcoming.length}</span>
+                Upcoming <span className="ml-1">{upcoming.length}</span>
               </button>
               <button
+                id="taster-previous-tastings-tab"
                 type="button"
+                role="tab"
+                aria-selected={activeTab === 'previous'}
+                aria-controls="taster-tasting-list-panel"
                 onClick={() => setActiveTab('previous')}
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                  activeTab === 'previous' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                }`}
+                className={cn(
+                  'rounded-lg border px-4 py-2 text-sm font-semibold transition-colors',
+                  activeTab === 'previous'
+                    ? 'border-[#181615] bg-[#181615] text-white'
+                    : 'border-slate-200 bg-white text-stone-500 hover:border-stone-400 hover:text-[#181615]'
+                )}
               >
-                Previous
-                <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs">{past.length}</span>
+                Previous <span className="ml-1">{past.length}</span>
               </button>
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent
+          id="taster-tasting-list-panel"
+          role="tabpanel"
+          aria-labelledby={`taster-${activeTab}-tastings-tab`}
+          className="space-y-4 px-5 pb-6 sm:px-7 sm:pb-7"
+        >
           {activeTab === 'previous' ? (
             <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
               <label className="space-y-1 text-sm text-slate-600">
@@ -233,18 +290,23 @@ export function TasterTastingsHub({
             </div>
           ) : null}
 
-          {activeTab === 'upcoming' ? (
-            upcoming.length ? upcoming.map(tasting => (
-              <TastingCard key={tasting.id} tasting={tasting} />
-            )) : (
-              <p className="text-sm text-slate-500">No upcoming tastings assigned right now.</p>
+          {displayedTastings.length ? displayedTastings.map((tasting, index, visibleTastings) => {
+            const tastingYear = format(new Date(tasting.scheduledAt), 'yyyy')
+            const previousTastingYear = index > 0
+              ? format(new Date(visibleTastings[index - 1].scheduledAt), 'yyyy')
+              : null
+            const showYearMarker = activeTab === 'previous' && tastingYear !== previousTastingYear
+
+            return (
+              <Fragment key={tasting.id}>
+                {showYearMarker ? <YearMarker year={tastingYear} /> : null}
+                <TastingCard tasting={tasting} />
+              </Fragment>
             )
-          ) : (
-            filteredPast.length ? filteredPast.map(tasting => (
-              <TastingCard key={tasting.id} tasting={tasting} compact />
-            )) : (
-              <p className="text-sm text-slate-500">No past tastings match this date range.</p>
-            )
+          }) : (
+            <p className="text-sm text-slate-500">
+              {activeTab === 'upcoming' ? 'No upcoming tastings assigned right now.' : 'No past tastings match this date range.'}
+            </p>
           )}
         </CardContent>
       </Card>

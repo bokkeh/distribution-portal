@@ -1,10 +1,11 @@
-import { desc, eq, inArray, sql } from 'drizzle-orm'
+import { desc, eq, inArray } from 'drizzle-orm'
 import { db } from '@/db'
 import { activityEvents, customerAccounts, invoices, tasterInvoices, tastings } from '@/db/schema'
 import { requireFeature } from '@/lib/auth/session'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { CustomerRecordLink } from '@/components/crm/CustomerRecordLink'
 
 function getAgeBucket(dueDate: string | Date | null) {
   if (!dueDate) return 'Current'
@@ -28,6 +29,7 @@ export default async function FinanceReconciliationPage() {
         total: invoices.total,
         dueDate: invoices.dueDate,
         status: invoices.status,
+        customerId: invoices.customerId,
         companyName: customerAccounts.companyName,
       })
       .from(invoices)
@@ -116,7 +118,10 @@ export default async function FinanceReconciliationPage() {
               <div key={invoice.id} className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
                 <div>
                   <p className="text-sm font-medium text-slate-900">{invoice.invoiceNumber}</p>
-                  <p className="text-xs text-muted-foreground">{invoice.companyName ?? 'Customer'} • Due {invoice.dueDate ? formatDate(invoice.dueDate) : '—'}</p>
+                  <p className="text-xs text-muted-foreground">
+                    <CustomerRecordLink accountId={invoice.customerId} name={invoice.companyName ?? 'Customer'} />
+                    {' • '}Due {invoice.dueDate ? formatDate(invoice.dueDate) : '—'}
+                  </p>
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-semibold">{formatCurrency(invoice.total)}</p>

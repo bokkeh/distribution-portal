@@ -5,15 +5,19 @@ import { requireAdmin } from '@/lib/auth/session'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { EmptyState } from '@/components/ui/empty-state'
+import { Progress } from '@/components/ui/progress'
 import { formatDate } from '@/lib/utils'
 import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowLeft, Clock, MapPin, Camera, User, Truck } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, Clock, MapPin, Camera, User, Truck, TriangleAlert } from 'lucide-react'
 import { ShelfInsightsCard } from '@/components/deliveries/ShelfInsightsCard'
+import { DeliveryPhotoGallery } from '@/components/deliveries/DeliveryPhotoGallery'
 import { SignaturePreviewDialog } from '@/components/deliveries/SignaturePreviewDialog'
 import type { SerializedShelfAnalysis } from '@/components/deliveries/ShelfInsightsCard'
 import { getDeliveryStopAdditionalPhotos } from '@/lib/deliveries/photos'
 import { signedPhotoUrl } from '@/lib/gcs/photo-url'
+import { CustomerRecordLink } from '@/components/crm/CustomerRecordLink'
 
 function haversineMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 3958.8 // Earth radius in miles
@@ -31,6 +35,10 @@ function formatDuration(ms: number): string {
   const h = Math.floor(totalMins / 60)
   const m = totalMins % 60
   return m > 0 ? `${h}h ${m}m` : `${h}h`
+}
+
+function percentage(value: number, total: number): number {
+  return total > 0 ? Math.round((value / total) * 100) : 0
 }
 
 export default async function DeliveryReportsPage() {
@@ -62,9 +70,12 @@ export default async function DeliveryReportsPage() {
           <h1 className="text-2xl font-bold text-slate-900">Delivery Reports</h1>
         </div>
         <Card>
-          <CardContent className="py-16 text-center text-muted-foreground">
-            <Truck className="w-10 h-10 mx-auto mb-3 text-slate-300" />
-            <p>No completed deliveries yet.</p>
+          <CardContent className="p-0">
+            <EmptyState
+              icon={Truck}
+              title="No completed deliveries yet"
+              description="Completed delivery runs will appear here with route, proof, and photo reporting."
+            />
           </CardContent>
         </Card>
       </div>
@@ -78,6 +89,7 @@ export default async function DeliveryReportsPage() {
     deliveryId: string
     sequenceNumber: number
     address: string
+    customerId: string | null
     companyName: string | null
     lat: string | null
     lng: string | null
@@ -102,6 +114,7 @@ export default async function DeliveryReportsPage() {
         deliveryId: deliveryStops.deliveryId,
         sequenceNumber: deliveryStops.sequenceNumber,
         address: deliveryStops.address,
+        customerId: deliveryStops.customerId,
         companyName: customerAccounts.companyName,
         lat: deliveryStops.lat,
         lng: deliveryStops.lng,
@@ -128,6 +141,7 @@ export default async function DeliveryReportsPage() {
         deliveryId: deliveryStops.deliveryId,
         sequenceNumber: deliveryStops.sequenceNumber,
         address: deliveryStops.address,
+        customerId: deliveryStops.customerId,
         companyName: customerAccounts.companyName,
         lat: deliveryStops.lat,
         lng: deliveryStops.lng,
@@ -186,15 +200,71 @@ export default async function DeliveryReportsPage() {
     }
   }
 
+  const totalStops = allStops.length
+  const totalDeliveredStops = allStops.filter(stop => stop.status === 'delivered').length
+  const totalFailedStops = allStops.filter(stop => stop.status === 'failed').length
+  const deliveredWithProof = allStops.filter(stop => (
+    stop.status === 'delivered' && Boolean(stop.proofOfDeliveryUrl || stop.recipientSignatureUrl)
+  )).length
+  const stopsWithPhotos = allStops.filter(stop => (
+    Boolean(stop.proofOfDeliveryUrl || stop.shelfPhotoUrl || getDeliveryStopAdditionalPhotos(stop).length > 0)
+  )).length
+  const overallCompletion = percentage(totalDeliveredStops, totalStops)
+  const overallProofCoverage = percentage(deliveredWithProof, totalDeliveredStops)
+  const overallPhotoCoverage = percentage(stopsWithPhotos, totalStops)
+
   return (
-    <div className="p-4 sm:p-8 space-y-6">
-      <div className="flex items-center gap-3">
-        <Link href="/admin/deliveries"><Button variant="ghost" size="icon"><ArrowLeft className="w-4 h-4" /></Button></Link>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Delivery Reports</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{completedDeliveries.length} completed run{completedDeliveries.length !== 1 ? 's' : ''}</p>
+    <div className="space-y-6 p-4 sm:p-8">
+      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 pb-5">
+        <div className="flex items-start gap-3">
+          <Link href="/admin/deliveries"><Button variant="ghost" size="icon" aria-label="Back to deliveries"><ArrowLeft className="h-4 w-4" /></Button></Link>
+          <div>
+            <p className="ui-eyebrow mb-1">Operations / Delivery intelligence</p>
+            <h1 className="text-slate-900">Delivery Reports</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {completedDeliveries.length} completed run{completedDeliveries.length !== 1 ? 's' : ''} · {totalStops} recorded stops
+            </p>
+          </div>
         </div>
+        <Badge variant={totalFailedStops > 0 ? 'warning' : 'success'}>
+          {totalFailedStops > 0 ? `${totalFailedStops} exception${totalFailedStops === 1 ? '' : 's'}` : 'All routes operational'}
+        </Badge>
       </div>
+
+      <Card className="overflow-hidden border-slate-300">
+        <CardHeader className="border-b border-slate-200 bg-slate-950 text-white">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="ui-eyebrow">Delivery network</p>
+              <CardTitle className="mt-1 text-xl text-white">Operational completion</CardTitle>
+            </div>
+            <p className="ui-operational-data text-xs text-slate-300">LAST {completedDeliveries.length} COMPLETED RUNS</p>
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-6 p-5 lg:grid-cols-[1fr_1.5fr] lg:p-6">
+          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-slate-200 bg-slate-200">
+            <div className="bg-white p-4">
+              <p className="ui-eyebrow">Delivered stops</p>
+              <p className="ui-display-xl mt-3 text-slate-950">{totalDeliveredStops}</p>
+              <p className="mt-2 text-xs text-slate-500">of {totalStops} route stops</p>
+            </div>
+            <div className="bg-white p-4">
+              <p className="ui-eyebrow">Exceptions</p>
+              <p className={totalFailedStops > 0 ? 'ui-display-xl mt-3 text-red-600' : 'ui-display-xl mt-3 text-green-600'}>{totalFailedStops}</p>
+              <p className="mt-2 text-xs text-slate-500">failed delivery attempts</p>
+            </div>
+            <div className="col-span-2 flex items-center gap-3 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+              {totalFailedStops > 0 ? <TriangleAlert className="h-4 w-4 text-red-500" /> : <CheckCircle2 className="h-4 w-4 text-green-600" />}
+              {totalFailedStops > 0 ? 'Review failed stops in the run summaries below.' : 'No failed stops in this reporting window.'}
+            </div>
+          </div>
+          <div className="space-y-5 rounded-lg border border-slate-200 bg-white p-4 sm:p-5">
+            <Progress value={overallCompletion} label="Stop fulfillment" helper={`${totalDeliveredStops} of ${totalStops} delivered`} tone="accent" />
+            <Progress value={overallProofCoverage} label="Proof capture" helper={`${deliveredWithProof} delivered stops with proof or signature`} tone="success" />
+            <Progress value={overallPhotoCoverage} label="Route photo coverage" helper={`${stopsWithPhotos} stops with captured media`} tone="info" />
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="space-y-6">
         {completedDeliveries.map(delivery => {
@@ -242,45 +312,59 @@ export default async function DeliveryReportsPage() {
 
           const deliveredCount = stops.filter(s => s.status === 'delivered').length
           const failedCount = stops.filter(s => s.status === 'failed').length
+          const proofCount = stops.filter(s => s.status === 'delivered' && (s.proofOfDeliveryUrl || s.recipientSignatureUrl)).length
+          const photoStopCount = stops.filter(s => (
+            s.proofOfDeliveryUrl || s.shelfPhotoUrl || getDeliveryStopAdditionalPhotos(s).length > 0
+          )).length
+          const completionRate = percentage(deliveredCount, stops.length)
+          const proofRate = percentage(proofCount, deliveredCount)
+          const photoRate = percentage(photoStopCount, stops.length)
 
           return (
-            <Card key={delivery.id} className="overflow-hidden">
-              <CardHeader className="pb-4 border-b bg-slate-50/60">
-                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                  {/* Driver */}
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div className="relative w-12 h-12 rounded-full overflow-hidden bg-slate-200 shrink-0 border border-slate-200">
-                      {delivery.driverAvatarUrl ? (
-                        <Image
-                          src={delivery.driverAvatarUrl}
-                          alt={delivery.driverName ?? 'Driver'}
-                          fill
-                          className="object-cover"
-                          unoptimized
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <User className="w-6 h-6 text-slate-400" />
-                        </div>
-                      )}
+            <Card
+              key={delivery.id}
+              className="overflow-hidden border-slate-300 [contain-intrinsic-size:auto_720px] [content-visibility:auto]"
+            >
+              <CardHeader className="border-b border-slate-800 bg-slate-950 pb-4 text-white">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:gap-5">
+                    {/* Driver */}
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full border-2 border-[#ff5a00] bg-slate-800">
+                        {delivery.driverAvatarUrl ? (
+                          <Image
+                            src={delivery.driverAvatarUrl}
+                            alt={delivery.driverName ?? 'Driver'}
+                            fill
+                            className="object-cover"
+                            unoptimized
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center">
+                            <User className="h-6 w-6 text-slate-400" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-white">{delivery.driverName ?? 'Unknown Driver'}</p>
+                        {(delivery.vehicleMake || delivery.licensePlate) && (
+                          <p className="truncate text-xs text-slate-400">
+                            {[delivery.vehicleMake, delivery.vehicleModel, delivery.licensePlate && `· ${delivery.licensePlate}`].filter(Boolean).join(' ')}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="font-semibold text-slate-900 truncate">{delivery.driverName ?? 'Unknown Driver'}</p>
-                      {(delivery.vehicleMake || delivery.licensePlate) && (
-                        <p className="text-xs text-muted-foreground truncate">
-                          {[delivery.vehicleMake, delivery.vehicleModel, delivery.licensePlate && `· ${delivery.licensePlate}`].filter(Boolean).join(' ')}
-                        </p>
-                      )}
+
+                    {/* Route identity */}
+                    <div className="border-t border-slate-800 pt-3 text-left sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0">
+                      <Badge variant="success">Completed</Badge>
+                      <CardTitle className="mt-1 text-lg text-white">Delivery {formatDate(delivery.weekStartDate)}</CardTitle>
+                      <p className="mt-0.5 text-xs text-slate-400">{stops.length} stop{stops.length !== 1 ? 's' : ''}</p>
                     </div>
                   </div>
 
-                  {/* Title + link */}
-                  <div className="flex items-center gap-3">
-                    <div className="text-right">
-                      <CardTitle className="text-base">Delivery {formatDate(delivery.weekStartDate)}</CardTitle>
-                      <p className="text-xs text-muted-foreground mt-0.5">{stops.length} stop{stops.length !== 1 ? 's' : ''}</p>
-                    </div>
-                    <Badge variant="success">Completed</Badge>
+                  {/* Action */}
+                  <div className="flex shrink-0 items-center gap-3">
                     <Link href={`/admin/deliveries/${delivery.id}`}>
                       <Button variant="outline" size="sm">View</Button>
                     </Link>
@@ -288,60 +372,50 @@ export default async function DeliveryReportsPage() {
                 </div>
               </CardHeader>
 
-              <CardContent className="pt-5 space-y-5">
+              <CardContent className="space-y-6 pt-5">
+                <div className="grid gap-5 lg:grid-cols-[1.25fr_1fr]">
+                  <div className="space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                    <Progress value={completionRate} label="Stop completion" helper={`${deliveredCount} delivered${failedCount > 0 ? ` · ${failedCount} failed` : ''}`} tone="accent" />
+                    <Progress value={proofRate} label="Proof of delivery" helper={`${proofCount} of ${deliveredCount} delivered stops documented`} tone="success" />
+                    <Progress value={photoRate} label="Photo coverage" helper={`${photoStopCount} stops with route media`} tone="info" />
+                  </div>
+
                 {/* Stats row */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="rounded-xl border bg-slate-50 px-4 py-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Stops</p>
-                    <p className="text-xl font-bold mt-1 text-slate-900">{stops.length}</p>
+                    <p className="ui-operational-data mt-2 text-xl text-blue-700">{stops.length}</p>
                     <p className="text-xs text-muted-foreground">
                       {deliveredCount} delivered{failedCount > 0 ? `, ${failedCount} failed` : ''}
                     </p>
                   </div>
-                  <div className="rounded-xl border bg-slate-50 px-4 py-3">
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1"><Clock className="w-3 h-3" />Duration</p>
-                    <p className="text-xl font-bold mt-1 text-slate-900">
+                    <p className="ui-operational-data mt-2 text-xl text-amber-700">
                       {durationMs !== null ? formatDuration(durationMs) : '—'}
                     </p>
                     <p className="text-xs text-muted-foreground">first to last stop</p>
                   </div>
-                  <div className="rounded-xl border bg-slate-50 px-4 py-3">
+                  <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1"><MapPin className="w-3 h-3" />Mileage</p>
-                    <p className="text-xl font-bold mt-1 text-slate-900">
+                    <p className="ui-operational-data mt-2 text-xl text-green-700">
                       {coordStops.length >= 2 ? `${totalMiles.toFixed(1)} mi` : '—'}
                     </p>
                     <p className="text-xs text-muted-foreground">estimated route distance</p>
                   </div>
-                  <div className="rounded-xl border bg-slate-50 px-4 py-3">
+                  <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1"><Camera className="w-3 h-3" />Photos</p>
-                    <p className="text-xl font-bold mt-1 text-slate-900">{photos.length}</p>
+                    <p className="ui-operational-data mt-2 text-xl text-slate-900">{photos.length}</p>
                     <p className="text-xs text-muted-foreground">captured on route</p>
                   </div>
+                </div>
                 </div>
 
                 {/* Photos */}
                 {photos.length > 0 && (
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Captured Photos</p>
-                    <div className="flex flex-wrap gap-2">
-                      {photos.map((photo, i) => (
-                        <a key={i} href={photo.url} target="_blank" rel="noreferrer" className="group relative">
-                          <div className="relative w-20 h-20 rounded-lg overflow-hidden border border-slate-200 bg-slate-100">
-                            <Image
-                              src={photo.url}
-                              alt={`${photo.label} – ${photo.stopLabel}`}
-                              fill
-                              className="object-cover transition-opacity group-hover:opacity-80"
-                              unoptimized
-                            />
-                          </div>
-                          <div className="mt-1 text-center">
-                            <p className="text-[10px] font-medium text-slate-700 leading-tight">{photo.label}</p>
-                            <p className="text-[10px] text-muted-foreground leading-tight max-w-[5rem] truncate">{photo.stopLabel}</p>
-                          </div>
-                        </a>
-                      ))}
-                    </div>
+                    <DeliveryPhotoGallery photos={photos} />
                   </div>
                 )}
 
@@ -354,7 +428,11 @@ export default async function DeliveryReportsPage() {
                         <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-600 text-[11px] font-bold flex items-center justify-center shrink-0">
                           {stop.sequenceNumber}
                         </span>
-                        <span className="flex-1 min-w-0 truncate text-slate-800">{stop.companyName ?? stop.address}</span>
+                        <CustomerRecordLink
+                          accountId={stop.customerId}
+                          name={stop.companyName ?? stop.address}
+                          className="flex-1 min-w-0 truncate text-slate-800"
+                        />
                         {stop.completedAt && (
                           <span className="text-xs text-muted-foreground shrink-0" suppressHydrationWarning>
                             {new Date(stop.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -392,7 +470,9 @@ export default async function DeliveryReportsPage() {
                         {shelfStops.map(stop => (
                           <div key={stop.id}>
                             {shelfStops.length > 1 && (
-                              <p className="mb-1.5 text-xs font-medium text-slate-600">{stop.companyName ?? stop.address}</p>
+                              <p className="mb-1.5 text-xs font-medium text-slate-600">
+                                <CustomerRecordLink accountId={stop.customerId} name={stop.companyName ?? stop.address} />
+                              </p>
                             )}
                             <ShelfInsightsCard
                               stop={{

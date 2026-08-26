@@ -1,8 +1,8 @@
 'use client'
 
-import Image from 'next/image'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
+import { DeliveryPhotoGallery, type DeliveryGalleryPhoto } from '@/components/deliveries/DeliveryPhotoGallery'
 import { formatEasternDateTime } from '@/lib/tastings/time'
 import { formatCurrency } from '@/lib/utils'
 import { TastingInsightsCard } from './TastingInsightsCard'
@@ -27,7 +27,8 @@ export type TastingReportRow = {
   missedCustomers: number | null
   consumerInteractions: number | null
   bottlePriceOnShelf: string | null
-  bottlesInStock: number | null
+  bottlesInStockBefore: number | null
+  bottlesInStockAfter: number | null
   accountFeedback: string | null
   highlights: string | null
   issues: string | null
@@ -58,6 +59,28 @@ function invoiceStatusVariant(s: string | null): 'secondary' | 'success' | 'warn
   if (s === 'paid') return 'success'
   if (s === 'approved') return 'warning'
   return 'secondary'
+}
+
+function getTastingGalleryPhotos(row: TastingReportRow): DeliveryGalleryPhoto[] {
+  const photos: DeliveryGalleryPhoto[] = []
+
+  if (row.setupPhotoUrl) {
+    photos.push({
+      url: signedPhotoUrl(row.setupPhotoUrl) ?? row.setupPhotoUrl,
+      label: 'Setup',
+      stopLabel: row.eventName,
+    })
+  }
+
+  for (const [index, url] of (row.shelfPhotoUrls ?? []).entries()) {
+    photos.push({
+      url: signedPhotoUrl(url) ?? url,
+      label: `Shelf ${index + 1}`,
+      stopLabel: row.eventName,
+    })
+  }
+
+  return photos
 }
 
 export function TastingReportsView({
@@ -149,7 +172,7 @@ export function TastingReportsView({
                         </div>
                       ))}
                     </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-3 sm:grid-cols-3">
                       <div className="space-y-0.5">
                         <p className="text-xs uppercase tracking-wide text-muted-foreground">Bottle Price On Shelf</p>
                         <p className="text-lg font-semibold text-slate-900">
@@ -157,8 +180,12 @@ export function TastingReportsView({
                         </p>
                       </div>
                       <div className="space-y-0.5">
-                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Bottles In Stock</p>
-                        <p className="text-lg font-semibold text-slate-900">{row.bottlesInStock ?? '-'}</p>
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Stock Before Tasting</p>
+                        <p className="text-lg font-semibold text-slate-900">{row.bottlesInStockBefore ?? '-'}</p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="text-xs uppercase tracking-wide text-muted-foreground">Stock After Tasting</p>
+                        <p className="text-lg font-semibold text-slate-900">{row.bottlesInStockAfter ?? '-'}</p>
                       </div>
                     </div>
                     {row.actualStartTime || row.actualEndTime ? (
@@ -183,43 +210,7 @@ export function TastingReportsView({
                     {(row.setupPhotoUrl || (row.shelfPhotoUrls && row.shelfPhotoUrls.length > 0)) && (
                       <div className="space-y-1.5">
                         <p className="text-xs uppercase tracking-wide text-muted-foreground">Captured Photos</p>
-                        <div className="flex flex-wrap gap-2">
-                          {row.setupPhotoUrl && (
-                            <a
-                              href={signedPhotoUrl(row.setupPhotoUrl) ?? row.setupPhotoUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="block h-14 w-14 overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
-                            >
-                              <Image
-                                src={signedPhotoUrl(row.setupPhotoUrl) ?? row.setupPhotoUrl}
-                                alt="Setup"
-                                width={56}
-                                height={56}
-                                className="h-full w-full object-cover"
-                                unoptimized
-                              />
-                            </a>
-                          )}
-                          {(row.shelfPhotoUrls ?? []).map((url, i) => (
-                            <a
-                              key={i}
-                              href={signedPhotoUrl(url) ?? url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="block h-14 w-14 overflow-hidden rounded-lg border border-slate-200 bg-slate-100"
-                            >
-                              <Image
-                                src={signedPhotoUrl(url) ?? url}
-                                alt={`Shelf ${i + 1}`}
-                                width={56}
-                                height={56}
-                                className="h-full w-full object-cover"
-                                unoptimized
-                              />
-                            </a>
-                          ))}
-                        </div>
+                        <DeliveryPhotoGallery photos={getTastingGalleryPhotos(row)} thumbnailVariant="compact" />
                       </div>
                     )}
 

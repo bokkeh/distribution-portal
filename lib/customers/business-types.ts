@@ -20,6 +20,31 @@ export const BUSINESS_TYPE_OPTIONS = BUSINESS_TYPE_DEFINITIONS.map(({ value }) =
   label: value,
 }))
 
+const BUSINESS_TYPE_COLORS: Record<string, string> = {
+  'Liquor Store': '#211e1c',
+  'Restaurant': '#10B981',
+  'Restaurant Group': '#059669',
+  'Hotel': '#3B82F6',
+  'Hotel Group': '#2563EB',
+  'Venue': '#8B5CF6',
+  'Bar': '#ff5a00',
+  'Night Club': '#EC4899',
+  'Grocery Store': '#F59E0B',
+  'Convenience Store': '#EAB308',
+  'Country Club': '#14B8A6',
+  'Casino': '#EF4444',
+  'Wholesaler': '#6366F1',
+  'Other': '#64748B',
+}
+
+const UNSPECIFIED_BUSINESS_TYPE_COLOR = '#94A3B8'
+
+export function getBusinessTypeColor(value: string | null | undefined): string {
+  const normalized = normalizeBusinessType(value)
+  if (!normalized) return UNSPECIFIED_BUSINESS_TYPE_COLOR
+  return BUSINESS_TYPE_COLORS[normalized] ?? UNSPECIFIED_BUSINESS_TYPE_COLOR
+}
+
 function normalizeBusinessTypeKey(value: string) {
   return value
     .trim()

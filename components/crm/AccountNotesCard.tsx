@@ -27,7 +27,18 @@ type EditingState = {
   noteBody: string
   noteType: string
   isPinned: boolean
+  occurredAt: string
 } | null
+
+function toDateInputValue(value: Date | string) {
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 
 export function AccountNotesCard({
   accountId,
@@ -48,6 +59,7 @@ export function AccountNotesCard({
   const [isPending, startTransition] = useTransition()
   const [noteBody, setNoteBody] = useState('')
   const [noteType, setNoteType] = useState('general_update')
+  const [occurredAt, setOccurredAt] = useState(() => toDateInputValue(new Date()))
   const [isPinned, setIsPinned] = useState(false)
   const [editing, setEditing] = useState<EditingState>(null)
 
@@ -68,6 +80,7 @@ export function AccountNotesCard({
     formData.append('accountId', accountId)
     formData.append('noteBody', noteBody)
     formData.append('noteType', noteType)
+    formData.append('occurredAt', occurredAt)
     if (isPinned) formData.append('isPinned', 'on')
 
     startTransition(async () => {
@@ -75,6 +88,7 @@ export function AccountNotesCard({
         await addAccountNote(formData)
         setNoteBody('')
         setNoteType('general_update')
+        setOccurredAt(toDateInputValue(new Date()))
         setIsPinned(false)
         refreshWithToast('Note added')
       } catch (error) {
@@ -89,6 +103,7 @@ export function AccountNotesCard({
     const formData = new FormData()
     formData.append('noteBody', editing.noteBody)
     formData.append('noteType', editing.noteType)
+    formData.append('occurredAt', editing.occurredAt)
     if (editing.isPinned) formData.append('isPinned', 'on')
 
     startTransition(async () => {
@@ -132,7 +147,7 @@ export function AccountNotesCard({
               placeholder="Add internal account context, call notes, email summaries, tasting feedback, or operational updates."
               className="min-h-24 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm outline-none transition focus:border-slate-400"
             />
-            <div className="grid gap-3 md:grid-cols-[1fr_auto_auto]">
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(10rem,auto)_auto_auto] md:items-end">
               <select
                 value={noteType}
                 onChange={(event) => setNoteType(event.target.value)}
@@ -142,6 +157,16 @@ export function AccountNotesCard({
                   <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
               </select>
+              <label className="grid gap-1 text-xs font-medium text-slate-600">
+                Activity date
+                <input
+                  type="date"
+                  value={occurredAt}
+                  onChange={(event) => setOccurredAt(event.target.value)}
+                  required
+                  className="h-10 rounded-md border border-input bg-white px-3 py-2 text-sm font-normal text-slate-900 shadow-sm"
+                />
+              </label>
               <label className="flex items-center gap-2 text-sm text-slate-600">
                 <input type="checkbox" checked={isPinned} onChange={(event) => setIsPinned(event.target.checked)} />
                 Pin note
@@ -168,7 +193,7 @@ export function AccountNotesCard({
                         onChange={(event) => setEditing((current) => current ? { ...current, noteBody: event.target.value } : current)}
                         className="min-h-24 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none transition focus:border-slate-400"
                       />
-                      <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto]">
+                      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(10rem,auto)_auto_auto_auto] md:items-end">
                         <select
                           value={editing.noteType}
                           onChange={(event) => setEditing((current) => current ? { ...current, noteType: event.target.value } : current)}
@@ -178,6 +203,16 @@ export function AccountNotesCard({
                             <option key={option.value} value={option.value}>{option.label}</option>
                           ))}
                         </select>
+                        <label className="grid gap-1 text-xs font-medium text-slate-600">
+                          Activity date
+                          <input
+                            type="date"
+                            value={editing.occurredAt}
+                            onChange={(event) => setEditing((current) => current ? { ...current, occurredAt: event.target.value } : current)}
+                            required
+                            className="h-10 rounded-md border border-input bg-white px-3 py-2 text-sm font-normal text-slate-900 shadow-sm"
+                          />
+                        </label>
                         <label className="flex items-center gap-2 text-sm text-slate-600">
                           <input
                             type="checkbox"
@@ -219,6 +254,7 @@ export function AccountNotesCard({
                                 noteBody: note.noteBody,
                                 noteType: note.noteType,
                                 isPinned: note.isPinned,
+                                occurredAt: toDateInputValue(note.occurredAt),
                               })}
                               className="rounded p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
                               title="Edit note"
@@ -237,7 +273,8 @@ export function AccountNotesCard({
                         ) : null}
                       </div>
                       <p className="mt-3 text-xs text-slate-500" suppressHydrationWarning>
-                        {note.authorName ?? 'System'}{note.authorRole ? ` (${note.authorRole})` : ''} • {formatDate(note.createdAt)}
+                        {note.authorName ?? 'System'}{note.authorRole ? ` (${note.authorRole})` : ''} • Activity {formatDate(note.occurredAt)}
+                        {toDateInputValue(note.occurredAt) !== toDateInputValue(note.createdAt) ? ` • Entered ${formatDate(note.createdAt)}` : ''}
                         {note.updatedAt.getTime() !== note.createdAt.getTime() ? ` • Edited ${formatDate(note.updatedAt)}` : ''}
                       </p>
                     </>

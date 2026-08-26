@@ -6,17 +6,16 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, FileText, BookOpen, Users, Package,
-  Truck, Building2, LogOut, ChevronRight, Menu, X, UserCircle, CalendarDays, MessageSquare, HeartPulse, ClipboardList, Workflow, BarChart3, TrendingUp, UserCheck, DollarSign, Globe, Receipt, ShoppingCart, Star, Cpu, Activity,
+  Truck, Building2, ChevronRight, Menu, X, CalendarDays, MessageSquare, HeartPulse, ClipboardList, Workflow, BarChart3, TrendingUp, UserCheck, DollarSign, Globe, Receipt, ShoppingCart, Star, Cpu, Activity,
   Newspaper, Gauge,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { signOut } from 'next-auth/react'
-import { SuperAdminViewSwitcher } from './SuperAdminViewSwitcher'
 import type { FeatureKey } from '@/lib/users/features'
 import { hasFeature } from '@/lib/users/features'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
 import { DialpadButton, DialpadSidebar } from '@/components/admin/DialpadSidebar'
 import { CommandPalette } from '@/components/ui/command-palette'
+import { PortalProfileMenu } from '@/components/layout/PortalProfileMenu'
 
 const SECTION_COLORS: Record<string, { border: string; label: string; dot: string }> = {
   'Overview':       { border: 'border-blue-400',   label: 'text-blue-600',   dot: 'bg-blue-400' },
@@ -74,7 +73,6 @@ const navSections = [
       { href: '/admin/invoicing/aging', label: 'AR Aging', icon: BarChart3, feature: 'invoicing' },
       { href: '/admin/finance/reconciliation', label: 'Reconciliation', icon: ClipboardList, feature: 'accounting' },
       { href: '/admin/finance/statements', label: 'Statements', icon: FileText, feature: 'accounting' },
-      { href: '/admin/accounts', label: 'Chart of Accounts', icon: BookOpen, feature: 'accounting' },
     ],
   },
   {
@@ -93,7 +91,6 @@ const navSections = [
       { href: '/admin/jobs', label: 'Background Jobs', icon: Cpu, feature: 'dashboard' },
       { href: '/admin/automations', label: 'Automations', icon: Workflow, feature: 'dashboard' },
       { href: '/admin/system', label: 'System Health', icon: HeartPulse, feature: 'dashboard' },
-      { href: '/admin/profile', label: 'My Profile', icon: UserCircle, feature: 'profile' },
     ],
   },
 ]
@@ -192,19 +189,23 @@ function NavLinks({
 }
 
 export default function AdminSidebar({
-  showViewSwitcher = false,
   featureFlags = [],
   roles = [],
   notifications = [],
   unreadCount = 0,
   navCounts = {},
+  userName,
+  userAvatarUrl,
+  canSwitchViews = false,
 }: {
-  showViewSwitcher?: boolean
   featureFlags?: string[]
   roles?: string[]
   notifications?: Array<{ id: string; kind: string; title: string; body: string; href: string | null; readAt: string | Date | null; createdAt: string | Date }>
   unreadCount?: number
   navCounts?: Partial<Record<string, number>>
+  userName?: string | null
+  userAvatarUrl?: string | null
+  canSwitchViews?: boolean
 }) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
@@ -231,7 +232,6 @@ export default function AdminSidebar({
             </div>
             <div className="flex items-center gap-1">
               <DialpadButton onClick={() => setDialpadOpen(true)} />
-              <NotificationBell items={notifications} unreadCount={unreadCount} />
             </div>
           </div>
         </div>
@@ -244,33 +244,30 @@ export default function AdminSidebar({
           <NavLinks pathname={pathname} featureFlags={featureFlags} roles={roles} navCounts={navCounts} />
         </nav>
 
-        <div className="p-4 border-t border-slate-200 space-y-3">
-          {showViewSwitcher && <SuperAdminViewSwitcher />}
-          <button
-            onClick={() => signOut({ callbackUrl: '/login' })}
-            className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors"
-          >
-            <LogOut className="w-4 h-4" /> Sign Out
-          </button>
-        </div>
       </aside>
 
       {/* ── Mobile top bar ──────────────────────────────────── */}
-      <header className="md:hidden fixed top-0 inset-x-0 z-40 flex items-center justify-between bg-white border-b border-slate-200 px-4 h-14 shadow-sm">
+      <header className="fixed inset-x-0 top-0 z-40 flex h-14 items-center justify-between border-b border-slate-300 bg-[hsl(var(--background))] px-4 md:hidden">
         <div className="flex items-center gap-2.5">
           <Image src="/brand/logo.png" alt="AHAWC" width={32} height={32}
-            className="h-8 w-8 rounded-lg bg-slate-100 p-0.5 object-contain" priority />
+            className="h-8 w-8 rounded-lg bg-white p-0.5 object-contain" priority />
           <div>
-            <p className="font-bold text-slate-900 text-sm leading-none">AHAWC</p>
-            <p className="text-xs text-slate-400 leading-none mt-0.5">Admin Portal</p>
+            <p className="text-sm font-bold leading-none text-slate-950">AHAWC</p>
+            <p className="mt-0.5 text-xs leading-none text-orange-600">Admin Portal</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <DialpadButton onClick={() => setDialpadOpen(true)} />
           <NotificationBell items={notifications} unreadCount={unreadCount} />
+          <PortalProfileMenu
+            userName={userName}
+            userAvatarUrl={userAvatarUrl}
+            profileHref="/admin/profile"
+            canSwitchViews={canSwitchViews}
+          />
           <button
             onClick={() => setOpen(true)}
-            className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+            className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-white hover:text-slate-950"
             aria-label="Open menu"
           >
             <Menu className="w-5 h-5" />
@@ -304,15 +301,6 @@ export default function AdminSidebar({
               <NavLinks pathname={pathname} featureFlags={featureFlags} roles={roles} navCounts={navCounts} onNav={() => setOpen(false)} />
             </nav>
 
-            <div className="p-4 border-t border-slate-200 space-y-3">
-              {showViewSwitcher && <SuperAdminViewSwitcher />}
-              <button
-                onClick={() => signOut({ callbackUrl: '/login' })}
-                className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors"
-              >
-                <LogOut className="w-4 h-4" /> Sign Out
-              </button>
-            </div>
           </aside>
 
           <div

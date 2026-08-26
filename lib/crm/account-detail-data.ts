@@ -29,6 +29,7 @@ export type AccountNoteItem = {
   authorName: string | null
   authorRole: string | null
   isPinned: boolean
+  occurredAt: Date
   createdAt: Date
   updatedAt: Date
 }
@@ -225,13 +226,14 @@ export async function getAccountNotes(accountId: string) {
         authorName: users.name,
         authorRole: accountNotes.authorRole,
         isPinned: accountNotes.isPinned,
+        occurredAt: accountNotes.occurredAt,
         createdAt: accountNotes.createdAt,
         updatedAt: accountNotes.updatedAt,
       })
       .from(accountNotes)
       .leftJoin(users, eq(accountNotes.authorUserId, users.id))
       .where(eq(accountNotes.accountId, accountId))
-      .orderBy(desc(accountNotes.isPinned), desc(accountNotes.createdAt))
+      .orderBy(desc(accountNotes.isPinned), desc(accountNotes.occurredAt), desc(accountNotes.createdAt))
   } catch (error) {
     if (!isMissingTable(error, 'account_notes')) {
       console.error('Failed to load account notes:', error)

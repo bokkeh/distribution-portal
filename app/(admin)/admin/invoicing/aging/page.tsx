@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { CopyPaymentLinkButton } from '@/components/invoices/CopyPaymentLinkButton'
+import { CustomerRecordLink } from '@/components/crm/CustomerRecordLink'
 import { getInvoicePublicPaymentPath } from '@/lib/invoices/public-token'
 
 type AgingBucket = 'current' | '1-30' | '31-60' | '61-90' | '90+'
@@ -63,6 +64,7 @@ export default async function InvoiceAgingPage() {
       status: invoices.status,
       dueDate: invoices.dueDate,
       createdAt: invoices.createdAt,
+      customerId: invoices.customerId,
       companyName: customerAccounts.companyName,
     })
     .from(invoices)
@@ -154,7 +156,9 @@ export default async function InvoiceAgingPage() {
                           {inv.invoiceNumber}
                         </Link>
                       </td>
-                      <td className="px-4 py-3 text-slate-700">{inv.companyName ?? '—'}</td>
+                      <td className="px-4 py-3 text-slate-700">
+                        <CustomerRecordLink accountId={inv.customerId} name={inv.companyName ?? 'Unknown customer'} />
+                      </td>
                       <td className="px-4 py-3 font-semibold text-slate-900">{formatCurrency(Number(inv.total ?? 0))}</td>
                       <td className="px-4 py-3 text-slate-600">
                         {inv.dueDate ? formatDate(inv.dueDate) : '—'}

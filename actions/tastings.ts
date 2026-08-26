@@ -137,6 +137,18 @@ function parseNonNegativeIntegerField(
   return { ok: true, numericValue: parsedValue }
 }
 
+function parseRequiredNonNegativeIntegerField(
+  value: FormDataEntryValue | null,
+  fieldLabel: string,
+  maxValue?: number,
+) {
+  if (!String(value ?? '').trim()) {
+    return { ok: false as const, error: `${fieldLabel} is required.` }
+  }
+
+  return parseNonNegativeIntegerField(value, fieldLabel, maxValue)
+}
+
 async function getSalesMemberIdForUser(userId: string) {
   const [member] = await db
     .select({ id: salesMembers.id, status: salesMembers.status })
@@ -1052,9 +1064,22 @@ export async function submitTastingReport(formData: FormData) {
     redirect(`${redirectBase}?error=${encodeURIComponent(consumerInteractionsResult.error)}`)
   }
 
-  const bottlesInStockResult = parseNonNegativeIntegerField(formData.get('bottlesInStock'), 'Number of bottles in stock', 100000)
-  if (!bottlesInStockResult.ok) {
-    redirect(`${redirectBase}?error=${encodeURIComponent(bottlesInStockResult.error)}`)
+  const bottlesInStockBeforeResult = parseRequiredNonNegativeIntegerField(
+    formData.get('bottlesInStockBefore'),
+    'Bottles in stock before the tasting',
+    100000,
+  )
+  if (!bottlesInStockBeforeResult.ok) {
+    redirect(`${redirectBase}?error=${encodeURIComponent(bottlesInStockBeforeResult.error)}`)
+  }
+
+  const bottlesInStockAfterResult = parseRequiredNonNegativeIntegerField(
+    formData.get('bottlesInStockAfter'),
+    'Bottles in stock after the tasting',
+    100000,
+  )
+  if (!bottlesInStockAfterResult.ok) {
+    redirect(`${redirectBase}?error=${encodeURIComponent(bottlesInStockAfterResult.error)}`)
   }
 
   const bottlePriceOnShelfResult = parseNonNegativeDecimalField(formData.get('bottlePriceOnShelf'), 'Bottle price on shelf', 10000)
@@ -1071,7 +1096,8 @@ export async function submitTastingReport(formData: FormData) {
     missedCustomers: missedCustomersResult.numericValue,
     consumerInteractions: consumerInteractionsResult.numericValue,
     bottlePriceOnShelf: bottlePriceOnShelfResult.formattedValue,
-    bottlesInStock: bottlesInStockResult.numericValue,
+    bottlesInStockBefore: bottlesInStockBeforeResult.numericValue,
+    bottlesInStockAfter: bottlesInStockAfterResult.numericValue,
     accountFeedback: ((formData.get('accountFeedback') as string) || '').trim() || null,
     highlights: ((formData.get('highlights') as string) || '').trim() || null,
     issues: ((formData.get('issues') as string) || '').trim() || null,

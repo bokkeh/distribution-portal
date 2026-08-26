@@ -3,12 +3,12 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Building2, Map, User, LogOut, DollarSign, Wine, TrendingUp, Menu, X, Star, ShoppingCart, Gauge } from 'lucide-react'
+import { LayoutDashboard, Building2, Map, DollarSign, Wine, TrendingUp, Menu, X, Star, ShoppingCart, Gauge } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { signOut } from 'next-auth/react'
 import { useState, useEffect } from 'react'
 import { DialpadButton, DialpadSidebar } from '@/components/admin/DialpadSidebar'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
+import { PortalProfileMenu } from '@/components/layout/PortalProfileMenu'
 
 const navItems = [
   { href: '/sales/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -20,7 +20,6 @@ const navItems = [
   { href: '/sales/promotion-catalog', label: 'Promotion Catalog', icon: Star },
   { href: '/sales/forecast', label: 'Forecast', icon: TrendingUp },
   { href: '/sales/commissions', label: 'Commissions', icon: DollarSign },
-  { href: '/sales/profile', label: 'Profile', icon: User },
 ]
 
 type NotificationItem = {
@@ -28,8 +27,10 @@ type NotificationItem = {
   href: string | null; readAt: string | Date | null; createdAt: string | Date
 }
 
-export default function SalesNav({ userName, notifications = [], unreadCount = 0 }: {
+export default function SalesNav({ userName, userAvatarUrl, canSwitchViews = false, notifications = [], unreadCount = 0 }: {
   userName?: string
+  userAvatarUrl?: string | null
+  canSwitchViews?: boolean
   notifications?: NotificationItem[]
   unreadCount?: number
 }) {
@@ -86,14 +87,12 @@ export default function SalesNav({ userName, notifications = [], unreadCount = 0
             <div className="flex items-center gap-1">
               <DialpadButton onClick={() => setDialpadOpen(true)} />
               <NotificationBell items={notifications} unreadCount={unreadCount} />
-              {userName && <span className="hidden sm:block text-sm text-slate-600 px-1">{userName}</span>}
-              <button
-                onClick={() => signOut({ callbackUrl: '/login' })}
-                className="hidden md:flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
-              >
-                <LogOut className="w-4 h-4" />
-                <span>Sign Out</span>
-              </button>
+              <PortalProfileMenu
+                userName={userName}
+                userAvatarUrl={userAvatarUrl}
+                profileHref={canSwitchViews ? '/admin/profile' : '/sales/profile'}
+                canSwitchViews={canSwitchViews}
+              />
               {/* Hamburger — mobile only */}
               <button
                 onClick={() => setMenuOpen(true)}
@@ -154,14 +153,6 @@ export default function SalesNav({ userName, notifications = [], unreadCount = 0
               })}
             </nav>
 
-            <div className="p-4 border-t border-slate-200">
-              <button
-                onClick={() => signOut({ callbackUrl: '/login' })}
-                className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors"
-              >
-                <LogOut className="w-4 h-4" /> Sign Out
-              </button>
-            </div>
           </aside>
 
           <div className="flex-1 bg-black/40 backdrop-blur-sm" onClick={() => setMenuOpen(false)} />

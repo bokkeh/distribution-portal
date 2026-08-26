@@ -1,26 +1,50 @@
 @import "tailwindcss";
 
 :root {
-  --background: 0 0% 100%;
-  --foreground: 222.2 84% 4.9%;
+  --ahawc-black: #120f0e;
+  --ahawc-amber: #ff5a00;
+  --ahawc-charcoal: #2b2625;
+  --ahawc-concrete: #e6e8ea;
+  --ahawc-cream: #faf9f6;
+  --ahawc-accent: #fff7ed;
+  --ahawc-muted: #6b6462;
+  --ahawc-success: #22c55e;
+  --ahawc-warning: #f59e0b;
+  --ahawc-error: #ef4444;
+  --ahawc-info: #3b82f6;
+  --background: 40 29% 97%;
+  --foreground: 15 14% 6%;
   --card: 0 0% 100%;
-  --card-foreground: 222.2 84% 4.9%;
+  --card-foreground: 15 14% 6%;
   --popover: 0 0% 100%;
-  --popover-foreground: 222.2 84% 4.9%;
-  --primary: 221.2 83.2% 53.3%;
-  --primary-foreground: 210 40% 98%;
-  --secondary: 210 40% 96.1%;
-  --secondary-foreground: 222.2 47.4% 11.2%;
-  --muted: 210 40% 96.1%;
-  --muted-foreground: 215.4 16.3% 46.9%;
-  --accent: 210 40% 96.1%;
-  --accent-foreground: 222.2 47.4% 11.2%;
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 210 40% 98%;
-  --border: 214.3 31.8% 91.4%;
-  --input: 214.3 31.8% 91.4%;
-  --ring: 221.2 83.2% 53.3%;
-  --radius: 0.5rem;
+  --popover-foreground: 15 14% 6%;
+  --primary: 21 100% 50%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 18 7% 16%;
+  --secondary-foreground: 40 29% 97%;
+  --muted: 210 5% 91%;
+  --muted-foreground: 15 4% 40%;
+  --accent: 33 100% 96%;
+  --accent-foreground: 21 100% 37%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 210 5% 91%;
+  --input: 210 5% 82%;
+  --ring: 21 100% 50%;
+  --radius: 0.375rem;
+  --sidebar-width: 260px;
+  --content-padding: 2rem;
+  --card-gap: 1rem;
+  --card-padding: 1.5rem;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
 }
 
 @theme inline {
@@ -43,20 +67,280 @@
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --color-ahawc-black: var(--ahawc-black);
+  --color-ahawc-amber: var(--ahawc-amber);
+  --color-ahawc-charcoal: var(--ahawc-charcoal);
+  --color-ahawc-concrete: var(--ahawc-concrete);
+  --color-ahawc-cream: var(--ahawc-cream);
+  --color-ahawc-accent: var(--ahawc-accent);
+  --color-ahawc-muted: var(--ahawc-muted);
+  --color-info: var(--ahawc-info);
+  --color-slate-50: #faf9f6;
+  --color-slate-100: #f3f1ed;
+  --color-slate-200: #e6e8ea;
+  --color-slate-300: #d5d2ce;
+  --color-slate-400: #9b9491;
+  --color-slate-500: #6b6462;
+  --color-slate-600: #514a48;
+  --color-slate-700: #3b3533;
+  --color-slate-800: #2b2625;
+  --color-slate-900: #1c1817;
+  --color-slate-950: #120f0e;
+  --color-blue-50: #fff7ed;
+  --color-blue-100: #ffedd5;
+  --color-blue-200: #fed7aa;
+  --color-blue-300: #fdba74;
+  --color-blue-400: #fb923c;
+  --color-blue-500: #ff5a00;
+  --color-blue-600: #ff5a00;
+  --color-blue-700: #c2410c;
+  --color-blue-800: #9a3412;
+  --color-blue-900: #7c2d12;
+  --font-sans: var(--font-ahawc-interface);
+  --font-mono: var(--font-ahawc-data);
+  --font-display: var(--font-ahawc-display);
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.625rem;
+  --radius-2xl: 0.75rem;
+  --radius-3xl: 0.875rem;
+  --shadow-sm: 0 1px 2px rgb(18 15 14 / 0.05);
+  --shadow-md: 0 8px 24px rgb(18 15 14 / 0.08);
+  --shadow-lg: 0 18px 48px rgb(18 15 14 / 0.12);
 }
 
 * {
   border-color: hsl(var(--border));
 }
 
+html {
+  background: var(--ahawc-cream);
+  color-scheme: light;
+  scroll-behavior: smooth;
+}
+
 body {
-  background-color: hsl(var(--background));
+  min-width: 320px;
+  background:
+    radial-gradient(circle at top right, rgb(255 90 0 / 0.035), transparent 32rem),
+    hsl(var(--background));
   color: hsl(var(--foreground));
   font-family: var(--font-sans, system-ui, sans-serif);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: rgb(255 90 0 / 0.2);
+  color: var(--ahawc-black);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ahawc-amber);
+  outline-offset: 2px;
+}
+
+main :where(h1, h2, h3, .font-display) {
+  font-family: var(--font-ahawc-display), "Arial Narrow", sans-serif;
+  font-variation-settings: "wght" 800;
+}
+
+main h1 {
+  color: var(--ahawc-black);
+  font-size: clamp(2rem, 3vw, 2.75rem);
+  font-weight: 900;
+  letter-spacing: -0.025em;
+  line-height: 0.98;
+  text-wrap: balance;
+}
+
+main h2 {
+  color: var(--ahawc-black);
+  font-weight: 800;
+  letter-spacing: -0.015em;
+}
+
+main :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea) {
+  min-height: 2.5rem;
+  border-color: hsl(var(--input));
+  border-radius: var(--radius-md);
+  background-color: white;
+  color: var(--ahawc-black);
+  box-shadow: 0 1px 1px rgb(18 15 14 / 0.03);
+}
+
+main :where(input, select, textarea)::placeholder {
+  color: #9b9491;
+}
+
+main :where(input, select, textarea):focus {
+  border-color: var(--ahawc-amber);
+  box-shadow: 0 0 0 3px rgb(255 90 0 / 0.12);
+  outline: none;
+}
+
+main table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+main thead {
+  background: #f3f1ed;
+}
+
+main th {
+  color: var(--ahawc-muted);
+  font-family: var(--font-ahawc-data), monospace;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+main :where(th, td) {
+  border-bottom: 1px solid var(--ahawc-concrete);
+  padding-block: 0.75rem;
+}
+
+main tbody tr {
+  transition: background-color 140ms ease;
+}
+
+main tbody tr:hover {
+  background-color: rgb(255 247 237 / 0.7);
+}
+
+main :where([role="tablist"], .operational-tabs) {
+  scrollbar-width: thin;
+}
+
+main [role="tab"][data-state="active"] {
+  color: var(--ahawc-black);
+}
+
+.portal-shell {
+  min-height: 100vh;
+  background: transparent;
+}
+
+.portal-main {
+  min-width: 0;
+  flex: 1 1 0%;
+}
+
+.portal-content {
+  width: 100%;
+  padding: 1rem;
+}
+
+.ui-eyebrow {
+  color: var(--ahawc-amber);
+  font-family: var(--font-ahawc-data), monospace;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.ui-operational-data {
+  font-family: var(--font-data), monospace;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.ui-display-xl {
+  font-family: var(--font-ahawc-display), sans-serif;
+  font-size: clamp(3rem, 7vw, 4rem);
+  font-weight: 900;
+  letter-spacing: -0.035em;
+  line-height: 0.9;
+}
+
+.ui-dark-surface {
+  border-color: #3b3533;
+  background: var(--ahawc-charcoal);
+  color: var(--ahawc-cream);
+}
+
+.map-surface :where(.gm-style, .mapboxgl-map) {
+  font-family: var(--font-sans) !important;
+}
+
+.map-surface :where(.gm-style-iw, .mapboxgl-popup-content) {
+  border: 1px solid var(--ahawc-concrete);
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+
+.upload-zone {
+  border: 1px dashed #fdba74;
+  border-radius: var(--radius-lg);
+  background: #fffaf5;
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.upload-zone:hover {
+  border-color: var(--ahawc-amber);
+  background: var(--ahawc-accent);
+}
+
+.ahawc-toast {
+  border: 1px solid var(--ahawc-concrete) !important;
+  border-left: 4px solid var(--ahawc-amber) !important;
+  border-radius: var(--radius-lg) !important;
+  background: white !important;
+  box-shadow: var(--shadow-md) !important;
+  color: var(--ahawc-black) !important;
+  font-family: var(--font-ahawc-interface), sans-serif !important;
+}
+
+.ahawc-toast-title {
+  font-weight: 700 !important;
+}
+
+.ahawc-toast-description {
+  color: var(--ahawc-muted) !important;
+}
+
+.ahawc-toast-action {
+  background: var(--ahawc-amber) !important;
+  color: white !important;
+}
+
+.ahawc-toast-cancel {
+  background: #f3f1ed !important;
+  color: var(--ahawc-charcoal) !important;
+}
+
+@media (min-width: 640px) {
+  .portal-content {
+    padding: var(--content-padding);
+  }
+}
+
+@media (max-width: 639px) {
+  main h1 {
+    font-size: 2rem;
+  }
+
+  main :where(th, td) {
+    padding-block: 0.625rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }

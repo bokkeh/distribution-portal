@@ -311,8 +311,10 @@ export function SalesIntelligenceSection({
                           <p className="font-semibold text-slate-900">{tasting.consumerInteractions ?? '—'}</p>
                         </div>
                         <div>
-                          <span className="text-muted-foreground">Bottles on shelf</span>
-                          <p className="font-semibold text-slate-900">{tasting.bottlesInStock ?? '—'}</p>
+                          <span className="text-muted-foreground">Stock before / after</span>
+                          <p className="font-semibold text-slate-900">
+                            {tasting.bottlesInStockBefore ?? '—'} / {tasting.bottlesInStockAfter ?? '—'}
+                          </p>
                         </div>
                       </div>
                     )}

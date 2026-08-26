@@ -6,7 +6,7 @@ import { Bell } from 'lucide-react'
 import { toast } from 'sonner'
 import { markAllNotificationsRead, markNotificationKindsRead, markNotificationRead } from '@/actions/user-notifications'
 
-type NotificationItem = {
+export type NotificationItem = {
   id: string
   kind: string
   title: string
@@ -21,10 +21,12 @@ export function NotificationBell({
   items,
   unreadCount,
   dark = false,
+  topBar = false,
 }: {
   items: NotificationItem[]
   unreadCount: number
   dark?: boolean
+  topBar?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [itemsOverride, setItemsOverride] = useState<NotificationItem[] | null>(null)
@@ -63,6 +65,18 @@ export function NotificationBell({
   }, [visibleItems])
 
   const classes = useMemo(() => {
+    if (topBar) {
+      return {
+        button: 'relative flex h-11 w-11 items-center justify-center rounded-md border border-slate-200 bg-white p-0 text-slate-950 shadow-sm transition hover:bg-slate-100',
+        panel: 'fixed z-50 rounded-2xl border border-slate-200 bg-white shadow-2xl',
+        item: 'block rounded-xl border border-slate-100 bg-slate-50 p-3 text-left hover:border-slate-200',
+        title: 'text-sm font-semibold text-slate-900',
+        body: 'mt-1 text-xs text-slate-600',
+        meta: 'mt-2 text-[11px] text-slate-500',
+        empty: 'px-4 py-8 text-center text-sm text-slate-500',
+      }
+    }
+
     if (dark) {
       return {
         button: 'relative rounded-xl px-2 py-2 text-slate-200 hover:bg-slate-800/70 hover:text-white',
@@ -84,7 +98,7 @@ export function NotificationBell({
       meta: 'mt-2 text-[11px] text-slate-500',
       empty: 'px-4 py-8 text-center text-sm text-slate-500',
     }
-  }, [dark])
+  }, [dark, topBar])
 
   useEffect(() => {
     for (const item of items) {
@@ -300,7 +314,7 @@ export function NotificationBell({
       >
         <Bell className="h-4 w-4 fill-current" />
         {resolvedUnreadCount > 0 ? (
-          <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
+          <span className={`absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white ${topBar ? 'bg-[#ff5a00]' : 'bg-red-600'}`}>
             {resolvedUnreadCount > 9 ? '9+' : resolvedUnreadCount}
           </span>
         ) : null}

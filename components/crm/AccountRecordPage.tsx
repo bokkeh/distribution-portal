@@ -270,7 +270,7 @@ export async function AccountRecordPage({
         email: contacts.email,
         phone: contacts.phone,
         isPrimary: contacts.isPrimary,
-      }).from(contacts).where(eq(contacts.customerId, accountId)).orderBy(desc(contacts.createdAt)).limit(5),
+      }).from(contacts).where(eq(contacts.customerId, accountId)).orderBy(desc(contacts.isPrimary), asc(contacts.name), asc(contacts.createdAt)).limit(5),
       db.select({
         id: orders.id,
         status: orders.status,
@@ -406,7 +406,7 @@ export async function AccountRecordPage({
         email: contacts.email,
         phone: contacts.phone,
         isPrimary: contacts.isPrimary,
-      }).from(contacts).where(eq(contacts.customerId, accountId)).orderBy(desc(contacts.createdAt)),
+      }).from(contacts).where(eq(contacts.customerId, accountId)).orderBy(desc(contacts.isPrimary), asc(contacts.name), asc(contacts.createdAt)),
       accountPhones.length
         ? db.select({
             id: smsMessages.id,

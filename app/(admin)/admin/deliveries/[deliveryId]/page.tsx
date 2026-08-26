@@ -16,6 +16,7 @@ import AddDeliveryStopForm from '@/components/deliveries/AddStopForm'
 import { getActivityTimeline } from '@/lib/activity/read'
 import { ActivityTimeline } from '@/components/activity/ActivityTimeline'
 import CopyShareLink from '@/components/share/CopyShareLink'
+import { CustomerRecordLink } from '@/components/crm/CustomerRecordLink'
 
 export default async function DeliveryDetailPage({
   params,
@@ -99,6 +100,7 @@ export default async function DeliveryDetailPage({
     lastLocationAt: Date | null
     recipientSignatureUrl: string | null
     recipientSignedName: string | null
+    customerId: string | null
     companyName: string | null
   }> = []
 
@@ -130,6 +132,7 @@ export default async function DeliveryDetailPage({
         lastLocationAt: deliveryStops.lastLocationAt,
         recipientSignatureUrl: deliveryStops.recipientSignatureUrl,
         recipientSignedName: deliveryStops.recipientSignedName,
+        customerId: deliveryStops.customerId,
         companyName: customerAccounts.companyName,
       })
       .from(deliveryStops)
@@ -155,6 +158,7 @@ export default async function DeliveryDetailPage({
         status: deliveryStops.status,
         notes: deliveryStops.notes,
         completedAt: deliveryStops.completedAt,
+        customerId: deliveryStops.customerId,
         companyName: customerAccounts.companyName,
       })
       .from(deliveryStops)
@@ -282,7 +286,9 @@ export default async function DeliveryDetailPage({
             <div key={stop.id} className="rounded-xl border border-slate-200 p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <p className="font-medium text-slate-900">{stop.companyName ?? stop.address}</p>
+                  <p className="font-medium text-slate-900">
+                    <CustomerRecordLink accountId={stop.customerId} name={stop.companyName ?? stop.address} />
+                  </p>
                   <p className="text-xs text-slate-500">{stop.customerStatus.replace(/_/g, ' ')}{stop.etaMinutes ? ` • ETA ${stop.etaMinutes} min` : ''}</p>
                 </div>
                 <a

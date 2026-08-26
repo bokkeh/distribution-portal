@@ -18,6 +18,7 @@ import {
   sampleRequestItems,
   sampleRequests,
   sampleRequestStatusHistory,
+  users,
   type QuickBooksSampleCategory,
 } from '@/db/schema'
 import { requireAdmin, requireAdminOrStaff } from '@/lib/auth/session'
@@ -79,8 +80,10 @@ export async function setLocationBalance(formData: FormData): Promise<ActionResu
     const productId = text(formData.get('productId'))
     const quantityCases = integer(formData.get('quantityCases'))
     const quantityBottles = integer(formData.get('quantityBottles'))
+    const category = text(formData.get('quickBooksCategory'))
     const reason = text(formData.get('reason'))
     if (!locationId || !productId || !reason) return { error: 'Location, product, and adjustment reason are required.' }
+    if (!isCategory(category)) return { error: 'Choose a valid adjustment category.' }
 
     await ensureBalance(locationId, productId)
     const [before] = await db.select().from(inventoryLocationBalances)
@@ -95,6 +98,7 @@ export async function setLocationBalance(formData: FormData): Promise<ActionResu
       destinationLocationId: locationId,
       quantityCases: Math.abs(quantityCases - before.quantityCases),
       quantityBottles: Math.abs(quantityBottles - before.quantityBottles),
+      quickBooksCategory: category,
       reason: `${reason} (balance ${before.quantityCases} cases/${before.quantityBottles} bottles to ${quantityCases}/${quantityBottles})`,
       actorUserId: session.user.id,
       approvedByUserId: session.user.id,
@@ -132,6 +136,37 @@ export async function saveLocationThreshold(formData: FormData): Promise<ActionR
     return { success: true }
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Unable to save threshold.' }
+  }
+}
+
+export async function assignSampleLocationOwner(formData: FormData): Promise<ActionResult> {
+  try {
+    await requireAdmin()
+    const locationId = text(formData.get('locationId'))
+    const ownerUserId = text(formData.get('ownerUserId'))
+    if (!locationId || !ownerUserId) return { error: 'Choose a sample location and inventory owner.' }
+
+    const [[location], [owner]] = await Promise.all([
+      db.select({ id: inventoryLocations.id, type: inventoryLocations.type })
+        .from(inventoryLocations)
+        .where(eq(inventoryLocations.id, locationId))
+        .limit(1),
+      db.select({ id: users.id })
+        .from(users)
+        .where(and(eq(users.id, ownerUserId), eq(users.active, true)))
+        .limit(1),
+    ])
+
+    if (!location || location.type !== 'sample') return { error: 'Sample location not found.' }
+    if (!owner) return { error: 'Active inventory owner not found.' }
+
+    await db.update(inventoryLocations)
+      .set({ ownerUserId, updatedAt: new Date() })
+      .where(eq(inventoryLocations.id, locationId))
+    refresh()
+    return { success: true }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Unable to assign the inventory owner.' }
   }
 }
 

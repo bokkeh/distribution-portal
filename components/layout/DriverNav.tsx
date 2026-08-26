@@ -4,11 +4,10 @@ import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Truck, Map, Menu, UserCircle, X, LogOut } from 'lucide-react'
-import { signOut } from 'next-auth/react'
+import { LayoutDashboard, Truck, Map, Menu, X } from 'lucide-react'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
-import { DriverSignOutButton } from '@/components/layout/DriverSignOutButton'
 import { cn } from '@/lib/utils'
+import { PortalProfileMenu } from '@/components/layout/PortalProfileMenu'
 
 type NotificationItem = {
   id: string
@@ -68,14 +67,18 @@ export function DriverNav({
   canViewDashboard,
   canViewDeliveries,
   canViewMap,
-  canViewProfile,
+  userName,
+  userAvatarUrl,
+  canSwitchViews = false,
 }: {
   notifications: NotificationItem[]
   unreadCount: number
   canViewDashboard: boolean
   canViewDeliveries: boolean
   canViewMap: boolean
-  canViewProfile: boolean
+  userName?: string | null
+  userAvatarUrl?: string | null
+  canSwitchViews?: boolean
 }) {
   const pathname = usePathname()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -91,7 +94,6 @@ export function DriverNav({
     ...(canViewDashboard ? [{ href: '/driver/dashboard', label: 'Dashboard', icon: LayoutDashboard }] : []),
     ...(canViewDeliveries ? [{ href: '/driver/deliveries#current-deliveries', label: 'Deliveries', icon: Truck }] : []),
     ...(canViewMap ? [{ href: '/driver/map', label: 'Map', icon: Map }] : []),
-    ...(canViewProfile ? [{ href: '/driver/profile', label: 'Profile', icon: UserCircle }] : []),
   ]
 
   return (
@@ -116,11 +118,22 @@ export function DriverNav({
           <div className="hidden items-center gap-1 sm:flex">
             <NotificationBell items={notifications} unreadCount={unreadCount} dark />
             <DriverNavLinks items={navItems} pathname={pathname} />
-            <DriverSignOutButton />
+            <PortalProfileMenu
+              userName={userName}
+              userAvatarUrl={userAvatarUrl}
+              profileHref={canSwitchViews ? '/admin/profile' : '/driver/profile'}
+              canSwitchViews={canSwitchViews}
+            />
           </div>
 
           <div className="flex items-center gap-2 sm:hidden">
             <NotificationBell items={notifications} unreadCount={unreadCount} dark />
+            <PortalProfileMenu
+              userName={userName}
+              userAvatarUrl={userAvatarUrl}
+              profileHref={canSwitchViews ? '/admin/profile' : '/driver/profile'}
+              canSwitchViews={canSwitchViews}
+            />
             <button
               type="button"
               onClick={() => setMenuOpen(true)}
@@ -168,16 +181,6 @@ export function DriverNav({
               <DriverNavLinks items={navItems} pathname={pathname} onNavigate={() => setMenuOpen(false)} />
             </nav>
 
-            <div className="border-t border-slate-800 p-3">
-              <button
-                type="button"
-                onClick={() => signOut({ callbackUrl: '/login' })}
-                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-900 hover:text-white"
-              >
-                <LogOut className="h-4 w-4" />
-                Sign Out
-              </button>
-            </div>
           </aside>
 
           <button

@@ -1,6 +1,6 @@
 import { db } from '@/db'
 import { contacts, customerAccounts } from '@/db/schema'
-import { eq } from 'drizzle-orm'
+import { asc, desc, eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -17,7 +17,11 @@ export default async function StaffContactsPage({ params }: { params: Promise<{ 
   const [account] = await db.select({ id: customerAccounts.id, companyName: customerAccounts.companyName }).from(customerAccounts).where(eq(customerAccounts.id, accountId))
   if (!account) notFound()
 
-  const accountContacts = await db.select().from(contacts).where(eq(contacts.customerId, accountId))
+  const accountContacts = await db
+    .select()
+    .from(contacts)
+    .where(eq(contacts.customerId, accountId))
+    .orderBy(desc(contacts.isPrimary), asc(contacts.name), asc(contacts.createdAt))
 
   return (
     <div className="p-4 sm:p-8 space-y-6">

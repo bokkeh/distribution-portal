@@ -22,7 +22,8 @@ type ReportRecord = {
   missedCustomers: number | null
   consumerInteractions: number | null
   bottlePriceOnShelf: string | null
-  bottlesInStock: number | null
+  bottlesInStockBefore: number | null
+  bottlesInStockAfter: number | null
   accountFeedback: string | null
   highlights: string | null
   issues: string | null

@@ -16,6 +16,7 @@ import { TasterRateCard } from '@/components/admin/TasterRateCard'
 import { ViewAsButton } from '@/components/admin/ViewAsButton'
 import { auth } from '@/lib/auth/config'
 import { getUserPreferences } from '@/lib/preferences/read'
+import { CustomerRecordLink } from '@/components/crm/CustomerRecordLink'
 
 function isMissingUserFeatureTable(error: unknown) {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
@@ -174,7 +175,10 @@ export default async function UserDetailPage({ params }: { params: Promise<{ use
             <CardHeader><CardTitle>Customer Account</CardTitle></CardHeader>
             <CardContent className="space-y-2 text-sm">
               <div className="grid grid-cols-2 gap-3">
-                <div><p className="text-muted-foreground">Company</p><p className="font-medium">{account.companyName}</p></div>
+                <div>
+                  <p className="text-muted-foreground">Company</p>
+                  <p className="font-medium"><CustomerRecordLink accountId={account.id} name={account.companyName} /></p>
+                </div>
                 <div><p className="text-muted-foreground">Terms</p><Badge variant="secondary">{account.paymentTerms}</Badge></div>
                 <div><p className="text-muted-foreground">Credit Limit</p><p className="font-medium">${account.creditLimit}</p></div>
                 <div><p className="text-muted-foreground">Balance</p><p className="font-medium">${account.balance}</p></div>

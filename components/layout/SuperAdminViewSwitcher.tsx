@@ -128,7 +128,7 @@ function AccountViewAs({ compact }: { compact: boolean }) {
   )
 }
 
-export function SuperAdminViewSwitcher({ compact = false }: { compact?: boolean }) {
+export function SuperAdminViewSwitcher({ compact = false, embedded = false }: { compact?: boolean; embedded?: boolean }) {
   const pathname = usePathname()
   const router = useRouter()
   const value = getCurrentView(pathname)
@@ -136,7 +136,7 @@ export function SuperAdminViewSwitcher({ compact = false }: { compact?: boolean 
 
   if (compact) {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-xl">
+      <div className={embedded ? 'bg-white p-2' : 'rounded-2xl border border-slate-200 bg-white p-3.5 shadow-xl'}>
         <div className="mb-3 flex items-center gap-2">
           <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-violet-600" />
           <span className="text-xs font-semibold uppercase tracking-wide text-violet-600">Switch View</span>

@@ -14,6 +14,7 @@ import { createInvoiceAdjustment, deleteDraftInvoice, markInvoicePaid, recordOff
 import { getInvoiceDetailData } from '@/lib/invoices/read'
 import { getInvoicePublicPaymentPath } from '@/lib/invoices/public-token'
 import { InvoiceVisual } from '@/components/invoices/InvoiceVisual'
+import { CustomerRecordLink } from '@/components/crm/CustomerRecordLink'
 
 export default async function InvoiceDetailPage({
   params,
@@ -31,6 +32,7 @@ export default async function InvoiceDetailPage({
       invoiceNumber: invoices.invoiceNumber,
       status: invoices.status,
       pdfUrl: invoices.pdfUrl,
+      customerId: invoices.customerId,
       companyName: customerAccounts.companyName,
     })
     .from(invoices)
@@ -69,7 +71,9 @@ export default async function InvoiceDetailPage({
         <Link href="/admin/invoicing"><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
         <div className="flex-1">
           <h1 className="text-2xl font-bold text-slate-900">{invoice.invoiceNumber}</h1>
-          <p className="mt-1 text-muted-foreground">{invoice.companyName}</p>
+          <p className="mt-1 text-muted-foreground">
+            <CustomerRecordLink accountId={invoice.customerId} name={invoice.companyName ?? 'Unknown customer'} />
+          </p>
           {invoiceVisual.orderId ? (
             <div className="mt-2">
               <Link href={`/admin/orders/${invoiceVisual.orderId}`}>

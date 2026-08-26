@@ -17,6 +17,7 @@ import { formatDate } from '@/lib/utils'
 import Image from 'next/image'
 import { CheckCircle, Check, ChevronDown, ChevronUp, Clock, GripVertical, Home, Loader2, MapPin, Pencil, RefreshCw, Send, X, XCircle } from 'lucide-react'
 import GetDirectionsButton from '@/components/shared/GetDirectionsButton'
+import { CustomerRecordLink } from '@/components/crm/CustomerRecordLink'
 
 type Stop = {
   id: string
@@ -45,6 +46,7 @@ type Stop = {
   lng?: string | null
   completedAt?: Date | null
   companyName: string | null
+  customerId?: string | null
 }
 
 function StopStatusBadge({ status }: { status: Stop['status'] }) {
@@ -263,7 +265,11 @@ function SortableStopCard({
         ) : (
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm font-semibold leading-tight">{stop.companyName ?? stop.address}</p>
+              <p className="text-sm font-semibold leading-tight">
+                {mode === 'admin' ? (
+                  <CustomerRecordLink accountId={stop.customerId} name={stop.companyName ?? stop.address} />
+                ) : stop.companyName ?? stop.address}
+              </p>
             {mode === 'driver' ? <StopStatusBadge status={stop.status} /> : null}
             </div>
             {stop.companyName && (

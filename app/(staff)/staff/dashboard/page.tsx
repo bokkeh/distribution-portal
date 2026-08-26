@@ -11,6 +11,7 @@ import { ShoppingCart, Users, Package, MessageSquare, ClipboardList } from 'luci
 import { getSmsInboxSummary } from '@/lib/inbox/summary'
 import Link from 'next/link'
 import { IndustryNewsWidget } from '@/components/news/IndustryNewsWidget'
+import { CustomerRecordLink } from '@/components/crm/CustomerRecordLink'
 
 export default async function StaffDashboard() {
   const session = await requireAdminOrStaff()
@@ -23,7 +24,7 @@ export default async function StaffDashboard() {
     db.select({ count: sql<number>`COUNT(*)` }).from(customerAccounts),
     db.select({
       id: orders.id, total: orders.total, status: orders.status, orderType: orders.orderType, createdAt: orders.createdAt,
-      companyName: customerAccounts.companyName,
+      customerId: orders.customerId, companyName: customerAccounts.companyName,
     }).from(orders)
       .leftJoin(customerAccounts, eq(orders.customerId, customerAccounts.id))
       .orderBy(desc(orders.createdAt)).limit(8),
@@ -101,7 +102,9 @@ export default async function StaffDashboard() {
             <tbody className="divide-y">
               {recentOrders.map(o => (
                 <tr key={o.id} className="hover:bg-slate-50">
-                  <td className="px-6 py-4 text-sm font-medium">{o.companyName ?? '—'}</td>
+                  <td className="px-6 py-4 text-sm font-medium">
+                    <CustomerRecordLink accountId={o.customerId} name={o.companyName ?? '—'} portal="staff" />
+                  </td>
                   <td className="px-6 py-4"><Badge variant="secondary">{o.orderType}</Badge></td>
                   <td className="px-6 py-4"><Badge variant={statusColor[o.status]}>{o.status}</Badge></td>
                   <td className="px-6 py-4 text-sm font-semibold">{formatCurrency(o.total)}</td>

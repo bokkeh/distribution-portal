@@ -1,6 +1,7 @@
 import { db } from '@/db'
 import { notificationsLog } from '@/db/schema'
 import { formatEasternDateTime, formatEasternTimeRange } from '@/lib/tastings/time'
+import { getAvailabilityReminderSubject } from '@/lib/tastings/availability-reminder'
 import {
   getEmailAutomationTemplateMap,
   resolveDefaultEmailTemplate,
@@ -1155,4 +1156,36 @@ export async function sendMonthlyInventoryReportEmail({
     ctaHref: portalUrl(`/api/sample-inventory/reports/${reportId}/csv`),
   })
   return sendEmail({ to, subject: `Sample Inventory Report - ${reportMonth}`, html })
+}
+
+export async function sendTasterAvailabilityReminderEmail({
+  to,
+  name,
+  deadlineLabel,
+  availabilityUrl,
+  userId,
+}: {
+  to: string
+  name: string
+  deadlineLabel: string
+  availabilityUrl: string
+  userId: string
+}) {
+  const subject = getAvailabilityReminderSubject(deadlineLabel)
+  const html = renderEmailCard({
+    eyebrow: 'Taster Availability',
+    title: `Availability due ${escapeHtml(deadlineLabel)}`,
+    intro: `Hi ${escapeHtml(name)}, please submit your upcoming tasting availability by the end of the month.`,
+    body: '<p style="margin: 0;">Select every upcoming Friday, Saturday, and Sunday that you are available to work so the team can schedule tastings accurately.</p>',
+    ctaLabel: 'Submit Availability',
+    ctaHref: availabilityUrl,
+  })
+
+  return sendEmail({
+    to,
+    subject,
+    html,
+    userId,
+    recipientName: name,
+  })
 }

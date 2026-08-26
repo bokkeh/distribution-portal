@@ -4,10 +4,9 @@ import { eq } from 'drizzle-orm'
 import { requireRole } from '@/lib/auth/session'
 import { notFound } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { OrderStatusBadge } from '@/components/orders/OrderStatusBadge'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { formatOrderPaymentStatusLabel, formatStatusLabel, orderPaymentStatusVariant, orderStatusVariant, shippingStatusVariant } from '@/lib/orders/status'
 import { formatPaymentTerms } from '@/lib/orders/payment-terms'
 import { isMissingShippingStatusColumn } from '@/lib/orders/shipping-fallback'
 import { describePricingSource } from '@/lib/pricing/geographic'
@@ -137,9 +136,9 @@ export default async function CustomerOrderDetailPage({ params }: { params: Prom
           <p className="text-muted-foreground mt-1">{formatDate(order.createdAt)}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Badge variant={orderPaymentStatusVariant[order.paymentStatus] ?? 'secondary'}>{formatOrderPaymentStatusLabel(order.paymentStatus)}</Badge>
-          <Badge variant={orderStatusVariant[order.status]}>{formatStatusLabel(order.status)}</Badge>
-          <Badge variant={shippingStatusVariant[order.shippingStatus]}>{formatStatusLabel(order.shippingStatus)}</Badge>
+          <OrderStatusBadge kind="payment" status={order.paymentStatus} />
+          <OrderStatusBadge kind="order" status={order.status} />
+          <OrderStatusBadge kind="shipping" status={order.shippingStatus} />
           <form action={reorderCustomerOrder.bind(null, order.id)}>
             <Button variant="outline" size="sm" type="submit">Reorder</Button>
           </form>
@@ -152,15 +151,15 @@ export default async function CustomerOrderDetailPage({ params }: { params: Prom
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-lg border bg-slate-50 p-4">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Order Status</p>
-              <div className="mt-2"><Badge variant={orderStatusVariant[order.status]}>{formatStatusLabel(order.status)}</Badge></div>
+              <div className="mt-2"><OrderStatusBadge kind="order" status={order.status} /></div>
             </div>
             <div className="rounded-lg border bg-slate-50 p-4">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Shipping Status</p>
-              <div className="mt-2"><Badge variant={shippingStatusVariant[order.shippingStatus]}>{formatStatusLabel(order.shippingStatus)}</Badge></div>
+              <div className="mt-2"><OrderStatusBadge kind="shipping" status={order.shippingStatus} /></div>
             </div>
             <div className="rounded-lg border bg-slate-50 p-4 sm:col-span-2">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Payment Status</p>
-              <div className="mt-2"><Badge variant={orderPaymentStatusVariant[order.paymentStatus] ?? 'secondary'}>{formatOrderPaymentStatusLabel(order.paymentStatus)}</Badge></div>
+              <div className="mt-2"><OrderStatusBadge kind="payment" status={order.paymentStatus} /></div>
             </div>
             <div className="rounded-lg border bg-slate-50 p-4 sm:col-span-2">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Payment Terms</p>

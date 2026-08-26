@@ -4,11 +4,10 @@ import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { CalendarDays, CalendarCheck, ChevronRight, FileText, LayoutDashboard, LogOut, Menu, UserCircle, Wallet, X } from 'lucide-react'
-import { signOut } from 'next-auth/react'
+import { CalendarDays, CalendarCheck, ChevronRight, FileText, LayoutDashboard, Menu, Wallet, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
-import { SuperAdminViewSwitcher } from '@/components/layout/SuperAdminViewSwitcher'
+import { PortalProfileMenu } from '@/components/layout/PortalProfileMenu'
 
 type NotificationItem = {
   id: string
@@ -30,11 +29,9 @@ const navItems = [
 
 function NavLinks({
   pathname,
-  showProfile,
   onNav,
 }: {
   pathname: string
-  showProfile: boolean
   onNav?: () => void
 }) {
   return (
@@ -59,45 +56,25 @@ function NavLinks({
           </Link>
         )
       })}
-      {showProfile ? (
-        <Link
-          href="/taster/profile"
-          onClick={onNav}
-          className={cn(
-            'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-            pathname === '/taster/profile' || pathname.startsWith('/taster/profile/')
-              ? 'bg-blue-600 text-white'
-              : 'text-slate-300 hover:bg-slate-800 hover:text-white',
-          )}
-        >
-          <UserCircle className="h-4 w-4 flex-shrink-0" />
-          Profile
-          {pathname === '/taster/profile' || pathname.startsWith('/taster/profile/') ? (
-            <ChevronRight className="ml-auto h-3.5 w-3.5" />
-          ) : null}
-        </Link>
-      ) : null}
     </>
   )
 }
 
 export function TasterSidebar({
-  showViewSwitcher = false,
-  showProfile = false,
   notifications = [],
   unreadCount = 0,
+  userName,
+  userAvatarUrl,
+  canSwitchViews = false,
 }: {
-  showViewSwitcher?: boolean
-  showProfile?: boolean
   notifications?: NotificationItem[]
   unreadCount?: number
+  userName?: string | null
+  userAvatarUrl?: string | null
+  canSwitchViews?: boolean
 }) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
-
-  useEffect(() => {
-    setOpen(false)
-  }, [pathname])
 
   useEffect(() => {
     document.body.style.overflow = open ? 'hidden' : ''
@@ -145,29 +122,14 @@ export function TasterSidebar({
           </div>
 
           {/* Right: bell + profile + sign out */}
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex shrink-0 items-center gap-3">
             <NotificationBell items={notifications} unreadCount={unreadCount} dark />
-            {showProfile && (
-              <Link
-                href="/taster/profile"
-                className={cn(
-                  'rounded-md p-1.5 transition-colors',
-                  pathname.startsWith('/taster/profile')
-                    ? 'bg-blue-600 text-white'
-                    : 'text-slate-300 hover:bg-slate-800 hover:text-white',
-                )}
-                title="Profile"
-              >
-                <UserCircle className="h-5 w-5" />
-              </Link>
-            )}
-            <button
-              onClick={() => signOut({ callbackUrl: '/login' })}
-              className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
-              title="Sign Out"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
+            <PortalProfileMenu
+              userName={userName}
+              userAvatarUrl={userAvatarUrl}
+              profileHref={canSwitchViews ? '/admin/profile' : '/taster/profile'}
+              canSwitchViews={canSwitchViews}
+            />
           </div>
         </div>
       </nav>
@@ -189,6 +151,12 @@ export function TasterSidebar({
         </div>
         <div className="flex items-center gap-2">
           <NotificationBell items={notifications} unreadCount={unreadCount} dark />
+          <PortalProfileMenu
+            userName={userName}
+            userAvatarUrl={userAvatarUrl}
+            profileHref={canSwitchViews ? '/admin/profile' : '/taster/profile'}
+            canSwitchViews={canSwitchViews}
+          />
           <button
             type="button"
             onClick={() => setOpen(true)}
@@ -228,18 +196,9 @@ export function TasterSidebar({
             </div>
 
             <nav className="flex-1 space-y-1 overflow-y-auto p-4">
-              <NavLinks pathname={pathname} showProfile={showProfile} onNav={() => setOpen(false)} />
+              <NavLinks pathname={pathname} onNav={() => setOpen(false)} />
             </nav>
 
-            <div className="border-t border-slate-700 p-4">
-              <button
-                onClick={() => signOut({ callbackUrl: '/login' })}
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
-              >
-                <LogOut className="h-4 w-4" />
-                Sign Out
-              </button>
-            </div>
           </aside>
 
           <div
@@ -249,13 +208,6 @@ export function TasterSidebar({
           />
         </div>
       ) : null}
-
-      {/* Floating view switcher for super-admins */}
-      {showViewSwitcher && (
-        <div className="fixed bottom-4 left-4 z-50 w-52">
-          <SuperAdminViewSwitcher compact />
-        </div>
-      )}
     </>
   )
 }

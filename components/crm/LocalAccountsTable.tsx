@@ -17,11 +17,12 @@ import {
   useSortable,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Building2, GripVertical, Settings2, Star, X } from 'lucide-react'
+import { ArrowDown, ArrowRight, ArrowUp, ArrowUpDown, Building2, GripVertical, MapPin, Settings2, Star, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { toggleStarAccount } from '@/actions/crm'
 import { getCustomerSegmentLabel, getCustomerSourceLabel } from '@/lib/customers/account-segmentation'
+import { getBusinessTypeColor } from '@/lib/customers/business-types'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { PipelineStage } from '@/lib/deal-stages'
 import { PhoneSmsButton } from './PhoneSmsButton'
@@ -57,10 +58,18 @@ export interface AccountRow {
   totalCasesPurchased: number
   healthScore: number
   lastActivityAt: string | Date | null
+  regionName?: string | null
+  orderCount?: number
+  daysSinceLastOrder?: number | null
+  pullThroughScore?: number | null
 }
 
 const COLUMN_OPTIONS = [
-  { key: 'company', label: 'Company' },
+  { key: 'company', label: 'Name' },
+  { key: 'region', label: 'Region' },
+  { key: 'orders', label: 'Orders' },
+  { key: 'daysSinceOrder', label: 'Days Since Order' },
+  { key: 'pullThrough', label: 'Pull-Through' },
   { key: 'firstName', label: 'First Name' },
   { key: 'lastName', label: 'Last Name' },
   { key: 'location', label: 'City / State' },
@@ -69,7 +78,7 @@ const COLUMN_OPTIONS = [
   { key: 'phone', label: 'Phone' },
   { key: 'email', label: 'Email' },
   { key: 'contactName', label: 'Primary Contact' },
-  { key: 'businessType', label: 'Business Type' },
+  { key: 'businessType', label: 'Type' },
   { key: 'segment', label: 'Segment' },
   { key: 'source', label: 'Source' },
   { key: 'dealStage', label: 'Deal Stage' },
@@ -85,11 +94,14 @@ const COLUMN_OPTIONS = [
 ] as const
 
 type ColumnKey = (typeof COLUMN_OPTIONS)[number]['key']
-type SortKey = 'company' | 'dealStage' | 'salesLead' | 'lastActivity' | 'balance' | 'pendingCases' | 'totalPurchased' | 'health'
+type SortKey = ColumnKey
+type SortDirection = 'asc' | 'desc'
 type ActivityWindowKey = 'all' | '1d' | '3d' | '7d' | '14d' | '30d'
 
-const DEFAULT_COLUMNS: ColumnKey[] = ['company', 'segment', 'location', 'phone', 'dealStage', 'terms', 'pendingCases', 'totalPurchased', 'balance', 'health', 'hubspot']
-const NUMERIC_COLUMNS = new Set<ColumnKey>(['creditLimit', 'pendingCases', 'totalPurchased', 'balance', 'health'])
+const ADMIN_DEFAULT_COLUMNS: ColumnKey[] = ['company', 'phone', 'businessType', 'region', 'orders', 'daysSinceOrder', 'pullThrough']
+const STANDARD_DEFAULT_COLUMNS: ColumnKey[] = ['company', 'location', 'phone', 'dealStage', 'terms', 'pendingCases', 'totalPurchased', 'balance', 'health', 'hubspot']
+const NUMERIC_COLUMNS = new Set<ColumnKey>(['creditLimit', 'pendingCases', 'totalPurchased', 'balance', 'health', 'orders', 'daysSinceOrder', 'pullThrough'])
+const DEFAULT_DESCENDING_COLUMNS = new Set<SortKey>(['creditLimit', 'pendingCases', 'totalPurchased', 'balance', 'lastActivity', 'health', 'orders', 'pullThrough'])
 const ACTIVITY_WINDOW_OPTIONS: Array<{ value: ActivityWindowKey; label: string }> = [
   { value: 'all', label: 'Touched: Anytime' },
   { value: '1d', label: 'Touched: Yesterday' },
@@ -105,6 +117,57 @@ function normalizeDate(value: string | Date | null | undefined) {
   return Number.isNaN(parsed.getTime()) ? null : parsed
 }
 
+function getDefaultSortDirection(column: SortKey): SortDirection {
+  return DEFAULT_DESCENDING_COLUMNS.has(column) ? 'desc' : 'asc'
+}
+
+function getAccountSortValue(
+  account: AccountRow,
+  column: SortKey,
+  stageOrder: Map<string, number>,
+): string | number | null {
+  switch (column) {
+    case 'company': return account.companyName
+    case 'firstName': return account.firstName
+    case 'lastName': return account.lastName
+    case 'location': return [account.city, account.state].filter(Boolean).join(', ') || null
+    case 'address': return account.address
+    case 'zip': return account.zip
+    case 'phone': return account.phone?.replace(/\D/g, '') || null
+    case 'email': return account.email
+    case 'contactName': return account.contactName
+    case 'businessType': return account.businessType
+    case 'region': return account.regionName ?? null
+    case 'orders': return account.orderCount ?? null
+    case 'daysSinceOrder': return account.daysSinceLastOrder ?? null
+    case 'pullThrough': return account.pullThroughScore ?? null
+    case 'segment': return account.customerSegment
+    case 'source': return account.customerSource
+    case 'dealStage': return account.dealStage ? (stageOrder.get(account.dealStage) ?? Number.MAX_SAFE_INTEGER) : null
+    case 'salesLead': return account.salesLeadName ?? null
+    case 'terms': return account.paymentTerms ?? 'PREPAID'
+    case 'creditLimit': return Number(account.creditLimit ?? 0)
+    case 'pendingCases': return account.pendingCases
+    case 'totalPurchased': return account.totalCasesPurchased
+    case 'balance': return Number(account.balance ?? 0)
+    case 'lastActivity': return normalizeDate(account.lastActivityAt)?.getTime() ?? null
+    case 'hubspot': return account.hubspotCompanyId || account.hubspotContactId ? 1 : 0
+    case 'health': return account.healthScore
+  }
+}
+
+function compareSortValues(left: string | number | null, right: string | number | null, direction: SortDirection) {
+  const leftMissing = left === null || left === ''
+  const rightMissing = right === null || right === ''
+  if (leftMissing && rightMissing) return 0
+  if (leftMissing) return 1
+  if (rightMissing) return -1
+  const comparison = typeof left === 'number' && typeof right === 'number'
+    ? left - right
+    : String(left).localeCompare(String(right), undefined, { numeric: true, sensitivity: 'base' })
+  return direction === 'asc' ? comparison : -comparison
+}
+
 function getActivityThreshold(window: ActivityWindowKey) {
   if (window === 'all') return null
 
@@ -117,45 +180,54 @@ function getActivityThreshold(window: ActivityWindowKey) {
   return now
 }
 
-function readStoredColumns(storageKey: string): ColumnKey[] {
-  if (typeof window === 'undefined') return DEFAULT_COLUMNS
+function readStoredColumns(storageKey: string, defaultColumns: ColumnKey[]): ColumnKey[] {
+  if (typeof window === 'undefined') return defaultColumns
 
   try {
     const raw = window.localStorage.getItem(storageKey)
-    if (!raw) return DEFAULT_COLUMNS
+    if (!raw) return defaultColumns
     const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return DEFAULT_COLUMNS
+    if (!Array.isArray(parsed)) return defaultColumns
     const next = parsed.filter((value): value is ColumnKey =>
       COLUMN_OPTIONS.some((option) => option.key === value)
     )
-    return next.length ? next : DEFAULT_COLUMNS
+    const isPreviousDefault = defaultColumns === ADMIN_DEFAULT_COLUMNS
+      && next.length === STANDARD_DEFAULT_COLUMNS.length
+      && next.every((column, index) => column === STANDARD_DEFAULT_COLUMNS[index])
+    if (isPreviousDefault) return ADMIN_DEFAULT_COLUMNS
+    return next.length ? next : defaultColumns
   } catch {
-    return DEFAULT_COLUMNS
+    return defaultColumns
   }
 }
 
 function readStoredView(filterStorageKey: string): {
   searchQuery: string
   sortBy: SortKey
+  sortDirection: SortDirection
   activityWindow: ActivityWindowKey
 } {
   if (typeof window === 'undefined') {
-    return { searchQuery: '', sortBy: 'company', activityWindow: 'all' }
+    return { searchQuery: '', sortBy: 'company', sortDirection: 'asc', activityWindow: 'all' }
   }
 
   try {
     const raw = window.localStorage.getItem(filterStorageKey)
-    if (!raw) return { searchQuery: '', sortBy: 'company', activityWindow: 'all' }
-    const parsed = JSON.parse(raw) as { searchQuery?: string; sortBy?: SortKey; activityWindow?: ActivityWindowKey }
-    const validSortBy: SortKey[] = ['company', 'dealStage', 'salesLead', 'lastActivity', 'balance', 'pendingCases', 'totalPurchased', 'health']
+    if (!raw) return { searchQuery: '', sortBy: 'company', sortDirection: 'asc', activityWindow: 'all' }
+    const parsed = JSON.parse(raw) as { searchQuery?: string; sortBy?: SortKey; sortDirection?: SortDirection; activityWindow?: ActivityWindowKey }
+    const validSortBy = COLUMN_OPTIONS.map((option) => option.key)
     const validActivityWindows: ActivityWindowKey[] = ['all', '1d', '3d', '7d', '14d', '30d']
+    const sortBy = parsed.sortBy && validSortBy.includes(parsed.sortBy) ? parsed.sortBy : 'company'
     return {
       searchQuery: typeof parsed.searchQuery === 'string' ? parsed.searchQuery : '',
-      sortBy: parsed.sortBy && validSortBy.includes(parsed.sortBy) ? parsed.sortBy : 'company',
+      sortBy,
+      sortDirection: parsed.sortDirection === 'asc' || parsed.sortDirection === 'desc'
+        ? parsed.sortDirection
+        : getDefaultSortDirection(sortBy),
       activityWindow: parsed.activityWindow && validActivityWindows.includes(parsed.activityWindow) ? parsed.activityWindow : 'all',
     }
   } catch {
-    return { searchQuery: '', sortBy: 'company', activityWindow: 'all' }
+    return { searchQuery: '', sortBy: 'company', sortDirection: 'asc', activityWindow: 'all' }
   }
 }
 
@@ -195,13 +267,45 @@ function SortableColumnChip({
   )
 }
 
-function renderHeaderCell(column: ColumnKey) {
+function renderHeaderCell({
+  column,
+  sortBy,
+  sortDirection,
+  onSort,
+}: {
+  column: ColumnKey
+  sortBy: SortKey
+  sortDirection: SortDirection
+  onSort: (column: SortKey) => void
+}) {
   const option = COLUMN_OPTIONS.find((item) => item.key === column)
   const alignment = NUMERIC_COLUMNS.has(column) ? 'text-right' : 'text-left'
+  const isActive = sortBy === column
+  const sortLabel = isActive
+    ? `${option?.label ?? column}, sorted ${sortDirection === 'asc' ? 'ascending' : 'descending'}. Activate to sort ${sortDirection === 'asc' ? 'descending' : 'ascending'}.`
+    : `${option?.label ?? column}. Activate to sort ${getDefaultSortDirection(column) === 'asc' ? 'ascending' : 'descending'}.`
 
   return (
-    <th key={column} className={`px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground ${alignment}`}>
-      {option?.label ?? column}
+    <th
+      key={column}
+      aria-sort={isActive ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+      className={`px-2 py-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground ${alignment}`}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(column)}
+        aria-label={sortLabel}
+        className={`group inline-flex min-h-8 items-center gap-1.5 rounded-md px-2 py-1 transition-colors hover:bg-slate-200/70 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff5a00] ${
+          NUMERIC_COLUMNS.has(column) ? 'ml-auto' : ''
+        } ${isActive ? 'text-[#d94c00]' : ''}`}
+      >
+        <span>{option?.label ?? column}</span>
+        {isActive ? (
+          sortDirection === 'asc' ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />
+        ) : (
+          <ArrowUpDown className="h-3.5 w-3.5 text-slate-300 transition-colors group-hover:text-slate-500" />
+        )}
+      </button>
     </th>
   )
 }
@@ -209,21 +313,33 @@ function renderHeaderCell(column: ColumnKey) {
 function renderAccountCell({
   account,
   column,
+  basePath,
   pipelineStages,
   onStageChange,
+  regionColors,
 }: {
   account: AccountRow
   column: ColumnKey
+  basePath: string
   pipelineStages: PipelineStage[]
   onStageChange: (accountId: string, nextStage: string) => void
+  regionColors: Record<string, string>
 }) {
   switch (column) {
     case 'company':
       return (
         <td key={column} className="px-4 py-3">
-          <div className="flex items-center gap-2">
-            <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <span className="text-sm font-medium">{account.companyName}</span>
+          <div className="flex items-start gap-2">
+            <Building2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+            <div>
+            <Link
+              href={`${basePath}/${account.id}`}
+              className="text-sm font-medium text-slate-900 underline-offset-4 transition hover:text-[#ff5a00] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff5a00]"
+            >
+              {account.companyName}
+            </Link>
+              <p className="mt-0.5 max-w-72 truncate text-xs text-slate-400">{[account.address, account.city, account.state].filter(Boolean).join(', ') || 'Address not entered'}</p>
+            </div>
           </div>
         </td>
       )
@@ -252,7 +368,41 @@ function renderAccountCell({
     case 'contactName':
       return <td key={column} className="px-4 py-3 text-sm text-muted-foreground">{account.contactName ?? '-'}</td>
     case 'businessType':
-      return <td key={column} className="px-4 py-3 text-sm text-muted-foreground">{account.businessType ?? '-'}</td>
+      return (
+        <td key={column} className="px-4 py-3">
+          <Badge
+            className="rounded-full border-transparent font-mono text-[10px] uppercase tracking-[0.05em] text-white"
+            style={{ backgroundColor: getBusinessTypeColor(account.businessType) }}
+          >
+            {account.businessType?.replaceAll('_', ' ') ?? 'Unspecified'}
+          </Badge>
+        </td>
+      )
+    case 'region': {
+      const color = account.regionName ? regionColors[account.regionName] : undefined
+      return (
+        <td key={column} className="px-4 py-3 text-sm text-slate-600">
+          <span className="mr-2 inline-block h-2 w-2 rounded-full" style={{ backgroundColor: color ?? '#94A3B8' }} />
+          {account.regionName ?? '-'}
+        </td>
+      )
+    }
+    case 'orders':
+      return <td key={column} className="px-4 py-3 text-right text-sm font-semibold text-slate-900">{account.orderCount || '—'}</td>
+    case 'daysSinceOrder':
+      return <td key={column} className="px-4 py-3 text-right font-mono text-sm text-slate-700">{account.daysSinceLastOrder == null ? '—' : `${account.daysSinceLastOrder}d`}</td>
+    case 'pullThrough': {
+      const score = account.pullThroughScore
+      const tone = score == null ? 'bg-slate-300' : score >= 75 ? 'bg-emerald-500' : score >= 50 ? 'bg-amber-500' : 'bg-red-500'
+      return (
+        <td key={column} className="px-4 py-3 text-right">
+          <div className="ml-auto w-24">
+            <p className="font-mono text-sm font-bold text-slate-900">{score == null ? '—' : `${score}%`}</p>
+            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-200"><div className={`h-full rounded-full ${tone}`} style={{ width: `${score ?? 0}%` }} /></div>
+          </div>
+        </td>
+      )
+    }
     case 'segment':
       return (
         <td key={column} className="px-4 py-3">
@@ -346,6 +496,126 @@ function renderAccountCell({
   }
 }
 
+function AccountStarButton({ account, onStar }: { account: AccountRow; onStar: (id: string, val: boolean) => void }) {
+  const [pending, setPending] = useState(false)
+  const [, startTransition] = useTransition()
+
+  function handleStar() {
+    setPending(true)
+    startTransition(async () => {
+      try {
+        await toggleStarAccount(account.id, !account.starred)
+        onStar(account.id, !account.starred)
+      } finally {
+        setPending(false)
+      }
+    })
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleStar}
+      disabled={pending}
+      className="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-yellow-50 hover:text-yellow-500 disabled:opacity-50"
+      aria-label={account.starred ? `Remove ${account.companyName} from starred accounts` : `Star ${account.companyName}`}
+    >
+      <Star className="h-4 w-4" fill={account.starred ? '#facc15' : 'none'} stroke={account.starred ? '#eab308' : 'currentColor'} />
+    </button>
+  )
+}
+
+function MobileAccountCard({
+  account,
+  basePath,
+  pipelineStages,
+  onStar,
+  onStageChange,
+  regionColors,
+}: {
+  account: AccountRow
+  basePath: string
+  pipelineStages: PipelineStage[]
+  onStar: (id: string, val: boolean) => void
+  onStageChange: (accountId: string, nextStage: string) => void
+  regionColors: Record<string, string>
+}) {
+  const pullThroughTone = account.pullThroughScore == null || account.pullThroughScore < 40
+    ? 'bg-red-500'
+    : account.pullThroughScore < 75 ? 'bg-amber-500' : 'bg-emerald-500'
+  const regionColor = account.regionName ? regionColors[account.regionName] : undefined
+
+  return (
+    <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <Link href={`${basePath}/${account.id}`} className="text-base font-bold leading-tight text-slate-950 underline-offset-4 hover:text-[#d94c00] hover:underline">
+            {account.companyName}
+          </Link>
+          <p className="mt-1 flex items-start gap-1.5 text-xs text-slate-500">
+            <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>{[account.address, account.city, account.state].filter(Boolean).join(', ') || 'Address not entered'}</span>
+          </p>
+        </div>
+        <AccountStarButton account={account} onStar={onStar} />
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Badge
+            className="rounded-full border-transparent font-mono text-[10px] uppercase tracking-[0.05em] text-white"
+            style={{ backgroundColor: getBusinessTypeColor(account.businessType) }}
+          >
+            {account.businessType?.replaceAll('_', ' ') ?? 'Unspecified'}
+          </Badge>
+          {account.regionName ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-medium text-slate-600">
+              <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: regionColor ?? '#94A3B8' }} />
+              {account.regionName}
+            </span>
+          ) : null}
+        </div>
+        {account.phone ? <PhoneSmsButton phone={account.phone} recipientName={account.companyName} /> : <span className="text-xs text-slate-400">No phone</span>}
+      </div>
+
+      <div className="mt-4 grid grid-cols-3 gap-2 rounded-xl bg-[#f4f1ed] p-3 text-center">
+        <div><p className="font-mono text-base font-bold text-slate-950">{account.orderCount ?? 0}</p><p className="text-[10px] uppercase tracking-wide text-slate-500">Orders</p></div>
+        <div className="border-x border-slate-200"><p className="font-mono text-base font-bold text-slate-950">{account.daysSinceLastOrder == null ? '—' : `${account.daysSinceLastOrder}d`}</p><p className="text-[10px] uppercase tracking-wide text-slate-500">Since order</p></div>
+        <div><p className="font-mono text-base font-bold text-slate-950">{account.pullThroughScore == null ? '—' : `${account.pullThroughScore}%`}</p><p className="text-[10px] uppercase tracking-wide text-slate-500">Pull-through</p></div>
+      </div>
+
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200"><div className={`h-full rounded-full ${pullThroughTone}`} style={{ width: `${account.pullThroughScore ?? 0}%` }} /></div>
+
+      <div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+        <DealStageSelect accountId={account.id} currentStage={account.dealStage} stages={pipelineStages} size="sm" onStageChange={(nextStage) => onStageChange(account.id, nextStage)} />
+        <Button asChild variant="outline" size="sm" className="gap-1.5"><Link href={`${basePath}/${account.id}`}>View <ArrowRight className="h-3.5 w-3.5" /></Link></Button>
+      </div>
+    </article>
+  )
+}
+
+function MobileAccountList({
+  accounts,
+  basePath,
+  pipelineStages,
+  onStar,
+  onStageChange,
+  regionColors,
+}: {
+  accounts: AccountRow[]
+  basePath: string
+  pipelineStages: PipelineStage[]
+  onStar: (id: string, val: boolean) => void
+  onStageChange: (accountId: string, nextStage: string) => void
+  regionColors: Record<string, string>
+}) {
+  return (
+    <div className="space-y-3 p-3 md:hidden">
+      {accounts.map((account) => <MobileAccountCard key={account.id} account={account} basePath={basePath} pipelineStages={pipelineStages} onStar={onStar} onStageChange={onStageChange} regionColors={regionColors} />)}
+    </div>
+  )
+}
+
 function AccountTable({
   accounts,
   onStar,
@@ -353,6 +623,10 @@ function AccountTable({
   basePath = '/admin/crm',
   visibleColumns,
   pipelineStages,
+  sortBy,
+  sortDirection,
+  onSort,
+  regionColors,
 }: {
   accounts: AccountRow[]
   onStar: (id: string, val: boolean) => void
@@ -360,27 +634,20 @@ function AccountTable({
   basePath?: string
   visibleColumns: ColumnKey[]
   pipelineStages: PipelineStage[]
+  sortBy: SortKey
+  sortDirection: SortDirection
+  onSort: (column: SortKey) => void
+  regionColors: Record<string, string>
 }) {
-  const [pending, setPending] = useState<string | null>(null)
-  const [, startTransition] = useTransition()
-
-  function handleStar(id: string, current: boolean) {
-    setPending(id)
-    startTransition(async () => {
-      await toggleStarAccount(id, !current)
-      onStar(id, !current)
-      setPending(null)
-    })
-  }
-
   if (accounts.length === 0) return null
 
   return (
+    <div className="hidden overflow-x-auto md:block">
     <table className="w-full">
       <thead className="border-b bg-slate-50">
         <tr>
           <th className="w-8 px-4 py-3" />
-          {visibleColumns.map((column) => renderHeaderCell(column))}
+          {visibleColumns.map((column) => renderHeaderCell({ column, sortBy, sortDirection, onSort }))}
           <th className="px-4 py-3" />
         </tr>
       </thead>
@@ -388,20 +655,9 @@ function AccountTable({
         {accounts.map((account) => (
           <tr key={account.id} className="transition-colors hover:bg-slate-50">
             <td className="px-4 py-3">
-              <button
-                type="button"
-                onClick={() => handleStar(account.id, account.starred)}
-                disabled={pending === account.id}
-                className="text-muted-foreground transition-colors hover:text-yellow-400 disabled:opacity-50"
-              >
-                <Star
-                  className="h-4 w-4"
-                  fill={account.starred ? '#facc15' : 'none'}
-                  stroke={account.starred ? '#eab308' : 'currentColor'}
-                />
-              </button>
+              <AccountStarButton account={account} onStar={onStar} />
             </td>
-            {visibleColumns.map((column) => renderAccountCell({ account, column, pipelineStages, onStageChange }))}
+            {visibleColumns.map((column) => renderAccountCell({ account, column, basePath, pipelineStages, onStageChange, regionColors }))}
             <td className="px-4 py-3">
               <Link href={`${basePath}/${account.id}`}>
                 <Button variant="ghost" size="sm">View</Button>
@@ -411,6 +667,7 @@ function AccountTable({
         ))}
       </tbody>
     </table>
+    </div>
   )
 }
 
@@ -419,20 +676,26 @@ export function LocalAccountsTable({
   basePath = '/admin/crm',
   userId,
   pipelineStages,
+  regionColors = {},
 }: {
   initialAccounts: AccountRow[]
   basePath?: string
   userId: string
   pipelineStages: PipelineStage[]
+  regionColors?: Record<string, string>
 }) {
   const [accounts, setAccounts] = useState<AccountRow[]>(initialAccounts)
   const [showColumnPicker, setShowColumnPicker] = useState(false)
-  const storageKey = useMemo(() => `crm-columns:${userId}:${basePath}`, [userId, basePath])
+  const isAdminCrm = basePath === '/admin/crm'
+  const storageKey = useMemo(() => isAdminCrm ? `crm-columns:v3:${userId}:${basePath}` : `crm-columns:${userId}:${basePath}`, [basePath, isAdminCrm, userId])
+  const defaultColumns = isAdminCrm ? ADMIN_DEFAULT_COLUMNS : STANDARD_DEFAULT_COLUMNS
   const filterStorageKey = useMemo(() => `crm-view:${userId}:${basePath}`, [userId, basePath])
-  const [selectedColumns, setSelectedColumns] = useState<ColumnKey[]>(() => readStoredColumns(storageKey))
-  const [searchQuery, setSearchQuery] = useState(() => readStoredView(filterStorageKey).searchQuery)
-  const [sortBy, setSortBy] = useState<SortKey>(() => readStoredView(filterStorageKey).sortBy)
-  const [activityWindow, setActivityWindow] = useState<ActivityWindowKey>(() => readStoredView(filterStorageKey).activityWindow)
+  const [selectedColumns, setSelectedColumns] = useState<ColumnKey[]>(defaultColumns)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [sortBy, setSortBy] = useState<SortKey>('company')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
+  const [activityWindow, setActivityWindow] = useState<ActivityWindowKey>('all')
+  const [storageReady, setStorageReady] = useState(false)
   const [page, setPage] = useState(1)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
 
@@ -441,20 +704,32 @@ export function LocalAccountsTable({
   }, [initialAccounts])
 
   useEffect(() => {
-    setPage(1)
-  }, [activityWindow, initialAccounts, searchQuery, sortBy])
+    const storedView = readStoredView(filterStorageKey)
+    setSelectedColumns(readStoredColumns(storageKey, defaultColumns))
+    setSearchQuery(storedView.searchQuery)
+    setSortBy(storedView.sortBy)
+    setSortDirection(storedView.sortDirection)
+    setActivityWindow(storedView.activityWindow)
+    setStorageReady(true)
+  }, [defaultColumns, filterStorageKey, storageKey])
 
   useEffect(() => {
+    setPage(1)
+  }, [activityWindow, initialAccounts, searchQuery, sortBy, sortDirection])
+
+  useEffect(() => {
+    if (!storageReady) return
     try {
       window.localStorage.setItem(storageKey, JSON.stringify(selectedColumns))
     } catch {}
-  }, [storageKey, selectedColumns])
+  }, [selectedColumns, storageKey, storageReady])
 
   useEffect(() => {
+    if (!storageReady) return
     try {
-      window.localStorage.setItem(filterStorageKey, JSON.stringify({ searchQuery, sortBy, activityWindow }))
+      window.localStorage.setItem(filterStorageKey, JSON.stringify({ searchQuery, sortBy, sortDirection, activityWindow }))
     } catch {}
-  }, [activityWindow, filterStorageKey, searchQuery, sortBy])
+  }, [activityWindow, filterStorageKey, searchQuery, sortBy, sortDirection, storageReady])
 
   function handleStar(id: string, val: boolean) {
     setAccounts((prev) => prev.map((account) => account.id === id ? { ...account, starred: val } : account))
@@ -487,6 +762,16 @@ export function LocalAccountsTable({
     })
   }
 
+  function handleSort(column: SortKey) {
+    if (sortBy === column) {
+      setSortDirection((current) => current === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortBy(column)
+      setSortDirection(getDefaultSortDirection(column))
+    }
+    setPage(1)
+  }
+
   const normalizedQuery = searchQuery.trim().toLowerCase()
   const activityThreshold = getActivityThreshold(activityWindow)
   const filteredAccounts = accounts.filter((account) => {
@@ -506,6 +791,7 @@ export function LocalAccountsTable({
       account.customerSource,
       account.paymentTerms,
       account.salesLeadName,
+      account.regionName,
     ].some((value) => String(value ?? '').toLowerCase().includes(normalizedQuery))
     if (!matchesSearch) return false
 
@@ -516,26 +802,11 @@ export function LocalAccountsTable({
 
   const stageOrder = new Map(pipelineStages.map((stage, index) => [stage.stageKey, index]))
   const sortedAccounts = [...filteredAccounts].sort((left, right) => {
-    if (sortBy === 'dealStage') {
-      const leftIndex = left.dealStage ? (stageOrder.get(left.dealStage) ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER
-      const rightIndex = right.dealStage ? (stageOrder.get(right.dealStage) ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER
-      if (leftIndex !== rightIndex) return leftIndex - rightIndex
-      return left.companyName.localeCompare(right.companyName)
-    }
-    if (sortBy === 'salesLead') {
-      return (left.salesLeadName ?? '').localeCompare(right.salesLeadName ?? '') || left.companyName.localeCompare(right.companyName)
-    }
-    if (sortBy === 'lastActivity') {
-      const leftTime = normalizeDate(left.lastActivityAt)?.getTime() ?? 0
-      const rightTime = normalizeDate(right.lastActivityAt)?.getTime() ?? 0
-      if (leftTime !== rightTime) return rightTime - leftTime
-      return left.companyName.localeCompare(right.companyName)
-    }
-    if (sortBy === 'balance') return Number(right.balance ?? 0) - Number(left.balance ?? 0)
-    if (sortBy === 'pendingCases') return right.pendingCases - left.pendingCases
-    if (sortBy === 'totalPurchased') return right.totalCasesPurchased - left.totalCasesPurchased
-    if (sortBy === 'health') return right.healthScore - left.healthScore
-    return left.companyName.localeCompare(right.companyName)
+    const leftValue = getAccountSortValue(left, sortBy, stageOrder)
+    const rightValue = getAccountSortValue(right, sortBy, stageOrder)
+    const comparison = compareSortValues(leftValue, rightValue, sortDirection)
+    if (comparison !== 0) return comparison
+    return left.companyName.localeCompare(right.companyName, undefined, { numeric: true, sensitivity: 'base' })
   })
 
   const totalPages = Math.max(1, Math.ceil(sortedAccounts.length / PAGE_SIZE))
@@ -554,13 +825,13 @@ export function LocalAccountsTable({
   const pageNumbers = Array.from({ length: pageNumberEnd - safePageStart + 1 }, (_, index) => safePageStart + index)
 
   return (
-    <div className="overflow-x-auto">
-      <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+    <div>
+      <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:py-3">
         <div>
-          <p className="text-sm font-medium text-slate-900">Visible Columns</p>
-          <p className="text-xs text-slate-500">Saved to your login only.</p>
+          <p className="text-sm font-semibold text-slate-900">Company accounts</p>
+          <p className="text-xs text-slate-500">Live CRM and pull-through data.</p>
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end">
           <input
             type="search"
             value={searchQuery}
@@ -569,24 +840,22 @@ export function LocalAccountsTable({
               setPage(1)
             }}
             placeholder="Search accounts"
-            className="h-9 min-w-[220px] rounded-md border border-input bg-white px-3 text-sm"
+            className="col-span-2 h-10 w-full rounded-md border border-input bg-white px-3 text-sm sm:h-9 sm:min-w-[220px] sm:w-auto"
           />
           <select
             value={sortBy}
             onChange={(event) => {
-              setSortBy(event.target.value as SortKey)
+              const nextSort = event.target.value as SortKey
+              setSortBy(nextSort)
+              setSortDirection(getDefaultSortDirection(nextSort))
               setPage(1)
             }}
-            className="h-9 rounded-md border border-input bg-white px-3 text-sm"
+            className="h-10 min-w-0 rounded-md border border-input bg-white px-2 text-sm sm:h-9 sm:px-3"
+            aria-label="Sort accounts"
           >
-            <option value="company">Sort: Company</option>
-            <option value="dealStage">Sort: Deal Stage</option>
-            <option value="salesLead">Sort: Sales Lead</option>
-            <option value="lastActivity">Sort: Last Activity</option>
-            <option value="balance">Sort: Balance</option>
-            <option value="pendingCases">Sort: Pending Cases</option>
-            <option value="totalPurchased">Sort: Total Purchased</option>
-            <option value="health">Sort: Health Score</option>
+            {COLUMN_OPTIONS.map((option) => (
+              <option key={option.key} value={option.key}>Sort: {option.label}</option>
+            ))}
           </select>
           <select
             value={activityWindow}
@@ -594,7 +863,7 @@ export function LocalAccountsTable({
               setActivityWindow(event.target.value as ActivityWindowKey)
               setPage(1)
             }}
-            className="h-9 rounded-md border border-input bg-white px-3 text-sm"
+            className="h-10 min-w-0 rounded-md border border-input bg-white px-2 text-sm sm:h-9 sm:px-3"
           >
             {ACTIVITY_WINDOW_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -602,13 +871,13 @@ export function LocalAccountsTable({
               </option>
             ))}
           </select>
-          <div className="relative">
-            <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => setShowColumnPicker((prev) => !prev)}>
+          <div className="relative col-span-2 sm:col-span-1">
+            <Button type="button" variant="outline" size="sm" className="h-10 w-full gap-2 sm:h-9 sm:w-auto" onClick={() => setShowColumnPicker((prev) => !prev)}>
               <Settings2 className="h-4 w-4" />
               Customize Columns
             </Button>
             {showColumnPicker ? (
-              <div className="absolute right-0 z-10 mt-2 w-[340px] rounded-xl border border-slate-200 bg-white shadow-lg">
+              <div className="absolute right-0 z-20 mt-2 w-[min(340px,calc(100vw-2rem))] max-h-[70vh] overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl">
                 <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
                   <div>
                     <p className="text-xs font-semibold text-slate-700">Show / Hide Columns</p>
@@ -682,7 +951,8 @@ export function LocalAccountsTable({
             <Star className="h-3.5 w-3.5 fill-yellow-400 stroke-yellow-500" />
             Starred Accounts ({starred.length})
           </div>
-          <AccountTable accounts={starred} onStar={handleStar} onStageChange={handleStageChange} basePath={basePath} visibleColumns={selectedColumns} pipelineStages={pipelineStages} />
+          <MobileAccountList accounts={starred} onStar={handleStar} onStageChange={handleStageChange} basePath={basePath} pipelineStages={pipelineStages} regionColors={regionColors} />
+          <AccountTable accounts={starred} onStar={handleStar} onStageChange={handleStageChange} basePath={basePath} visibleColumns={selectedColumns} pipelineStages={pipelineStages} sortBy={sortBy} sortDirection={sortDirection} onSort={handleSort} regionColors={regionColors} />
         </div>
       ) : null}
 
@@ -691,7 +961,10 @@ export function LocalAccountsTable({
           No accounts yet. Import from HubSpot or add manually.
         </div>
       ) : rest.length > 0 ? (
-        <AccountTable accounts={rest} onStar={handleStar} onStageChange={handleStageChange} basePath={basePath} visibleColumns={selectedColumns} pipelineStages={pipelineStages} />
+        <>
+          <MobileAccountList accounts={rest} onStar={handleStar} onStageChange={handleStageChange} basePath={basePath} pipelineStages={pipelineStages} regionColors={regionColors} />
+          <AccountTable accounts={rest} onStar={handleStar} onStageChange={handleStageChange} basePath={basePath} visibleColumns={selectedColumns} pipelineStages={pipelineStages} sortBy={sortBy} sortDirection={sortDirection} onSort={handleSort} regionColors={regionColors} />
+        </>
       ) : null}
       {sortedAccounts.length > PAGE_SIZE ? (
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-sm text-slate-500">

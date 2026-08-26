@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { EmptyState } from '@/components/ui/empty-state'
 import { formatPromotionCategory, formatPromotionOrderStatus, promotionStatusBadgeVariant } from '@/lib/promotions'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { CustomerRecordLink } from '@/components/crm/CustomerRecordLink'
 
 export default async function AdminPromotionCatalogPage() {
   const data = await getPromotionCatalogAdminData()
@@ -102,7 +103,9 @@ export default async function AdminPromotionCatalogPage() {
                 <tbody>
                   {orders.map((order) => (
                     <tr key={order.id} className="border-b border-slate-100 align-top">
-                      <td className="px-3 py-3 font-medium text-slate-900">{order.accountName}</td>
+                      <td className="px-3 py-3 font-medium text-slate-900">
+                        <CustomerRecordLink accountId={order.accountId} name={order.accountName} />
+                      </td>
                       <td className="px-3 py-3 text-slate-700">{order.itemTitle}</td>
                       <td className="px-3 py-3 text-slate-700">{order.quantity}</td>
                       <td className="px-3 py-3 text-slate-700">{formatCurrency(order.totalPrice)}</td>

@@ -27,6 +27,7 @@ export function CRMEntityMergeCard({
   sourceName,
   targetName,
   previewFields,
+  defaultExpanded = false,
 }: {
   title: string
   description: string
@@ -37,9 +38,10 @@ export function CRMEntityMergeCard({
   sourceName: string
   targetName: string
   previewFields?: PreviewField[]
+  defaultExpanded?: boolean
 }) {
   const [isPending, startTransition] = useTransition()
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(defaultExpanded)
   const [sourceId, setSourceId] = useState('')
   const [targetId, setTargetId] = useState('')
   const submitRef = useRef<HTMLButtonElement>(null)

@@ -21,7 +21,8 @@ type ReportRecord = {
   missedCustomers: number | null
   consumerInteractions: number | null
   bottlePriceOnShelf: string | null
-  bottlesInStock: number | null
+  bottlesInStockBefore: number | null
+  bottlesInStockAfter: number | null
   accountFeedback: string | null
   highlights: string | null
   issues: string | null
@@ -257,7 +258,7 @@ export function TastingReportFormCard({
             </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-2">
               <Label htmlFor="bottlePriceOnShelf">Bottle Price On Shelf</Label>
               <Input
@@ -272,10 +273,35 @@ export function TastingReportFormCard({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="bottlesInStock">Number Of Bottles In Stock</Label>
-              <Input id="bottlesInStock" name="bottlesInStock" type="number" min="0" defaultValue={activeReport?.bottlesInStock ?? ''} />
+              <Label htmlFor="bottlesInStockBefore">Bottles In Stock Before Tasting *</Label>
+              <Input
+                id="bottlesInStockBefore"
+                name="bottlesInStockBefore"
+                type="number"
+                inputMode="numeric"
+                min="0"
+                required
+                defaultValue={activeReport?.bottlesInStockBefore ?? ''}
+                placeholder="Count before setup"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="bottlesInStockAfter">Bottles In Stock After Tasting *</Label>
+              <Input
+                id="bottlesInStockAfter"
+                name="bottlesInStockAfter"
+                type="number"
+                inputMode="numeric"
+                min="0"
+                required
+                defaultValue={activeReport?.bottlesInStockAfter ?? ''}
+                placeholder="Count after event"
+              />
             </div>
           </div>
+          <p className="-mt-2 text-xs text-muted-foreground">
+            Count the store&apos;s Wisher bottles before setup and again when the tasting ends.
+          </p>
 
           <div className="space-y-2">
             <Label htmlFor="accountFeedback">Store Feedback</Label>

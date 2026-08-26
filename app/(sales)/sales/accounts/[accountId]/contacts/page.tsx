@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { eq } from 'drizzle-orm'
+import { asc, desc, eq } from 'drizzle-orm'
 import { ArrowLeft } from 'lucide-react'
 import { requireRole } from '@/lib/auth/session'
 import { db } from '@/db'
@@ -46,7 +46,11 @@ export default async function SalesContactsPage({
     }
   }
 
-  const accountContacts = await db.select().from(contacts).where(eq(contacts.customerId, accountId))
+  const accountContacts = await db
+    .select()
+    .from(contacts)
+    .where(eq(contacts.customerId, accountId))
+    .orderBy(desc(contacts.isPrimary), asc(contacts.name), asc(contacts.createdAt))
 
   return (
     <div className="p-4 sm:p-8 space-y-6">
