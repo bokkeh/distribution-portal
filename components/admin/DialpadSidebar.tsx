@@ -15,11 +15,14 @@ const KEYS = [
 type Tab = 'sms' | 'call'
 type CallStatus = 'idle' | 'calling' | 'connected' | 'ended' | 'error'
 
-export function DialpadButton({ onClick }: { onClick: () => void }) {
+export function DialpadButton({ onClick, dark = false }: { onClick: () => void; dark?: boolean }) {
   return (
     <button
       onClick={onClick}
-      className="relative rounded-xl px-2 py-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+      className={cn(
+        'relative rounded-xl px-2 py-2 transition-colors',
+        dark ? 'text-slate-300 hover:bg-white/10 hover:text-white' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900',
+      )}
       aria-label="Open dialpad"
     >
       <Phone className="w-5 h-5" />

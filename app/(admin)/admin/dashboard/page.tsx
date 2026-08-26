@@ -1,5 +1,6 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
+import { CustomerRecordLink } from '@/components/crm/CustomerRecordLink'
 import { eq, sql, desc, and, ne, inArray, gte, lte } from 'drizzle-orm'
 import { DollarSign, ShoppingCart, Users, MessageSquare, AlertTriangle, HeartPulse, Truck, Wine } from 'lucide-react'
 import { db } from '@/db'
@@ -429,7 +430,11 @@ export default async function AdminDashboard({
                     }`}>
                       {index + 1}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-900">{account.companyName}</span>
+                    <CustomerRecordLink
+                      accountId={account.customerId}
+                      name={account.companyName}
+                      className="min-w-0 flex-1 truncate text-sm font-medium text-slate-900"
+                    />
                     <span className="shrink-0 text-sm font-semibold text-slate-700">{formatCurrency(account.total ?? '0')}</span>
                   </div>
                 ))}

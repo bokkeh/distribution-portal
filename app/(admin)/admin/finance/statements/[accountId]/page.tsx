@@ -5,6 +5,7 @@ import { customerAccounts, invoices } from '@/db/schema'
 import { requireFeature } from '@/lib/auth/session'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { CustomerRecordLink } from '@/components/crm/CustomerRecordLink'
 
 export default async function FinanceStatementDetailPage({
   params,
@@ -38,7 +39,9 @@ export default async function FinanceStatementDetailPage({
   return (
     <div className="space-y-6 p-4 sm:p-8">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">{account.companyName}</h1>
+        <h1 className="text-2xl font-bold text-slate-900">
+          <CustomerRecordLink accountId={account.id} name={account.companyName} />
+        </h1>
         <p className="mt-1 text-muted-foreground">Statement view for customer balances and invoice history.</p>
       </div>
 

@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState, useTransition } from 'react'
+import Link from 'next/link'
 import { Building2, Download, Globe, Pencil, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -294,12 +295,22 @@ export function HubSpotCompaniesTab({ companies: initialCompanies, importedIds, 
               </tr>
             ) : filtered.map(company => {
               const isImported = imported.has(company.id)
+              const localAccountId = localAccountIds.get(company.id)
               return (
                 <tr key={company.id} className="transition-colors hover:bg-slate-50">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
                       <Building2 className="h-4 w-4 shrink-0 text-orange-500" />
-                      <span className="text-sm font-medium">{company.name}</span>
+                      {localAccountId ? (
+                        <Link
+                          href={`/admin/crm/${localAccountId}`}
+                          className="text-sm font-medium text-slate-900 underline-offset-4 transition hover:text-[#ff5a00] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff5a00]"
+                        >
+                          {company.name}
+                        </Link>
+                      ) : (
+                        <span className="text-sm font-medium">{company.name}</span>
+                      )}
                     </div>
                   </td>
                   <td className="px-6 py-4 text-sm text-muted-foreground">

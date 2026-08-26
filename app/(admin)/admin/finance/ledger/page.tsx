@@ -6,6 +6,7 @@ import { requireFeature } from '@/lib/auth/session'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { CustomerRecordLink } from '@/components/crm/CustomerRecordLink'
 
 type LedgerRow = {
   id: string
@@ -13,6 +14,7 @@ type LedgerRow = {
   type: string
   reference: string
   counterparty: string
+  accountId: string | null
   amount: number
   detail: string
   href: string
@@ -29,6 +31,7 @@ export default async function FinanceLedgerPage() {
         invoiceNumber: invoices.invoiceNumber,
         total: invoices.total,
         status: invoices.status,
+        customerId: invoices.customerId,
         companyName: customerAccounts.companyName,
       })
       .from(invoices)
@@ -69,6 +72,7 @@ export default async function FinanceLedgerPage() {
       type: row.status === 'paid' ? 'Invoice paid' : 'Invoice issued',
       reference: row.invoiceNumber,
       counterparty: row.companyName ?? 'Customer',
+      accountId: row.customerId,
       amount: Number(row.total),
       detail: row.status === 'paid' ? 'Customer payment cleared' : 'Customer invoice created',
       href: `/admin/invoicing/${row.id}`,
@@ -79,6 +83,7 @@ export default async function FinanceLedgerPage() {
       type: 'Journal entry',
       reference: row.reference ?? 'Manual entry',
       counterparty: row.createdByName ?? 'System',
+      accountId: null,
       amount: 0,
       detail: row.description,
       href: '/admin/accounts/journal',
@@ -93,6 +98,7 @@ export default async function FinanceLedgerPage() {
         type: row.kind === 'taster_invoice_paid' ? 'Taster payout' : row.kind === 'taster_invoice_payout_failed' ? 'Payout failure' : 'Invoice adjustment',
         reference,
         counterparty: row.title,
+        accountId: null,
         amount,
         detail: row.body ?? row.title,
         href: '/admin/invoicing',
@@ -135,7 +141,9 @@ export default async function FinanceLedgerPage() {
                   <td className="px-6 py-4 text-sm">{formatDate(row.date)}</td>
                   <td className="px-6 py-4 text-sm font-medium">{row.type}</td>
                   <td className="px-6 py-4 text-sm"><Link className="text-blue-600 hover:underline" href={row.href}>{row.reference}</Link></td>
-                  <td className="px-6 py-4 text-sm">{row.counterparty}</td>
+                  <td className="px-6 py-4 text-sm">
+                    <CustomerRecordLink accountId={row.accountId} name={row.counterparty} />
+                  </td>
                   <td className="px-6 py-4 text-sm text-muted-foreground">{row.detail}</td>
                   <td className="px-6 py-4 text-right text-sm font-semibold">{row.amount ? formatCurrency(row.amount) : '—'}</td>
                 </tr>

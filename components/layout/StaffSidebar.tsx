@@ -6,14 +6,13 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, ShoppingCart, Building2, Package,
-  LogOut, ChevronRight, Menu, X, UserCircle, CalendarDays, MessageSquare, FileText, Gauge,
+  ChevronRight, Menu, X, CalendarDays, MessageSquare, FileText, Gauge,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { signOut } from 'next-auth/react'
-import { SuperAdminViewSwitcher } from './SuperAdminViewSwitcher'
 import type { FeatureKey } from '@/lib/users/features'
 import { hasFeature } from '@/lib/users/features'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
+import { PortalProfileMenu } from '@/components/layout/PortalProfileMenu'
 
 const navItems = [
   { href: '/staff/dashboard', label: 'Dashboard', icon: LayoutDashboard, feature: 'dashboard' },
@@ -25,7 +24,6 @@ const navItems = [
   { href: '/staff/inventory', label: 'Inventory', icon: Package, feature: 'inventory' },
   { href: '/staff/sample-inventory', label: 'Sample Inventory', icon: Package, feature: 'inventory' },
   { href: '/staff/tastings',  label: 'Tastings',  icon: CalendarDays, feature: 'tastings' },
-  { href: '/staff/profile',   label: 'My Profile', icon: UserCircle, feature: 'profile' },
 ]
 
 function NavLinks({
@@ -66,22 +64,24 @@ function NavLinks({
 }
 
 export default function StaffSidebar({
-  showViewSwitcher = false,
   featureFlags = [],
   roles = [],
   notifications = [],
   unreadCount = 0,
+  userName,
+  userAvatarUrl,
+  canSwitchViews = false,
 }: {
-  showViewSwitcher?: boolean
   featureFlags?: string[]
   roles?: string[]
   notifications?: Array<{ id: string; kind: string; title: string; body: string; href: string | null; readAt: string | Date | null; createdAt: string | Date }>
   unreadCount?: number
+  userName?: string | null
+  userAvatarUrl?: string | null
+  canSwitchViews?: boolean
 }) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
-
-  useEffect(() => { setOpen(false) }, [pathname])
 
   useEffect(() => {
     document.body.style.overflow = open ? 'hidden' : ''
@@ -108,15 +108,6 @@ export default function StaffSidebar({
         <nav className="flex-1 p-4 space-y-1">
           <NavLinks pathname={pathname} featureFlags={featureFlags} roles={roles} />
         </nav>
-        <div className="p-4 border-t border-slate-700">
-          {showViewSwitcher && <div className="mb-4"><SuperAdminViewSwitcher compact /></div>}
-          <button
-            onClick={() => signOut({ callbackUrl: '/login' })}
-            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
-          >
-            <LogOut className="w-4 h-4" /> Sign Out
-          </button>
-        </div>
       </aside>
 
       {/* ── Mobile top bar ──────────────────────────────────── */}
@@ -131,6 +122,12 @@ export default function StaffSidebar({
         </div>
         <div className="flex items-center gap-2">
           <NotificationBell items={notifications} unreadCount={unreadCount} dark />
+          <PortalProfileMenu
+            userName={userName}
+            userAvatarUrl={userAvatarUrl}
+            profileHref={canSwitchViews ? '/admin/profile' : '/staff/profile'}
+            canSwitchViews={canSwitchViews}
+          />
           <button
             onClick={() => setOpen(true)}
             className="p-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
@@ -167,15 +164,6 @@ export default function StaffSidebar({
               <NavLinks pathname={pathname} featureFlags={featureFlags} roles={roles} onNav={() => setOpen(false)} />
             </nav>
 
-            <div className="p-4 border-t border-slate-700">
-              {showViewSwitcher && <div className="mb-4"><SuperAdminViewSwitcher compact /></div>}
-              <button
-                onClick={() => signOut({ callbackUrl: '/login' })}
-                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
-              >
-                <LogOut className="w-4 h-4" /> Sign Out
-              </button>
-            </div>
           </aside>
 
           <div

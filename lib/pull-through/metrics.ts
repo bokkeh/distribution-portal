@@ -57,7 +57,7 @@ function clamp(value: number, min: number, max: number) {
 }
 
 export function reorderFrequencyLabel(avgDays: number | null) {
-  if (avgDays == null) return null
+  if (avgDays == null || avgDays <= 0) return null
   if (avgDays <= 10) return 'Weekly'
   if (avgDays <= 18) return 'Biweekly'
   if (avgDays <= 45) return 'Monthly'
@@ -391,6 +391,15 @@ export function deriveTemperature(
     return { temperature: 'new', why }
   }
 
+  // Every order landed on the same day (split POs, or a backfilled import). There is
+  // an order count but no interval, so there is no cadence to measure against.
+  if (avgDaysBetweenOrders <= 0) {
+    why.push(`${totalOrders} orders all recorded on the same day — no interval to measure`)
+    if (daysSinceLastOrder != null) why.push(`${daysSinceLastOrder} days since that order`)
+    why.push('A second order on a later date will establish the reorder pattern')
+    return { temperature: 'new', why }
+  }
+
   const ratio = daysSinceLastOrder != null ? daysSinceLastOrder / avgDaysBetweenOrders : null
   const cadence = `Averages a reorder every ${Math.round(avgDaysBetweenOrders)} days`
 
@@ -436,7 +445,7 @@ export function computePullThroughScore(
 ): PullThroughScore {
   const components: ScoreComponent[] = []
 
-  if (orders.totalOrders >= 2 && orders.avgDaysBetweenOrders != null) {
+  if (orders.totalOrders >= 2 && orders.avgDaysBetweenOrders != null && orders.avgDaysBetweenOrders > 0) {
     const depth = clamp(orders.reorderCount / 4, 0, 1)
     const regularity =
       orders.orderGapStdDevDays != null && orders.avgDaysBetweenOrders > 0
@@ -546,6 +555,7 @@ export function recommendAction(
 
   const dueForReorder =
     orders.avgDaysBetweenOrders != null &&
+    orders.avgDaysBetweenOrders > 0 &&
     orders.daysSinceLastOrder != null &&
     orders.daysSinceLastOrder >= orders.avgDaysBetweenOrders * 0.85
 
@@ -602,6 +612,7 @@ export function recommendAction(
   // 4. Overdue against their own cadence.
   if (
     orders.avgDaysBetweenOrders != null &&
+    orders.avgDaysBetweenOrders > 0 &&
     orders.daysSinceLastOrder != null &&
     orders.daysSinceLastOrder > orders.avgDaysBetweenOrders * 1.25
   ) {
@@ -638,6 +649,7 @@ export function recommendAction(
     inventory.bottles != null &&
     inventory.bottles > 0 &&
     orders.avgDaysBetweenOrders != null &&
+    orders.avgDaysBetweenOrders > 0 &&
     inventory.estimatedDaysOfInventory != null &&
     inventory.estimatedDaysOfInventory > orders.avgDaysBetweenOrders
   ) {
@@ -653,7 +665,7 @@ export function recommendAction(
   }
 
   why.push('Ordering on pattern with stock on hand')
-  if (orders.daysSinceLastOrder != null && orders.avgDaysBetweenOrders != null) {
+  if (orders.daysSinceLastOrder != null && orders.avgDaysBetweenOrders != null && orders.avgDaysBetweenOrders > 0) {
     why.push(`Day ${orders.daysSinceLastOrder} of a ${Math.round(orders.avgDaysBetweenOrders)}-day cycle`)
   }
   return { key: 'no_action', label: 'NO ACTION', urgency: 'none', why }

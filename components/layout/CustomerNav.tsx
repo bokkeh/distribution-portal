@@ -4,13 +4,13 @@ import { useEffect } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Package, ShoppingCart, FileText, User, LogOut, Star } from 'lucide-react'
+import { LayoutDashboard, Package, ShoppingCart, FileText, Star } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { signOut } from 'next-auth/react'
 import { useCart } from '@/hooks/useCart'
 import type { FeatureKey } from '@/lib/users/features'
 import { hasFeature } from '@/lib/users/features'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
+import { PortalProfileMenu } from '@/components/layout/PortalProfileMenu'
 
 const navItems = [
   { href: '/customer/dashboard', label: 'Dashboard', icon: LayoutDashboard, feature: 'dashboard' },
@@ -18,7 +18,6 @@ const navItems = [
   { href: '/customer/promotion-catalog', label: 'Promotion Catalog', icon: Star, feature: 'promotions' },
   { href: '/customer/orders', label: 'My Orders', icon: ShoppingCart, feature: 'orders' },
   { href: '/customer/invoices', label: 'Invoices', icon: FileText, feature: 'invoices' },
-  { href: '/customer/profile', label: 'Profile', icon: User, feature: 'profile' },
 ]
 
 function CartButton({ count }: { count: number }) {
@@ -42,12 +41,18 @@ export default function CustomerNav({
   roles = [],
   notifications = [],
   unreadCount = 0,
+  userName,
+  userAvatarUrl,
+  canSwitchViews = false,
 }: {
   cartScopeKey: string
   featureFlags?: string[]
   roles?: string[]
   notifications?: Array<{ id: string; kind: string; title: string; body: string; href: string | null; readAt: string | Date | null; createdAt: string | Date }>
   unreadCount?: number
+  userName?: string | null
+  userAvatarUrl?: string | null
+  canSwitchViews?: boolean
 }) {
   const pathname = usePathname()
   const { itemCount, setCartScope } = useCart()
@@ -101,13 +106,12 @@ export default function CustomerNav({
           <div className="flex items-center gap-2">
             <NotificationBell items={notifications} unreadCount={unreadCount} />
             {canUseCart ? <CartButton count={cartCount} /> : null}
-            <button
-              onClick={() => signOut({ callbackUrl: '/login' })}
-              className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
-            >
-              <LogOut className="w-4 h-4" />
-              <span className="hidden sm:inline">Sign Out</span>
-            </button>
+            <PortalProfileMenu
+              userName={userName}
+              userAvatarUrl={userAvatarUrl}
+              profileHref={canSwitchViews ? '/admin/profile' : '/customer/profile'}
+              canSwitchViews={canSwitchViews}
+            />
           </div>
         </div>
 

@@ -62,7 +62,8 @@ function buildContextBlock(
     missedCustomers: number | null
     consumerInteractions: number | null
     bottlePriceOnShelf: string | null
-    bottlesInStock: number | null
+    bottlesInStockBefore: number | null
+    bottlesInStockAfter: number | null
     accountFeedback: string | null
     highlights: string | null
     issues: string | null
@@ -91,7 +92,8 @@ function buildContextBlock(
     `- Bottles sold: ${bottles}`,
     `- Customers missed: ${report.missedCustomers ?? 0}`,
     `- Bottle price on shelf: ${report.bottlePriceOnShelf ? `$${report.bottlePriceOnShelf}` : 'unknown'}`,
-    `- Bottles in stock: ${report.bottlesInStock ?? 0}`,
+    `- Bottles in stock before tasting: ${report.bottlesInStockBefore ?? 'unknown'}`,
+    `- Bottles in stock after tasting: ${report.bottlesInStockAfter ?? 'unknown'}`,
     `- Conversion rate: ${conversionRate}% (bottles sold per interaction)`,
     '',
     'TASTER NOTES:',
@@ -266,7 +268,8 @@ export async function analyzeTastingReport(
         missedCustomers: report.missedCustomers,
         consumerInteractions: report.consumerInteractions,
         bottlePriceOnShelf: report.bottlePriceOnShelf,
-        bottlesInStock: report.bottlesInStock,
+        bottlesInStockBefore: report.bottlesInStockBefore,
+        bottlesInStockAfter: report.bottlesInStockAfter,
         accountFeedback: report.accountFeedback,
         highlights: report.highlights,
         issues: report.issues,

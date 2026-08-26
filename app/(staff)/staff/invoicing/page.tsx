@@ -8,6 +8,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import Link from 'next/link'
 import { markInvoicePaid } from '@/actions/invoices'
 import { approveTasterInvoice, payoutTasterInvoiceViaStripe } from '@/actions/taster-payouts'
+import { CustomerRecordLink } from '@/components/crm/CustomerRecordLink'
 
 export default async function StaffInvoicingPage({
   searchParams,
@@ -44,6 +45,7 @@ export default async function StaffInvoicingPage({
       status: invoices.status,
       dueDate: invoices.dueDate,
       createdAt: invoices.createdAt,
+      customerId: invoices.customerId,
       companyName: customerAccounts.companyName,
     })
     .from(invoices)
@@ -146,7 +148,9 @@ export default async function StaffInvoicingPage({
                 ) : allInvoices.map((inv) => (
                   <tr key={inv.id} className="transition-colors hover:bg-slate-50">
                     <td className="px-6 py-4 text-sm font-medium">{inv.invoiceNumber}</td>
-                    <td className="px-6 py-4 text-sm">{inv.companyName ?? 'N/A'}</td>
+                    <td className="px-6 py-4 text-sm">
+                      <CustomerRecordLink accountId={inv.customerId} name={inv.companyName ?? 'N/A'} portal="staff" />
+                    </td>
                     <td className="px-6 py-4 text-sm font-semibold">{formatCurrency(inv.total)}</td>
                     <td className="px-6 py-4"><Badge variant={statusVariant[inv.status]}>{inv.status}</Badge></td>
                     <td className="px-6 py-4 text-sm">{inv.dueDate ? formatDate(inv.dueDate) : '—'}</td>

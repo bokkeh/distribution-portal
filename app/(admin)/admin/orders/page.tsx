@@ -4,8 +4,9 @@ import { eq, desc, inArray, sql } from 'drizzle-orm'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { OrderStatusBadge } from '@/components/orders/OrderStatusBadge'
+import { CustomerRecordLink } from '@/components/crm/CustomerRecordLink'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { formatOrderPaymentStatusLabel, formatStatusLabel, orderPaymentStatusVariant, orderStatusVariant, shippingStatusVariant } from '@/lib/orders/status'
 import { isMissingShippingStatusColumn } from '@/lib/orders/shipping-fallback'
 import Link from 'next/link'
 import { Plus, FileText, Send } from 'lucide-react'
@@ -22,6 +23,7 @@ export default async function AdminOrdersPage() {
     orderType: 'paid' | 'sample'
     paymentStatus: string
     createdAt: Date
+    customerId: string
     companyName: string | null
   }> = []
 
@@ -35,6 +37,7 @@ export default async function AdminOrdersPage() {
         orderType: orders.orderType,
         paymentStatus: orders.paymentStatus,
         createdAt: orders.createdAt,
+        customerId: orders.customerId,
         companyName: customerAccounts.companyName,
       })
       .from(orders)
@@ -51,6 +54,7 @@ export default async function AdminOrdersPage() {
         status: orders.status,
         orderType: orders.orderType,
         createdAt: orders.createdAt,
+        customerId: orders.customerId,
         companyName: customerAccounts.companyName,
       })
       .from(orders)
@@ -121,12 +125,14 @@ export default async function AdminOrdersPage() {
               ) : allOrders.map(order => (
                 <tr key={order.id} className="hover:bg-slate-50">
                   <td className="px-6 py-4 text-sm font-mono">#{order.id.slice(-8).toUpperCase()}</td>
-                  <td className="px-6 py-4 text-sm font-medium">{order.companyName ?? '-'}</td>
+                  <td className="px-6 py-4 text-sm font-medium">
+                    <CustomerRecordLink accountId={order.customerId} name={order.companyName ?? 'Unknown customer'} />
+                  </td>
                   <td className="px-6 py-4 text-sm">{order.quantity}</td>
                   <td className="px-6 py-4"><Badge variant="outline">{order.orderType}</Badge></td>
-                  <td className="px-6 py-4"><Badge variant={orderPaymentStatusVariant[order.paymentStatus] ?? 'secondary'}>{formatOrderPaymentStatusLabel(order.paymentStatus)}</Badge></td>
-                  <td className="px-6 py-4"><Badge variant={orderStatusVariant[order.status]}>{formatStatusLabel(order.status)}</Badge></td>
-                  <td className="px-6 py-4"><Badge variant={shippingStatusVariant[order.shippingStatus]}>{formatStatusLabel(order.shippingStatus)}</Badge></td>
+                  <td className="px-6 py-4"><OrderStatusBadge kind="payment" status={order.paymentStatus} /></td>
+                  <td className="px-6 py-4"><OrderStatusBadge kind="order" status={order.status} /></td>
+                  <td className="px-6 py-4"><OrderStatusBadge kind="shipping" status={order.shippingStatus} /></td>
                   <td className="px-6 py-4 text-sm font-semibold">{formatCurrency(order.total)}</td>
                   <td className="px-6 py-4 text-sm text-muted-foreground">{formatDate(order.createdAt)}</td>
                   <td className="px-6 py-4"><Link href={`/admin/orders/${order.id}`}><Button variant="ghost" size="sm">View</Button></Link></td>

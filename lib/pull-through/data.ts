@@ -263,7 +263,8 @@ export async function loadTastings(accountIds: string[], mode: ViewerMode) {
       casesSold: tastingReports.casesSold,
       samplesServed: tastingReports.samplesServed,
       consumerInteractions: tastingReports.consumerInteractions,
-      bottlesInStock: tastingReports.bottlesInStock,
+      bottlesInStockBefore: tastingReports.bottlesInStockBefore,
+      bottlesInStockAfter: tastingReports.bottlesInStockAfter,
       accountFeedback: tastingReports.accountFeedback,
       highlights: tastingReports.highlights,
       issues: tastingReports.issues,
@@ -308,7 +309,8 @@ export async function loadTastings(accountIds: string[], mode: ViewerMode) {
       casesSold: row.casesSold,
       samplesServed: row.samplesServed,
       consumerInteractions: row.consumerInteractions,
-      bottlesInStock: row.bottlesInStock,
+      bottlesInStockBefore: row.bottlesInStockBefore,
+      bottlesInStockAfter: row.bottlesInStockAfter,
       accountFeedback: row.accountFeedback,
       highlights: row.highlights,
       issues: row.issues,
@@ -716,7 +718,8 @@ export async function loadAccountTimeline(
     const details: string[] = []
     if (tasting.bottlesSold != null) details.push(`${tasting.bottlesSold} bottles sold`)
     if (tasting.samplesServed != null) details.push(`${tasting.samplesServed} samples served`)
-    if (tasting.bottlesInStock != null) details.push(`${tasting.bottlesInStock} bottles on shelf`)
+    if (tasting.bottlesInStockBefore != null) details.push(`${tasting.bottlesInStockBefore} bottles before tasting`)
+    if (tasting.bottlesInStockAfter != null) details.push(`${tasting.bottlesInStockAfter} bottles after tasting`)
 
     events.push({
       id: `tasting-${tasting.id}`,

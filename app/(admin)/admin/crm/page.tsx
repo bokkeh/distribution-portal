@@ -1,22 +1,44 @@
+import Link from 'next/link'
+import { and, asc, countDistinct, eq, inArray, max, ne, sql } from 'drizzle-orm'
+import { Kanban, LayoutList, Plus, X } from 'lucide-react'
+import { mergeContacts, mergeCustomerAccounts } from '@/actions/crm'
 import { db } from '@/db'
-import { activityEvents, contacts, crmPipelineStages, customerAccounts, deliveries, deliveryStops, invoices, orderItems, orders, salesMembers, tastings, users } from '@/db/schema'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { getHubSpotCompanies } from '@/lib/hubspot/client'
+import {
+  activityEvents,
+  communityContacts,
+  contacts,
+  crmPipelineStages,
+  customerAccounts,
+  deliveries,
+  deliveryStops,
+  invoices,
+  orderItems,
+  orders,
+  salesMembers,
+  salesRegions,
+  tastings,
+  users,
+} from '@/db/schema'
+import { CRMEntityMergeCard } from '@/components/crm/CRMEntityMergeCard'
+import { CRMOverview } from '@/components/crm/CRMOverview'
+import { CRMSettingsMenu } from '@/components/crm/CRMSettingsMenu'
+import { CRMTabs } from '@/components/crm/CRMTabs'
+import { CommunityContactsTable } from '@/components/crm/CommunityContactsTable'
 import { HubSpotCompaniesTab } from '@/components/crm/HubSpotCompaniesTab'
 import { LocalAccountsTable } from '@/components/crm/LocalAccountsTable'
 import { LocalPeopleTable } from '@/components/crm/LocalPeopleTable'
-import { CRMEntityMergeCard } from '@/components/crm/CRMEntityMergeCard'
-import { CRMTabs } from '@/components/crm/CRMTabs'
 import { PipelineBoard } from '@/components/crm/PipelineBoard'
-import { sql, eq, and, inArray, max, asc } from 'drizzle-orm'
-import Link from 'next/link'
-import { Kanban, LayoutList, Plus, Upload } from 'lucide-react'
-import { requireFeature } from '@/lib/auth/session'
-import { mergeContacts, mergeCustomerAccounts } from '@/actions/crm'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 import { CRM_ACCOUNT_FILTERS, type CRMAccountFilter, normalizeCRMAccountFilter } from '@/lib/customers/account-segmentation'
 import { coercePipelineStages } from '@/lib/deal-stages'
+import { requireFeature } from '@/lib/auth/session'
+import { getHubSpotCompanies } from '@/lib/hubspot/client'
+import { buildRegionColorMap } from '@/lib/maps/region-colors'
+import { loadPullThroughDataset, resolvePullThroughScope } from '@/lib/pull-through/data'
 import { formatCurrency } from '@/lib/utils'
+
+type CRMTool = 'merge-accounts' | 'merge-people'
 
 function matchesAccountFilter(account: { customerSegment: string | null; customerSource: string | null }, filter: CRMAccountFilter) {
   if (filter === 'all') return true
@@ -25,38 +47,40 @@ function matchesAccountFilter(account: { customerSegment: string | null; custome
   return account.customerSegment !== 'b2c_consumer'
 }
 
-function buildCrmHref(basePath: string, view: 'list' | 'pipeline', filter: CRMAccountFilter) {
-  const params = new URLSearchParams()
+function buildCrmHref(view: 'list' | 'pipeline', filter: CRMAccountFilter) {
+  const params = new URLSearchParams({ tab: 'company-accounts' })
   if (view === 'pipeline') params.set('view', 'pipeline')
   if (filter !== 'b2b') params.set('segment', filter)
-  const query = params.toString()
-  return query ? `${basePath}?${query}` : basePath
+  return `/admin/crm?${params.toString()}`
+}
+
+function buildToolHref(tool: CRMTool, filter: CRMAccountFilter) {
+  const params = new URLSearchParams({ tool })
+  if (filter !== 'b2b') params.set('segment', filter)
+  return `/admin/crm?${params.toString()}`
 }
 
 function getMostRecentDate(...values: Array<Date | string | null | undefined>) {
   let latest: Date | null = null
-
   for (const value of values) {
     if (!value) continue
     const parsed = value instanceof Date ? value : new Date(value)
-    if (Number.isNaN(parsed.getTime())) continue
-    if (!latest || parsed.getTime() > latest.getTime()) {
-      latest = parsed
-    }
+    if (!Number.isNaN(parsed.getTime()) && (!latest || parsed > latest)) latest = parsed
   }
-
   return latest
 }
 
 export default async function CRMPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string; segment?: string }>
+  searchParams: Promise<{ view?: string; segment?: string; tab?: string; tool?: string }>
 }) {
   const session = await requireFeature('crm', 'admin')
-  const { view, segment } = await searchParams
+  const { view, segment, tab, tool: requestedTool } = await searchParams
   const isPipeline = view === 'pipeline'
   const currentFilter = normalizeCRMAccountFilter(segment)
+  const tool: CRMTool | null = requestedTool === 'merge-accounts' || requestedTool === 'merge-people' ? requestedTool : null
+
   async function submitAccountMerge(formData: FormData) {
     'use server'
     await mergeCustomerAccounts(formData)
@@ -65,7 +89,8 @@ export default async function CRMPage({
     'use server'
     await mergeContacts(formData)
   }
-  const [accounts, people, hsResult, currentSalesMember] = await Promise.all([
+
+  const [accounts, people, community, hsResult, currentSalesMember, pipelineStageRows, pullThroughDataset, allRegions] = await Promise.all([
     db.select({
       id: customerAccounts.id,
       companyName: customerAccounts.companyName,
@@ -74,6 +99,7 @@ export default async function CRMPage({
       address: customerAccounts.address,
       city: customerAccounts.city,
       state: customerAccounts.state,
+      county: customerAccounts.county,
       zip: customerAccounts.zip,
       phone: customerAccounts.phone,
       email: customerAccounts.email,
@@ -87,6 +113,7 @@ export default async function CRMPage({
       paymentTerms: customerAccounts.paymentTerms,
       assignedSalesRepId: customerAccounts.assignedSalesRepId,
       salesLeadName: users.name,
+      salesRegionName: salesRegions.name,
       hubspotContactId: customerAccounts.hubspotContactId,
       hubspotCompanyId: customerAccounts.hubspotCompanyId,
       starred: customerAccounts.starred,
@@ -94,6 +121,7 @@ export default async function CRMPage({
       .from(customerAccounts)
       .leftJoin(salesMembers, eq(customerAccounts.assignedSalesRepId, salesMembers.id))
       .leftJoin(users, eq(salesMembers.userId, users.id))
+      .leftJoin(salesRegions, eq(customerAccounts.assignedRegionId, salesRegions.id))
       .orderBy(customerAccounts.companyName),
     db.select({
       id: contacts.id,
@@ -110,323 +138,167 @@ export default async function CRMPage({
       .from(contacts)
       .innerJoin(customerAccounts, eq(contacts.customerId, customerAccounts.id))
       .orderBy(contacts.name),
+    db.select().from(communityContacts).orderBy(communityContacts.lastName, communityContacts.firstName),
     getHubSpotCompanies(),
-    db.select({ id: salesMembers.id })
-      .from(salesMembers)
-      .where(eq(salesMembers.userId, session.user.id))
-      .limit(1)
-      .then((rows) => rows[0] ?? null),
+    db.select({ id: salesMembers.id }).from(salesMembers).where(eq(salesMembers.userId, session.user.id)).limit(1).then((rows) => rows[0] ?? null),
+    db.select({
+      id: crmPipelineStages.id,
+      stageKey: crmPipelineStages.stageKey,
+      label: crmPipelineStages.label,
+      colorToken: crmPipelineStages.colorToken,
+      position: crmPipelineStages.position,
+    }).from(crmPipelineStages).orderBy(asc(crmPipelineStages.position), asc(crmPipelineStages.label)).catch(() => null),
+    resolvePullThroughScope(session).then(loadPullThroughDataset),
+    db.select({ name: salesRegions.name }).from(salesRegions).orderBy(asc(salesRegions.name)),
   ])
 
-  const pipelineStageRows = await db.select({
-    id: crmPipelineStages.id,
-    stageKey: crmPipelineStages.stageKey,
-    label: crmPipelineStages.label,
-    colorToken: crmPipelineStages.colorToken,
-    position: crmPipelineStages.position,
-  })
-    .from(crmPipelineStages)
-    .orderBy(asc(crmPipelineStages.position), asc(crmPipelineStages.label))
-    .catch(() => null)
-
+  const regionColors = buildRegionColorMap(allRegions.map((region) => region.name))
   const pipelineStages = coercePipelineStages(pipelineStageRows)
-
-  // Aggregate order stats per customer
-  const accountIds = accounts.map(a => a.id)
-  const [pendingStats, totalStats, lastOrderStats, accountActivityStats, orderActivityStats, invoiceActivityStats, tastingActivityStats, deliveryActivityStats] = await Promise.all([
-    accountIds.length === 0 ? [] : db
-      .select({
-        customerId: orders.customerId,
-        cases: sql<number>`coalesce(sum(${orderItems.quantity}::numeric), 0)`.as('cases'),
-      })
-      .from(orders)
-      .innerJoin(orderItems, eq(orderItems.orderId, orders.id))
-      .where(and(
-        inArray(orders.customerId, accountIds),
-        inArray(orders.status, ['pending', 'confirmed'])
-      ))
-      .groupBy(orders.customerId),
-    accountIds.length === 0 ? [] : db
-      .select({
-        customerId: orders.customerId,
-        cases: sql<number>`coalesce(sum(${orderItems.quantity}::numeric), 0)`.as('cases'),
-      })
-      .from(orders)
-      .innerJoin(orderItems, eq(orderItems.orderId, orders.id))
-      .where(and(
-        inArray(orders.customerId, accountIds),
-        inArray(orders.status, ['confirmed', 'fulfilled'])
-      ))
-      .groupBy(orders.customerId),
-    accountIds.length === 0 ? [] : db
-      .select({
-        customerId: orders.customerId,
-        lastOrderAt: max(orders.createdAt).as('last_order_at'),
-      })
-      .from(orders)
-      .where(inArray(orders.customerId, accountIds))
-      .groupBy(orders.customerId),
-    accountIds.length === 0 ? [] : db
-      .select({
-        customerId: activityEvents.entityId,
-        lastActivityAt: max(activityEvents.createdAt).as('last_activity_at'),
-      })
-      .from(activityEvents)
-      .where(and(eq(activityEvents.entityType, 'account'), inArray(activityEvents.entityId, accountIds)))
-      .groupBy(activityEvents.entityId),
-    accountIds.length === 0 ? [] : db
-      .select({
-        customerId: orders.customerId,
-        lastActivityAt: max(activityEvents.createdAt).as('last_activity_at'),
-      })
-      .from(activityEvents)
-      .innerJoin(orders, eq(activityEvents.entityId, orders.id))
-      .where(and(eq(activityEvents.entityType, 'order'), inArray(orders.customerId, accountIds)))
-      .groupBy(orders.customerId),
-    accountIds.length === 0 ? [] : db
-      .select({
-        customerId: invoices.customerId,
-        lastActivityAt: max(activityEvents.createdAt).as('last_activity_at'),
-      })
-      .from(activityEvents)
-      .innerJoin(invoices, eq(activityEvents.entityId, invoices.id))
-      .where(and(eq(activityEvents.entityType, 'invoice'), inArray(invoices.customerId, accountIds)))
-      .groupBy(invoices.customerId),
-    accountIds.length === 0 ? [] : db
-      .select({
-        customerId: tastings.customerId,
-        lastActivityAt: max(activityEvents.createdAt).as('last_activity_at'),
-      })
-      .from(activityEvents)
-      .innerJoin(tastings, eq(activityEvents.entityId, tastings.id))
-      .where(and(eq(activityEvents.entityType, 'tasting'), inArray(tastings.customerId, accountIds)))
-      .groupBy(tastings.customerId),
-    accountIds.length === 0 ? [] : db
-      .select({
-        customerId: deliveryStops.customerId,
-        lastActivityAt: max(activityEvents.createdAt).as('last_activity_at'),
-      })
-      .from(activityEvents)
-      .innerJoin(deliveries, eq(activityEvents.entityId, deliveries.id))
-      .innerJoin(deliveryStops, eq(deliveryStops.deliveryId, deliveries.id))
-      .where(and(eq(activityEvents.entityType, 'delivery'), inArray(deliveryStops.customerId, accountIds)))
-      .groupBy(deliveryStops.customerId),
+  const accountIds = accounts.map((account) => account.id)
+  const [pendingStats, totalStats, orderStats, accountActivityStats, orderActivityStats, invoiceActivityStats, tastingActivityStats, deliveryActivityStats] = await Promise.all([
+    accountIds.length === 0 ? [] : db.select({ customerId: orders.customerId, cases: sql<number>`coalesce(sum(${orderItems.quantity}::numeric), 0)`.as('cases') }).from(orders).innerJoin(orderItems, eq(orderItems.orderId, orders.id)).where(and(inArray(orders.customerId, accountIds), inArray(orders.status, ['pending', 'confirmed']))).groupBy(orders.customerId),
+    accountIds.length === 0 ? [] : db.select({ customerId: orders.customerId, cases: sql<number>`coalesce(sum(${orderItems.quantity}::numeric), 0)`.as('cases') }).from(orders).innerJoin(orderItems, eq(orderItems.orderId, orders.id)).where(and(inArray(orders.customerId, accountIds), inArray(orders.status, ['confirmed', 'fulfilled']))).groupBy(orders.customerId),
+    accountIds.length === 0 ? [] : db.select({ customerId: orders.customerId, orderCount: countDistinct(orders.id), lastOrderAt: max(orders.createdAt).as('last_order_at') }).from(orders).where(and(inArray(orders.customerId, accountIds), ne(orders.status, 'cancelled'))).groupBy(orders.customerId),
+    accountIds.length === 0 ? [] : db.select({ customerId: activityEvents.entityId, lastActivityAt: max(activityEvents.createdAt).as('last_activity_at') }).from(activityEvents).where(and(eq(activityEvents.entityType, 'account'), inArray(activityEvents.entityId, accountIds))).groupBy(activityEvents.entityId),
+    accountIds.length === 0 ? [] : db.select({ customerId: orders.customerId, lastActivityAt: max(activityEvents.createdAt).as('last_activity_at') }).from(activityEvents).innerJoin(orders, eq(activityEvents.entityId, orders.id)).where(and(eq(activityEvents.entityType, 'order'), inArray(orders.customerId, accountIds))).groupBy(orders.customerId),
+    accountIds.length === 0 ? [] : db.select({ customerId: invoices.customerId, lastActivityAt: max(activityEvents.createdAt).as('last_activity_at') }).from(activityEvents).innerJoin(invoices, eq(activityEvents.entityId, invoices.id)).where(and(eq(activityEvents.entityType, 'invoice'), inArray(invoices.customerId, accountIds))).groupBy(invoices.customerId),
+    accountIds.length === 0 ? [] : db.select({ customerId: tastings.customerId, lastActivityAt: max(activityEvents.createdAt).as('last_activity_at') }).from(activityEvents).innerJoin(tastings, eq(activityEvents.entityId, tastings.id)).where(and(eq(activityEvents.entityType, 'tasting'), inArray(tastings.customerId, accountIds))).groupBy(tastings.customerId),
+    accountIds.length === 0 ? [] : db.select({ customerId: deliveryStops.customerId, lastActivityAt: max(activityEvents.createdAt).as('last_activity_at') }).from(activityEvents).innerJoin(deliveries, eq(activityEvents.entityId, deliveries.id)).innerJoin(deliveryStops, eq(deliveryStops.deliveryId, deliveries.id)).where(and(eq(activityEvents.entityType, 'delivery'), inArray(deliveryStops.customerId, accountIds))).groupBy(deliveryStops.customerId),
   ])
 
-  const pendingMap = new Map(pendingStats.map(r => [r.customerId, Number(r.cases)]))
-  const totalMap = new Map(totalStats.map(r => [r.customerId, Number(r.cases)]))
-  const lastOrderMap = new Map(lastOrderStats.map(r => [r.customerId, r.lastOrderAt]))
-  const accountActivityMap = new Map(accountActivityStats.map(r => [r.customerId, r.lastActivityAt]))
-  const orderActivityMap = new Map(orderActivityStats.map(r => [r.customerId, r.lastActivityAt]))
-  const invoiceActivityMap = new Map(invoiceActivityStats.map(r => [r.customerId, r.lastActivityAt]))
-  const tastingActivityMap = new Map(tastingActivityStats.map(r => [r.customerId, r.lastActivityAt]))
-  const deliveryActivityMap = new Map(deliveryActivityStats.map(r => [r.customerId, r.lastActivityAt]))
-
+  const pendingMap = new Map(pendingStats.map((row) => [row.customerId, Number(row.cases)]))
+  const totalMap = new Map(totalStats.map((row) => [row.customerId, Number(row.cases)]))
+  const orderMap = new Map(orderStats.map((row) => [row.customerId, row]))
+  const pullThroughMap = new Map(pullThroughDataset.rows.map((row) => [row.accountId, row]))
+  const accountActivityMap = new Map(accountActivityStats.map((row) => [row.customerId, row.lastActivityAt]))
+  const orderActivityMap = new Map(orderActivityStats.map((row) => [row.customerId, row.lastActivityAt]))
+  const invoiceActivityMap = new Map(invoiceActivityStats.map((row) => [row.customerId, row.lastActivityAt]))
+  const tastingActivityMap = new Map(tastingActivityStats.map((row) => [row.customerId, row.lastActivityAt]))
+  const deliveryActivityMap = new Map(deliveryActivityStats.map((row) => [row.customerId, row.lastActivityAt]))
   const now = Date.now()
-  function computeHealthScore(a: typeof accounts[0]): number {
-    const lastOrder = lastOrderMap.get(a.id)
-    const daysSince = lastOrder ? (now - new Date(lastOrder).getTime()) / 86400000 : null
-    const recency =
-      daysSince == null ? 0 :
-      daysSince <= 30 ? 40 :
-      daysSince <= 60 ? 30 :
-      daysSince <= 90 ? 20 :
-      daysSince <= 180 ? 10 : 0
 
-    const credit = Number(a.creditLimit ?? 0)
-    const bal = Number(a.balance ?? 0)
-    const payment =
-      bal <= 0 ? 40 :
-      credit > 0 && bal < credit * 0.25 ? 30 :
-      credit > 0 && bal < credit * 0.5 ? 20 :
-      credit > 0 && bal < credit ? 10 : 0
-
-    const cases = totalMap.get(a.id) ?? 0
-    const volume =
-      cases > 100 ? 20 :
-      cases > 50 ? 15 :
-      cases > 20 ? 10 :
-      cases > 5 ? 5 : 0
-
+  function computeHealthScore(account: typeof accounts[number]) {
+    const lastOrder = orderMap.get(account.id)?.lastOrderAt
+    const daysSince = lastOrder ? (now - new Date(lastOrder).getTime()) / 86_400_000 : null
+    const recency = daysSince == null ? 0 : daysSince <= 30 ? 40 : daysSince <= 60 ? 30 : daysSince <= 90 ? 20 : daysSince <= 180 ? 10 : 0
+    const credit = Number(account.creditLimit ?? 0)
+    const balance = Number(account.balance ?? 0)
+    const payment = balance <= 0 ? 40 : credit > 0 && balance < credit * 0.25 ? 30 : credit > 0 && balance < credit * 0.5 ? 20 : credit > 0 && balance < credit ? 10 : 0
+    const cases = totalMap.get(account.id) ?? 0
+    const volume = cases > 100 ? 20 : cases > 50 ? 15 : cases > 20 ? 10 : cases > 5 ? 5 : 0
     return recency + payment + volume
   }
 
-  const accountRows = accounts.map(a => ({
-    ...a,
-    pendingCases: pendingMap.get(a.id) ?? 0,
-    totalCasesPurchased: totalMap.get(a.id) ?? 0,
-    healthScore: computeHealthScore(a),
-    lastActivityAt: getMostRecentDate(
-      accountActivityMap.get(a.id),
-      orderActivityMap.get(a.id),
-      invoiceActivityMap.get(a.id),
-      tastingActivityMap.get(a.id),
-      deliveryActivityMap.get(a.id),
-      lastOrderMap.get(a.id),
-    ),
-  }))
+  const accountRows = accounts.map((account) => {
+    const pullThrough = pullThroughMap.get(account.id)
+    const generalOrders = orderMap.get(account.id)
+    const lastOrderAt = pullThrough?.orders.lastOrderAt ?? generalOrders?.lastOrderAt ?? null
+    const fallbackDaysSince = lastOrderAt ? Math.max(0, Math.floor((now - new Date(lastOrderAt).getTime()) / 86_400_000)) : null
+    const locationFallback = [account.city, account.state].filter(Boolean).join(', ') || null
+
+    return {
+      ...account,
+      pendingCases: pendingMap.get(account.id) ?? 0,
+      totalCasesPurchased: pullThrough?.orders.totalCases ?? totalMap.get(account.id) ?? 0,
+      healthScore: computeHealthScore(account),
+      regionName: pullThrough?.territory ?? account.salesRegionName ?? account.county ?? locationFallback,
+      orderCount: pullThrough?.orders.totalOrders ?? Number(generalOrders?.orderCount ?? 0),
+      daysSinceLastOrder: pullThrough?.orders.daysSinceLastOrder ?? fallbackDaysSince,
+      pullThroughScore: pullThrough?.pullThrough.score ?? null,
+      lastActivityAt: getMostRecentDate(pullThrough?.lastActivityAt, accountActivityMap.get(account.id), orderActivityMap.get(account.id), invoiceActivityMap.get(account.id), tastingActivityMap.get(account.id), deliveryActivityMap.get(account.id), lastOrderAt),
+    }
+  })
+
   const filteredAccounts = accounts.filter((account) => matchesAccountFilter(account, currentFilter))
   const filteredAccountRows = accountRows.filter((account) => matchesAccountFilter(account, currentFilter))
-  const assignedToMeRows = currentSalesMember
-    ? accountRows.filter((account) => account.assignedSalesRepId === currentSalesMember.id)
-    : []
+  const assignedToMeRows = currentSalesMember ? accountRows.filter((account) => account.assignedSalesRepId === currentSalesMember.id) : []
   const filteredAssignedToMeRows = assignedToMeRows.filter((account) => matchesAccountFilter(account, currentFilter))
   const filteredAccountIds = new Set(filteredAccounts.map((account) => account.id))
   const filteredPeople = people.filter((person) => filteredAccountIds.has(person.customerId))
-
-  const localAccountIds = new Map<string, string>(
-    accounts.filter(a => a.hubspotCompanyId).map(a => [a.hubspotCompanyId!, a.id])
-  )
+  const localAccountIds = new Map(accounts.filter((account) => account.hubspotCompanyId).map((account) => [account.hubspotCompanyId!, account.id]))
   const importedHsIds = new Set(localAccountIds.keys())
   const { companies: hsCompanies, error: hsError } = hsResult
+  const pullThroughScores = pullThroughDataset.rows.map((row) => row.pullThrough.score).filter((score): score is number => score != null)
+  const averagePullThrough = pullThroughScores.length ? Math.round(pullThroughScores.reduce((sum, score) => sum + score, 0) / pullThroughScores.length) : null
+  const defaultTab = ['overview', 'company-accounts', 'company-contacts', 'community-contacts', 'assigned', 'hubspot'].includes(tab ?? '') ? tab : 'company-accounts'
+
+  const mergeAccountCard = (
+    <CRMEntityMergeCard
+      title="Merge Accounts"
+      description="Choose the duplicate account to remove and the account that should survive. All orders, contacts, and data will be moved to the target."
+      sourceLabel="Duplicate account (removed)"
+      targetLabel="Keep this account"
+      options={filteredAccounts.map((account) => ({ id: account.id, label: account.companyName, preview: { companyName: account.companyName, address: account.address, city: account.city, state: account.state, zip: account.zip, phone: account.phone, email: account.email, contactName: account.contactName, businessType: account.businessType, dealStage: account.dealStage?.replace(/_/g, ' ') ?? null, paymentTerms: account.paymentTerms, creditLimit: formatCurrency(account.creditLimit ?? '0'), balance: formatCurrency(account.balance ?? '0') } }))}
+      action={submitAccountMerge}
+      sourceName="sourceAccountId"
+      targetName="targetAccountId"
+      previewFields={[{ key: 'companyName', label: 'Company' }, { key: 'address', label: 'Address' }, { key: 'city', label: 'City' }, { key: 'state', label: 'State' }, { key: 'zip', label: 'Zip' }, { key: 'phone', label: 'Phone' }, { key: 'email', label: 'Email' }, { key: 'contactName', label: 'Contact' }, { key: 'businessType', label: 'Biz Type' }, { key: 'dealStage', label: 'Deal Stage' }, { key: 'paymentTerms', label: 'Terms' }, { key: 'creditLimit', label: 'Credit Limit' }, { key: 'balance', label: 'Balance' }]}
+      defaultExpanded
+    />
+  )
+
+  const mergePeopleCard = (
+    <CRMEntityMergeCard
+      title="Merge People"
+      description="Merge a duplicate company contact into the surviving contact record and preserve the target account link."
+      sourceLabel="Duplicate person (removed)"
+      targetLabel="Keep this person"
+      options={filteredPeople.map((person) => ({ id: person.id, label: `${person.name} — ${person.companyName}`, preview: { name: person.name, title: person.title, email: person.email, phone: person.phone, phoneType: person.phoneType, preferredContact: person.preferredContact, company: person.companyName } }))}
+      action={submitContactMerge}
+      sourceName="sourceContactId"
+      targetName="targetContactId"
+      previewFields={[{ key: 'name', label: 'Name' }, { key: 'title', label: 'Title' }, { key: 'email', label: 'Email' }, { key: 'phone', label: 'Phone' }, { key: 'phoneType', label: 'Phone Type' }, { key: 'preferredContact', label: 'Preferred' }, { key: 'company', label: 'Account' }]}
+      defaultExpanded
+    />
+  )
 
   return (
-    <div className="p-4 sm:p-8 space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">CRM / Accounts</h1>
-          <p className="text-muted-foreground mt-1">
-            {filteredAccounts.length} shown · {accounts.length} local · {hsCompanies.length} in HubSpot
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1 border rounded-lg p-1 bg-slate-50">
-            <Link href={buildCrmHref('/admin/crm', 'list', currentFilter)}>
-              <Button variant={!isPipeline ? 'default' : 'ghost'} size="sm" className="gap-1.5">
-                <LayoutList className="w-4 h-4" />
-                List
-              </Button>
-            </Link>
-            <Link href={buildCrmHref('/admin/crm', 'pipeline', currentFilter)}>
-              <Button variant={isPipeline ? 'default' : 'ghost'} size="sm" className="gap-1.5">
-                <Kanban className="w-4 h-4" />
-                Pipeline
-              </Button>
-            </Link>
+    <div className="space-y-6 bg-[#f4f1ed] p-4 sm:p-8">
+      <Card className="rounded-2xl border-slate-200 bg-white shadow-none">
+        <CardContent className="flex flex-wrap items-center justify-between gap-4 p-6 sm:p-7">
+          <div>
+            <h1 className="font-display text-4xl font-bold uppercase leading-none text-[#181615] sm:text-5xl">CRM / Accounts</h1>
+            <p className="mt-2 text-sm text-slate-500">{accounts.length} company accounts · {people.length} company contacts · {community.length} community contacts</p>
           </div>
-          <div className="flex items-center gap-1 border rounded-lg p-1 bg-slate-50">
-            {CRM_ACCOUNT_FILTERS.map((filter) => (
-              <Link key={filter.value} href={buildCrmHref('/admin/crm', isPipeline ? 'pipeline' : 'list', filter.value)}>
-                <Button variant={currentFilter === filter.value ? 'default' : 'ghost'} size="sm">
-                  {filter.label}
-                </Button>
-              </Link>
-            ))}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild variant="outline" className="font-display uppercase"><Link href="/admin/crm/people/new"><Plus className="h-4 w-4" />Add people</Link></Button>
+            <Button asChild className="bg-[#ff5a00] font-display uppercase hover:bg-[#e65000]"><Link href="/admin/crm/new"><Plus className="h-4 w-4" />Create account</Link></Button>
+            <CRMSettingsMenu mergeAccountsHref={buildToolHref('merge-accounts', currentFilter)} mergePeopleHref={buildToolHref('merge-people', currentFilter)} />
           </div>
-          <Link href="/admin/crm/import/wisher">
-            <Button variant="outline"><Upload className="w-4 h-4 mr-2" />Import Wisher CSV</Button>
-          </Link>
-          <Link href="/admin/crm/sales-routes">
-            <Button variant="outline"><Plus className="w-4 h-4 mr-2" />Sales Routes</Button>
-          </Link>
-          <Link href="/admin/crm/new">
-            <Button><Plus className="w-4 h-4 mr-2" />Add Account</Button>
-          </Link>
-        </div>
-      </div>
-
-      {isPipeline ? (
-        <PipelineBoard accounts={filteredAccounts} basePath="/admin/crm" stages={pipelineStages} canManageStages canCreateAccounts />
-      ) : (
-      <Card>
-        <CardContent className="grid gap-4 border-b p-4 lg:grid-cols-2">
-          <CRMEntityMergeCard
-            title="Merge Accounts"
-            description="Choose the duplicate account to remove and the account that should survive. All orders, contacts, and data will be moved to the target."
-            sourceLabel="Duplicate account (removed)"
-            targetLabel="Keep this account"
-            options={filteredAccounts.map(a => ({
-              id: a.id,
-              label: a.companyName,
-              preview: {
-                companyName: a.companyName,
-                address: a.address,
-                city: a.city,
-                state: a.state,
-                zip: a.zip,
-                phone: a.phone,
-                email: a.email,
-                contactName: a.contactName,
-                businessType: a.businessType,
-                dealStage: a.dealStage?.replace(/_/g, ' ') ?? null,
-                paymentTerms: a.paymentTerms,
-                creditLimit: formatCurrency(a.creditLimit ?? '0'),
-                balance: formatCurrency(a.balance ?? '0'),
-              },
-            }))}
-            action={submitAccountMerge}
-            sourceName="sourceAccountId"
-            targetName="targetAccountId"
-            previewFields={[
-              { key: 'companyName', label: 'Company' },
-              { key: 'address', label: 'Address' },
-              { key: 'city', label: 'City' },
-              { key: 'state', label: 'State' },
-              { key: 'zip', label: 'Zip' },
-              { key: 'phone', label: 'Phone' },
-              { key: 'email', label: 'Email' },
-              { key: 'contactName', label: 'Contact' },
-              { key: 'businessType', label: 'Biz Type' },
-              { key: 'dealStage', label: 'Deal Stage' },
-              { key: 'paymentTerms', label: 'Terms' },
-              { key: 'creditLimit', label: 'Credit Limit' },
-              { key: 'balance', label: 'Balance' },
-            ]}
-          />
-          <CRMEntityMergeCard
-            title="Merge People"
-            description="Merge a duplicate person into the surviving contact record and preserve the target account link."
-            sourceLabel="Duplicate person (removed)"
-            targetLabel="Keep this person"
-            options={filteredPeople.map(p => ({
-              id: p.id,
-              label: `${p.name} — ${p.companyName}`,
-              preview: {
-                name: p.name,
-                title: p.title,
-                email: p.email,
-                phone: p.phone,
-                phoneType: p.phoneType,
-                preferredContact: p.preferredContact,
-                company: p.companyName,
-              },
-            }))}
-            action={submitContactMerge}
-            sourceName="sourceContactId"
-            targetName="targetContactId"
-            previewFields={[
-              { key: 'name', label: 'Name' },
-              { key: 'title', label: 'Title' },
-              { key: 'email', label: 'Email' },
-              { key: 'phone', label: 'Phone' },
-              { key: 'phoneType', label: 'Phone Type' },
-              { key: 'preferredContact', label: 'Preferred' },
-              { key: 'company', label: 'Account' },
-            ]}
-          />
-        </CardContent>
-        <CardContent className="p-0">
-            <CRMTabs
-              tabs={[
-                { id: 'local', label: 'Local Accounts', count: filteredAccountRows.length },
-                { id: 'assigned', label: 'Assigned To Me', count: filteredAssignedToMeRows.length },
-                { id: 'people', label: 'People', count: filteredPeople.length },
-                { id: 'hubspot', label: 'HubSpot Companies', count: hsCompanies.length },
-              ]}
-            >
-              <LocalAccountsTable initialAccounts={filteredAccountRows} userId={session.user.id} pipelineStages={pipelineStages} />
-              <LocalAccountsTable initialAccounts={filteredAssignedToMeRows} userId={session.user.id} pipelineStages={pipelineStages} />
-              <LocalPeopleTable people={filteredPeople} basePath="/admin/crm" />
-              <HubSpotCompaniesTab
-                companies={hsCompanies}
-              importedIds={importedHsIds}
-              localAccountIds={localAccountIds}
-              error={hsError}
-            />
-          </CRMTabs>
         </CardContent>
       </Card>
-      )}
+
+      {tool ? (
+        <Card className="border-slate-200 shadow-none">
+          <CardContent className="p-4">
+            <div className="mb-3 flex items-center justify-between"><p className="font-semibold text-slate-900">CRM management</p><Button asChild variant="ghost" size="icon"><Link href={buildCrmHref('list', currentFilter)} aria-label="Close CRM management"><X className="h-4 w-4" /></Link></Button></div>
+            {tool === 'merge-accounts' ? mergeAccountCard : mergePeopleCard}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <CRMTabs
+        defaultTab={defaultTab}
+        tabs={[{ id: 'overview', label: 'Overview' }, { id: 'company-accounts', label: 'Company Accounts' }, { id: 'company-contacts', label: 'Company Contacts' }, { id: 'community-contacts', label: 'Community Contacts' }, { id: 'assigned', label: 'Assigned To Me' }, { id: 'hubspot', label: 'HubSpot Companies' }]}
+      >
+        <Card className="mt-6 shadow-none"><CRMOverview accountCount={accounts.length} companyContactCount={people.length} communityContactCount={community.length} assignedCount={assignedToMeRows.length} averagePullThrough={averagePullThrough} /></Card>
+        <div className="mt-6 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1">
+              <Button asChild variant={!isPipeline ? 'default' : 'ghost'} size="sm"><Link href={buildCrmHref('list', currentFilter)}><LayoutList className="h-4 w-4" />List</Link></Button>
+              <Button asChild variant={isPipeline ? 'default' : 'ghost'} size="sm"><Link href={buildCrmHref('pipeline', currentFilter)}><Kanban className="h-4 w-4" />Pipeline</Link></Button>
+            </div>
+            <div className="flex flex-wrap items-center gap-1 rounded-lg border border-slate-200 bg-white p-1">
+              {CRM_ACCOUNT_FILTERS.map((filter) => <Button key={filter.value} asChild variant={currentFilter === filter.value ? 'default' : 'ghost'} size="sm"><Link href={buildCrmHref(isPipeline ? 'pipeline' : 'list', filter.value)}>{filter.label}</Link></Button>)}
+            </div>
+          </div>
+          {isPipeline ? <PipelineBoard accounts={filteredAccountRows} basePath="/admin/crm" stages={pipelineStages} canManageStages canCreateAccounts regionColors={regionColors} /> : <Card className="overflow-hidden shadow-none"><LocalAccountsTable initialAccounts={filteredAccountRows} userId={session.user.id} pipelineStages={pipelineStages} regionColors={regionColors} /></Card>}
+        </div>
+        <Card className="mt-6 overflow-hidden shadow-none"><LocalPeopleTable people={filteredPeople} basePath="/admin/crm" /></Card>
+        <Card className="mt-6 overflow-hidden shadow-none"><CommunityContactsTable contacts={community} /></Card>
+        <Card className="mt-6 overflow-hidden shadow-none"><LocalAccountsTable initialAccounts={filteredAssignedToMeRows} userId={session.user.id} pipelineStages={pipelineStages} regionColors={regionColors} /></Card>
+        <Card className="mt-6 overflow-hidden shadow-none"><HubSpotCompaniesTab companies={hsCompanies} importedIds={importedHsIds} localAccountIds={localAccountIds} error={hsError} /></Card>
+      </CRMTabs>
     </div>
   )
 }

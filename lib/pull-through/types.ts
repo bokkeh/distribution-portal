@@ -130,8 +130,9 @@ export type PullThroughTasting = {
   casesSold: number | null
   samplesServed: number | null
   consumerInteractions: number | null
-  /** Shelf stock recorded on the tasting report — an inventory observation. */
-  bottlesInStock: number | null
+  /** Shelf stock observations recorded before and after the tasting. */
+  bottlesInStockBefore: number | null
+  bottlesInStockAfter: number | null
   accountFeedback: string | null
   highlights: string | null
   issues: string | null

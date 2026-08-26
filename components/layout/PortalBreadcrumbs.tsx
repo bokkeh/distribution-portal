@@ -49,24 +49,29 @@ function labelForSegment(segment: string) {
   return segment.replace(/-/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
 }
 
-export function PortalBreadcrumbs() {
+export function PortalBreadcrumbs({ operational = false }: { operational?: boolean }) {
   const pathname = usePathname()
   const segments = pathname.split('/').filter(Boolean)
 
   if (segments.length <= 1) return null
 
   return (
-    <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-sm text-slate-500">
+    <nav
+      aria-label="Breadcrumb"
+      className={operational
+        ? 'flex min-w-0 flex-nowrap items-center gap-2 overflow-hidden whitespace-nowrap font-mono text-xs font-bold uppercase tracking-[0.08em] text-slate-500'
+        : 'flex flex-wrap items-center gap-2 text-sm text-slate-500'}
+    >
       {segments.map((segment, index) => {
         const href = hrefForSegments(segments, index)
         const isLast = index === segments.length - 1
         return (
           <div key={`${index}-${segment}-${href}`} className="flex items-center gap-2">
-            {index > 0 ? <span className="text-slate-300">/</span> : null}
+            {index > 0 ? <span className={operational ? 'text-[#ff5a00]' : 'text-slate-300'}>&gt;</span> : null}
             {isLast ? (
-              <span className="font-medium text-slate-900">{labelForSegment(segment)}</span>
+              <span className={operational ? 'font-bold text-slate-950' : 'font-medium text-slate-900'}>{labelForSegment(segment)}</span>
             ) : (
-              <Link href={href} className="hover:text-slate-900">
+              <Link href={href} className={operational ? 'transition hover:text-[#ff5a00]' : 'hover:text-slate-900'}>
                 {labelForSegment(segment)}
               </Link>
             )}

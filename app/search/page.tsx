@@ -1,11 +1,12 @@
 import Link from 'next/link'
-import { desc, eq, ilike, or, sql } from 'drizzle-orm'
+import { desc, ilike, or, sql } from 'drizzle-orm'
 import { requireAuth } from '@/lib/auth/session'
 import { db } from '@/db'
-import { customerAccounts, deliveries, orders, smsMessages, tastings, users } from '@/db/schema'
+import { deliveries, orders, smsMessages, tastings, users } from '@/db/schema'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatDate } from '@/lib/utils'
+import { searchAccounts } from '@/lib/search/account-search'
 
 function roleBasePath(roles: string[]) {
   if (roles.includes('admin')) return '/admin/dashboard'
@@ -38,10 +39,7 @@ export default async function PortalSearchPage({
 
   const like = `%${query}%`
   const [accounts, orderRows, userRows, deliveryRows, tastingRows, inboxRows] = await Promise.all([
-    db.select({ id: customerAccounts.id, name: customerAccounts.companyName, city: customerAccounts.city })
-      .from(customerAccounts)
-      .where(or(ilike(customerAccounts.companyName, like), ilike(customerAccounts.contactName, like)))
-      .limit(8),
+    searchAccounts(query, 8),
     db.select({ id: orders.id, status: orders.status, createdAt: orders.createdAt })
       .from(orders)
       .where(sql`cast(${orders.id} as text) ilike ${like}`)
@@ -71,7 +69,7 @@ export default async function PortalSearchPage({
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-8">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Search Results</h1>
-        <p className="mt-1 text-sm text-slate-500">Showing results for "{query}"</p>
+        <p className="mt-1 text-sm text-slate-500">Showing results for &ldquo;{query}&rdquo;</p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -80,7 +78,7 @@ export default async function PortalSearchPage({
           <CardContent className="space-y-3">
             {accounts.length ? accounts.map((account) => (
               <Link key={account.id} href={`${base.replace(/\/dashboard$|\/deliveries$|\/tastings$/, '')}/crm/${account.id}`} className="block rounded-xl border border-slate-200 px-4 py-3 hover:bg-slate-50">
-                <p className="font-medium text-slate-900">{account.name}</p>
+                <p className="font-medium text-slate-900">{account.companyName}</p>
                 <p className="text-sm text-slate-500">{account.city ?? 'No city on file'}</p>
               </Link>
             )) : <p className="text-sm text-slate-500">No account matches.</p>}

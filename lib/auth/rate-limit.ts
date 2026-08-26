@@ -65,6 +65,9 @@ export const isDirectionsRateLimited = makeLimiter('directions-action', 20, '1 h
 /** Public delivery tracking token lookups: 60 / 15 min per token+viewer */
 export const isDeliveryTrackingRateLimited = makeLimiter('delivery-tracking', 60, '15 m')
 
+/** Public community/newsletter signup: 5 submissions / hour per IP */
+export const isCommunitySignupRateLimited = makeLimiter('community-signup', 5, '1 h')
+
 // ---------------------------------------------------------------------------
 // Shared 429 response
 // ---------------------------------------------------------------------------

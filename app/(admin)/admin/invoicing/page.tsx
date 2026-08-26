@@ -8,6 +8,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import Link from 'next/link'
 import { Plus, Receipt } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
+import { CustomerRecordLink } from '@/components/crm/CustomerRecordLink'
 import { markInvoicePaid } from '@/actions/invoices'
 import { approveTasterInvoice, payoutTasterInvoiceViaStripe } from '@/actions/taster-payouts'
 
@@ -58,6 +59,7 @@ export default async function InvoicingPage({
       total: orders.total,
       status: orders.status,
       createdAt: orders.createdAt,
+      customerId: orders.customerId,
       companyName: customerAccounts.companyName,
       invoiceId: invoices.id,
       invoiceNumber: invoices.invoiceNumber,
@@ -78,6 +80,7 @@ export default async function InvoicingPage({
       status: invoices.status,
       dueDate: invoices.dueDate,
       createdAt: invoices.createdAt,
+      customerId: invoices.customerId,
       companyName: customerAccounts.companyName,
     })
     .from(invoices)
@@ -242,7 +245,9 @@ export default async function InvoicingPage({
                 ) : allInvoices.map((inv) => (
                   <tr key={inv.id} className="transition-colors hover:bg-slate-50">
                     <td className="px-6 py-4 text-sm font-medium">{inv.invoiceNumber}</td>
-                    <td className="px-6 py-4 text-sm">{inv.companyName ?? 'N/A'}</td>
+                    <td className="px-6 py-4 text-sm">
+                      <CustomerRecordLink accountId={inv.customerId} name={inv.companyName ?? 'Unknown customer'} />
+                    </td>
                     <td className="px-6 py-4 text-sm">
                       {inv.orderId ? (
                         <Link href={`/admin/orders/${inv.orderId}`} className="font-medium text-blue-600 underline">
@@ -310,7 +315,9 @@ export default async function InvoicingPage({
                         #{order.id.slice(-8).toUpperCase()}
                       </Link>
                     </td>
-                    <td className="px-6 py-4 text-sm">{order.companyName ?? 'N/A'}</td>
+                    <td className="px-6 py-4 text-sm">
+                      <CustomerRecordLink accountId={order.customerId} name={order.companyName ?? 'Unknown customer'} />
+                    </td>
                     <td className="px-6 py-4 text-sm">
                       <Badge variant={order.status === 'fulfilled' ? 'success' : order.status === 'cancelled' ? 'destructive' : 'info'}>
                         {order.status}

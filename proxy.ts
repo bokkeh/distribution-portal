@@ -34,7 +34,7 @@ export default auth((req) => {
     return response
   }
 
-  if (pathname.startsWith('/share') || pathname === '/join' || pathname.startsWith('/pay') || pathname.startsWith('/order-review') || pathname === '/taster-signup') {
+  if (pathname.startsWith('/share') || pathname === '/join' || pathname === '/community' || pathname.startsWith('/pay') || pathname.startsWith('/order-review') || pathname === '/taster-signup') {
     return NextResponse.next()
   }
 

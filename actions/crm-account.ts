@@ -96,6 +96,25 @@ function parseInventoryDateInput(value: string) {
   return parsed
 }
 
+function parseAccountNoteDateInput(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new Error('Activity date is invalid.')
+  }
+
+  const [year, month, day] = value.split('-').map(Number)
+  const parsed = new Date(Date.UTC(year, month - 1, day, 12))
+  if (
+    Number.isNaN(parsed.getTime())
+    || parsed.getUTCFullYear() !== year
+    || parsed.getUTCMonth() !== month - 1
+    || parsed.getUTCDate() !== day
+  ) {
+    throw new Error('Activity date is invalid.')
+  }
+
+  return parsed
+}
+
 async function buildAccountInventoryItem(itemId: string): Promise<AccountInventoryItem | null> {
   const [item] = await db
     .select({
@@ -281,10 +300,13 @@ export async function addAccountNote(formData: FormData) {
   const accountId = normalizeWhitespace(formData.get('accountId'))
   const noteBody = normalizeWhitespace(formData.get('noteBody'))
   const noteType = normalizeWhitespace(formData.get('noteType')) || 'general_update'
+  const occurredAtInput = normalizeWhitespace(formData.get('occurredAt'))
   const isPinned = formData.get('isPinned') === 'on'
 
   if (!accountId) throw new Error('Account is required.')
   if (!noteBody) throw new Error('Note cannot be empty.')
+
+  const occurredAt = parseAccountNoteDateInput(occurredAtInput)
 
   const authorRole = getPrimaryRole(session)
 
@@ -303,6 +325,7 @@ export async function addAccountNote(formData: FormData) {
     authorUserId: session.user.id,
     authorRole,
     isPinned,
+    occurredAt,
   })
 
   await logActivityEvent({
@@ -315,6 +338,7 @@ export async function addAccountNote(formData: FormData) {
     metadata: {
       noteType,
       isPinned,
+      occurredAt: occurredAt.toISOString(),
       companyName: account.companyName,
     },
   })
@@ -327,9 +351,17 @@ export async function updateAccountNote(noteId: string, formData: FormData) {
   const session = await requireRole(...INTERNAL_ACCOUNT_ROLES)
   const noteBody = normalizeWhitespace(formData.get('noteBody'))
   const noteType = normalizeWhitespace(formData.get('noteType')) || 'general_update'
+  const occurredAtInput = normalizeWhitespace(formData.get('occurredAt'))
   const isPinned = formData.get('isPinned') === 'on'
 
   if (!noteBody) return { error: 'Note cannot be empty.' }
+
+  let occurredAt: Date
+  try {
+    occurredAt = parseAccountNoteDateInput(occurredAtInput)
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Activity date is invalid.' }
+  }
 
   const [existingNote] = await db
     .select()
@@ -349,6 +381,7 @@ export async function updateAccountNote(noteId: string, formData: FormData) {
     noteBody,
     noteType,
     isPinned,
+    occurredAt,
     updatedAt: new Date(),
   }).where(eq(accountNotes.id, noteId))
 
@@ -363,6 +396,8 @@ export async function updateAccountNote(noteId: string, formData: FormData) {
       noteId,
       noteType,
       isPinned,
+      occurredAt: occurredAt.toISOString(),
+      previousOccurredAt: existingNote.occurredAt.toISOString(),
       before: existingNote.noteBody,
       after: noteBody,
     },

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth/config'
 import { db } from '@/db'
-import { orders, customerAccounts, invoices, tastings, deliveries, users } from '@/db/schema'
+import { invoices, tastings, users } from '@/db/schema'
 import { ilike, or, desc } from 'drizzle-orm'
+import { searchAccounts } from '@/lib/search/account-search'
 
 export async function GET(req: NextRequest) {
   const session = await auth()
@@ -16,6 +17,8 @@ export async function GET(req: NextRequest) {
   if (q.length < 2) return NextResponse.json([])
 
   const like = `%${q}%`
+  const isAdmin = roles.includes('admin')
+  const accountBasePath = isAdmin ? '/admin/crm' : '/staff/crm'
   const results: Array<{
     id: string
     label: string
@@ -26,15 +29,12 @@ export async function GET(req: NextRequest) {
 
   await Promise.all([
     // Accounts
-    db.select({ id: customerAccounts.id, companyName: customerAccounts.companyName, city: customerAccounts.city, state: customerAccounts.state })
-      .from(customerAccounts)
-      .where(or(ilike(customerAccounts.companyName, like), ilike(customerAccounts.email, like)))
-      .limit(5)
+    searchAccounts(q, 8)
       .then(rows => rows.forEach(r => results.push({
         id: r.id, type: 'account',
         label: r.companyName,
         sublabel: [r.city, r.state].filter(Boolean).join(', ') || undefined,
-        href: `/admin/crm/${r.id}`,
+        href: `${accountBasePath}/${r.id}`,
       }))),
 
     // Invoices
@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
       }))),
 
     // Users
-    db.select({ id: users.id, name: users.name, email: users.email, role: users.role })
+    isAdmin ? db.select({ id: users.id, name: users.name, email: users.email, role: users.role })
       .from(users)
       .where(or(ilike(users.name, like), ilike(users.email, like)))
       .limit(5)
@@ -72,8 +72,11 @@ export async function GET(req: NextRequest) {
         label: r.name,
         sublabel: `${r.email} · ${r.role}`,
         href: `/admin/users/${r.id}`,
-      }))),
+      }))) : Promise.resolve(),
   ])
 
-  return NextResponse.json(results.slice(0, 15))
+  const typeOrder = { account: 0, invoice: 1, tasting: 2, user: 3, order: 4, delivery: 5 }
+  return NextResponse.json(results
+    .sort((left, right) => typeOrder[left.type] - typeOrder[right.type])
+    .slice(0, 15))
 }

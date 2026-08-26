@@ -10,7 +10,7 @@ const TERMINAL_STATUSES = ['approved', 'rejected', 'resolved']
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await requireAdmin()
-  const isSuperAdmin = session.user.email?.toLowerCase() === 'alex@ahawc.com'
+  const canSwitchViews = (session.user.roles ?? [session.user.role]).includes('admin')
   const { notifications, unreadCount } = await getBellNotificationsForUser(session.user.id)
 
   let wholesalerRequestCount = 0
@@ -44,16 +44,26 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div className="flex min-h-screen bg-slate-50">
       <AdminSidebar
-        showViewSwitcher={isSuperAdmin}
         featureFlags={session.user.featureFlags}
         roles={session.user.roles}
         notifications={notifications}
         unreadCount={unreadCount}
         navCounts={{ '/admin/wholesale-requests': wholesalerRequestCount }}
+        userName={session.user.name}
+        userAvatarUrl={session.user.image}
+        canSwitchViews={canSwitchViews}
       />
       <main className="flex-1 overflow-auto pt-14 md:pt-0">
+        <PortalTopBar
+          operational
+          notifications={notifications}
+          unreadCount={unreadCount}
+          userName={session.user.name}
+          userAvatarUrl={session.user.image}
+          profileHref="/admin/profile"
+          canSwitchViews={canSwitchViews}
+        />
         <div className="p-4 sm:p-8">
-          <PortalTopBar />
           {children}
         </div>
       </main>

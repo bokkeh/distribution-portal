@@ -288,6 +288,41 @@
       "when": 1785805200000,
       "tag": "0055_sample_inventory_management",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1787707245229,
+      "tag": "0056_account_note_activity_date",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1787708338453,
+      "tag": "0057_tasting_report_stock_before_after",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1787792400000,
+      "tag": "0058_link_sample_locations_to_users",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1787796000000,
+      "tag": "0059_link_kim_sample_location",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1787882400000,
+      "tag": "0060_community_contacts",
+      "breakpoints": true
     }
   ]
 }

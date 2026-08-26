@@ -143,6 +143,46 @@ export async function updateDealStage(accountId: string, dealStage: string) {
   revalidatePath(`/staff/crm/${accountId}`)
 }
 
+export async function renameCRMAccount(accountId: string, companyName: string) {
+  const cleanName = companyName.trim().replace(/\s+/g, ' ')
+  if (!cleanName) throw new Error('Account name is required.')
+  if (cleanName.length > 200) throw new Error('Account name must be 200 characters or fewer.')
+
+  const { session, account } = await requireEditableAccountAccess(accountId)
+  if (account.companyName === cleanName) return { companyName: cleanName }
+
+  const [updated] = await db
+    .update(customerAccounts)
+    .set({ companyName: cleanName })
+    .where(eq(customerAccounts.id, accountId))
+    .returning({ companyName: customerAccounts.companyName })
+
+  if (!updated) throw new Error('Account not found.')
+
+  await logActivityEvent({
+    entityType: 'account',
+    entityId: accountId,
+    actorUserId: session.user.id,
+    kind: 'account_updated',
+    title: 'Account name updated',
+    body: `${account.companyName} was renamed to ${cleanName}.`,
+    metadata: { changedFields: ['companyName'], previousCompanyName: account.companyName },
+  })
+
+  if (account.hubspotCompanyId) {
+    after(async () => {
+      try {
+        await updateHubSpotCompany(account.hubspotCompanyId!, { name: cleanName })
+      } catch (error) {
+        console.error('Failed to sync inline CRM account rename to HubSpot', error)
+      }
+    })
+  }
+
+  revalidateCRMAccountPaths(accountId)
+  return updated
+}
+
 export async function createPipelineStage(label: string) {
   await requireRole('admin')
 

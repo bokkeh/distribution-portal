@@ -5,6 +5,7 @@ import { customerAccounts, invoices } from '@/db/schema'
 import { requireFeature } from '@/lib/auth/session'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { CustomerRecordLink } from '@/components/crm/CustomerRecordLink'
 import { formatCurrency } from '@/lib/utils'
 
 export default async function FinanceStatementsPage() {
@@ -35,7 +36,7 @@ export default async function FinanceStatementsPage() {
           {accounts.map((account) => (
             <div key={account.id} className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
               <div>
-                <p className="text-sm font-medium text-slate-900">{account.companyName}</p>
+                <CustomerRecordLink accountId={account.id} name={account.companyName} className="text-sm font-medium text-slate-900" />
                 <p className="text-xs text-muted-foreground">{account.openInvoiceCount} open invoices</p>
               </div>
               <div className="flex items-center gap-3">

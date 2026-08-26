@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   closestCenter,
   DndContext,
@@ -22,17 +23,18 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { toast } from 'sonner'
-import { GripVertical, PencilLine, Plus, Trash2 } from 'lucide-react'
+import { Clock3, GripVertical, Plus, Trash2 } from 'lucide-react'
 import {
   createPipelineStage,
   deletePipelineStage,
+  renameCRMAccount,
   renamePipelineStage,
   reorderPipelineStages,
   updateDealStage,
 } from '@/actions/crm'
 import { getPipelineStageColorClass } from '@/lib/deal-stages'
-import { formatCurrency } from '@/lib/utils'
 import type { PipelineStage } from '@/lib/deal-stages'
+import { getBusinessTypeColor } from '@/lib/customers/business-types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
@@ -46,6 +48,10 @@ interface Account {
   state: string | null
   balance: string | null
   contactName: string | null
+  businessType?: string | null
+  daysSinceLastOrder?: number | null
+  pullThroughScore?: number | null
+  regionName?: string | null
 }
 
 interface Props {
@@ -54,6 +60,7 @@ interface Props {
   stages: PipelineStage[]
   canManageStages?: boolean
   canCreateAccounts?: boolean
+  regionColors?: Record<string, string>
 }
 
 function getAccountDragId(accountId: string) {
@@ -68,15 +75,53 @@ function getStageDropId(stageId: string) {
   return `stage-drop:${stageId}`
 }
 
+const STAGE_TONES: Record<string, { shell: string; title: string; count: string; action: string }> = {
+  slate: { shell: 'border-amber-200 bg-amber-50', title: 'text-amber-500', count: 'bg-amber-500', action: 'bg-amber-100/70 hover:bg-amber-100' },
+  blue: { shell: 'border-blue-200 bg-blue-50', title: 'text-blue-500', count: 'bg-blue-500', action: 'bg-blue-100/70 hover:bg-blue-100' },
+  amber: { shell: 'border-orange-200 bg-orange-50', title: 'text-[#ff5a00]', count: 'bg-[#ff5a00]', action: 'bg-orange-100/70 hover:bg-orange-100' },
+  violet: { shell: 'border-violet-200 bg-violet-50', title: 'text-violet-500', count: 'bg-violet-500', action: 'bg-violet-100/70 hover:bg-violet-100' },
+  green: { shell: 'border-emerald-200 bg-emerald-50', title: 'text-emerald-500', count: 'bg-emerald-500', action: 'bg-emerald-100/70 hover:bg-emerald-100' },
+  red: { shell: 'border-rose-200 bg-rose-50', title: 'text-rose-500', count: 'bg-rose-500', action: 'bg-rose-100/70 hover:bg-rose-100' },
+  teal: { shell: 'border-teal-200 bg-teal-50', title: 'text-teal-500', count: 'bg-teal-500', action: 'bg-teal-100/70 hover:bg-teal-100' },
+  pink: { shell: 'border-pink-200 bg-pink-50', title: 'text-pink-500', count: 'bg-pink-500', action: 'bg-pink-100/70 hover:bg-pink-100' },
+}
+
+function getStageTone(stage: PipelineStage) {
+  const stageName = `${stage.stageKey} ${stage.label}`.toLowerCase()
+  if (stageName.includes('check back')) return STAGE_TONES.slate
+  if (stageName.includes('connected')) return STAGE_TONES.green
+  if (stageName.includes('appt') || stageName.includes('appointment')) return STAGE_TONES.blue
+  if (stageName.includes('order placed')) return STAGE_TONES.amber
+  if (stageName.includes('committed')) return STAGE_TONES.violet
+  if (stageName.includes('won') || stageName.includes('onboard')) return STAGE_TONES.green
+  return STAGE_TONES[stage.colorToken] ?? STAGE_TONES.slate
+}
+
+function getPullThroughTone(score: number | null | undefined) {
+  if (score == null || score < 40) return 'bg-red-500'
+  if (score < 75) return 'bg-amber-500'
+  return 'bg-emerald-500'
+}
+
 function AccountCard({
   account,
   basePath,
   isDragging = false,
+  isRenaming = false,
+  onRename,
+  regionColors,
 }: {
   account: Account
   basePath: string
   isDragging?: boolean
+  isRenaming?: boolean
+  onRename: (accountId: string, companyName: string) => void
+  regionColors: Record<string, string>
 }) {
+  const router = useRouter()
+  const [isEditing, setIsEditing] = useState(false)
+  const [nameDraft, setNameDraft] = useState(account.companyName)
+  const navigationTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
     id: getAccountDragId(account.id),
     data: {
@@ -86,44 +131,122 @@ function AccountCard({
   })
 
   const style = transform ? { transform: CSS.Translate.toString(transform) } : undefined
-  const fallbackName = [account.firstName, account.lastName].filter(Boolean).join(' ').trim()
-  const subtitle = account.contactName ?? (fallbackName || null)
+  const location = [account.city, account.state].filter(Boolean).join(', ')
+  const businessType = account.businessType?.replaceAll('_', ' ') || 'Unspecified'
+  const score = account.pullThroughScore
+  const regionColor = account.regionName ? regionColors[account.regionName] : undefined
+
+  useEffect(() => () => {
+    if (navigationTimer.current) clearTimeout(navigationTimer.current)
+  }, [])
+
+  function beginEditing() {
+    if (navigationTimer.current) clearTimeout(navigationTimer.current)
+    setNameDraft(account.companyName)
+    setIsEditing(true)
+  }
+
+  function saveName() {
+    const nextName = nameDraft.trim().replace(/\s+/g, ' ')
+    setIsEditing(false)
+    if (!nextName || nextName === account.companyName) {
+      setNameDraft(account.companyName)
+      return
+    }
+    onRename(account.id, nextName)
+  }
+
+  function handleNameClick(event: React.MouseEvent<HTMLButtonElement>) {
+    if (event.detail > 1) {
+      if (navigationTimer.current) clearTimeout(navigationTimer.current)
+      return
+    }
+    navigationTimer.current = setTimeout(() => router.push(`${basePath}/${account.id}`), 350)
+  }
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`space-y-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm ${isDragging ? 'opacity-40' : ''}`}
+      {...(isEditing ? {} : listeners)}
+      {...(isEditing ? {} : attributes)}
+      className={`group relative cursor-grab touch-none rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_20px_rgba(15,23,42,0.08)] transition-shadow hover:shadow-[0_12px_28px_rgba(15,23,42,0.13)] active:cursor-grabbing ${isDragging ? 'opacity-40' : ''}`}
     >
-      <div className="flex items-start gap-1">
-        <button
-          {...listeners}
-          {...attributes}
-          className="mt-0.5 shrink-0 cursor-grab text-slate-300 hover:text-slate-500 active:cursor-grabbing"
-          aria-label="Drag to move"
-        >
-          <GripVertical className="h-3.5 w-3.5" />
-        </button>
-        <Link
-          href={`${basePath}/${account.id}`}
-          className="block flex-1 text-sm font-semibold leading-tight text-slate-900 hover:text-blue-600"
-        >
-          {account.companyName}
-        </Link>
+      <span
+        aria-hidden="true"
+        className="absolute right-3 top-3 rounded p-1 text-slate-300 opacity-40 transition group-hover:opacity-100"
+      >
+        <GripVertical className="h-4 w-4" />
+      </span>
+
+      <div className="min-h-16 pr-6">
+        {isEditing ? (
+          <input
+            value={nameDraft}
+            onChange={(event) => setNameDraft(event.target.value)}
+            onFocus={(event) => event.currentTarget.select()}
+            onBlur={saveName}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') event.currentTarget.blur()
+              if (event.key === 'Escape') {
+                setNameDraft(account.companyName)
+                setIsEditing(false)
+              }
+            }}
+            autoFocus
+            maxLength={200}
+            aria-label={`Rename ${account.companyName}`}
+            className="w-full rounded-md border border-[#ff5a00] bg-white px-2 py-1 text-base font-bold leading-tight text-slate-950 outline-none ring-2 ring-orange-100"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={handleNameClick}
+            onDoubleClick={beginEditing}
+            onKeyDown={(event) => {
+              if (event.key === 'F2') beginEditing()
+            }}
+            title="Open account · Double-click to rename"
+            className="text-left text-base font-bold leading-tight text-slate-950 decoration-[#ff5a00] underline-offset-4 hover:text-[#d94c00] hover:underline focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff5a00]"
+          >
+            {account.companyName}
+          </button>
+        )}
+        <p className="mt-1.5 text-sm text-[#817b76]">{location || 'Location not entered'}</p>
       </div>
-      {subtitle ? (
-        <p className="pl-5 text-xs text-slate-500">{subtitle}</p>
-      ) : null}
-      {(account.city || account.state) ? (
-        <p className="pl-5 text-xs text-muted-foreground">
-          {[account.city, account.state].filter(Boolean).join(', ')}
-        </p>
-      ) : null}
-      {account.balance && parseFloat(account.balance) > 0 ? (
-        <p className="pl-5 text-xs text-slate-500">
-          Balance: <span className="font-medium text-slate-700">{formatCurrency(account.balance)}</span>
-        </p>
-      ) : null}
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span
+            className="rounded-md px-2.5 py-1 font-display text-xs font-bold uppercase tracking-[0.04em] text-white"
+            style={{ backgroundColor: getBusinessTypeColor(account.businessType) }}
+          >
+            {businessType}
+          </span>
+          {account.regionName ? (
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
+              <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: regionColor ?? '#94A3B8' }} />
+              {account.regionName}
+            </span>
+          ) : null}
+        </div>
+        <span className="inline-flex items-center gap-1.5 text-sm text-[#817b76]">
+          <Clock3 className="h-4 w-4" />
+          {account.daysSinceLastOrder == null ? '—' : `${account.daysSinceLastOrder}d`}
+        </span>
+      </div>
+
+      <div className="mt-4 border-t border-slate-200 pt-3">
+        <div className="flex items-center justify-between gap-2 text-sm">
+          <span className="text-[#817b76]">Pull-through Score</span>
+          <span className="font-bold text-slate-950">{score == null ? '—' : `${score}%`}</span>
+        </div>
+        <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200">
+          <div className={`h-full rounded-full transition-[width] ${getPullThroughTone(score)}`} style={{ width: `${score ?? 0}%` }} />
+        </div>
+      </div>
+
+      {isRenaming ? <span className="absolute bottom-3 right-3 h-2 w-2 animate-pulse rounded-full bg-[#ff5a00]" aria-label="Saving account name" /> : null}
     </div>
   )
 }
@@ -139,7 +262,10 @@ function StageColumn({
   onStageLabelChange,
   onStageRename,
   onStageDelete,
+  renamingAccountId,
+  onAccountRename,
   isSaving,
+  regionColors,
 }: {
   stage: PipelineStage
   accounts: Account[]
@@ -151,8 +277,12 @@ function StageColumn({
   onStageLabelChange: (stageId: string, value: string) => void
   onStageRename: (stageId: string) => void
   onStageDelete: (stageId: string) => void
+  renamingAccountId: string | null
+  onAccountRename: (accountId: string, companyName: string) => void
   isSaving: boolean
+  regionColors: Record<string, string>
 }) {
+  const [isEditingStage, setIsEditingStage] = useState(false)
   const {
     attributes,
     listeners,
@@ -181,55 +311,76 @@ function StageColumn({
     transform: CSS.Transform.toString(transform),
     transition,
   }
+  const tone = getStageTone(stage)
+
+  function saveStageName() {
+    setIsEditingStage(false)
+    if (stageLabelDraft.trim() && stageLabelDraft.trim() !== stage.label) onStageRename(stage.id)
+  }
 
   return (
-    <div ref={setSortableNodeRef} style={style} className="w-72 flex-shrink-0">
-      <div className={`rounded-t-lg border px-3 py-2 ${stage.colorClass}`}>
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2">
+    <div ref={setSortableNodeRef} style={style} className="w-[290px] flex-shrink-0">
+      <div className={`group rounded-2xl border p-4 ${tone.shell}`}>
+        <div className="flex min-h-9 items-center justify-between gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             {canManageStages ? (
               <button
                 type="button"
                 {...attributes}
                 {...listeners}
-                className="shrink-0 cursor-grab text-slate-500 hover:text-slate-700 active:cursor-grabbing"
+                className="shrink-0 cursor-grab text-slate-400 hover:text-slate-700 active:cursor-grabbing"
                 aria-label={`Move ${stage.label}`}
               >
-                <GripVertical className="h-3.5 w-3.5" />
+                <GripVertical className="h-4 w-4" />
               </button>
             ) : null}
-            <span className="truncate text-xs font-semibold uppercase tracking-wide">{stage.label}</span>
+            {isEditingStage ? (
+              <input
+                value={stageLabelDraft}
+                onChange={(event) => onStageLabelChange(stage.id, event.target.value)}
+                onFocus={(event) => event.currentTarget.select()}
+                onBlur={saveStageName}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') event.currentTarget.blur()
+                  if (event.key === 'Escape') {
+                    onStageLabelChange(stage.id, stage.label)
+                    setIsEditingStage(false)
+                  }
+                }}
+                autoFocus
+                aria-label={`Rename ${stage.label}`}
+                className="min-w-0 flex-1 rounded-md border border-white/80 bg-white/80 px-2 py-1 font-display text-lg font-bold uppercase text-slate-950 outline-none"
+              />
+            ) : canManageStages ? (
+              <button
+                type="button"
+                onDoubleClick={() => setIsEditingStage(true)}
+                onKeyDown={(event) => {
+                  if (event.key === 'F2') setIsEditingStage(true)
+                }}
+                title="Double-click to rename this stage"
+                className={`truncate text-left font-display text-xl font-bold uppercase leading-none tracking-[0.02em] ${tone.title}`}
+              >
+                {stage.label}
+              </button>
+            ) : (
+              <span className={`truncate font-display text-xl font-bold uppercase leading-none tracking-[0.02em] ${tone.title}`}>{stage.label}</span>
+            )}
           </div>
-          <span className="text-xs font-bold">{accounts.length}</span>
+          <span className={`inline-flex min-w-8 items-center justify-center rounded-full px-2 py-1 text-sm font-bold text-white ${tone.count}`}>{accounts.length}</span>
         </div>
         {(canCreateAccounts || canManageStages) ? (
-          <div className="mt-2 flex flex-wrap items-center gap-2">
+          <div className="mt-3 flex items-center gap-2">
             {canCreateAccounts ? (
-              <Link href={`/admin/crm/new?stage=${encodeURIComponent(stage.stageKey)}`}>
-                <Button variant="secondary" size="sm" className="h-7 gap-1.5 px-2 text-[11px]">
-                  <Plus className="h-3.5 w-3.5" />
+              <Link href={`/admin/crm/new?stage=${encodeURIComponent(stage.stageKey)}`} className={`flex h-9 min-w-0 flex-1 items-center gap-2 rounded-lg px-3 text-sm font-bold text-slate-950 transition ${tone.action}`}>
+                  <Plus className="h-4 w-4" />
                   New
-                </Button>
               </Link>
             ) : null}
             {canManageStages ? (
-              <>
-                <div className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-white/60 bg-white/70 px-2 py-1">
-                  <PencilLine className="h-3.5 w-3.5 shrink-0 text-slate-500" />
-                  <input
-                    value={stageLabelDraft}
-                    onChange={(event) => onStageLabelChange(stage.id, event.target.value)}
-                    className="min-w-0 flex-1 bg-transparent text-xs text-slate-900 outline-none"
-                    aria-label={`Rename ${stage.label}`}
-                  />
-                </div>
-                <Button type="button" size="sm" variant="secondary" className="h-7 px-2 text-[11px]" disabled={isSaving} onClick={() => onStageRename(stage.id)}>
-                  Save
-                </Button>
-                <Button type="button" size="sm" variant="outline" className="h-7 px-2 text-[11px]" disabled={isSaving} onClick={() => onStageDelete(stage.id)}>
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </>
+              <Button type="button" size="icon" variant="ghost" className={`h-9 w-9 ${tone.action}`} disabled={isSaving} onClick={() => onStageDelete(stage.id)} aria-label={`Delete ${stage.label} stage`}>
+                <Trash2 className="h-4 w-4" />
+              </Button>
             ) : null}
           </div>
         ) : null}
@@ -237,8 +388,8 @@ function StageColumn({
 
       <div
         ref={setDropNodeRef}
-        className={`mt-2 min-h-24 space-y-2 rounded-b-lg p-1 transition-colors ${
-          isOver ? 'bg-slate-100 ring-2 ring-slate-300 ring-inset' : ''
+        className={`mt-4 min-h-28 space-y-4 rounded-2xl transition-colors ${
+          isOver ? 'bg-orange-50/70 p-2 ring-2 ring-[#ff5a00] ring-inset' : ''
         }`}
       >
         {accounts.map((account) => (
@@ -247,6 +398,9 @@ function StageColumn({
             account={account}
             basePath={basePath}
             isDragging={getAccountDragId(account.id) === activeId}
+            isRenaming={renamingAccountId === account.id}
+            onRename={onAccountRename}
+            regionColors={regionColors}
           />
         ))}
         {accounts.length === 0 ? (
@@ -265,11 +419,13 @@ export function PipelineBoard({
   stages: initialStages,
   canManageStages = false,
   canCreateAccounts = false,
+  regionColors = {},
 }: Props) {
   const [accounts, setAccounts] = useState<Account[]>(initialAccounts)
   const [stages, setStages] = useState<PipelineStage[]>(initialStages)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [activeType, setActiveType] = useState<'account' | 'stage' | null>(null)
+  const [renamingAccountId, setRenamingAccountId] = useState<string | null>(null)
   const [newStageLabel, setNewStageLabel] = useState('')
   const [stageLabels, setStageLabels] = useState<Record<string, string>>(
     Object.fromEntries(initialStages.map((stage) => [stage.id, stage.label]))
@@ -367,6 +523,27 @@ export function PipelineBoard({
     setStageLabels((prev) => ({ ...prev, [stageId]: value }))
   }
 
+  function handleAccountRename(accountId: string, companyName: string) {
+    const previousName = accounts.find((account) => account.id === accountId)?.companyName
+    if (!previousName || previousName === companyName) return
+
+    setRenamingAccountId(accountId)
+    setAccounts((prev) => prev.map((account) => account.id === accountId ? { ...account, companyName } : account))
+
+    startTransition(async () => {
+      try {
+        const updated = await renameCRMAccount(accountId, companyName)
+        setAccounts((prev) => prev.map((account) => account.id === accountId ? { ...account, companyName: updated.companyName } : account))
+        toast.success('Account name updated')
+      } catch (error) {
+        setAccounts((prev) => prev.map((account) => account.id === accountId ? { ...account, companyName: previousName } : account))
+        toast.error(error instanceof Error ? error.message : 'Failed to update account name')
+      } finally {
+        setRenamingAccountId((current) => current === accountId ? null : current)
+      }
+    })
+  }
+
   function handleStageRename(stageId: string) {
     const label = stageLabels[stageId]?.trim()
     if (!label) {
@@ -447,15 +624,15 @@ export function PipelineBoard({
   return (
     <div className="space-y-4">
       {canManageStages ? (
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <p className="text-sm font-semibold text-slate-900">Manage Pipeline Columns</p>
-              <p className="text-xs text-slate-500">Rename, remove, add, and drag columns left to right directly on the board.</p>
+              <p className="font-display text-lg font-bold uppercase text-slate-950">Manage pipeline</p>
+              <p className="text-xs text-slate-500">Drag cards between stages. Double-click an account or stage name to rename it.</p>
             </div>
             <div className="flex w-full max-w-md items-center gap-2">
               <Input value={newStageLabel} onChange={(event) => setNewStageLabel(event.target.value)} placeholder="Add a new pipeline column" />
-              <Button type="button" onClick={handleCreateStage}>
+              <Button type="button" onClick={handleCreateStage} className="shrink-0 bg-[#ff5a00] font-display uppercase hover:bg-[#e65000]">
                 <Plus className="mr-2 h-4 w-4" />
                 Add Column
               </Button>
@@ -466,7 +643,7 @@ export function PipelineBoard({
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragEnd={onDragEnd}>
         <SortableContext items={stages.map((stage) => getStageSortId(stage.id))} strategy={horizontalListSortingStrategy}>
-          <div className="flex gap-4 overflow-x-auto pb-4">
+          <div className="flex gap-6 overflow-x-auto pb-6 pt-1 [scrollbar-color:#cbd5e1_transparent]">
             {stageAccounts.map(({ stage, accounts: columnAccounts }) => (
               <StageColumn
                 key={stage.id}
@@ -480,7 +657,10 @@ export function PipelineBoard({
                 onStageLabelChange={handleStageLabelChange}
                 onStageRename={handleStageRename}
                 onStageDelete={handleStageDelete}
+                renamingAccountId={renamingAccountId}
+                onAccountRename={handleAccountRename}
                 isSaving={false}
+                regionColors={regionColors}
               />
             ))}
           </div>

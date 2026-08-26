@@ -4,11 +4,13 @@ import { eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { OrderStatusBadge } from '@/components/orders/OrderStatusBadge'
+import { CustomerRecordLink } from '@/components/crm/CustomerRecordLink'
 import { Button } from '@/components/ui/button'
 import { ConfirmSubmitButton } from '@/components/ui/confirm-submit-button'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatStatusLabel } from '@/lib/orders/status'
 import { updateOrderShippingStatus, updateOrderStatus } from '@/actions/orders'
-import { formatOrderPaymentStatusLabel, formatStatusLabel, orderPaymentStatusVariant, orderStatusVariant, shippingStatusVariant } from '@/lib/orders/status'
 import { formatPaymentTerms } from '@/lib/orders/payment-terms'
 import { isMissingShippingStatusColumn } from '@/lib/orders/shipping-fallback'
 import { describePricingSource } from '@/lib/pricing/geographic'
@@ -35,6 +37,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
         paymentTerms: string | null
         notes: string | null
         createdAt: Date
+        customerId: string
         companyName: string | null
       }
     | undefined
@@ -53,6 +56,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
         paymentTerms: orders.paymentTerms,
         notes: orders.notes,
         createdAt: orders.createdAt,
+        customerId: orders.customerId,
         companyName: customerAccounts.companyName,
       })
       .from(orders)
@@ -72,6 +76,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
         paymentTerms: customerAccounts.paymentTerms,
         notes: orders.notes,
         createdAt: orders.createdAt,
+        customerId: orders.customerId,
         companyName: customerAccounts.companyName,
       })
       .from(orders)
@@ -130,12 +135,14 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
         <Link href="/admin/orders"><Button variant="ghost" size="icon"><ArrowLeft className="w-4 h-4" /></Button></Link>
         <div className="flex-1">
           <h1 className="text-2xl font-bold text-slate-900">Order #{order.id.slice(-8).toUpperCase()}</h1>
-          <p className="text-muted-foreground mt-1">{order.companyName} · {formatDate(order.createdAt)}</p>
+          <p className="text-muted-foreground mt-1">
+            <CustomerRecordLink accountId={order.customerId} name={order.companyName ?? 'Unknown customer'} /> · {formatDate(order.createdAt)}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Badge variant={orderPaymentStatusVariant[order.paymentStatus] ?? 'secondary'} className="text-sm px-3 py-1">{formatOrderPaymentStatusLabel(order.paymentStatus)}</Badge>
-          <Badge variant={orderStatusVariant[order.status]} className="text-sm px-3 py-1">{formatStatusLabel(order.status)}</Badge>
-          <Badge variant={shippingStatusVariant[order.shippingStatus]} className="text-sm px-3 py-1">{formatStatusLabel(order.shippingStatus)}</Badge>
+          <OrderStatusBadge kind="payment" status={order.paymentStatus} />
+          <OrderStatusBadge kind="order" status={order.status} />
+          <OrderStatusBadge kind="shipping" status={order.shippingStatus} />
         </div>
       </div>
 
@@ -183,9 +190,9 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
           <CardContent className="space-y-4">
             <div className="text-sm space-y-2">
               <div className="flex justify-between"><span className="text-muted-foreground">Type</span><Badge variant="outline">{order.orderType}</Badge></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Payment</span><Badge variant={orderPaymentStatusVariant[order.paymentStatus] ?? 'secondary'}>{formatOrderPaymentStatusLabel(order.paymentStatus)}</Badge></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Order Status</span><Badge variant={orderStatusVariant[order.status]}>{formatStatusLabel(order.status)}</Badge></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Shipping</span><Badge variant={shippingStatusVariant[order.shippingStatus]}>{formatStatusLabel(order.shippingStatus)}</Badge></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Payment</span><OrderStatusBadge kind="payment" status={order.paymentStatus} /></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Order Status</span><OrderStatusBadge kind="order" status={order.status} /></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Shipping</span><OrderStatusBadge kind="shipping" status={order.shippingStatus} /></div>
               <div className="flex justify-between gap-3"><span className="text-muted-foreground">Payment Terms</span><span className="text-right font-medium">{formatPaymentTerms(order.paymentTerms)}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Total</span><span className="font-bold">{formatCurrency(order.total)}</span></div>
             </div>

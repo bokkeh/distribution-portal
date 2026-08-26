@@ -53,6 +53,37 @@ function readStoredColumns(): ColumnKey[] {
   }
 }
 
+function MobilePersonCard({ person, basePath }: { person: PersonRow; basePath: '/admin/crm' | '/staff/crm' }) {
+  return (
+    <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-base font-bold text-slate-950">{person.name}</p>
+          <p className="mt-0.5 text-sm text-slate-500">{person.title ?? 'Title not entered'}</p>
+        </div>
+        {person.isPrimary ? <Badge variant="success">Primary</Badge> : null}
+      </div>
+
+      <Link href={`${basePath}/${person.customerId}`} className="mt-3 block rounded-xl bg-[#f4f1ed] px-3 py-2.5 text-sm font-semibold text-slate-900 underline-offset-4 hover:text-[#d94c00] hover:underline">
+        {person.companyName}
+      </Link>
+
+      <div className="mt-3 space-y-2 text-sm">
+        {person.email ? <a href={`mailto:${person.email}`} className="block break-all text-slate-600 hover:text-[#d94c00] hover:underline">{person.email}</a> : <p className="text-slate-400">No email</p>}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {person.phone ? <PhoneSmsButton phone={person.phone} recipientName={person.name} /> : <span className="text-slate-400">No phone</span>}
+          {person.preferredContact ? <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600">Prefers {person.preferredContact}</span> : null}
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <Button asChild variant="outline" size="sm"><Link href={`${basePath}/${person.customerId}`}>View account</Link></Button>
+        <Button asChild variant="outline" size="sm"><Link href={`${basePath}/${person.customerId}/contacts`}>Manage</Link></Button>
+      </div>
+    </article>
+  )
+}
+
 export function LocalPeopleTable({
   people,
   basePath,
@@ -61,15 +92,22 @@ export function LocalPeopleTable({
   basePath: '/admin/crm' | '/staff/crm'
 }) {
   const [showColumnPicker, setShowColumnPicker] = useState(false)
-  const [selectedColumns, setSelectedColumns] = useState<ColumnKey[]>(() => readStoredColumns())
+  const [selectedColumns, setSelectedColumns] = useState<ColumnKey[]>(DEFAULT_COLUMNS)
+  const [storageReady, setStorageReady] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [page, setPage] = useState(1)
 
   useEffect(() => {
+    setSelectedColumns(readStoredColumns())
+    setStorageReady(true)
+  }, [])
+
+  useEffect(() => {
+    if (!storageReady) return
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(selectedColumns))
     } catch {}
-  }, [selectedColumns])
+  }, [selectedColumns, storageReady])
 
   function toggleColumn(column: ColumnKey) {
     setSelectedColumns((prev) => {
@@ -112,14 +150,14 @@ export function LocalPeopleTable({
   }
 
   return (
-    <div className="overflow-x-auto">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+    <div>
+      <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:py-3">
         <div>
-          <p className="text-sm font-medium text-slate-900">People</p>
-          <p className="text-xs text-slate-500">{filteredPeople.length} of {people.length} contacts</p>
+          <p className="text-sm font-semibold text-slate-900">Company contacts</p>
+          <p className="text-xs text-slate-500">{filteredPeople.length} of {people.length} people associated with accounts</p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="relative">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          <div className="relative w-full sm:w-auto">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
             <input
               type="search"
@@ -129,16 +167,16 @@ export function LocalPeopleTable({
                 setPage(1)
               }}
               placeholder="Search people..."
-              className="h-9 min-w-[180px] rounded-md border border-input bg-white pl-8 pr-3 text-sm"
+              className="h-10 w-full rounded-md border border-input bg-white pl-8 pr-3 text-sm sm:h-9 sm:min-w-[180px]"
             />
           </div>
-          <div className="relative">
-            <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => setShowColumnPicker((prev) => !prev)}>
+          <div className="relative w-full sm:w-auto">
+            <Button type="button" variant="outline" size="sm" className="h-10 w-full gap-2 sm:h-9 sm:w-auto" onClick={() => setShowColumnPicker((prev) => !prev)}>
               <Settings2 className="h-4 w-4" />
               Customize Columns
             </Button>
             {showColumnPicker ? (
-              <div className="absolute right-0 z-10 mt-2 w-60 rounded-xl border border-slate-200 bg-white shadow-lg">
+              <div className="absolute right-0 z-20 mt-2 max-h-[70vh] w-[min(15rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl">
                 <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
                   <p className="text-xs font-semibold text-slate-700">Show / Hide Columns</p>
                   <button type="button" onClick={() => setShowColumnPicker(false)} className="text-slate-400 hover:text-slate-600">
@@ -191,6 +229,12 @@ export function LocalPeopleTable({
         ) : null}
       </div>
 
+      <div className="space-y-3 p-3 md:hidden">
+        {paginatedPeople.map((person) => <MobilePersonCard key={person.id} person={person} basePath={basePath} />)}
+        {paginatedPeople.length === 0 ? <p className="px-4 py-10 text-center text-sm text-slate-500">No people match your search.</p> : null}
+      </div>
+
+      <div className="hidden overflow-x-auto md:block">
       <table className="w-full">
         <thead className="border-b bg-slate-50">
           <tr>
@@ -219,7 +263,16 @@ export function LocalPeopleTable({
                 </td>
               ) : null}
               {vis.has('title') ? <td className="px-4 py-3 text-sm text-muted-foreground">{person.title ?? '-'}</td> : null}
-              {vis.has('company') ? <td className="px-4 py-3 text-sm font-medium text-slate-900">{person.companyName}</td> : null}
+              {vis.has('company') ? (
+                <td className="px-4 py-3 text-sm font-medium">
+                  <Link
+                    href={`${basePath}/${person.customerId}`}
+                    className="text-slate-900 underline-offset-4 transition hover:text-[#ff5a00] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff5a00]"
+                  >
+                    {person.companyName}
+                  </Link>
+                </td>
+              ) : null}
               {vis.has('phone') ? (
                 <td className="px-4 py-3 text-sm">
                   {person.phone ? (
@@ -255,6 +308,7 @@ export function LocalPeopleTable({
           ))}
         </tbody>
       </table>
+      </div>
 
       {filteredPeople.length > PAGE_SIZE ? (
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-sm text-slate-500">

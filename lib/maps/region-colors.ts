@@ -16,3 +16,12 @@ export const REGION_COLORS = [
 export function getRegionColor(index: number): string {
   return REGION_COLORS[index % REGION_COLORS.length]
 }
+
+export function buildRegionColorMap(regionNames: string[]): Record<string, string> {
+  const sortedNames = [...new Set(regionNames)].sort((a, b) => a.localeCompare(b))
+  const map: Record<string, string> = {}
+  sortedNames.forEach((name, index) => {
+    map[name] = getRegionColor(index)
+  })
+  return map
+}

@@ -14,6 +14,7 @@ import { ViewAsButton } from '@/components/admin/ViewAsButton'
 import Link from 'next/link'
 import { ArrowLeft, Calendar, MapPin, Phone, User, FileText, Receipt, StickyNote } from 'lucide-react'
 import { TastingReportFormCard } from '@/components/tastings/TastingReportFormCard'
+import { CustomerRecordLink } from '@/components/crm/CustomerRecordLink'
 
 const STATUS_COLORS: Record<string, string> = {
   requested: 'text-violet-700 border-violet-200 bg-violet-50',
@@ -184,7 +185,11 @@ export default async function AdminTastingDetailPage({
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">{tasting.eventName}</h1>
-            <p className="text-slate-500 mt-0.5">{account?.companyName}</p>
+            {account ? (
+              <p className="text-slate-500 mt-0.5">
+                <CustomerRecordLink accountId={account.id} name={account.companyName ?? 'Unknown customer'} />
+              </p>
+            ) : null}
           </div>
           <Badge variant="outline" className={`capitalize text-sm px-2.5 py-1 ${STATUS_COLORS[tasting.status] ?? ''}`}>
             {tasting.status}
@@ -280,7 +285,8 @@ export default async function AdminTastingDetailPage({
                   { label: 'Bottles Sold', value: report.bottlesSold },
                   { label: 'Customers Missed', value: report.missedCustomers },
                   { label: 'Consumer Interactions', value: report.consumerInteractions },
-                  { label: 'Bottles In Stock', value: report.bottlesInStock },
+                  { label: 'Stock Before Tasting', value: report.bottlesInStockBefore },
+                  { label: 'Stock After Tasting', value: report.bottlesInStockAfter },
                 ].map(({ label, value }) => value != null && (
                   <div key={label} className="bg-slate-50 rounded-lg p-2.5">
                     <span className="text-xs text-slate-400">{label}</span>
