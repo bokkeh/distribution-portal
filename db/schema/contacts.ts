@@ -13,6 +13,7 @@ export const contacts = pgTable('contacts', {
   isPrimary: boolean('is_primary').notNull().default(false),
   hubspotContactId: text('hubspot_contact_id'),
   notes: text('notes'),
+  dealStage: text('deal_stage'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

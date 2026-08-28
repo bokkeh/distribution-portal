@@ -11,12 +11,14 @@ export function DealStageSelect({
   stages,
   onStageChange,
   size = 'md',
+  updateAction = updateDealStage,
 }: {
   accountId: string
   currentStage: string | null | undefined
   stages: PipelineStage[]
   onStageChange?: (nextStage: string) => void
   size?: 'sm' | 'md'
+  updateAction?: (id: string, stageKey: string) => Promise<unknown>
 }) {
   const [isPending, startTransition] = useTransition()
   const [optimisticValue, setOptimisticValue] = useState<string | null>(null)
@@ -29,7 +31,7 @@ export function DealStageSelect({
     setOptimisticValue(value)
     startTransition(async () => {
       try {
-        await updateDealStage(accountId, value)
+        await updateAction(accountId, value)
         onStageChange?.(value)
         setOptimisticValue(null)
         toast.success('Deal stage updated')

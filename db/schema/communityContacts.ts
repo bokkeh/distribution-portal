@@ -9,6 +9,7 @@ export const communityContacts = pgTable('community_contacts', {
   phone: text('phone').notNull(),
   status: text('status', { enum: ['subscribed', 'unsubscribed'] }).notNull().default('subscribed'),
   source: text('source', { enum: ['public_signup', 'admin_entry', 'import'] }).notNull(),
+  dealStage: text('deal_stage'),
   marketingConsentAt: timestamp('marketing_consent_at', { withTimezone: true }).notNull().defaultNow(),
   createdByUserId: uuid('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

@@ -1,7 +1,7 @@
 'use server'
 
 import { db } from '@/db'
-import { accountPreferences, activityEvents, contacts, crmPipelineStages, customerAccounts, deliveryStops, invoices, orders, salesMembers, salesRegions, salesRouteStops, smsThreads, tastings, users } from '@/db/schema'
+import { accountPreferences, activityEvents, communityContacts, contacts, crmPipelineStages, customerAccounts, deliveryStops, hubspotCompanyPipelineStages, invoices, orders, salesMembers, salesRegions, salesRouteStops, smsThreads, tastings, users, type CrmPipelineEntityType } from '@/db/schema'
 import { requireAdminOrStaff, requireRole } from '@/lib/auth/session'
 import { geocodeAddress } from '@/lib/maps/geocode'
 import { and, asc, eq, inArray } from 'drizzle-orm'
@@ -56,7 +56,7 @@ const HUBSPOT_CONTACT_SYNC_FIELDS = new Set<string>([
   'paymentTerms',
 ] as const)
 
-async function getOrderedPipelineStages() {
+async function getOrderedPipelineStages(entityType: CrmPipelineEntityType = 'account') {
   const stages = await db
     .select({
       id: crmPipelineStages.id,
@@ -66,14 +66,15 @@ async function getOrderedPipelineStages() {
       position: crmPipelineStages.position,
     })
     .from(crmPipelineStages)
+    .where(eq(crmPipelineStages.entityType, entityType))
     .orderBy(asc(crmPipelineStages.position), asc(crmPipelineStages.label))
 
   return coercePipelineStages(stages)
 }
 
-async function resolvePipelineStageKey(value: string | null | undefined) {
+async function resolvePipelineStageKey(value: string | null | undefined, entityType: CrmPipelineEntityType = 'account') {
   const normalized = normalizePipelineStageKey(value)
-  const stages = await getOrderedPipelineStages()
+  const stages = await getOrderedPipelineStages(entityType)
   return stages.find((stage) => stage.stageKey === normalized)?.stageKey ?? stages[0]?.stageKey ?? 'new_lead'
 }
 
@@ -153,6 +154,33 @@ export async function updateDealStage(accountId: string, dealStage: string) {
   revalidatePath('/staff/crm')
   revalidatePath(`/admin/crm/${accountId}`)
   revalidatePath(`/staff/crm/${accountId}`)
+}
+
+export async function updateContactDealStage(contactId: string, dealStage: string) {
+  await requireAdminOrStaff()
+  const nextStageKey = await resolvePipelineStageKey(dealStage, 'contact')
+  await db.update(contacts).set({ dealStage: nextStageKey }).where(eq(contacts.id, contactId))
+  revalidateCRMIndexPaths()
+}
+
+export async function updateCommunityContactDealStage(communityContactId: string, dealStage: string) {
+  await requireAdminOrStaff()
+  const nextStageKey = await resolvePipelineStageKey(dealStage, 'community_contact')
+  await db.update(communityContacts).set({ dealStage: nextStageKey, updatedAt: new Date() }).where(eq(communityContacts.id, communityContactId))
+  revalidateCRMIndexPaths()
+}
+
+export async function updateHubspotCompanyStage(hubspotCompanyId: string, dealStage: string) {
+  await requireAdminOrStaff()
+  const nextStageKey = await resolvePipelineStageKey(dealStage, 'hubspot_company')
+  await db
+    .insert(hubspotCompanyPipelineStages)
+    .values({ hubspotCompanyId, stageKey: nextStageKey })
+    .onConflictDoUpdate({
+      target: hubspotCompanyPipelineStages.hubspotCompanyId,
+      set: { stageKey: nextStageKey, updatedAt: new Date() },
+    })
+  revalidateCRMIndexPaths()
 }
 
 export async function renameCRMAccount(accountId: string, companyName: string) {
@@ -319,7 +347,7 @@ export async function updateCRMAccountInlineField(
   return result
 }
 
-export async function createPipelineStage(label: string) {
+export async function createPipelineStage(label: string, entityType: CrmPipelineEntityType = 'account') {
   await requireRole('admin')
 
   const cleanLabel = label.trim()
@@ -327,7 +355,7 @@ export async function createPipelineStage(label: string) {
     throw new Error('Stage label is required.')
   }
 
-  const existingStages = await getOrderedPipelineStages()
+  const existingStages = await getOrderedPipelineStages(entityType)
   const baseKey = normalizePipelineStageKey(cleanLabel)
   let stageKey = baseKey
   let suffix = 2
@@ -339,6 +367,7 @@ export async function createPipelineStage(label: string) {
   const [created] = await db
     .insert(crmPipelineStages)
     .values({
+      entityType,
       stageKey,
       label: cleanLabel,
       colorToken: getNextPipelineStageColorToken(existingStages.length),
@@ -387,7 +416,13 @@ export async function renamePipelineStage(stageId: string, label: string) {
 export async function deletePipelineStage(stageId: string) {
   await requireRole('admin')
 
-  const stages = await getOrderedPipelineStages()
+  const [stageRow] = await db.select({ entityType: crmPipelineStages.entityType }).from(crmPipelineStages).where(eq(crmPipelineStages.id, stageId)).limit(1)
+  if (!stageRow) {
+    throw new Error('Stage not found.')
+  }
+  const entityType = stageRow.entityType as CrmPipelineEntityType
+
+  const stages = await getOrderedPipelineStages(entityType)
   if (stages.length <= 1) {
     throw new Error('At least one pipeline stage is required.')
   }
@@ -402,9 +437,23 @@ export async function deletePipelineStage(stageId: string) {
     throw new Error('A replacement stage is required before deleting this stage.')
   }
 
-  await db.update(customerAccounts)
-    .set({ dealStage: fallbackStage.stageKey })
-    .where(eq(customerAccounts.dealStage, stageToDelete.stageKey))
+  if (entityType === 'account') {
+    await db.update(customerAccounts)
+      .set({ dealStage: fallbackStage.stageKey })
+      .where(eq(customerAccounts.dealStage, stageToDelete.stageKey))
+  } else if (entityType === 'contact') {
+    await db.update(contacts)
+      .set({ dealStage: fallbackStage.stageKey })
+      .where(eq(contacts.dealStage, stageToDelete.stageKey))
+  } else if (entityType === 'community_contact') {
+    await db.update(communityContacts)
+      .set({ dealStage: fallbackStage.stageKey })
+      .where(eq(communityContacts.dealStage, stageToDelete.stageKey))
+  } else if (entityType === 'hubspot_company') {
+    await db.update(hubspotCompanyPipelineStages)
+      .set({ stageKey: fallbackStage.stageKey, updatedAt: new Date() })
+      .where(eq(hubspotCompanyPipelineStages.stageKey, stageToDelete.stageKey))
+  }
 
   await db.delete(crmPipelineStages).where(eq(crmPipelineStages.id, stageId))
 
@@ -422,10 +471,10 @@ export async function deletePipelineStage(stageId: string) {
   return { fallbackStageKey: fallbackStage.stageKey }
 }
 
-export async function reorderPipelineStages(stageIds: string[]) {
+export async function reorderPipelineStages(stageIds: string[], entityType: CrmPipelineEntityType = 'account') {
   await requireRole('admin')
 
-  const stages = await getOrderedPipelineStages()
+  const stages = await getOrderedPipelineStages(entityType)
   const existingIds = new Set(stages.map((stage) => stage.id))
   if (stageIds.length !== stages.length || stageIds.some((id) => !existingIds.has(id))) {
     throw new Error('Stage order is out of sync. Refresh and try again.')

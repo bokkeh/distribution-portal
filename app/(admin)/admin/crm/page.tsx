@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { and, asc, countDistinct, eq, inArray, max, ne, sql } from 'drizzle-orm'
 import { Kanban, LayoutList, Plus, X } from 'lucide-react'
-import { mergeContacts, mergeCustomerAccounts } from '@/actions/crm'
+import { mergeContacts, mergeCustomerAccounts, updateCommunityContactDealStage, updateContactDealStage, updateHubspotCompanyStage } from '@/actions/crm'
 import { db } from '@/db'
 import {
   activityEvents,
@@ -11,6 +11,7 @@ import {
   customerAccounts,
   deliveries,
   deliveryStops,
+  hubspotCompanyPipelineStages,
   invoices,
   orderItems,
   orders,
@@ -28,6 +29,8 @@ import { HubSpotCompaniesTab } from '@/components/crm/HubSpotCompaniesTab'
 import { LocalAccountsTable } from '@/components/crm/LocalAccountsTable'
 import { LocalPeopleTable } from '@/components/crm/LocalPeopleTable'
 import { PipelineBoard } from '@/components/crm/PipelineBoard'
+import { GenericPipelineBoard, type GenericPipelineItem } from '@/components/crm/GenericPipelineBoard'
+import { ListPipelineToggle } from '@/components/crm/ListPipelineToggle'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { CRM_ACCOUNT_FILTERS, type CRMAccountFilter, normalizeCRMAccountFilter } from '@/lib/customers/account-segmentation'
@@ -37,6 +40,25 @@ import { getHubSpotCompanies } from '@/lib/hubspot/client'
 import { buildRegionColorMap } from '@/lib/maps/region-colors'
 import { loadPullThroughDataset, resolvePullThroughScope } from '@/lib/pull-through/data'
 import { formatCurrency } from '@/lib/utils'
+
+const CONTACT_CARD_FIELDS = [
+  { key: 'company', label: 'Company' },
+  { key: 'title', label: 'Title' },
+  { key: 'email', label: 'Email' },
+  { key: 'phone', label: 'Phone' },
+]
+const COMMUNITY_CARD_FIELDS = [
+  { key: 'email', label: 'Email' },
+  { key: 'phone', label: 'Phone' },
+  { key: 'status', label: 'Status' },
+  { key: 'source', label: 'Source' },
+]
+const HUBSPOT_CARD_FIELDS = [
+  { key: 'location', label: 'Location' },
+  { key: 'domain', label: 'Domain' },
+  { key: 'phone', label: 'Phone' },
+  { key: 'industry', label: 'Industry' },
+]
 
 type CRMTool = 'merge-accounts' | 'merge-people'
 
@@ -90,7 +112,7 @@ export default async function CRMPage({
     await mergeContacts(formData)
   }
 
-  const [accounts, people, community, hsResult, currentSalesMember, pipelineStageRows, pullThroughDataset, allRegions, salesLeadOptions] = await Promise.all([
+  const [accounts, people, community, hsResult, currentSalesMember, pipelineStageRows, pullThroughDataset, allRegions, salesLeadOptions, contactStageRows, communityStageRows, hubspotStageRows, hubspotStageAssignments] = await Promise.all([
     db.select({
       id: customerAccounts.id,
       companyName: customerAccounts.companyName,
@@ -133,13 +155,57 @@ export default async function CRMPage({
       phoneType: contacts.phoneType,
       preferredContact: contacts.preferredContact,
       isPrimary: contacts.isPrimary,
+      dealStage: contacts.dealStage,
       companyName: customerAccounts.companyName,
       customerId: customerAccounts.id,
     })
       .from(contacts)
       .innerJoin(customerAccounts, eq(contacts.customerId, customerAccounts.id))
-      .orderBy(contacts.name),
-    db.select().from(communityContacts).orderBy(communityContacts.lastName, communityContacts.firstName),
+      .orderBy(contacts.name)
+      .catch(() => db.select({
+        id: contacts.id,
+        name: contacts.name,
+        title: contacts.title,
+        email: contacts.email,
+        phone: contacts.phone,
+        phoneType: contacts.phoneType,
+        preferredContact: contacts.preferredContact,
+        isPrimary: contacts.isPrimary,
+        companyName: customerAccounts.companyName,
+        customerId: customerAccounts.id,
+      })
+        .from(contacts)
+        .innerJoin(customerAccounts, eq(contacts.customerId, customerAccounts.id))
+        .orderBy(contacts.name)
+        .then((rows) => rows.map((row) => ({ ...row, dealStage: null as string | null })))),
+    db.select({
+      id: communityContacts.id,
+      firstName: communityContacts.firstName,
+      lastName: communityContacts.lastName,
+      email: communityContacts.email,
+      phone: communityContacts.phone,
+      status: communityContacts.status,
+      source: communityContacts.source,
+      dealStage: communityContacts.dealStage,
+      marketingConsentAt: communityContacts.marketingConsentAt,
+      createdAt: communityContacts.createdAt,
+    })
+      .from(communityContacts)
+      .orderBy(communityContacts.lastName, communityContacts.firstName)
+      .catch(() => db.select({
+        id: communityContacts.id,
+        firstName: communityContacts.firstName,
+        lastName: communityContacts.lastName,
+        email: communityContacts.email,
+        phone: communityContacts.phone,
+        status: communityContacts.status,
+        source: communityContacts.source,
+        marketingConsentAt: communityContacts.marketingConsentAt,
+        createdAt: communityContacts.createdAt,
+      })
+        .from(communityContacts)
+        .orderBy(communityContacts.lastName, communityContacts.firstName)
+        .then((rows) => rows.map((row) => ({ ...row, dealStage: null as string | null })))),
     getHubSpotCompanies(),
     db.select({ id: salesMembers.id }).from(salesMembers).where(eq(salesMembers.userId, session.user.id)).limit(1).then((rows) => rows[0] ?? null),
     db.select({
@@ -148,7 +214,7 @@ export default async function CRMPage({
       label: crmPipelineStages.label,
       colorToken: crmPipelineStages.colorToken,
       position: crmPipelineStages.position,
-    }).from(crmPipelineStages).orderBy(asc(crmPipelineStages.position), asc(crmPipelineStages.label)).catch(() => null),
+    }).from(crmPipelineStages).where(eq(crmPipelineStages.entityType, 'account')).orderBy(asc(crmPipelineStages.position), asc(crmPipelineStages.label)).catch(() => null),
     resolvePullThroughScope(session).then(loadPullThroughDataset),
     db.select({ id: salesRegions.id, name: salesRegions.name }).from(salesRegions).orderBy(asc(salesRegions.name)),
     db
@@ -157,12 +223,38 @@ export default async function CRMPage({
       .innerJoin(users, eq(salesMembers.userId, users.id))
       .where(and(eq(salesMembers.status, 'active'), eq(users.active, true)))
       .orderBy(asc(users.name)),
+    db.select({
+      id: crmPipelineStages.id,
+      stageKey: crmPipelineStages.stageKey,
+      label: crmPipelineStages.label,
+      colorToken: crmPipelineStages.colorToken,
+      position: crmPipelineStages.position,
+    }).from(crmPipelineStages).where(eq(crmPipelineStages.entityType, 'contact')).orderBy(asc(crmPipelineStages.position), asc(crmPipelineStages.label)).catch(() => []),
+    db.select({
+      id: crmPipelineStages.id,
+      stageKey: crmPipelineStages.stageKey,
+      label: crmPipelineStages.label,
+      colorToken: crmPipelineStages.colorToken,
+      position: crmPipelineStages.position,
+    }).from(crmPipelineStages).where(eq(crmPipelineStages.entityType, 'community_contact')).orderBy(asc(crmPipelineStages.position), asc(crmPipelineStages.label)).catch(() => []),
+    db.select({
+      id: crmPipelineStages.id,
+      stageKey: crmPipelineStages.stageKey,
+      label: crmPipelineStages.label,
+      colorToken: crmPipelineStages.colorToken,
+      position: crmPipelineStages.position,
+    }).from(crmPipelineStages).where(eq(crmPipelineStages.entityType, 'hubspot_company')).orderBy(asc(crmPipelineStages.position), asc(crmPipelineStages.label)).catch(() => []),
+    db.select({ hubspotCompanyId: hubspotCompanyPipelineStages.hubspotCompanyId, stageKey: hubspotCompanyPipelineStages.stageKey }).from(hubspotCompanyPipelineStages).catch(() => []),
   ])
 
   const regionColors = buildRegionColorMap(allRegions.map((region) => region.name))
   const regionOptions = allRegions.map((region) => ({ value: region.id, label: region.name }))
   const salesLeadInlineOptions = salesLeadOptions.map((member) => ({ value: member.id, label: member.name }))
   const pipelineStages = coercePipelineStages(pipelineStageRows)
+  const contactPipelineStages = coercePipelineStages(contactStageRows)
+  const communityPipelineStages = coercePipelineStages(communityStageRows)
+  const hubspotPipelineStages = coercePipelineStages(hubspotStageRows)
+  const hubspotStageMap = new Map(hubspotStageAssignments.map((row) => [row.hubspotCompanyId, row.stageKey]))
   const accountIds = accounts.map((account) => account.id)
   const [pendingStats, totalStats, orderStats, accountActivityStats, orderActivityStats, invoiceActivityStats, tastingActivityStats, deliveryActivityStats] = await Promise.all([
     accountIds.length === 0 ? [] : db.select({ customerId: orders.customerId, cases: sql<number>`coalesce(sum(${orderItems.quantity}::numeric), 0)`.as('cases') }).from(orders).innerJoin(orderItems, eq(orderItems.orderId, orders.id)).where(and(inArray(orders.customerId, accountIds), inArray(orders.status, ['pending', 'confirmed']))).groupBy(orders.customerId),
@@ -230,6 +322,48 @@ export default async function CRMPage({
   const { companies: hsCompanies, error: hsError } = hsResult
   const pullThroughScores = pullThroughDataset.rows.map((row) => row.pullThrough.score).filter((score): score is number => score != null)
   const averagePullThrough = pullThroughScores.length ? Math.round(pullThroughScores.reduce((sum, score) => sum + score, 0) / pullThroughScores.length) : null
+
+  const contactPipelineItems: GenericPipelineItem[] = filteredPeople.map((person) => ({
+    id: person.id,
+    dealStage: person.dealStage,
+    title: person.name,
+    subtitle: person.companyName,
+    href: `/admin/crm/${person.customerId}`,
+    fields: {
+      company: person.companyName,
+      title: person.title,
+      email: person.email,
+      phone: person.phone,
+    },
+  }))
+
+  const communityPipelineItems: GenericPipelineItem[] = community.map((contact) => ({
+    id: contact.id,
+    dealStage: contact.dealStage,
+    title: `${contact.firstName} ${contact.lastName}`.trim(),
+    subtitle: contact.email,
+    href: null,
+    fields: {
+      email: contact.email,
+      phone: contact.phone,
+      status: contact.status.replaceAll('_', ' '),
+      source: contact.source.replaceAll('_', ' '),
+    },
+  }))
+
+  const hubspotPipelineItems: GenericPipelineItem[] = hsCompanies.map((company) => ({
+    id: company.id,
+    dealStage: hubspotStageMap.get(company.id) ?? null,
+    title: company.name || 'Unnamed company',
+    subtitle: [company.city, company.state].filter(Boolean).join(', ') || null,
+    href: null,
+    fields: {
+      location: [company.city, company.state].filter(Boolean).join(', '),
+      domain: company.domain,
+      phone: company.phone,
+      industry: company.industry,
+    },
+  }))
   const defaultTab = ['overview', 'company-accounts', 'company-contacts', 'community-contacts', 'assigned', 'hubspot'].includes(tab ?? '') ? tab : 'company-accounts'
 
   const mergeAccountCard = (
@@ -305,10 +439,71 @@ export default async function CRMPage({
           </div>
           {isPipeline ? <PipelineBoard accounts={filteredAccountRows} basePath="/admin/crm" stages={pipelineStages} canManageStages canCreateAccounts regionColors={regionColors} regionOptions={regionOptions} /> : <Card className="overflow-hidden shadow-none"><LocalAccountsTable initialAccounts={filteredAccountRows} userId={session.user.id} pipelineStages={pipelineStages} regionColors={regionColors} regionOptions={regionOptions} salesLeadOptions={salesLeadInlineOptions} canAssignSalesLead /></Card>}
         </div>
-        <Card className="mt-6 overflow-hidden shadow-none"><LocalPeopleTable people={filteredPeople} basePath="/admin/crm" /></Card>
-        <Card className="mt-6 overflow-hidden shadow-none"><CommunityContactsTable contacts={community} /></Card>
-        <Card className="mt-6 overflow-hidden shadow-none"><LocalAccountsTable initialAccounts={filteredAssignedToMeRows} userId={session.user.id} pipelineStages={pipelineStages} regionColors={regionColors} regionOptions={regionOptions} salesLeadOptions={salesLeadInlineOptions} canAssignSalesLead /></Card>
-        <Card className="mt-6 overflow-hidden shadow-none"><HubSpotCompaniesTab companies={hsCompanies} importedIds={importedHsIds} localAccountIds={localAccountIds} error={hsError} /></Card>
+        <div className="mt-6">
+          <ListPipelineToggle
+            list={<Card className="overflow-hidden shadow-none"><LocalPeopleTable people={filteredPeople} basePath="/admin/crm" /></Card>}
+            pipeline={
+              <GenericPipelineBoard
+                entityType="contact"
+                items={contactPipelineItems}
+                stages={contactPipelineStages}
+                canManageStages
+                fieldOptions={CONTACT_CARD_FIELDS}
+                defaultFields={['company']}
+                storageKey="crm-pipeline-contact-card-fields:v1"
+                updateItemStage={updateContactDealStage}
+              />
+            }
+          />
+        </div>
+        <div className="mt-6">
+          <ListPipelineToggle
+            list={<Card className="overflow-hidden shadow-none"><CommunityContactsTable contacts={community} /></Card>}
+            pipeline={
+              <GenericPipelineBoard
+                entityType="community_contact"
+                items={communityPipelineItems}
+                stages={communityPipelineStages}
+                canManageStages
+                fieldOptions={COMMUNITY_CARD_FIELDS}
+                defaultFields={['status']}
+                storageKey="crm-pipeline-community-card-fields:v1"
+                updateItemStage={updateCommunityContactDealStage}
+              />
+            }
+          />
+        </div>
+        <div className="mt-6">
+          <ListPipelineToggle
+            list={<Card className="overflow-hidden shadow-none"><LocalAccountsTable initialAccounts={filteredAssignedToMeRows} userId={session.user.id} pipelineStages={pipelineStages} regionColors={regionColors} regionOptions={regionOptions} salesLeadOptions={salesLeadInlineOptions} canAssignSalesLead /></Card>}
+            pipeline={
+              <PipelineBoard
+                accounts={filteredAssignedToMeRows}
+                basePath="/admin/crm"
+                stages={pipelineStages}
+                regionColors={regionColors}
+                regionOptions={regionOptions}
+              />
+            }
+          />
+        </div>
+        <div className="mt-6">
+          <ListPipelineToggle
+            list={<Card className="overflow-hidden shadow-none"><HubSpotCompaniesTab companies={hsCompanies} importedIds={importedHsIds} localAccountIds={localAccountIds} error={hsError} /></Card>}
+            pipeline={
+              <GenericPipelineBoard
+                entityType="hubspot_company"
+                items={hubspotPipelineItems}
+                stages={hubspotPipelineStages}
+                canManageStages
+                fieldOptions={HUBSPOT_CARD_FIELDS}
+                defaultFields={['location']}
+                storageKey="crm-pipeline-hubspot-card-fields:v1"
+                updateItemStage={updateHubspotCompanyStage}
+              />
+            }
+          />
+        </div>
       </CRMTabs>
     </div>
   )
