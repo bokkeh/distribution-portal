@@ -1,19 +1,18 @@
-import Link from 'next/link'
 import { asc, eq } from 'drizzle-orm'
 import { Plus } from 'lucide-react'
 import { TASK_ROLES } from '@/lib/tasks/roles'
 import { db } from '@/db'
 import { users } from '@/db/schema'
 import { getTasksForView } from '@/lib/tasks/read'
-import { TaskList } from '@/components/tasks/TaskList'
+import { TasksScopeTabs } from '@/components/tasks/TasksScopeTabs'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 
 export async function TasksPage({ mode, userId, roles, organization = false }: { mode: 'admin' | 'staff' | 'sales'; userId: string; roles: string[]; organization?: boolean }) {
   const canViewOrganization = roles.some((role) => ['admin', 'staff', 'sales_manager'].includes(role))
   const canReassign = roles.some((role) => ['admin', 'staff', 'sales_manager'].includes(role))
-  const [tasks, assigneeRows] = await Promise.all([
-    getTasksForView({ userId, roles, includeOrganization: organization && canViewOrganization }),
+  const [assignedToMeTasks, organizationTasks, assigneeRows] = await Promise.all([
+    getTasksForView({ userId, roles, includeOrganization: false }),
+    canViewOrganization ? getTasksForView({ userId, roles, includeOrganization: true }) : Promise.resolve([]),
     canReassign
       ? db.select({ id: users.id, name: users.name, roles: users.roles }).from(users).where(eq(users.active, true)).orderBy(asc(users.name))
       : Promise.resolve([]),
@@ -31,13 +30,16 @@ export async function TasksPage({ mode, userId, roles, organization = false }: {
         </div>
         <Button type="button" data-quick-add-action="task"><Plus className="mr-2 h-4 w-4" />Add Task</Button>
       </div>
-      {canViewOrganization ? (
-        <div className="flex gap-2 text-sm">
-          <Link href={`/${mode}/tasks`} className={`rounded-lg px-3 py-2 ${!organization ? 'bg-slate-900 text-white' : 'bg-white text-slate-600'}`}>Assigned to me</Link>
-          <Link href={`/${mode}/tasks?scope=organization`} className={`rounded-lg px-3 py-2 ${organization ? 'bg-slate-900 text-white' : 'bg-white text-slate-600'}`}>Organization</Link>
-        </div>
-      ) : null}
-      <Card><CardContent className="p-4 sm:p-6"><TaskList items={tasks} mode={mode} nowIso={nowIso} assigneeOptions={assigneeOptions} canReassign={canReassign} /></CardContent></Card>
+      <TasksScopeTabs
+        mode={mode}
+        nowIso={nowIso}
+        canViewOrganization={canViewOrganization}
+        initialOrganization={organization}
+        assignedToMeTasks={assignedToMeTasks}
+        organizationTasks={organizationTasks}
+        assigneeOptions={assigneeOptions}
+        canReassign={canReassign}
+      />
     </div>
   )
 }
