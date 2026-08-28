@@ -1,6 +1,6 @@
 import { customerAccounts, users } from '@/db/schema'
 import { db } from '@/db'
-import { TastingsPlanner } from '@/components/tastings/TastingsPlanner'
+import { TastingScheduleBoard, UpcomingTastingsList } from '@/components/tastings/TastingsPlanner'
 import { TasterTeamPanel } from '@/components/tastings/TasterTeamPanel'
 import { requireFeature } from '@/lib/auth/session'
 import { getTastingsForView } from '@/actions/tastings'
@@ -33,7 +33,8 @@ export default async function AdminTastingsPage({
 }) {
   await requireFeature('tastings', 'admin')
   const params = await searchParams
-  const defaultTab = params.tab === 'roi' ? 'roi' : 'schedule'
+  const validTabs = ['team', 'schedule', 'upcoming', 'roi']
+  const defaultTab = validTabs.includes(params.tab ?? '') ? params.tab! : 'team'
   let data:
     | {
         accounts: Array<{ id: string; companyName: string; address: string | null; city: string | null; state: string | null; zip: string | null }>
@@ -110,25 +111,35 @@ export default async function AdminTastingsPage({
       <PageTabs
         ariaLabel="Tastings views"
         defaultTab={defaultTab}
-        tabs={[{ id: 'schedule', label: 'Schedule' }, { id: 'roi', label: 'Tasting ROI' }]}
+        tabs={[
+          { id: 'team', label: 'Taster Team' },
+          { id: 'schedule', label: 'Schedule' },
+          { id: 'upcoming', label: 'Upcoming Tastings' },
+          { id: 'roi', label: 'Tasting ROI' },
+        ]}
       >
-      <div className="space-y-6">
-      <TasterTeamPanel
-        mode="admin"
-        tastings={data.tastings}
-        tasters={data.activeTasters}
-        availability={data.availability}
-      />
-      <TastingsPlanner
-        mode="admin"
-        tastings={data.tastings}
-        accounts={data.accounts}
-        tasters={data.activeTasters}
-        success={params.success}
-        error={params.error}
-        initialAccountId={params.account}
-        initialDate={params.date}
-      />
+      <div className="pt-6">
+        <TasterTeamPanel
+          mode="admin"
+          tastings={data.tastings}
+          tasters={data.activeTasters}
+          availability={data.availability}
+        />
+      </div>
+      <div className="pt-6">
+        <TastingScheduleBoard
+          mode="admin"
+          tastings={data.tastings}
+          accounts={data.accounts}
+          tasters={data.activeTasters}
+          success={params.success}
+          error={params.error}
+          initialAccountId={params.account}
+          initialDate={params.date}
+        />
+      </div>
+      <div className="pt-6">
+        <UpcomingTastingsList mode="admin" tastings={data.tastings} />
       </div>
       <div className="pt-6">
         <TastingROIView from={params.from} to={params.to} />

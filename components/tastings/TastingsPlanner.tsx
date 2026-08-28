@@ -138,7 +138,16 @@ function YearMarker({ year }: { year: string }) {
   )
 }
 
-export function TastingsPlanner({
+export function TastingsPlanner(props: Props) {
+  return (
+    <div className="space-y-6">
+      <TastingScheduleBoard {...props} />
+      <UpcomingTastingsList mode={props.mode} tastings={props.tastings} />
+    </div>
+  )
+}
+
+export function TastingScheduleBoard({
   mode,
   tastings,
   accounts,
@@ -158,16 +167,11 @@ export function TastingsPlanner({
   const [selectedAccountId, setSelectedAccountId] = useState(() =>
     initialAccountId && accounts.some((account) => account.id === initialAccountId) ? initialAccountId : ''
   )
-  const [now] = useState(() => Date.now())
   const [dateInput, setDateInput] = useState(() =>
     initialDate && !Number.isNaN(new Date(`${initialDate}T12:00:00`).getTime())
       ? initialDate
       : format(initialSelectedDate, 'yyyy-MM-dd')
   )
-  const [activeTab, setActiveTab] = useState<'upcoming' | 'previous'>('upcoming')
-  const [previousFrom, setPreviousFrom] = useState('')
-  const [previousTo, setPreviousTo] = useState('')
-
   function applySelectedDate(nextDateValue: string) {
     setDateInput(nextDateValue)
     const parsed = parseDateInputValue(nextDateValue)
@@ -189,36 +193,6 @@ export function TastingsPlanner({
     () => calendarVisibleTastings.filter((tasting) => isSameDay(new Date(tasting.scheduledAt), selectedDate)),
     [calendarVisibleTastings, selectedDate],
   )
-  const upcomingTastings = useMemo(
-    () =>
-      calendarVisibleTastings
-        .filter((tasting) => new Date(tasting.scheduledAt).getTime() >= now)
-        .sort((left, right) => new Date(left.scheduledAt).getTime() - new Date(right.scheduledAt).getTime()),
-    [calendarVisibleTastings, now],
-  )
-  const previousTastings = useMemo(
-    () =>
-      tastings
-        .filter((tasting) => new Date(tasting.scheduledAt).getTime() < now)
-        .sort((left, right) => new Date(right.scheduledAt).getTime() - new Date(left.scheduledAt).getTime()),
-    [tastings, now],
-  )
-  const filteredPreviousTastings = useMemo(() => {
-    return previousTastings.filter((tasting) => {
-      const tastingDate = new Date(tasting.scheduledAt)
-      if (previousFrom) {
-        const from = new Date(`${previousFrom}T00:00:00`)
-        if (tastingDate < from) return false
-      }
-      if (previousTo) {
-        const to = new Date(`${previousTo}T23:59:59.999`)
-        if (tastingDate > to) return false
-      }
-      return true
-    })
-  }, [previousFrom, previousTo, previousTastings])
-  const displayedTastings = activeTab === 'upcoming' ? upcomingTastings : filteredPreviousTastings
-
   return (
     <div className="space-y-6">
       {success ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</div> : null}
@@ -466,7 +440,51 @@ export function TastingsPlanner({
           </CardContent>
         </Card>
       </div>
+    </div>
+  )
+}
 
+export function UpcomingTastingsList({ mode, tastings }: { mode: Props['mode']; tastings: TastingRow[] }) {
+  const [now] = useState(() => Date.now())
+  const [activeTab, setActiveTab] = useState<'upcoming' | 'previous'>('upcoming')
+  const [previousFrom, setPreviousFrom] = useState('')
+  const [previousTo, setPreviousTo] = useState('')
+
+  const calendarVisibleTastings = useMemo(
+    () => tastings.filter((tasting) => isCalendarVisibleStatus(tasting.status)),
+    [tastings],
+  )
+  const upcomingTastings = useMemo(
+    () =>
+      calendarVisibleTastings
+        .filter((tasting) => new Date(tasting.scheduledAt).getTime() >= now)
+        .sort((left, right) => new Date(left.scheduledAt).getTime() - new Date(right.scheduledAt).getTime()),
+    [calendarVisibleTastings, now],
+  )
+  const previousTastings = useMemo(
+    () =>
+      tastings
+        .filter((tasting) => new Date(tasting.scheduledAt).getTime() < now)
+        .sort((left, right) => new Date(right.scheduledAt).getTime() - new Date(left.scheduledAt).getTime()),
+    [tastings, now],
+  )
+  const filteredPreviousTastings = useMemo(() => {
+    return previousTastings.filter((tasting) => {
+      const tastingDate = new Date(tasting.scheduledAt)
+      if (previousFrom) {
+        const from = new Date(`${previousFrom}T00:00:00`)
+        if (tastingDate < from) return false
+      }
+      if (previousTo) {
+        const to = new Date(`${previousTo}T23:59:59.999`)
+        if (tastingDate > to) return false
+      }
+      return true
+    })
+  }, [previousFrom, previousTo, previousTastings])
+  const displayedTastings = activeTab === 'upcoming' ? upcomingTastings : filteredPreviousTastings
+
+  return (
       <Card className="overflow-hidden rounded-[22px] border-slate-200 bg-white shadow-none">
         <CardHeader className="px-5 pb-4 pt-6 sm:px-7 sm:pt-7">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -623,6 +641,5 @@ export function TastingsPlanner({
           )}
         </CardContent>
       </Card>
-    </div>
   )
 }
