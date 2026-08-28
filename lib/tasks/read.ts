@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, or } from 'drizzle-orm'
+import { and, asc, desc, eq } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/pg-core'
 import { db } from '@/db'
 import { contacts, crmTasks, customerAccounts, users } from '@/db/schema'
@@ -30,7 +30,7 @@ export async function getTasksForView(input: {
   const conditions = [
     ...(input.accountId ? [eq(crmTasks.accountId, input.accountId)] : []),
     ...(!input.includeOrganization || !canViewOrganization
-      ? [or(eq(crmTasks.assignedToUserId, input.userId), eq(crmTasks.createdByUserId, input.userId))!]
+      ? [eq(crmTasks.assignedToUserId, input.userId)]
       : []),
   ]
   const creator = alias(users, 'task_creator')
