@@ -38,6 +38,8 @@ import type { PipelineStage } from '@/lib/deal-stages'
 import { getBusinessTypeColor } from '@/lib/customers/business-types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { DealStageSelect } from './DealStageSelect'
+import { PipelineCardSettings, usePipelineCardFields, type PipelineCardFieldOption } from './PipelineCardSettings'
 import {
   applyInlineAccountUpdate,
   EMPTY_INLINE_ACCOUNT_OPTIONS,
@@ -45,6 +47,12 @@ import {
   INLINE_BUSINESS_TYPE_OPTIONS,
   type InlineAccountOption,
 } from './InlineAccountFieldSelect'
+
+const ACCOUNT_CARD_FIELD_OPTIONS: PipelineCardFieldOption[] = [
+  { key: 'businessType', label: 'Business Type' },
+  { key: 'region', label: 'Region' },
+]
+const ACCOUNT_CARD_DEFAULT_FIELDS: string[] = []
 
 interface Account {
   id: string
@@ -122,6 +130,9 @@ function AccountCard({
   onInlineChange,
   regionColors,
   regionOptions,
+  cardFields,
+  stages,
+  onQuickMove,
 }: {
   account: Account
   basePath: string
@@ -131,6 +142,9 @@ function AccountCard({
   onInlineChange: (accountId: string, update: InlineCRMAccountUpdate) => void
   regionColors: Record<string, string>
   regionOptions: InlineAccountOption[]
+  cardFields: ReadonlySet<string>
+  stages: PipelineStage[]
+  onQuickMove: (accountId: string, nextStage: string) => void
 }) {
   const router = useRouter()
   const [isEditing, setIsEditing] = useState(false)
@@ -229,29 +243,46 @@ function AccountCard({
         <p className="mt-1.5 text-sm text-[#817b76]">{location || 'Location not entered'}</p>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <InlineAccountFieldSelect
-            accountId={account.id}
-            accountName={account.companyName}
-            field="businessType"
-            value={account.businessType}
-            currentLabel={businessType}
-            options={INLINE_BUSINESS_TYPE_OPTIONS}
-            toneColor={getBusinessTypeColor(account.businessType)}
-            onChange={(update) => onInlineChange(account.id, update)}
-          />
-          <InlineAccountFieldSelect
-            accountId={account.id}
-            accountName={account.companyName}
-            field="regionId"
-            value={account.regionId}
-            currentLabel={account.regionName ?? 'Unassigned'}
-            options={regionOptions}
-            toneColor={regionColor ?? '#94A3B8'}
-            onChange={(update) => onInlineChange(account.id, update)}
-          />
+      <div className="mt-3" onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+        <DealStageSelect
+          accountId={account.id}
+          currentStage={account.dealStage}
+          stages={stages}
+          size="sm"
+          onStageChange={(nextStage) => onQuickMove(account.id, nextStage)}
+        />
+      </div>
+
+      {(cardFields.has('businessType') || cardFields.has('region')) ? (
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          {cardFields.has('businessType') ? (
+            <InlineAccountFieldSelect
+              accountId={account.id}
+              accountName={account.companyName}
+              field="businessType"
+              value={account.businessType}
+              currentLabel={businessType}
+              options={INLINE_BUSINESS_TYPE_OPTIONS}
+              toneColor={getBusinessTypeColor(account.businessType)}
+              onChange={(update) => onInlineChange(account.id, update)}
+            />
+          ) : null}
+          {cardFields.has('region') ? (
+            <InlineAccountFieldSelect
+              accountId={account.id}
+              accountName={account.companyName}
+              field="regionId"
+              value={account.regionId}
+              currentLabel={account.regionName ?? 'Unassigned'}
+              options={regionOptions}
+              toneColor={regionColor ?? '#94A3B8'}
+              onChange={(update) => onInlineChange(account.id, update)}
+            />
+          ) : null}
         </div>
+      ) : null}
+
+      <div className="mt-3 flex items-center justify-end gap-2">
         <span className="inline-flex items-center gap-1.5 text-sm text-[#817b76]">
           <Clock3 className="h-4 w-4" />
           {account.daysSinceLastOrder == null ? '—' : `${account.daysSinceLastOrder}d`}
@@ -356,6 +387,7 @@ function AddAccountPopover({
 
 function StageColumn({
   stage,
+  stages,
   accounts,
   allAccounts,
   basePath,
@@ -370,11 +402,14 @@ function StageColumn({
   onAccountRename,
   onInlineChange,
   onAccountAssign,
+  onQuickMove,
   isSaving,
   regionColors,
   regionOptions,
+  cardFields,
 }: {
   stage: PipelineStage
+  stages: PipelineStage[]
   accounts: Account[]
   allAccounts: Account[]
   basePath: string
@@ -389,9 +424,11 @@ function StageColumn({
   onAccountRename: (accountId: string, companyName: string) => void
   onInlineChange: (accountId: string, update: InlineCRMAccountUpdate) => void
   onAccountAssign: (accountId: string, stageKey: string) => void
+  onQuickMove: (accountId: string, nextStage: string) => void
   isSaving: boolean
   regionColors: Record<string, string>
   regionOptions: InlineAccountOption[]
+  cardFields: ReadonlySet<string>
 }) {
   const [isEditingStage, setIsEditingStage] = useState(false)
   const {
@@ -432,7 +469,7 @@ function StageColumn({
 
   return (
     <div ref={setSortableNodeRef} style={style} className="w-[290px] flex-shrink-0">
-      <div className={`group rounded-2xl border p-4 ${tone.shell}`}>
+      <div className={`group sticky top-0 z-20 rounded-2xl border p-4 shadow-sm ${tone.shell}`}>
         <div className="flex min-h-9 items-center justify-between gap-2">
           <div className="flex min-w-0 flex-1 items-center gap-2">
             {canManageStages ? (
@@ -518,6 +555,9 @@ function StageColumn({
             onInlineChange={onInlineChange}
             regionColors={regionColors}
             regionOptions={regionOptions}
+            cardFields={cardFields}
+            stages={stages}
+            onQuickMove={onQuickMove}
           />
         ))}
         {accounts.length === 0 ? (
@@ -550,6 +590,11 @@ export function PipelineBoard({
   )
   const [, startTransition] = useTransition()
   const inlineRegionOptions = useMemo(() => [{ value: '', label: 'Unassigned' }, ...regionOptions], [regionOptions])
+  const { selectedFields: cardFields, toggleField: toggleCardField, resetFields: resetCardFields } = usePipelineCardFields({
+    storageKey: 'crm-pipeline-account-card-fields:v1',
+    options: ACCOUNT_CARD_FIELD_OPTIONS,
+    defaults: ACCOUNT_CARD_DEFAULT_FIELDS,
+  })
 
   useEffect(() => {
     setAccounts(initialAccounts)
@@ -681,6 +726,10 @@ export function PipelineBoard({
     })
   }
 
+  function handleQuickMove(accountId: string, nextStage: string) {
+    setAccounts((prev) => prev.map((item) => item.id === accountId ? { ...item, dealStage: nextStage } : item))
+  }
+
   function handleInlineChange(accountId: string, update: InlineCRMAccountUpdate) {
     setAccounts((prev) => prev.map((account) => account.id === accountId ? applyInlineAccountUpdate(account, update) : account))
   }
@@ -764,6 +813,14 @@ export function PipelineBoard({
 
   return (
     <div className="space-y-4">
+      <div className="flex justify-end">
+        <PipelineCardSettings
+          options={ACCOUNT_CARD_FIELD_OPTIONS}
+          selectedFields={cardFields}
+          onToggle={toggleCardField}
+          onReset={resetCardFields}
+        />
+      </div>
       {canManageStages ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -789,6 +846,7 @@ export function PipelineBoard({
               <StageColumn
                 key={stage.id}
                 stage={stage}
+                stages={stages}
                 accounts={columnAccounts}
                 allAccounts={accounts}
                 basePath={basePath}
@@ -803,9 +861,11 @@ export function PipelineBoard({
                 onAccountRename={handleAccountRename}
                 onInlineChange={handleInlineChange}
                 onAccountAssign={handleAccountAssign}
+                onQuickMove={handleQuickMove}
                 isSaving={false}
                 regionColors={regionColors}
                 regionOptions={inlineRegionOptions}
+                cardFields={cardFields}
               />
             ))}
           </div>
