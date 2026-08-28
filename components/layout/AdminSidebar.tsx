@@ -32,6 +32,7 @@ const navSections = [
     title: 'Overview',
     items: [
       { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard, feature: 'dashboard' },
+      { href: '/admin/tasks', label: 'Tasks', icon: ClipboardList, feature: 'crm' },
       { href: '/admin/attention', label: 'Needs Attention', icon: Activity, feature: 'dashboard' },
       { href: '/admin/news', label: 'Industry News', icon: Newspaper, feature: 'dashboard' },
     ],

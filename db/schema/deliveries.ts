@@ -3,6 +3,7 @@ import { drivers } from './drivers'
 import { orders } from './orders'
 import { customerAccounts } from './customers'
 import { users } from './users'
+import { contacts } from './contacts'
 
 export const deliveries = pgTable('deliveries', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -29,6 +30,10 @@ export const deliveryStops = pgTable('delivery_stops', {
   lng: numeric('lng', { precision: 10, scale: 7 }),
   status: text('status', { enum: ['pending', 'delivered', 'failed'] }).notNull().default('pending'),
   notes: text('notes'),
+  scheduledAt: timestamp('scheduled_at', { withTimezone: true }),
+  assignedUserId: uuid('assigned_user_id').references(() => users.id, { onDelete: 'set null' }),
+  recipientContactId: uuid('recipient_contact_id').references(() => contacts.id, { onDelete: 'set null' }),
+  deliveredItems: jsonb('delivered_items').$type<Array<{ productId: string; quantity: number; unit: 'case' | 'bottle' }>>().notNull().default([]),
   proofOfDeliveryUrl: text('proof_of_delivery_url'),
   shelfPhotoUrl: text('shelf_photo_url'),
   additionalPhotoUrl: text('additional_photo_url'),
@@ -54,7 +59,9 @@ export const deliveryStops = pgTable('delivery_stops', {
   recipientSignedName: text('recipient_signed_name'),
   recipientSignedAt: timestamp('recipient_signed_at', { withTimezone: true }),
   completedAt: timestamp('completed_at', { withTimezone: true }),
-})
+}, (table) => ({
+  scheduledIdx: index('delivery_stops_scheduled_idx').on(table.scheduledAt, table.status),
+}))
 
 export const deliveryNotifications = pgTable('delivery_notifications', {
   id: uuid('id').primaryKey().defaultRandom(),

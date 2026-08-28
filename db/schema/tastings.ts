@@ -1,5 +1,6 @@
-import { boolean, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
+import { boolean, integer, jsonb, numeric, pgTable, text, timestamp, uuid, index } from 'drizzle-orm/pg-core'
 import { customerAccounts } from './customers'
+import { products } from './products'
 import { users } from './users'
 
 export const tastings = pgTable('tastings', {
@@ -22,5 +23,21 @@ export const tastings = pgTable('tastings', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
+export const tastingProducts = pgTable('tasting_products', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tastingId: uuid('tasting_id').notNull().references(() => tastings.id, { onDelete: 'cascade' }),
+  productId: uuid('product_id').notNull().references(() => products.id),
+  plannedQuantity: numeric('planned_quantity', { precision: 10, scale: 2 }).notNull().default('0'),
+  startingInventory: jsonb('starting_inventory').$type<{ cases?: number; bottles?: number; units?: number }>().notNull().default({}),
+  unitsSold: integer('units_sold').notNull().default(0),
+  revenueGenerated: numeric('revenue_generated', { precision: 12, scale: 2 }).notNull().default('0'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index('tasting_products_tasting_idx').on(table.tastingId),
+  index('tasting_products_product_idx').on(table.productId),
+])
+
 export type Tasting = typeof tastings.$inferSelect
 export type NewTasting = typeof tastings.$inferInsert
+export type TastingProduct = typeof tastingProducts.$inferSelect
+export type NewTastingProduct = typeof tastingProducts.$inferInsert

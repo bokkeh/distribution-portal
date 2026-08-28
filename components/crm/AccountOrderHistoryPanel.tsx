@@ -26,6 +26,7 @@ type OrderHistoryItem = {
   total: string
   createdAt: string | Date
   orderHref: string | null
+  isAssisted: boolean
 }
 
 type RangeKey = '7d' | '14d' | '30d' | '90d' | 'month' | 'quarter' | 'year' | 'all'
@@ -37,6 +38,7 @@ type NormalizedOrder = {
   total: string
   createdAt: Date
   orderHref: string | null
+  isAssisted: boolean
 }
 
 type ChartPoint = {
@@ -463,6 +465,7 @@ export function AccountOrderHistoryPanel({
                         <Badge variant={getOrderStatusVariant(order.status)} className="text-xs">
                           {order.status}
                         </Badge>
+                        {order.isAssisted ? <Badge variant="info" className="ml-2 text-xs">Assisted</Badge> : null}
                       </td>
                       <td className="py-3">
                         <div className="flex items-center gap-2">

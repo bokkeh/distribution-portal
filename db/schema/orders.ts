@@ -1,9 +1,10 @@
-import { pgTable, uuid, text, numeric, timestamp } from 'drizzle-orm/pg-core'
+import { boolean, index, pgTable, uuid, text, numeric, timestamp } from 'drizzle-orm/pg-core'
 import { customerAccounts } from './customers'
 import { users } from './users'
 import { products } from './products'
 import { salesMembers } from './salesMembers'
 import { geographicPricingRules } from './geographicPricingRules'
+import { tastings } from './tastings'
 
 export const ORDER_PAYMENT_STATUSES = ['not_applicable', 'requires_action', 'processing', 'paid', 'failed', 'canceled'] as const
 export type OrderPaymentStatus = typeof ORDER_PAYMENT_STATUSES[number]
@@ -28,8 +29,15 @@ export const orders = pgTable('orders', {
   attributionSource: text('attribution_source', { enum: ['auto_assigned', 'manual', 'self_placed'] }),
   commissionStatus: text('commission_status', { enum: ['none', 'pending', 'calculated', 'approved', 'paid'] }).default('none'),
   commissionAmount: numeric('commission_amount', { precision: 12, scale: 2 }),
+  isAssisted: boolean('is_assisted').notNull().default(false),
+  assistedByUserId: uuid('assisted_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  assistanceType: text('assistance_type'),
+  relatedTastingId: uuid('related_tasting_id').references(() => tastings.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-})
+}, (table) => [
+  index('orders_related_tasting_idx').on(table.relatedTastingId),
+  index('orders_assisted_by_idx').on(table.assistedByUserId, table.createdAt),
+])
 
 export const orderItems = pgTable('order_items', {
   id: uuid('id').primaryKey().defaultRandom(),

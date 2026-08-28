@@ -15,6 +15,9 @@ import { getSystemHealthSnapshot } from '@/lib/ops/system-health'
 import { RevenueChart } from '@/components/dashboard/RevenueChart'
 import type { MonthlyRevenuePoint } from '@/components/dashboard/RevenueChart'
 import { IndustryNewsWidget } from '@/components/news/IndustryNewsWidget'
+import { requireAdmin } from '@/lib/auth/session'
+import { getTasksForView } from '@/lib/tasks/read'
+import { TaskDashboardModule } from '@/components/tasks/TaskDashboardModule'
 
 function isValidDateInput(value?: string) {
   if (!value) return false
@@ -46,6 +49,7 @@ export default async function AdminDashboard({
 }: {
   searchParams: Promise<{ from?: string; to?: string }>
 }) {
+  const session = await requireAdmin()
   const { from, to } = await searchParams
   const fromInput = isValidDateInput(from) ? from : undefined
   const toInput = isValidDateInput(to) ? to : undefined
@@ -222,6 +226,7 @@ export default async function AdminDashboard({
     fulfilled: 'success',
     cancelled: 'destructive',
   }
+  const dashboardTasks = await getTasksForView({ userId: session.user.id, roles: session.user.roles ?? [session.user.role as string], limit: 12 })
 
   return (
     <div className="p-8 space-y-8">
@@ -235,6 +240,8 @@ export default async function AdminDashboard({
           <DateRangeFilter />
         </Suspense>
       </div>
+
+      <TaskDashboardModule tasks={dashboardTasks} mode="admin" nowIso={new Date().toISOString()} />
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
         <KpiCard

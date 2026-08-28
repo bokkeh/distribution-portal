@@ -323,6 +323,13 @@
       "when": 1787882400000,
       "tag": "0060_community_contacts",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1787922000000,
+      "tag": "0061_global_quick_add",
+      "breakpoints": true
     }
   ]
 }

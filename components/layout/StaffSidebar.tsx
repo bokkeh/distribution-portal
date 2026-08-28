@@ -5,7 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-  LayoutDashboard, ShoppingCart, Building2, Package,
+  LayoutDashboard, ShoppingCart, Building2, Package, ClipboardCheck,
   ChevronRight, Menu, X, CalendarDays, MessageSquare, FileText, Gauge,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -16,6 +16,7 @@ import { PortalProfileMenu } from '@/components/layout/PortalProfileMenu'
 
 const navItems = [
   { href: '/staff/dashboard', label: 'Dashboard', icon: LayoutDashboard, feature: 'dashboard' },
+  { href: '/staff/tasks', label: 'Tasks', icon: ClipboardCheck, feature: 'crm' },
   { href: '/staff/orders',    label: 'Orders',    icon: ShoppingCart, feature: 'orders' },
   { href: '/staff/invoicing', label: 'Invoicing', icon: FileText, feature: 'invoicing' },
   { href: '/staff/crm',       label: 'Accounts',  icon: Building2, feature: 'crm' },

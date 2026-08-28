@@ -207,13 +207,19 @@ export function TasterTeamPanel({
               key={tab.id}
               type="button"
               onClick={() => setView(tab.id as 'roster' | 'availability')}
-              className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
+              className={`relative px-1 pb-3 text-sm font-medium transition-colors ${
                 view === tab.id
-                  ? 'border-slate-900 text-slate-900'
-                  : 'border-transparent text-slate-400 hover:text-slate-700'
+                  ? 'text-slate-900'
+                  : 'text-slate-400 hover:text-slate-700'
               }`}
             >
               {tab.label}
+              {view === tab.id ? (
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-[3px] bg-[var(--ahawc-amber)]"
+                />
+              ) : null}
             </button>
           ))}
         </div>

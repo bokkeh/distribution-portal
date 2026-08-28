@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { IndustryNewsWidget } from '@/components/news/IndustryNewsWidget'
 import { getReorderFollowUps, LOW_INVENTORY_CASE_THRESHOLD, SINGLE_CASE_REORDER_DELAY_DAYS } from '@/lib/sales/reorder-follow-ups'
+import { getTasksForView } from '@/lib/tasks/read'
+import { TaskDashboardModule } from '@/components/tasks/TaskDashboardModule'
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('en-US', {
@@ -197,9 +199,11 @@ export default async function SalesDashboardPage() {
       tone: nextTastings.length > 0 ? 'info' : 'secondary',
     },
   ]
+  const dashboardTasks = await getTasksForView({ userId, roles: session.user.roles ?? [session.user.role as string], limit: 12 })
 
   return (
     <div className="space-y-6">
+      <TaskDashboardModule tasks={dashboardTasks} mode="sales" nowIso={new Date().toISOString()} />
       <section className="overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-blue-50">
         <div className="grid gap-6 px-6 py-6 lg:grid-cols-[1.15fr_0.85fr] lg:px-8">
           <div className="space-y-5">

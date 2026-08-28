@@ -6,6 +6,7 @@ import {
   accountMedia,
   accountNotes,
   activityEvents,
+  crmTasks,
   customerAccounts,
   deliveries,
   deliveryStops,
@@ -128,6 +129,7 @@ function categorizeActivity(entityType: string, kind: string) {
   if (entityType === 'order') return 'orders'
   if (entityType === 'delivery') return 'deliveries'
   if (entityType === 'tasting') return 'tastings'
+  if (entityType === 'task') return 'tasks'
   if (normalizedKind.includes('account') || normalizedKind.includes('contact') || normalizedKind.includes('payment') || normalizedKind.includes('credit') || normalizedKind.includes('preference')) {
     return 'profile_updates'
   }
@@ -171,6 +173,9 @@ function mapActivityEvent(
   } else if (row.entityType === 'invoice') {
     relatedLabel = refs.invoices.get(row.entityId) ?? `Invoice #${row.entityId.slice(-8).toUpperCase()}`
     relatedHref = mode === 'admin' ? `/admin/invoicing/${row.entityId}` : null
+  } else if (row.entityType === 'task') {
+    relatedLabel = `Task #${row.entityId.slice(-8).toUpperCase()}`
+    relatedHref = `/${mode}/tasks?task=${row.entityId}`
   } else if (metadata.contactId) {
     relatedLabel = 'Contact record'
     relatedHref = mode === 'sales' ? `/sales/accounts/${row.entityId}/contacts` : `/${mode}/crm/${row.entityId}/contacts`
@@ -192,7 +197,7 @@ function mapActivityEvent(
   }
 }
 
-async function getActivityRows(entityType: 'account' | 'order' | 'delivery' | 'tasting' | 'invoice', entityIds: string[]) {
+async function getActivityRows(entityType: 'account' | 'order' | 'delivery' | 'tasting' | 'invoice' | 'task', entityIds: string[]) {
   if (entityIds.length === 0) return [] as RawActivityEvent[]
 
   return db
@@ -442,7 +447,7 @@ export async function getAccountInventoryHistory(accountId: string) {
 
 export async function getAccountActivityFeed(accountId: string, mode: 'admin' | 'staff' | 'sales') {
   try {
-    const [invoiceRefs, tastingRefs, orderRefs, deliveryRefs] = await Promise.all([
+    const [invoiceRefs, tastingRefs, orderRefs, deliveryRefs, taskRefs] = await Promise.all([
       db.select({ id: invoices.id, invoiceNumber: invoices.invoiceNumber }).from(invoices).where(eq(invoices.customerId, accountId)),
       db.select({ id: tastings.id, eventName: tastings.eventName }).from(tastings).where(eq(tastings.customerId, accountId)),
       db.select({ id: orders.id }).from(orders).where(eq(orders.customerId, accountId)),
@@ -451,19 +456,22 @@ export async function getAccountActivityFeed(accountId: string, mode: 'admin' | 
         .from(deliveryStops)
         .innerJoin(deliveries, eq(deliveryStops.deliveryId, deliveries.id))
         .where(eq(deliveryStops.customerId, accountId)),
+      db.select({ id: crmTasks.id }).from(crmTasks).where(eq(crmTasks.accountId, accountId)),
     ])
 
     const orderIds = orderRefs.map((row) => row.id)
     const invoiceIds = invoiceRefs.map((row) => row.id)
     const tastingIds = tastingRefs.map((row) => row.id)
     const deliveryIds = Array.from(new Set(deliveryRefs.map((row) => row.id)))
+    const taskIds = taskRefs.map((row) => row.id)
 
-    const [accountRows, orderRows, deliveryRows, tastingRows, invoiceRows] = await Promise.all([
+    const [accountRows, orderRows, deliveryRows, tastingRows, invoiceRows, taskRows] = await Promise.all([
       getActivityRows('account', [accountId]),
       getActivityRows('order', orderIds),
       getActivityRows('delivery', deliveryIds),
       getActivityRows('tasting', tastingIds),
       getActivityRows('invoice', invoiceIds),
+      getActivityRows('task', taskIds),
     ])
 
     const refs = {
@@ -471,7 +479,7 @@ export async function getAccountActivityFeed(accountId: string, mode: 'admin' | 
       tastingNames: new Map(tastingRefs.map((row) => [row.id, row.eventName])),
     }
 
-    return [...accountRows, ...orderRows, ...deliveryRows, ...tastingRows, ...invoiceRows]
+    return [...accountRows, ...orderRows, ...deliveryRows, ...tastingRows, ...invoiceRows, ...taskRows]
       .map((row) => mapActivityEvent(row, refs, mode))
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
   } catch (error) {

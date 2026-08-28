@@ -3,15 +3,17 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Building2, Map, DollarSign, Wine, TrendingUp, Menu, X, Star, ShoppingCart, Gauge } from 'lucide-react'
+import { LayoutDashboard, Building2, Map, DollarSign, Wine, TrendingUp, Menu, X, Star, ShoppingCart, Gauge, ClipboardCheck } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useState, useEffect } from 'react'
 import { DialpadButton, DialpadSidebar } from '@/components/admin/DialpadSidebar'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
+import { GlobalQuickAdd } from '@/components/quick-add/GlobalQuickAdd'
 import { PortalProfileMenu } from '@/components/layout/PortalProfileMenu'
 
 const navItems = [
   { href: '/sales/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/sales/tasks', label: 'Tasks', icon: ClipboardCheck },
   { href: '/sales/accounts', label: 'My Accounts', icon: Building2 },
   { href: '/sales/pull-through', label: 'Pull-Through', icon: Gauge },
   { href: '/sales/orders/assisted', label: 'Orders', icon: ShoppingCart },
@@ -85,6 +87,7 @@ export default function SalesNav({ userName, userAvatarUrl, canSwitchViews = fal
 
             {/* Right actions */}
             <div className="flex items-center gap-1">
+              <GlobalQuickAdd compact />
               <DialpadButton onClick={() => setDialpadOpen(true)} />
               <NotificationBell items={notifications} unreadCount={unreadCount} />
               <PortalProfileMenu

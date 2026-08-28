@@ -80,16 +80,22 @@ export function CRMTabs({ tabs, children, defaultTab }: Props) {
             aria-selected={active === tab.id}
             onClick={() => setActive(tab.id)}
             className={cn(
-              'font-display -mb-px whitespace-nowrap border-b-[3px] px-0 py-4 text-base font-bold uppercase tracking-[0.02em] transition-colors',
+              'font-display relative whitespace-nowrap px-0 py-4 text-base font-bold uppercase tracking-[0.02em] transition-colors',
               active === tab.id
-                ? 'border-[#ff5a00] text-[#181615]'
-                : 'border-transparent text-[#817b76] hover:text-[#181615]'
+                ? 'text-[#181615]'
+                : 'text-[#817b76] hover:text-[#181615]'
             )}
           >
             {tab.label}
             {tab.count !== undefined && (
               <span className="ml-2 rounded-full bg-white px-2 py-0.5 font-mono text-[10px] text-slate-500">{tab.count}</span>
             )}
+            {active === tab.id ? (
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-[3px] bg-[var(--ahawc-amber)]"
+              />
+            ) : null}
           </button>
         ))}
       </div>

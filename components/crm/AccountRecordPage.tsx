@@ -35,6 +35,8 @@ import { AccountRecordTabs } from '@/components/crm/AccountRecordTabs'
 import { AccountSmartInsightsCard } from '@/components/crm/AccountSmartInsightsCard'
 import { ViewAsAccountButton } from '@/components/admin/ViewAsAccountButton'
 import { generateAccountSmartInsights } from '@/lib/crm/smart-insights'
+import { getTasksForView } from '@/lib/tasks/read'
+import { TaskList } from '@/components/tasks/TaskList'
 import { SalesIntelligenceSection } from '@/components/pull-through/SalesIntelligenceSection'
 import { loadAccountIntelligence, type AccountIntelligence, type PullThroughScope } from '@/lib/pull-through/data'
 import { coercePipelineStages } from '@/lib/deal-stages'
@@ -202,7 +204,7 @@ export async function AccountRecordPage({
   let overviewData:
     | {
         accountContacts: Array<{ id: string; name: string; title: string | null; email: string | null; phone: string | null; isPrimary: boolean }>
-        recentOrders: Array<{ id: string; status: string; total: string; createdAt: Date }>
+        recentOrders: Array<{ id: string; status: string; total: string; createdAt: Date; isAssisted: boolean }>
         recentInvoices: Array<{ id: string; invoiceNumber: string; dueDate: string | null; total: string; status: string }>
         orderCount: { total: number }
         recentDeliveries: Array<{ deliveryId: string; status: string; weekStartDate: string; stopStatus: string; completedAt: Date | null; proofOfDeliveryUrl: string | null; shelfPhotoUrl: string | null }>
@@ -218,7 +220,7 @@ export async function AccountRecordPage({
 
   let ordersData:
     | {
-        recentOrders: Array<{ id: string; status: string; total: string; createdAt: Date }>
+        recentOrders: Array<{ id: string; status: string; total: string; createdAt: Date; isAssisted: boolean }>
         recentInvoices: Array<{ id: string; invoiceNumber: string; dueDate: string | null; total: string; status: string }>
         recentDeliveries: Array<{ deliveryId: string; status: string; weekStartDate: string; stopStatus: string; completedAt: Date | null; proofOfDeliveryUrl: string | null; shelfPhotoUrl: string | null }>
         recentTastings: Array<{ id: string; eventName: string; status: string; scheduledAt: Date; endAt: Date | null; reportSubmittedAt: Date | null }>
@@ -244,6 +246,7 @@ export async function AccountRecordPage({
     | {
         notes: Awaited<ReturnType<typeof getAccountNotes>>
         activityItems: Awaited<ReturnType<typeof getAccountActivityFeed>>
+        tasks: Awaited<ReturnType<typeof getTasksForView>>
       }
     | null = null
 
@@ -276,6 +279,7 @@ export async function AccountRecordPage({
         status: orders.status,
         total: orders.total,
         createdAt: orders.createdAt,
+        isAssisted: orders.isAssisted,
       }).from(orders).where(eq(orders.customerId, accountId)).orderBy(desc(orders.createdAt)).limit(8),
       db.select({
         id: invoices.id,
@@ -367,6 +371,7 @@ export async function AccountRecordPage({
         status: orders.status,
         total: orders.total,
         createdAt: orders.createdAt,
+        isAssisted: orders.isAssisted,
       }).from(orders).where(eq(orders.customerId, accountId)).orderBy(desc(orders.createdAt)),
       db.select({
         id: invoices.id,
@@ -446,11 +451,12 @@ export async function AccountRecordPage({
   }
 
   if (tab === 'notes-activity') {
-    const [notes, activityItems] = await Promise.all([
+    const [notes, activityItems, accountTasks] = await Promise.all([
       getAccountNotes(accountId),
       getAccountActivityFeed(accountId, mode),
+      getTasksForView({ userId: currentUserId ?? '', roles: currentUserRoles, accountId, includeOrganization: true }),
     ])
-    notesActivityData = { notes, activityItems }
+    notesActivityData = { notes, activityItems, tasks: accountTasks }
   }
 
   if (tab === 'media') {
@@ -797,9 +803,15 @@ export async function AccountRecordPage({
       ) : null}
 
       {tab === 'notes-activity' && notesActivityData ? (
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-          <AccountNotesCard accountId={account.id} notes={notesActivityData.notes} currentUserId={currentUserId} currentUserRoles={currentUserRoles} />
-          <AccountActivityCard items={notesActivityData.activityItems} />
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+            <AccountNotesCard accountId={account.id} notes={notesActivityData.notes} currentUserId={currentUserId} currentUserRoles={currentUserRoles} />
+            <AccountActivityCard items={notesActivityData.activityItems} />
+          </div>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between"><CardTitle>Account Tasks</CardTitle><Button type="button" size="sm" data-quick-add-action="task"><Plus className="mr-1 h-4 w-4" />Add Task</Button></CardHeader>
+            <CardContent><TaskList items={notesActivityData.tasks} mode={mode} nowIso={new Date().toISOString()} /></CardContent>
+          </Card>
         </div>
       ) : null}
 

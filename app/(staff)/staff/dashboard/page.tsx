@@ -12,6 +12,8 @@ import { getSmsInboxSummary } from '@/lib/inbox/summary'
 import Link from 'next/link'
 import { IndustryNewsWidget } from '@/components/news/IndustryNewsWidget'
 import { CustomerRecordLink } from '@/components/crm/CustomerRecordLink'
+import { getTasksForView } from '@/lib/tasks/read'
+import { TaskDashboardModule } from '@/components/tasks/TaskDashboardModule'
 
 export default async function StaffDashboard() {
   const session = await requireAdminOrStaff()
@@ -19,7 +21,7 @@ export default async function StaffDashboard() {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
-  const [totalOrders, totalCustomers, recentOrders, smsInboxSummary, newOrdersToday, tastingActionsDue] = await Promise.all([
+  const [totalOrders, totalCustomers, recentOrders, smsInboxSummary, newOrdersToday, tastingActionsDue, dashboardTasks] = await Promise.all([
     db.select({ count: sql<number>`COUNT(*)` }).from(orders),
     db.select({ count: sql<number>`COUNT(*)` }).from(customerAccounts),
     db.select({
@@ -34,6 +36,7 @@ export default async function StaffDashboard() {
       .from(tastings)
       .leftJoin(tastingReports, eq(tastings.id, tastingReports.tastingId))
       .where(and(eq(tastings.status, 'completed'), sql`${tastingReports.id} is null`)),
+    getTasksForView({ userId: session.user.id, roles: session.user.roles ?? [session.user.role as string], limit: 12 }),
   ])
 
   const statusColor: Record<string, 'default' | 'success' | 'warning' | 'destructive' | 'info'> = {
@@ -46,6 +49,7 @@ export default async function StaffDashboard() {
         <h1 className="text-2xl font-bold text-slate-900">Sales Dashboard</h1>
         <p className="text-muted-foreground mt-1">Welcome back, {session.user.name}</p>
       </div>
+      <TaskDashboardModule tasks={dashboardTasks} mode="staff" nowIso={new Date().toISOString()} />
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
         <KpiCard title="Total Orders" value={String(totalOrders[0]?.count ?? 0)} icon={ShoppingCart} />
         <KpiCard title="Accounts" value={String(totalCustomers[0]?.count ?? 0)} icon={Users} />

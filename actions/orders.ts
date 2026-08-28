@@ -2,7 +2,7 @@
 
 import Stripe from 'stripe'
 import { db } from '@/db'
-import { customerAccounts, inventory, orderItems, orders, salesMembers } from '@/db/schema'
+import { customerAccounts, inventory, orderItems, orders, salesMembers, tastings, users } from '@/db/schema'
 import { getEffectiveSession, requireAuth, requireRole } from '@/lib/auth/session'
 import { eq, inArray } from 'drizzle-orm'
 import { calculateCommissionForOrder, recordCommission } from '@/actions/sales-members'
@@ -182,6 +182,40 @@ export async function createOrder(formData: FormData) {
     const itemsJson = formData.get('items') as string
     const items: { productId: string; quantity: number }[] = JSON.parse(itemsJson)
     const orderDate = !isCustomerOrder && orderedDateInput ? parsePlacedDateInput(orderedDateInput) : new Date()
+    const isAssisted = !isCustomerOrder && formData.get('isAssisted') === 'true'
+    const assistanceType = isAssisted ? ((formData.get('assistanceType') as string | null)?.trim() || 'rep_placed') : null
+    const requestedAssistedByUserId = (formData.get('assistedByUserId') as string | null)?.trim() || null
+    const relatedTastingId = isAssisted ? ((formData.get('relatedTastingId') as string | null)?.trim() || null) : null
+    const canAssignAssistance = userRoles.some((role) => ['admin', 'staff', 'sales_manager'].includes(role))
+    const assistedByUserId = isAssisted && canAssignAssistance && requestedAssistedByUserId
+      ? requestedAssistedByUserId
+      : isAssisted ? session.user.id : null
+
+    if (!Array.isArray(items) || !items.length || items.some((item) => !item.productId || !Number.isFinite(item.quantity) || item.quantity <= 0)) {
+      throw new Error('Add at least one product with a valid quantity.')
+    }
+
+    if (assistedByUserId) {
+      const [assistingUser] = await db
+        .select({ id: users.id, roles: users.roles, active: users.active })
+        .from(users)
+        .where(eq(users.id, assistedByUserId))
+        .limit(1)
+      if (!assistingUser?.active || !assistingUser.roles.some((role) => ['admin', 'staff', 'sales_rep', 'sales_manager'].includes(role))) {
+        throw new Error('Choose an eligible active sales user for assisted attribution.')
+      }
+    }
+
+    if (relatedTastingId) {
+      const [relatedTasting] = await db
+        .select({ customerId: tastings.customerId })
+        .from(tastings)
+        .where(eq(tastings.id, relatedTastingId))
+        .limit(1)
+      if (!relatedTasting || relatedTasting.customerId !== customerId) {
+        throw new Error('The related tasting must belong to the selected account.')
+      }
+    }
 
     let customerBusinessType: string | null = null
     let defaultPaymentTerms = 'PREPAID'
@@ -330,24 +364,32 @@ export async function createOrder(formData: FormData) {
       tax: tax.toFixed(2),
       total: total.toFixed(2),
       notes: normalizedNotes || null,
+      isAssisted,
+      assistedByUserId,
+      assistanceType,
+      relatedTastingId,
     }).returning()
 
     await db.insert(orderItems).values(lineItems.map(item => ({ ...item, orderId: order.id })))
 
-    // Auto-attribute order to assigned sales rep
+    // Assisted attribution is a dimension on this order, never a second revenue record.
     const [acct] = await db
       .select({ assignedSalesRepId: customerAccounts.assignedSalesRepId })
       .from(customerAccounts)
       .where(eq(customerAccounts.id, customerId))
       .limit(1)
-    if (acct?.assignedSalesRepId) {
+    const [assistingMember] = assistedByUserId
+      ? await db.select({ id: salesMembers.id }).from(salesMembers).where(eq(salesMembers.userId, assistedByUserId)).limit(1)
+      : []
+    const attributedSalesMemberId = assistingMember?.id ?? acct?.assignedSalesRepId ?? null
+    if (attributedSalesMemberId) {
       await db
         .update(orders)
-        .set({ attributedSalesMemberId: acct.assignedSalesRepId, attributionSource: 'auto_assigned' })
+        .set({ attributedSalesMemberId, attributionSource: assistingMember ? 'manual' : 'auto_assigned' })
         .where(eq(orders.id, order.id))
       const { amount } = await calculateCommissionForOrder(order.id)
       if (amount !== null && amount > 0) {
-        await recordCommission({ salesMemberId: acct.assignedSalesRepId, orderId: order.id, amount })
+        await recordCommission({ salesMemberId: attributedSalesMemberId, orderId: order.id, amount })
       }
     }
 
@@ -357,7 +399,8 @@ export async function createOrder(formData: FormData) {
       actorUserId: session.user.id,
       kind: 'order_created',
       title: 'Order created',
-      body: `A ${purchaseUnit} order totaling $${total.toFixed(2)} was created.`,
+      body: `${isAssisted ? 'An assisted' : 'A'} ${purchaseUnit} order totaling $${total.toFixed(2)} was created.`,
+      metadata: { customerId, isAssisted, assistedByUserId, assistanceType, relatedTastingId },
     })
 
     const [customerAccount] = await db
@@ -457,6 +500,7 @@ export async function createOrder(formData: FormData) {
 
     return {
       success: true as const,
+      orderId: order.id,
       paymentStatus,
       redirectTo: isCustomerOrder
         ? `/customer/orders/${order.id}`
