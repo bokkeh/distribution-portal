@@ -1,5 +1,5 @@
 import { db } from '@/db'
-import { activityEvents, contacts, crmPipelineStages, customerAccounts, deliveries, deliveryStops, invoices, orderItems, orders, salesMembers, tastings, users } from '@/db/schema'
+import { activityEvents, contacts, crmPipelineStages, customerAccounts, deliveries, deliveryStops, invoices, orderItems, orders, salesMembers, salesRegions, tastings, users } from '@/db/schema'
 import { sql, eq, and, inArray, asc, max } from 'drizzle-orm'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -17,6 +17,7 @@ import { mergeContacts, mergeCustomerAccounts } from '@/actions/crm'
 import { CRM_ACCOUNT_FILTERS, type CRMAccountFilter, normalizeCRMAccountFilter } from '@/lib/customers/account-segmentation'
 import { coercePipelineStages } from '@/lib/deal-stages'
 import { formatCurrency } from '@/lib/utils'
+import { buildRegionColorMap } from '@/lib/maps/region-colors'
 
 function matchesAccountFilter(account: { customerSegment: string | null; customerSource: string | null }, filter: CRMAccountFilter) {
   if (filter === 'all') return true
@@ -66,7 +67,7 @@ export default async function StaffCRMPage({
   const isPipeline = view === 'pipeline'
   const currentFilter = normalizeCRMAccountFilter(segment)
 
-  const [accounts, people, hsResult, currentSalesMember, pipelineStageRows] = await Promise.all([
+  const [accounts, people, hsResult, currentSalesMember, pipelineStageRows, allRegions] = await Promise.all([
     db.select({
       id: customerAccounts.id,
       companyName: customerAccounts.companyName,
@@ -87,7 +88,9 @@ export default async function StaffCRMPage({
       balance: customerAccounts.balance,
       paymentTerms: customerAccounts.paymentTerms,
       assignedSalesRepId: customerAccounts.assignedSalesRepId,
+      assignedRegionId: customerAccounts.assignedRegionId,
       salesLeadName: users.name,
+      salesRegionName: salesRegions.name,
       hubspotContactId: customerAccounts.hubspotContactId,
       hubspotCompanyId: customerAccounts.hubspotCompanyId,
       starred: customerAccounts.starred,
@@ -95,6 +98,7 @@ export default async function StaffCRMPage({
       .from(customerAccounts)
       .leftJoin(salesMembers, eq(customerAccounts.assignedSalesRepId, salesMembers.id))
       .leftJoin(users, eq(salesMembers.userId, users.id))
+      .leftJoin(salesRegions, eq(customerAccounts.assignedRegionId, salesRegions.id))
       .orderBy(customerAccounts.companyName),
     db.select({
       id: contacts.id,
@@ -126,8 +130,11 @@ export default async function StaffCRMPage({
     })
       .from(crmPipelineStages)
       .orderBy(asc(crmPipelineStages.position), asc(crmPipelineStages.label)),
+    db.select({ id: salesRegions.id, name: salesRegions.name }).from(salesRegions).orderBy(asc(salesRegions.name)),
   ])
   const pipelineStages = coercePipelineStages(pipelineStageRows)
+  const regionColors = buildRegionColorMap(allRegions.map((region) => region.name))
+  const regionOptions = allRegions.map((region) => ({ value: region.id, label: region.name }))
 
   // Order stats per customer
   const accountIds = accounts.map(a => a.id)
@@ -216,6 +223,8 @@ export default async function StaffCRMPage({
 
   const accountRows = accounts.map(a => ({
     ...a,
+    regionId: a.assignedRegionId,
+    regionName: a.salesRegionName,
     pendingCases: pendingMap.get(a.id) ?? 0,
     totalCasesPurchased: totalMap.get(a.id) ?? 0,
     healthScore: 0,
@@ -280,7 +289,7 @@ export default async function StaffCRMPage({
       </div>
 
       {isPipeline ? (
-        <PipelineBoard accounts={filteredAccounts} basePath="/staff/crm" stages={pipelineStages} />
+        <PipelineBoard accounts={filteredAccountRows} basePath="/staff/crm" stages={pipelineStages} regionColors={regionColors} regionOptions={regionOptions} />
       ) : (
         <Card>
           <CardContent className="grid gap-4 border-b p-4 lg:grid-cols-2">
@@ -368,8 +377,8 @@ export default async function StaffCRMPage({
                 { id: 'hubspot', label: 'HubSpot Companies', count: hsCompanies.length },
               ]}
             >
-              <LocalAccountsTable initialAccounts={filteredAccountRows} basePath="/staff/crm" userId={session.user.id} pipelineStages={pipelineStages} />
-              <LocalAccountsTable initialAccounts={filteredAssignedToMeRows} basePath="/staff/crm" userId={session.user.id} pipelineStages={pipelineStages} />
+              <LocalAccountsTable initialAccounts={filteredAccountRows} basePath="/staff/crm" userId={session.user.id} pipelineStages={pipelineStages} regionColors={regionColors} regionOptions={regionOptions} />
+              <LocalAccountsTable initialAccounts={filteredAssignedToMeRows} basePath="/staff/crm" userId={session.user.id} pipelineStages={pipelineStages} regionColors={regionColors} regionOptions={regionOptions} />
               <LocalPeopleTable people={filteredPeople} basePath="/staff/crm" />
               <HubSpotCompaniesTab
                 companies={hsCompanies}

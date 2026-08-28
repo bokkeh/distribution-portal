@@ -1,7 +1,7 @@
 'use server'
 
 import { db } from '@/db'
-import { accountPreferences, activityEvents, contacts, crmPipelineStages, customerAccounts, deliveryStops, invoices, orders, salesMembers, salesRouteStops, smsThreads, tastings, users } from '@/db/schema'
+import { accountPreferences, activityEvents, contacts, crmPipelineStages, customerAccounts, deliveryStops, invoices, orders, salesMembers, salesRegions, salesRouteStops, smsThreads, tastings, users } from '@/db/schema'
 import { requireAdminOrStaff, requireRole } from '@/lib/auth/session'
 import { geocodeAddress } from '@/lib/maps/geocode'
 import { and, asc, eq, inArray } from 'drizzle-orm'
@@ -14,10 +14,22 @@ import { normalizeAccountGeography } from '@/lib/pricing/geographic-service'
 import { isGeocodeActionRateLimited } from '@/lib/auth/rate-limit'
 import { normalizeBusinessType } from '@/lib/customers/business-types'
 import { normalizeCustomerSegment } from '@/lib/customers/account-segmentation'
+import { PAYMENT_TERM_OPTIONS } from '@/lib/orders/payment-terms'
 import { parseWisherCustomersCsv } from '@/lib/customers/wisher-import'
 import { coercePipelineStages, getNextPipelineStageColorToken, normalizePipelineStageKey } from '@/lib/deal-stages'
 
 const CRM_EDITOR_ROLES = ['admin', 'staff', 'sales_rep', 'sales_manager'] as const
+const INLINE_ACCOUNT_FIELDS = ['businessType', 'regionId', 'paymentTerms', 'salesLeadId'] as const
+const PAYMENT_TERM_VALUES = new Set<string>(PAYMENT_TERM_OPTIONS.map((option) => option.value))
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+export type InlineCRMAccountField = (typeof INLINE_ACCOUNT_FIELDS)[number]
+
+export interface InlineCRMAccountUpdate {
+  field: InlineCRMAccountField
+  value: string
+  label: string
+}
 const HUBSPOT_COMPANY_SYNC_FIELDS = new Set<string>([
   'companyName',
   'phone',
@@ -181,6 +193,130 @@ export async function renameCRMAccount(accountId: string, companyName: string) {
 
   revalidateCRMAccountPaths(accountId)
   return updated
+}
+
+export async function updateCRMAccountInlineField(
+  accountId: string,
+  field: InlineCRMAccountField,
+  rawValue: string,
+): Promise<InlineCRMAccountUpdate> {
+  if (typeof accountId !== 'string' || !UUID_PATTERN.test(accountId)) throw new Error('Invalid account.')
+  if (typeof field !== 'string' || !INLINE_ACCOUNT_FIELDS.includes(field as InlineCRMAccountField)) {
+    throw new Error('This account field cannot be updated inline.')
+  }
+  if (typeof rawValue !== 'string') throw new Error('Invalid account field value.')
+
+  const { session, roles, account } = await requireEditableAccountAccess(accountId)
+  const value = rawValue.trim()
+  let previousValue: string | null = null
+  let nextValue: string | null = null
+  let label = ''
+  const updateValues: {
+    businessType?: string | null
+    assignedRegionId?: string | null
+    paymentTerms?: string
+    assignedSalesRepId?: string | null
+  } = {}
+  let assignedRepUserId: string | null = null
+
+  if (field === 'businessType') {
+    const businessType = value ? normalizeBusinessType(value) : null
+    if (value && !businessType) throw new Error('Select a valid account type.')
+    previousValue = account.businessType
+    nextValue = businessType
+    label = businessType ?? 'Unspecified'
+    updateValues.businessType = businessType
+  } else if (field === 'regionId') {
+    previousValue = account.assignedRegionId
+    nextValue = value || null
+    label = 'Unassigned'
+
+    if (nextValue) {
+      const [region] = await db
+        .select({ id: salesRegions.id, name: salesRegions.name })
+        .from(salesRegions)
+        .where(eq(salesRegions.id, nextValue))
+        .limit(1)
+      if (!region) throw new Error('Selected region was not found.')
+      label = region.name
+    }
+
+    updateValues.assignedRegionId = nextValue
+  } else if (field === 'paymentTerms') {
+    if (!PAYMENT_TERM_VALUES.has(value)) throw new Error('Select valid payment terms.')
+    previousValue = account.paymentTerms ?? 'PREPAID'
+    nextValue = value
+    label = PAYMENT_TERM_OPTIONS.find((option) => option.value === value)?.label ?? value
+    updateValues.paymentTerms = value
+  } else {
+    if (!roles.has('admin')) throw new Error('Only admins can assign a sales lead.')
+    previousValue = account.assignedSalesRepId
+    nextValue = value || null
+    label = 'Unassigned'
+
+    if (nextValue) {
+      const [rep] = await db
+        .select({ id: salesMembers.id, userId: salesMembers.userId, name: users.name })
+        .from(salesMembers)
+        .innerJoin(users, eq(salesMembers.userId, users.id))
+        .where(and(eq(salesMembers.id, nextValue), eq(salesMembers.status, 'active'), eq(users.active, true)))
+        .limit(1)
+      if (!rep) throw new Error('Selected sales lead was not found or is inactive.')
+      label = rep.name
+      assignedRepUserId = rep.userId
+    }
+
+    updateValues.assignedSalesRepId = nextValue
+  }
+
+  const result = { field, value: nextValue ?? '', label }
+  if ((previousValue ?? null) === (nextValue ?? null)) return result
+
+  const [updatedAccount] = await db
+    .update(customerAccounts)
+    .set(updateValues)
+    .where(eq(customerAccounts.id, accountId))
+    .returning({ id: customerAccounts.id })
+  if (!updatedAccount) throw new Error('Account not found.')
+
+  const fieldLabel = field === 'businessType'
+    ? 'Type'
+    : field === 'regionId'
+      ? 'Region'
+      : field === 'paymentTerms'
+        ? 'Payment terms'
+        : 'Sales lead'
+
+  try {
+    await logActivityEvent({
+      entityType: 'account',
+      entityId: accountId,
+      actorUserId: session.user.id,
+      kind: 'account_updated',
+      title: `${fieldLabel} updated`,
+      body: `${account.companyName}: ${fieldLabel.toLowerCase()} changed to ${label}.`,
+      metadata: { changedFields: [field], previousValue, nextValue },
+    })
+  } catch (error) {
+    console.error('Failed to log inline CRM account update', { accountId, field, error })
+  }
+
+  if (field === 'salesLeadId' && assignedRepUserId) {
+    try {
+      await createUserNotification({
+        userId: assignedRepUserId,
+        kind: 'crm_account_assigned',
+        title: 'CRM account assigned',
+        body: `${account.companyName} has been assigned to you as the sales lead.`,
+        href: `/sales/accounts/${accountId}`,
+      })
+    } catch (error) {
+      console.error('Failed to notify newly assigned CRM sales lead', { accountId, assignedRepUserId, error })
+    }
+  }
+
+  revalidateCRMAccountPaths(accountId)
+  return result
 }
 
 export async function createPipelineStage(label: string) {

@@ -90,7 +90,7 @@ export default async function CRMPage({
     await mergeContacts(formData)
   }
 
-  const [accounts, people, community, hsResult, currentSalesMember, pipelineStageRows, pullThroughDataset, allRegions] = await Promise.all([
+  const [accounts, people, community, hsResult, currentSalesMember, pipelineStageRows, pullThroughDataset, allRegions, salesLeadOptions] = await Promise.all([
     db.select({
       id: customerAccounts.id,
       companyName: customerAccounts.companyName,
@@ -112,6 +112,7 @@ export default async function CRMPage({
       balance: customerAccounts.balance,
       paymentTerms: customerAccounts.paymentTerms,
       assignedSalesRepId: customerAccounts.assignedSalesRepId,
+      assignedRegionId: customerAccounts.assignedRegionId,
       salesLeadName: users.name,
       salesRegionName: salesRegions.name,
       hubspotContactId: customerAccounts.hubspotContactId,
@@ -149,10 +150,18 @@ export default async function CRMPage({
       position: crmPipelineStages.position,
     }).from(crmPipelineStages).orderBy(asc(crmPipelineStages.position), asc(crmPipelineStages.label)).catch(() => null),
     resolvePullThroughScope(session).then(loadPullThroughDataset),
-    db.select({ name: salesRegions.name }).from(salesRegions).orderBy(asc(salesRegions.name)),
+    db.select({ id: salesRegions.id, name: salesRegions.name }).from(salesRegions).orderBy(asc(salesRegions.name)),
+    db
+      .select({ id: salesMembers.id, name: users.name })
+      .from(salesMembers)
+      .innerJoin(users, eq(salesMembers.userId, users.id))
+      .where(and(eq(salesMembers.status, 'active'), eq(users.active, true)))
+      .orderBy(asc(users.name)),
   ])
 
   const regionColors = buildRegionColorMap(allRegions.map((region) => region.name))
+  const regionOptions = allRegions.map((region) => ({ value: region.id, label: region.name }))
+  const salesLeadInlineOptions = salesLeadOptions.map((member) => ({ value: member.id, label: member.name }))
   const pipelineStages = coercePipelineStages(pipelineStageRows)
   const accountIds = accounts.map((account) => account.id)
   const [pendingStats, totalStats, orderStats, accountActivityStats, orderActivityStats, invoiceActivityStats, tastingActivityStats, deliveryActivityStats] = await Promise.all([
@@ -201,7 +210,8 @@ export default async function CRMPage({
       pendingCases: pendingMap.get(account.id) ?? 0,
       totalCasesPurchased: pullThrough?.orders.totalCases ?? totalMap.get(account.id) ?? 0,
       healthScore: computeHealthScore(account),
-      regionName: pullThrough?.territory ?? account.salesRegionName ?? account.county ?? locationFallback,
+      regionId: account.assignedRegionId,
+      regionName: account.salesRegionName ?? pullThrough?.territory ?? account.county ?? locationFallback,
       orderCount: pullThrough?.orders.totalOrders ?? Number(generalOrders?.orderCount ?? 0),
       daysSinceLastOrder: pullThrough?.orders.daysSinceLastOrder ?? fallbackDaysSince,
       pullThroughScore: pullThrough?.pullThrough.score ?? null,
@@ -292,11 +302,11 @@ export default async function CRMPage({
               {CRM_ACCOUNT_FILTERS.map((filter) => <Button key={filter.value} asChild variant={currentFilter === filter.value ? 'default' : 'ghost'} size="sm"><Link href={buildCrmHref(isPipeline ? 'pipeline' : 'list', filter.value)}>{filter.label}</Link></Button>)}
             </div>
           </div>
-          {isPipeline ? <PipelineBoard accounts={filteredAccountRows} basePath="/admin/crm" stages={pipelineStages} canManageStages canCreateAccounts regionColors={regionColors} /> : <Card className="overflow-hidden shadow-none"><LocalAccountsTable initialAccounts={filteredAccountRows} userId={session.user.id} pipelineStages={pipelineStages} regionColors={regionColors} /></Card>}
+          {isPipeline ? <PipelineBoard accounts={filteredAccountRows} basePath="/admin/crm" stages={pipelineStages} canManageStages canCreateAccounts regionColors={regionColors} regionOptions={regionOptions} /> : <Card className="overflow-hidden shadow-none"><LocalAccountsTable initialAccounts={filteredAccountRows} userId={session.user.id} pipelineStages={pipelineStages} regionColors={regionColors} regionOptions={regionOptions} salesLeadOptions={salesLeadInlineOptions} canAssignSalesLead /></Card>}
         </div>
         <Card className="mt-6 overflow-hidden shadow-none"><LocalPeopleTable people={filteredPeople} basePath="/admin/crm" /></Card>
         <Card className="mt-6 overflow-hidden shadow-none"><CommunityContactsTable contacts={community} /></Card>
-        <Card className="mt-6 overflow-hidden shadow-none"><LocalAccountsTable initialAccounts={filteredAssignedToMeRows} userId={session.user.id} pipelineStages={pipelineStages} regionColors={regionColors} /></Card>
+        <Card className="mt-6 overflow-hidden shadow-none"><LocalAccountsTable initialAccounts={filteredAssignedToMeRows} userId={session.user.id} pipelineStages={pipelineStages} regionColors={regionColors} regionOptions={regionOptions} salesLeadOptions={salesLeadInlineOptions} canAssignSalesLead /></Card>
         <Card className="mt-6 overflow-hidden shadow-none"><HubSpotCompaniesTab companies={hsCompanies} importedIds={importedHsIds} localAccountIds={localAccountIds} error={hsError} /></Card>
       </CRMTabs>
     </div>

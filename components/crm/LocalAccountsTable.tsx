@@ -20,13 +20,22 @@ import { CSS } from '@dnd-kit/utilities'
 import { ArrowDown, ArrowRight, ArrowUp, ArrowUpDown, Building2, GripVertical, MapPin, Settings2, Star, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { toggleStarAccount } from '@/actions/crm'
+import { toggleStarAccount, type InlineCRMAccountUpdate } from '@/actions/crm'
 import { getCustomerSegmentLabel, getCustomerSourceLabel } from '@/lib/customers/account-segmentation'
 import { getBusinessTypeColor } from '@/lib/customers/business-types'
+import { formatPaymentTerms } from '@/lib/orders/payment-terms'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { PipelineStage } from '@/lib/deal-stages'
 import { PhoneSmsButton } from './PhoneSmsButton'
 import { DealStageSelect } from './DealStageSelect'
+import {
+  applyInlineAccountUpdate,
+  EMPTY_INLINE_ACCOUNT_OPTIONS,
+  InlineAccountFieldSelect,
+  INLINE_BUSINESS_TYPE_OPTIONS,
+  INLINE_PAYMENT_TERM_OPTIONS,
+  type InlineAccountOption,
+} from './InlineAccountFieldSelect'
 
 const PAGE_SIZE = 200
 
@@ -58,6 +67,7 @@ export interface AccountRow {
   totalCasesPurchased: number
   healthScore: number
   lastActivityAt: string | Date | null
+  regionId?: string | null
   regionName?: string | null
   orderCount?: number
   daysSinceLastOrder?: number | null
@@ -316,14 +326,22 @@ function renderAccountCell({
   basePath,
   pipelineStages,
   onStageChange,
+  onInlineChange,
   regionColors,
+  regionOptions,
+  salesLeadOptions,
+  canAssignSalesLead,
 }: {
   account: AccountRow
   column: ColumnKey
   basePath: string
   pipelineStages: PipelineStage[]
   onStageChange: (accountId: string, nextStage: string) => void
+  onInlineChange: (accountId: string, update: InlineCRMAccountUpdate) => void
   regionColors: Record<string, string>
+  regionOptions: InlineAccountOption[]
+  salesLeadOptions: InlineAccountOption[]
+  canAssignSalesLead: boolean
 }) {
   switch (column) {
     case 'company':
@@ -370,20 +388,32 @@ function renderAccountCell({
     case 'businessType':
       return (
         <td key={column} className="px-4 py-3">
-          <Badge
-            className="rounded-full border-transparent font-mono text-[10px] uppercase tracking-[0.05em] text-white"
-            style={{ backgroundColor: getBusinessTypeColor(account.businessType) }}
-          >
-            {account.businessType?.replaceAll('_', ' ') ?? 'Unspecified'}
-          </Badge>
+          <InlineAccountFieldSelect
+            accountId={account.id}
+            accountName={account.companyName}
+            field="businessType"
+            value={account.businessType}
+            currentLabel={account.businessType ?? 'Unspecified'}
+            options={INLINE_BUSINESS_TYPE_OPTIONS}
+            toneColor={getBusinessTypeColor(account.businessType)}
+            onChange={(update) => onInlineChange(account.id, update)}
+          />
         </td>
       )
     case 'region': {
       const color = account.regionName ? regionColors[account.regionName] : undefined
       return (
         <td key={column} className="px-4 py-3 text-sm text-slate-600">
-          <span className="mr-2 inline-block h-2 w-2 rounded-full" style={{ backgroundColor: color ?? '#94A3B8' }} />
-          {account.regionName ?? '-'}
+          <InlineAccountFieldSelect
+            accountId={account.id}
+            accountName={account.companyName}
+            field="regionId"
+            value={account.regionId}
+            currentLabel={account.regionName ?? 'Unassigned'}
+            options={regionOptions}
+            toneColor={color ?? '#94A3B8'}
+            onChange={(update) => onInlineChange(account.id, update)}
+          />
         </td>
       )
     }
@@ -426,11 +456,33 @@ function renderAccountCell({
         </td>
       )
     case 'salesLead':
-      return <td key={column} className="px-4 py-3 text-sm text-muted-foreground">{account.salesLeadName ?? '-'}</td>
+      return (
+        <td key={column} className="px-4 py-3 text-sm text-muted-foreground">
+          {canAssignSalesLead ? (
+            <InlineAccountFieldSelect
+              accountId={account.id}
+              accountName={account.companyName}
+              field="salesLeadId"
+              value={account.assignedSalesRepId}
+              currentLabel={account.salesLeadName ?? 'Unassigned'}
+              options={salesLeadOptions}
+              onChange={(update) => onInlineChange(account.id, update)}
+            />
+          ) : account.salesLeadName ?? '-'}
+        </td>
+      )
     case 'terms':
       return (
         <td key={column} className="px-4 py-3">
-          <Badge variant="secondary">{account.paymentTerms ?? 'PREPAID'}</Badge>
+          <InlineAccountFieldSelect
+            accountId={account.id}
+            accountName={account.companyName}
+            field="paymentTerms"
+            value={account.paymentTerms ?? 'PREPAID'}
+            currentLabel={formatPaymentTerms(account.paymentTerms ?? 'PREPAID')}
+            options={INLINE_PAYMENT_TERM_OPTIONS}
+            onChange={(update) => onInlineChange(account.id, update)}
+          />
         </td>
       )
     case 'creditLimit':
@@ -531,14 +583,22 @@ function MobileAccountCard({
   pipelineStages,
   onStar,
   onStageChange,
+  onInlineChange,
   regionColors,
+  regionOptions,
+  salesLeadOptions,
+  canAssignSalesLead,
 }: {
   account: AccountRow
   basePath: string
   pipelineStages: PipelineStage[]
   onStar: (id: string, val: boolean) => void
   onStageChange: (accountId: string, nextStage: string) => void
+  onInlineChange: (accountId: string, update: InlineCRMAccountUpdate) => void
   regionColors: Record<string, string>
+  regionOptions: InlineAccountOption[]
+  salesLeadOptions: InlineAccountOption[]
+  canAssignSalesLead: boolean
 }) {
   const pullThroughTone = account.pullThroughScore == null || account.pullThroughScore < 40
     ? 'bg-red-500'
@@ -562,18 +622,26 @@ function MobileAccountCard({
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-1.5">
-          <Badge
-            className="rounded-full border-transparent font-mono text-[10px] uppercase tracking-[0.05em] text-white"
-            style={{ backgroundColor: getBusinessTypeColor(account.businessType) }}
-          >
-            {account.businessType?.replaceAll('_', ' ') ?? 'Unspecified'}
-          </Badge>
-          {account.regionName ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-medium text-slate-600">
-              <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: regionColor ?? '#94A3B8' }} />
-              {account.regionName}
-            </span>
-          ) : null}
+          <InlineAccountFieldSelect
+            accountId={account.id}
+            accountName={account.companyName}
+            field="businessType"
+            value={account.businessType}
+            currentLabel={account.businessType ?? 'Unspecified'}
+            options={INLINE_BUSINESS_TYPE_OPTIONS}
+            toneColor={getBusinessTypeColor(account.businessType)}
+            onChange={(update) => onInlineChange(account.id, update)}
+          />
+          <InlineAccountFieldSelect
+            accountId={account.id}
+            accountName={account.companyName}
+            field="regionId"
+            value={account.regionId}
+            currentLabel={account.regionName ?? 'Unassigned'}
+            options={regionOptions}
+            toneColor={regionColor ?? '#94A3B8'}
+            onChange={(update) => onInlineChange(account.id, update)}
+          />
         </div>
         {account.phone ? <PhoneSmsButton phone={account.phone} recipientName={account.companyName} /> : <span className="text-xs text-slate-400">No phone</span>}
       </div>
@@ -585,6 +653,37 @@ function MobileAccountCard({
       </div>
 
       <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200"><div className={`h-full rounded-full ${pullThroughTone}`} style={{ width: `${account.pullThroughScore ?? 0}%` }} /></div>
+
+      <div className={`mt-4 grid gap-2 ${canAssignSalesLead ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        <div>
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Terms</p>
+          <InlineAccountFieldSelect
+            accountId={account.id}
+            accountName={account.companyName}
+            field="paymentTerms"
+            value={account.paymentTerms ?? 'PREPAID'}
+            currentLabel={formatPaymentTerms(account.paymentTerms ?? 'PREPAID')}
+            options={INLINE_PAYMENT_TERM_OPTIONS}
+            className="w-full [&>select]:w-full"
+            onChange={(update) => onInlineChange(account.id, update)}
+          />
+        </div>
+        {canAssignSalesLead ? (
+          <div>
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Sales lead</p>
+            <InlineAccountFieldSelect
+              accountId={account.id}
+              accountName={account.companyName}
+              field="salesLeadId"
+              value={account.assignedSalesRepId}
+              currentLabel={account.salesLeadName ?? 'Unassigned'}
+              options={salesLeadOptions}
+              className="w-full [&>select]:w-full"
+              onChange={(update) => onInlineChange(account.id, update)}
+            />
+          </div>
+        ) : null}
+      </div>
 
       <div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
         <DealStageSelect accountId={account.id} currentStage={account.dealStage} stages={pipelineStages} size="sm" onStageChange={(nextStage) => onStageChange(account.id, nextStage)} />
@@ -600,18 +699,26 @@ function MobileAccountList({
   pipelineStages,
   onStar,
   onStageChange,
+  onInlineChange,
   regionColors,
+  regionOptions,
+  salesLeadOptions,
+  canAssignSalesLead,
 }: {
   accounts: AccountRow[]
   basePath: string
   pipelineStages: PipelineStage[]
   onStar: (id: string, val: boolean) => void
   onStageChange: (accountId: string, nextStage: string) => void
+  onInlineChange: (accountId: string, update: InlineCRMAccountUpdate) => void
   regionColors: Record<string, string>
+  regionOptions: InlineAccountOption[]
+  salesLeadOptions: InlineAccountOption[]
+  canAssignSalesLead: boolean
 }) {
   return (
     <div className="space-y-3 p-3 md:hidden">
-      {accounts.map((account) => <MobileAccountCard key={account.id} account={account} basePath={basePath} pipelineStages={pipelineStages} onStar={onStar} onStageChange={onStageChange} regionColors={regionColors} />)}
+      {accounts.map((account) => <MobileAccountCard key={account.id} account={account} basePath={basePath} pipelineStages={pipelineStages} onStar={onStar} onStageChange={onStageChange} onInlineChange={onInlineChange} regionColors={regionColors} regionOptions={regionOptions} salesLeadOptions={salesLeadOptions} canAssignSalesLead={canAssignSalesLead} />)}
     </div>
   )
 }
@@ -620,6 +727,7 @@ function AccountTable({
   accounts,
   onStar,
   onStageChange,
+  onInlineChange,
   basePath = '/admin/crm',
   visibleColumns,
   pipelineStages,
@@ -627,10 +735,14 @@ function AccountTable({
   sortDirection,
   onSort,
   regionColors,
+  regionOptions,
+  salesLeadOptions,
+  canAssignSalesLead,
 }: {
   accounts: AccountRow[]
   onStar: (id: string, val: boolean) => void
   onStageChange: (accountId: string, nextStage: string) => void
+  onInlineChange: (accountId: string, update: InlineCRMAccountUpdate) => void
   basePath?: string
   visibleColumns: ColumnKey[]
   pipelineStages: PipelineStage[]
@@ -638,6 +750,9 @@ function AccountTable({
   sortDirection: SortDirection
   onSort: (column: SortKey) => void
   regionColors: Record<string, string>
+  regionOptions: InlineAccountOption[]
+  salesLeadOptions: InlineAccountOption[]
+  canAssignSalesLead: boolean
 }) {
   if (accounts.length === 0) return null
 
@@ -657,7 +772,7 @@ function AccountTable({
             <td className="px-4 py-3">
               <AccountStarButton account={account} onStar={onStar} />
             </td>
-            {visibleColumns.map((column) => renderAccountCell({ account, column, basePath, pipelineStages, onStageChange, regionColors }))}
+            {visibleColumns.map((column) => renderAccountCell({ account, column, basePath, pipelineStages, onStageChange, onInlineChange, regionColors, regionOptions, salesLeadOptions, canAssignSalesLead }))}
             <td className="px-4 py-3">
               <Link href={`${basePath}/${account.id}`}>
                 <Button variant="ghost" size="sm">View</Button>
@@ -677,12 +792,18 @@ export function LocalAccountsTable({
   userId,
   pipelineStages,
   regionColors = {},
+  regionOptions = EMPTY_INLINE_ACCOUNT_OPTIONS,
+  salesLeadOptions = EMPTY_INLINE_ACCOUNT_OPTIONS,
+  canAssignSalesLead = false,
 }: {
   initialAccounts: AccountRow[]
   basePath?: string
   userId: string
   pipelineStages: PipelineStage[]
   regionColors?: Record<string, string>
+  regionOptions?: InlineAccountOption[]
+  salesLeadOptions?: InlineAccountOption[]
+  canAssignSalesLead?: boolean
 }) {
   const [accounts, setAccounts] = useState<AccountRow[]>(initialAccounts)
   const [showColumnPicker, setShowColumnPicker] = useState(false)
@@ -697,6 +818,8 @@ export function LocalAccountsTable({
   const [activityWindow, setActivityWindow] = useState<ActivityWindowKey>('all')
   const [storageReady, setStorageReady] = useState(false)
   const [page, setPage] = useState(1)
+  const inlineRegionOptions = useMemo(() => [{ value: '', label: 'Unassigned' }, ...regionOptions], [regionOptions])
+  const inlineSalesLeadOptions = useMemo(() => [{ value: '', label: 'Unassigned' }, ...salesLeadOptions], [salesLeadOptions])
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
 
   useEffect(() => {
@@ -737,6 +860,10 @@ export function LocalAccountsTable({
 
   function handleStageChange(accountId: string, nextStage: string) {
     setAccounts((prev) => prev.map((account) => account.id === accountId ? { ...account, dealStage: nextStage } : account))
+  }
+
+  function handleInlineChange(accountId: string, update: InlineCRMAccountUpdate) {
+    setAccounts((prev) => prev.map((account) => account.id === accountId ? applyInlineAccountUpdate(account, update) : account))
   }
 
   function toggleColumn(column: ColumnKey) {
@@ -951,8 +1078,8 @@ export function LocalAccountsTable({
             <Star className="h-3.5 w-3.5 fill-yellow-400 stroke-yellow-500" />
             Starred Accounts ({starred.length})
           </div>
-          <MobileAccountList accounts={starred} onStar={handleStar} onStageChange={handleStageChange} basePath={basePath} pipelineStages={pipelineStages} regionColors={regionColors} />
-          <AccountTable accounts={starred} onStar={handleStar} onStageChange={handleStageChange} basePath={basePath} visibleColumns={selectedColumns} pipelineStages={pipelineStages} sortBy={sortBy} sortDirection={sortDirection} onSort={handleSort} regionColors={regionColors} />
+          <MobileAccountList accounts={starred} onStar={handleStar} onStageChange={handleStageChange} onInlineChange={handleInlineChange} basePath={basePath} pipelineStages={pipelineStages} regionColors={regionColors} regionOptions={inlineRegionOptions} salesLeadOptions={inlineSalesLeadOptions} canAssignSalesLead={canAssignSalesLead} />
+          <AccountTable accounts={starred} onStar={handleStar} onStageChange={handleStageChange} onInlineChange={handleInlineChange} basePath={basePath} visibleColumns={selectedColumns} pipelineStages={pipelineStages} sortBy={sortBy} sortDirection={sortDirection} onSort={handleSort} regionColors={regionColors} regionOptions={inlineRegionOptions} salesLeadOptions={inlineSalesLeadOptions} canAssignSalesLead={canAssignSalesLead} />
         </div>
       ) : null}
 
@@ -962,8 +1089,8 @@ export function LocalAccountsTable({
         </div>
       ) : rest.length > 0 ? (
         <>
-          <MobileAccountList accounts={rest} onStar={handleStar} onStageChange={handleStageChange} basePath={basePath} pipelineStages={pipelineStages} regionColors={regionColors} />
-          <AccountTable accounts={rest} onStar={handleStar} onStageChange={handleStageChange} basePath={basePath} visibleColumns={selectedColumns} pipelineStages={pipelineStages} sortBy={sortBy} sortDirection={sortDirection} onSort={handleSort} regionColors={regionColors} />
+          <MobileAccountList accounts={rest} onStar={handleStar} onStageChange={handleStageChange} onInlineChange={handleInlineChange} basePath={basePath} pipelineStages={pipelineStages} regionColors={regionColors} regionOptions={inlineRegionOptions} salesLeadOptions={inlineSalesLeadOptions} canAssignSalesLead={canAssignSalesLead} />
+          <AccountTable accounts={rest} onStar={handleStar} onStageChange={handleStageChange} onInlineChange={handleInlineChange} basePath={basePath} visibleColumns={selectedColumns} pipelineStages={pipelineStages} sortBy={sortBy} sortDirection={sortDirection} onSort={handleSort} regionColors={regionColors} regionOptions={inlineRegionOptions} salesLeadOptions={inlineSalesLeadOptions} canAssignSalesLead={canAssignSalesLead} />
         </>
       ) : null}
       {sortedAccounts.length > PAGE_SIZE ? (

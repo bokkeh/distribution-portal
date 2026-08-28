@@ -31,12 +31,20 @@ import {
   renamePipelineStage,
   reorderPipelineStages,
   updateDealStage,
+  type InlineCRMAccountUpdate,
 } from '@/actions/crm'
 import { getPipelineStageColorClass } from '@/lib/deal-stages'
 import type { PipelineStage } from '@/lib/deal-stages'
 import { getBusinessTypeColor } from '@/lib/customers/business-types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import {
+  applyInlineAccountUpdate,
+  EMPTY_INLINE_ACCOUNT_OPTIONS,
+  InlineAccountFieldSelect,
+  INLINE_BUSINESS_TYPE_OPTIONS,
+  type InlineAccountOption,
+} from './InlineAccountFieldSelect'
 
 interface Account {
   id: string
@@ -51,6 +59,7 @@ interface Account {
   businessType?: string | null
   daysSinceLastOrder?: number | null
   pullThroughScore?: number | null
+  regionId?: string | null
   regionName?: string | null
 }
 
@@ -61,6 +70,7 @@ interface Props {
   canManageStages?: boolean
   canCreateAccounts?: boolean
   regionColors?: Record<string, string>
+  regionOptions?: InlineAccountOption[]
 }
 
 function getAccountDragId(accountId: string) {
@@ -109,14 +119,18 @@ function AccountCard({
   isDragging = false,
   isRenaming = false,
   onRename,
+  onInlineChange,
   regionColors,
+  regionOptions,
 }: {
   account: Account
   basePath: string
   isDragging?: boolean
   isRenaming?: boolean
   onRename: (accountId: string, companyName: string) => void
+  onInlineChange: (accountId: string, update: InlineCRMAccountUpdate) => void
   regionColors: Record<string, string>
+  regionOptions: InlineAccountOption[]
 }) {
   const router = useRouter()
   const [isEditing, setIsEditing] = useState(false)
@@ -217,18 +231,26 @@ function AccountCard({
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-1.5">
-          <span
-            className="rounded-md px-2.5 py-1 font-display text-xs font-bold uppercase tracking-[0.04em] text-white"
-            style={{ backgroundColor: getBusinessTypeColor(account.businessType) }}
-          >
-            {businessType}
-          </span>
-          {account.regionName ? (
-            <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
-              <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: regionColor ?? '#94A3B8' }} />
-              {account.regionName}
-            </span>
-          ) : null}
+          <InlineAccountFieldSelect
+            accountId={account.id}
+            accountName={account.companyName}
+            field="businessType"
+            value={account.businessType}
+            currentLabel={businessType}
+            options={INLINE_BUSINESS_TYPE_OPTIONS}
+            toneColor={getBusinessTypeColor(account.businessType)}
+            onChange={(update) => onInlineChange(account.id, update)}
+          />
+          <InlineAccountFieldSelect
+            accountId={account.id}
+            accountName={account.companyName}
+            field="regionId"
+            value={account.regionId}
+            currentLabel={account.regionName ?? 'Unassigned'}
+            options={regionOptions}
+            toneColor={regionColor ?? '#94A3B8'}
+            onChange={(update) => onInlineChange(account.id, update)}
+          />
         </div>
         <span className="inline-flex items-center gap-1.5 text-sm text-[#817b76]">
           <Clock3 className="h-4 w-4" />
@@ -346,9 +368,11 @@ function StageColumn({
   onStageDelete,
   renamingAccountId,
   onAccountRename,
+  onInlineChange,
   onAccountAssign,
   isSaving,
   regionColors,
+  regionOptions,
 }: {
   stage: PipelineStage
   accounts: Account[]
@@ -363,9 +387,11 @@ function StageColumn({
   onStageDelete: (stageId: string) => void
   renamingAccountId: string | null
   onAccountRename: (accountId: string, companyName: string) => void
+  onInlineChange: (accountId: string, update: InlineCRMAccountUpdate) => void
   onAccountAssign: (accountId: string, stageKey: string) => void
   isSaving: boolean
   regionColors: Record<string, string>
+  regionOptions: InlineAccountOption[]
 }) {
   const [isEditingStage, setIsEditingStage] = useState(false)
   const {
@@ -489,7 +515,9 @@ function StageColumn({
             isDragging={getAccountDragId(account.id) === activeId}
             isRenaming={renamingAccountId === account.id}
             onRename={onAccountRename}
+            onInlineChange={onInlineChange}
             regionColors={regionColors}
+            regionOptions={regionOptions}
           />
         ))}
         {accounts.length === 0 ? (
@@ -509,6 +537,7 @@ export function PipelineBoard({
   canManageStages = false,
   canCreateAccounts = false,
   regionColors = {},
+  regionOptions = EMPTY_INLINE_ACCOUNT_OPTIONS,
 }: Props) {
   const [accounts, setAccounts] = useState<Account[]>(initialAccounts)
   const [stages, setStages] = useState<PipelineStage[]>(initialStages)
@@ -520,6 +549,7 @@ export function PipelineBoard({
     Object.fromEntries(initialStages.map((stage) => [stage.id, stage.label]))
   )
   const [, startTransition] = useTransition()
+  const inlineRegionOptions = useMemo(() => [{ value: '', label: 'Unassigned' }, ...regionOptions], [regionOptions])
 
   useEffect(() => {
     setAccounts(initialAccounts)
@@ -651,6 +681,10 @@ export function PipelineBoard({
     })
   }
 
+  function handleInlineChange(accountId: string, update: InlineCRMAccountUpdate) {
+    setAccounts((prev) => prev.map((account) => account.id === accountId ? applyInlineAccountUpdate(account, update) : account))
+  }
+
   function handleStageRename(stageId: string) {
     const label = stageLabels[stageId]?.trim()
     if (!label) {
@@ -767,9 +801,11 @@ export function PipelineBoard({
                 onStageDelete={handleStageDelete}
                 renamingAccountId={renamingAccountId}
                 onAccountRename={handleAccountRename}
+                onInlineChange={handleInlineChange}
                 onAccountAssign={handleAccountAssign}
                 isSaving={false}
                 regionColors={regionColors}
+                regionOptions={inlineRegionOptions}
               />
             ))}
           </div>
