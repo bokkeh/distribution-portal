@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { asc, eq } from 'drizzle-orm'
 import { Plus } from 'lucide-react'
-import { TASK_ROLES } from '@/actions/tasks'
+import { TASK_ROLES } from '@/lib/tasks/roles'
 import { db } from '@/db'
 import { users } from '@/db/schema'
 import { getTasksForView } from '@/lib/tasks/read'

@@ -8,8 +8,7 @@ import { contacts, crmTasks, customerAccounts, deliveries, deliveryStops, orders
 import { requireRole } from '@/lib/auth/session'
 import { logActivityEvent } from '@/lib/activity/log'
 import { sendTaskNotification, type TaskNotificationChannel } from '@/lib/tasks/notifications'
-
-export const TASK_ROLES = ['admin', 'staff', 'sales_rep', 'sales_manager'] as const
+import { TASK_ROLES } from '@/lib/tasks/roles'
 const taskInputSchema = z.object({
   title: z.string().trim().min(1, 'Task title is required.').max(200),
   description: z.string().trim().max(4000).optional().nullable(),
