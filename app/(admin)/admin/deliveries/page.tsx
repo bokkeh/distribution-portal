@@ -1,5 +1,5 @@
 import { db } from '@/db'
-import { deliveries, drivers, users, deliveryStops, customerAccounts } from '@/db/schema'
+import { deliveries, drivers, users } from '@/db/schema'
 import { eq, desc } from 'drizzle-orm'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,8 @@ import Link from 'next/link'
 import { Plus, Truck, MapPin } from 'lucide-react'
 import { deleteDelivery } from '@/actions/deliveries'
 import { PhoneActions } from '@/components/shared/PhoneActions'
+import { PageTabs } from '@/components/ui/PageTabs'
+import { DeliveryReportsView } from '@/components/deliveries/DeliveryReportsView'
 
 const statusVariant: Record<string, 'default' | 'success' | 'warning' | 'destructive' | 'info'> = {
   scheduled: 'info',
@@ -17,7 +19,13 @@ const statusVariant: Record<string, 'default' | 'success' | 'warning' | 'destruc
   cancelled: 'destructive',
 }
 
-export default async function DeliveriesPage() {
+export default async function DeliveriesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>
+}) {
+  const { tab } = await searchParams
+  const defaultTab = tab === 'reports' ? 'reports' : 'deliveries'
   const allDrivers = await db
     .select({
       id: drivers.id,
@@ -64,6 +72,12 @@ export default async function DeliveriesPage() {
         </div>
       </div>
 
+      <PageTabs
+        ariaLabel="Deliveries views"
+        defaultTab={defaultTab}
+        tabs={[{ id: 'deliveries', label: 'Deliveries' }, { id: 'reports', label: 'Reports' }]}
+      >
+      <div className="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>Driver Roster</CardTitle>
@@ -143,6 +157,11 @@ export default async function DeliveriesPage() {
           </Card>
         ))}
       </div>
+      </div>
+      <div className="pt-6">
+        <DeliveryReportsView />
+      </div>
+      </PageTabs>
     </div>
   )
 }

@@ -33,7 +33,7 @@ const NAV_ITEMS = [
   { label: 'Inventory', href: '/admin/inventory', icon: Package, section: 'Navigation' },
   { label: 'Background Jobs', href: '/admin/jobs', icon: Cpu, section: 'Navigation' },
   { label: 'Tastings', href: '/admin/tastings', icon: CalendarDays, section: 'Navigation' },
-  { label: 'Tasting ROI', href: '/admin/tastings/roi', icon: TrendingUp, section: 'Navigation' },
+  { label: 'Tasting ROI', href: '/admin/tastings?tab=roi', icon: TrendingUp, section: 'Navigation' },
   { label: 'CRM / Accounts', href: '/admin/crm', icon: Building2, section: 'Navigation' },
   { label: 'SMS Inbox', href: '/admin/inbox', icon: MessageSquare, section: 'Navigation' },
   { label: 'Payments Ledger', href: '/admin/finance/ledger', icon: BookOpen, section: 'Navigation' },

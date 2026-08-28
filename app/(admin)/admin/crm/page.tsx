@@ -22,7 +22,7 @@ import {
 import { CRMEntityMergeCard } from '@/components/crm/CRMEntityMergeCard'
 import { CRMOverview } from '@/components/crm/CRMOverview'
 import { CRMSettingsMenu } from '@/components/crm/CRMSettingsMenu'
-import { CRMTabs } from '@/components/crm/CRMTabs'
+import { PageTabs as CRMTabs } from '@/components/ui/PageTabs'
 import { CommunityContactsTable } from '@/components/crm/CommunityContactsTable'
 import { HubSpotCompaniesTab } from '@/components/crm/HubSpotCompaniesTab'
 import { LocalAccountsTable } from '@/components/crm/LocalAccountsTable'
@@ -288,6 +288,7 @@ export default async function CRMPage({
       ) : null}
 
       <CRMTabs
+        ariaLabel="CRM views"
         defaultTab={defaultTab}
         tabs={[{ id: 'overview', label: 'Overview' }, { id: 'company-accounts', label: 'Company Accounts' }, { id: 'company-contacts', label: 'Company Contacts' }, { id: 'community-contacts', label: 'Community Contacts' }, { id: 'assigned', label: 'Assigned To Me' }, { id: 'hubspot', label: 'HubSpot Companies' }]}
       >

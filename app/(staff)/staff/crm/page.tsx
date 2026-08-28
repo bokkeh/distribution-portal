@@ -8,7 +8,7 @@ import { HubSpotCompaniesTab } from '@/components/crm/HubSpotCompaniesTab'
 import { LocalAccountsTable } from '@/components/crm/LocalAccountsTable'
 import { LocalPeopleTable } from '@/components/crm/LocalPeopleTable'
 import { CRMEntityMergeCard } from '@/components/crm/CRMEntityMergeCard'
-import { CRMTabs } from '@/components/crm/CRMTabs'
+import { PageTabs as CRMTabs } from '@/components/ui/PageTabs'
 import { PipelineBoard } from '@/components/crm/PipelineBoard'
 import Link from 'next/link'
 import { LayoutList, Kanban } from 'lucide-react'
@@ -370,6 +370,7 @@ export default async function StaffCRMPage({
           </CardContent>
           <CardContent className="p-0">
             <CRMTabs
+              ariaLabel="CRM views"
               tabs={[
                 { id: 'local', label: 'Local Accounts', count: filteredAccountRows.length },
                 { id: 'assigned', label: 'Assigned To Me', count: filteredAssignedToMeRows.length },

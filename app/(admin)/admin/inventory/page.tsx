@@ -12,8 +12,16 @@ import { Plus, AlertTriangle } from 'lucide-react'
 import { AdminInventoryRowActions } from '@/components/inventory/AdminInventoryRowActions'
 import { UndoInventoryTransactionButton } from '@/components/inventory/UndoInventoryTransactionButton'
 import { toBottles } from '@/lib/inventory/units'
+import { PageTabs } from '@/components/ui/PageTabs'
+import { SampleInventoryView } from '@/components/inventory/SampleInventoryView'
 
-export default async function InventoryPage() {
+export default async function InventoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>
+}) {
+  const { tab } = await searchParams
+  const defaultTab = tab === 'samples' ? 'samples' : 'inventory'
   // Fetch staff/admin users for the assign dropdown
   const staffUsers = await db
     .select({ id: users.id, name: users.name, role: users.role })
@@ -186,6 +194,13 @@ export default async function InventoryPage() {
         </Link>
       </div>
 
+      <PageTabs
+        ariaLabel="Inventory views"
+        defaultTab={defaultTab}
+        tabs={[{ id: 'inventory', label: 'Inventory' }, { id: 'samples', label: 'Sample Inventory' }]}
+      >
+      <div className="space-y-6">
+
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Card><CardContent className="p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Warehouse</p><p className="mt-1 text-2xl font-semibold">{inventoryTotals.warehouse.toLocaleString()} bottles</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Samples available</p><p className="mt-1 text-2xl font-semibold">{inventoryTotals.samples.toLocaleString()} bottles</p></CardContent></Card>
@@ -331,6 +346,11 @@ export default async function InventoryPage() {
           </div>
         </CardContent>
       </Card>
+      </div>
+      <div className="pt-6">
+        <SampleInventoryView basePath="/admin/sample-inventory" />
+      </div>
+      </PageTabs>
     </div>
   )
 }

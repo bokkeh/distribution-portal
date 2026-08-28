@@ -41,9 +41,7 @@ const navSections = [
     title: 'Sales & Orders',
     items: [
       { href: '/admin/orders', label: 'Orders', icon: ShoppingCart, feature: 'orders' },
-      { href: '/sales/orders/assisted', label: 'Assisted Orders', icon: ClipboardList, feature: 'orders' },
       { href: '/admin/deliveries', label: 'Deliveries', icon: Truck, feature: 'deliveries' },
-      { href: '/admin/deliveries/reports', label: 'Delivery Reports', icon: BarChart3, feature: 'deliveries' },
       { href: '/admin/deliveries/performance', label: 'Driver Performance', icon: TrendingUp, feature: 'deliveries' },
       { href: '/admin/invoicing', label: 'Invoicing', icon: Receipt, feature: 'invoicing' },
       { href: '/admin/wholesale-requests', label: 'Wholesaler Requests', icon: Star, feature: 'wholesale_requests' },
@@ -53,10 +51,8 @@ const navSections = [
     title: 'Operations',
     items: [
       { href: '/admin/inventory', label: 'Inventory', icon: Package, feature: 'inventory' },
-      { href: '/admin/sample-inventory', label: 'Sample Inventory', icon: ClipboardList, feature: 'inventory' },
       { href: '/admin/pricing', label: 'Geographic Pricing', icon: FileText, feature: 'inventory' },
       { href: '/admin/tastings', label: 'Tastings', icon: CalendarDays, feature: 'tastings' },
-      { href: '/admin/tastings/roi', label: 'Tasting ROI', icon: TrendingUp, feature: 'tastings' },
     ],
   },
   {

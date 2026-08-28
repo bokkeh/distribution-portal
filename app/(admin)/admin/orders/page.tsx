@@ -9,11 +9,19 @@ import { CustomerRecordLink } from '@/components/crm/CustomerRecordLink'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { isMissingShippingStatusColumn } from '@/lib/orders/shipping-fallback'
 import Link from 'next/link'
-import { Plus, FileText, Send } from 'lucide-react'
+import { Plus, FileText } from 'lucide-react'
 import { BulkOrderStatusForm } from '@/components/orders/BulkOrderStatusForm'
 import { EmptyState } from '@/components/ui/empty-state'
+import { PageTabs } from '@/components/ui/PageTabs'
+import { AssistedOrdersView } from '@/components/orders/AssistedOrdersView'
 
-export default async function AdminOrdersPage() {
+export default async function AdminOrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>
+}) {
+  const { tab } = await searchParams
+  const defaultTab = tab === 'assisted' ? 'assisted' : 'orders'
   let allOrders: Array<{
     id: string
     total: string
@@ -89,11 +97,15 @@ export default async function AdminOrdersPage() {
           <p className="text-muted-foreground mt-1">{allOrders.length} total orders</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link href="/sales/orders/assisted"><Button variant="outline">Track Assisted Orders</Button></Link>
-          <Link href="/sales/orders/assisted/new"><Button variant="outline"><Send className="w-4 h-4 mr-2" />Create Customer Link</Button></Link>
           <Link href="/admin/orders/new"><Button><Plus className="w-4 h-4 mr-2" />New Order</Button></Link>
         </div>
       </div>
+      <PageTabs
+        ariaLabel="Orders views"
+        defaultTab={defaultTab}
+        tabs={[{ id: 'orders', label: 'Orders' }, { id: 'assisted', label: 'Assisted Orders' }]}
+      >
+      <div className="space-y-6">
       <BulkOrderStatusForm
         mode="admin"
         orders={allOrders.map((order) => ({
@@ -143,6 +155,11 @@ export default async function AdminOrdersPage() {
           </div>
         </CardContent>
       </Card>
+      </div>
+      <div className="pt-6">
+        <AssistedOrdersView />
+      </div>
+      </PageTabs>
     </div>
   )
 }

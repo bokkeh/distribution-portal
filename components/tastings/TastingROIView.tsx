@@ -1,24 +1,20 @@
 import { db } from '@/db'
 import { tastings, tastingReports, tasterInvoices, users } from '@/db/schema'
-import { requireFeature } from '@/lib/auth/session'
 import { and, desc, eq, gte, lte } from 'drizzle-orm'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import Link from 'next/link'
-import { ArrowLeft, TrendingUp, DollarSign, Wine, Users } from 'lucide-react'
+import { TrendingUp, DollarSign, Wine, Users } from 'lucide-react'
 import { Suspense } from 'react'
 import { DateRangeFilter } from '@/components/ui/date-range-filter'
 
-export default async function TastingROIPage({
-  searchParams,
+export async function TastingROIView({
+  from,
+  to,
 }: {
-  searchParams: Promise<{ from?: string; to?: string }>
+  from?: string
+  to?: string
 }) {
-  await requireFeature('tastings', 'admin')
-  const { from, to } = await searchParams
-
   const dateFilters = [
     eq(tastings.status, 'completed'),
     from ? gte(tastings.scheduledAt, new Date(from)) : undefined,
@@ -90,14 +86,9 @@ export default async function TastingROIPage({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <Link href="/admin/tastings">
-            <Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">Tasting ROI Report</h1>
-            <p className="mt-1 text-muted-foreground">Performance and return on investment across all completed tastings.</p>
-          </div>
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900">Tasting ROI Report</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Performance and return on investment across all completed tastings.</p>
         </div>
         <Suspense>
           <DateRangeFilter />

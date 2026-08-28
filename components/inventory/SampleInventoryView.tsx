@@ -17,7 +17,7 @@ import { toDisplayAvatarUrl } from '@/lib/users/avatar'
 const input = 'rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm'
 const formAction = (action: (formData: FormData) => Promise<unknown>) => action as (formData: FormData) => Promise<void>
 
-export default async function SampleInventoryPage() {
+export async function SampleInventoryView({ basePath = '/admin/sample-inventory' }: { basePath?: string }) {
   const [locations, productRows, balances, thresholds, requests, replenishments, exports, alerts, reports, locationOwners] = await Promise.all([
     db.select().from(inventoryLocations).where(eq(inventoryLocations.active, true)).orderBy(asc(inventoryLocations.name)),
     db.select().from(products).where(eq(products.active, true)).orderBy(asc(products.name)),
@@ -39,10 +39,10 @@ export default async function SampleInventoryPage() {
   const openReplenishmentCount = replenishments.length
   const qbAttention = exports.length
 
-  return <div className="space-y-6 p-6">
+  return <div className="space-y-6">
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <div><h1 className="text-2xl font-bold text-slate-900">Sample Inventory</h1><p className="text-sm text-slate-500">Location stock, sample usage, replenishment, and accounting categorization.</p></div>
-      <Button asChild><Link href="/admin/sample-inventory/new"><Plus className="h-4 w-4" />New sample request</Link></Button>
+      <div><h2 className="text-lg font-semibold text-slate-900">Sample Inventory</h2><p className="text-sm text-slate-500">Location stock, sample usage, replenishment, and accounting categorization.</p></div>
+      <Button asChild><Link href={`${basePath}/new`}><Plus className="h-4 w-4" />New sample request</Link></Button>
     </div>
 
     <div className="grid gap-4 md:grid-cols-4">
@@ -74,5 +74,3 @@ export default async function SampleInventoryPage() {
 
 function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) { return <Card><CardContent className="flex items-center gap-3 p-4"><span className="rounded-lg bg-blue-50 p-2 text-blue-600 [&>svg]:h-5 [&>svg]:w-5">{icon}</span><div><p className="text-2xl font-bold">{value}</p><p className="text-xs text-slate-500">{label}</p></div></CardContent></Card> }
 function Empty({ text }: { text: string }) { return <div className="py-8 text-center text-sm text-slate-500"><Package className="mx-auto mb-2 h-6 w-6"/>{text}</div> }
-
-

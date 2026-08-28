@@ -1,7 +1,6 @@
 import { db } from '@/db'
 import { deliveries, deliveryStops, drivers, users, customerAccounts, shelfAnalyses } from '@/db/schema'
 import { eq, desc, inArray, and } from 'drizzle-orm'
-import { requireAdmin } from '@/lib/auth/session'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -10,7 +9,7 @@ import { Progress } from '@/components/ui/progress'
 import { formatDate } from '@/lib/utils'
 import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowLeft, CheckCircle2, Clock, MapPin, Camera, User, Truck, TriangleAlert } from 'lucide-react'
+import { CheckCircle2, Clock, MapPin, Camera, User, Truck, TriangleAlert } from 'lucide-react'
 import { ShelfInsightsCard } from '@/components/deliveries/ShelfInsightsCard'
 import { DeliveryPhotoGallery } from '@/components/deliveries/DeliveryPhotoGallery'
 import { SignaturePreviewDialog } from '@/components/deliveries/SignaturePreviewDialog'
@@ -41,9 +40,7 @@ function percentage(value: number, total: number): number {
   return total > 0 ? Math.round((value / total) * 100) : 0
 }
 
-export default async function DeliveryReportsPage() {
-  await requireAdmin()
-
+export async function DeliveryReportsView() {
   const completedDeliveries = await db
     .select({
       id: deliveries.id,
@@ -64,11 +61,7 @@ export default async function DeliveryReportsPage() {
 
   if (completedDeliveries.length === 0) {
     return (
-      <div className="p-8 space-y-6">
-        <div className="flex items-center gap-3">
-          <Link href="/admin/deliveries"><Button variant="ghost" size="icon"><ArrowLeft className="w-4 h-4" /></Button></Link>
-          <h1 className="text-2xl font-bold text-slate-900">Delivery Reports</h1>
-        </div>
+      <div className="space-y-6">
         <Card>
           <CardContent className="p-0">
             <EmptyState
@@ -214,17 +207,14 @@ export default async function DeliveryReportsPage() {
   const overallPhotoCoverage = percentage(stopsWithPhotos, totalStops)
 
   return (
-    <div className="space-y-6 p-4 sm:p-8">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 pb-5">
-        <div className="flex items-start gap-3">
-          <Link href="/admin/deliveries"><Button variant="ghost" size="icon" aria-label="Back to deliveries"><ArrowLeft className="h-4 w-4" /></Button></Link>
-          <div>
-            <p className="ui-eyebrow mb-1">Operations / Delivery intelligence</p>
-            <h1 className="text-slate-900">Delivery Reports</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {completedDeliveries.length} completed run{completedDeliveries.length !== 1 ? 's' : ''} · {totalStops} recorded stops
-            </p>
-          </div>
+        <div>
+          <p className="ui-eyebrow mb-1">Operations / Delivery intelligence</p>
+          <h2 className="text-slate-900">Delivery Reports</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {completedDeliveries.length} completed run{completedDeliveries.length !== 1 ? 's' : ''} · {totalStops} recorded stops
+          </p>
         </div>
         <Badge variant={totalFailedStops > 0 ? 'warning' : 'success'}>
           {totalFailedStops > 0 ? `${totalFailedStops} exception${totalFailedStops === 1 ? '' : 's'}` : 'All routes operational'}

@@ -29,7 +29,7 @@ const integer = (value: FormDataEntryValue | null) => Math.max(0, Number.parseIn
 const text = (value: FormDataEntryValue | null) => String(value ?? '').trim()
 
 function refresh() {
-  revalidatePath('/admin/sample-inventory')
+  revalidatePath('/admin/inventory')
   revalidatePath('/staff/sample-inventory')
 }
 

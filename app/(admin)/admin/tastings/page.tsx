@@ -7,6 +7,8 @@ import { getTastingsForView } from '@/actions/tastings'
 import { getAvailabilityForUsers } from '@/actions/taster-availability'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
+import { PageTabs } from '@/components/ui/PageTabs'
+import { TastingROIView } from '@/components/tastings/TastingROIView'
 
 function isMissingTastingsTable(error: unknown) {
   const code = (error as { code?: string; cause?: { code?: string } } | null)?.code
@@ -27,10 +29,11 @@ function isMissingTastingsTable(error: unknown) {
 export default async function AdminTastingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ success?: string; error?: string; account?: string; date?: string }>
+  searchParams: Promise<{ success?: string; error?: string; account?: string; date?: string; tab?: string; from?: string; to?: string }>
 }) {
   await requireFeature('tastings', 'admin')
   const params = await searchParams
+  const defaultTab = params.tab === 'roi' ? 'roi' : 'schedule'
   let data:
     | {
         accounts: Array<{ id: string; companyName: string; address: string | null; city: string | null; state: string | null; zip: string | null }>
@@ -104,6 +107,12 @@ export default async function AdminTastingsPage({
           </Link>
         </div>
       </div>
+      <PageTabs
+        ariaLabel="Tastings views"
+        defaultTab={defaultTab}
+        tabs={[{ id: 'schedule', label: 'Schedule' }, { id: 'roi', label: 'Tasting ROI' }]}
+      >
+      <div className="space-y-6">
       <TasterTeamPanel
         mode="admin"
         tastings={data.tastings}
@@ -120,6 +129,11 @@ export default async function AdminTastingsPage({
         initialAccountId={params.account}
         initialDate={params.date}
       />
+      </div>
+      <div className="pt-6">
+        <TastingROIView from={params.from} to={params.to} />
+      </div>
+      </PageTabs>
     </div>
   )
 }

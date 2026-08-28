@@ -15,9 +15,10 @@ interface Props {
   tabs: Tab[]
   children: React.ReactNode[]
   defaultTab?: string
+  ariaLabel?: string
 }
 
-export function CRMTabs({ tabs, children, defaultTab }: Props) {
+export function PageTabs({ tabs, children, defaultTab, ariaLabel = 'Page views' }: Props) {
   const resolvedDefaultTab = tabs.some((tab) => tab.id === defaultTab) ? defaultTab! : tabs[0].id
   const [active, setActive] = useState(resolvedDefaultTab)
   const activeIndex = tabs.findIndex(t => t.id === active)
@@ -36,7 +37,7 @@ export function CRMTabs({ tabs, children, defaultTab }: Props) {
             <button
               type="button"
               className="flex items-center gap-2 rounded-lg px-2 py-2 text-base font-bold uppercase tracking-[0.02em] text-[#181615]"
-              aria-label="Open CRM views menu"
+              aria-label={`Open ${ariaLabel} menu`}
             >
               <Menu className="h-5 w-5 shrink-0" />
               <span className="font-display truncate">{activeTab?.label}</span>
@@ -71,7 +72,7 @@ export function CRMTabs({ tabs, children, defaultTab }: Props) {
       </div>
 
       {/* Desktop: tab strip */}
-      <div role="tablist" aria-label="CRM views" className="hidden gap-7 overflow-x-auto border-b border-slate-200 bg-[#f4f1ed] px-1 sm:flex">
+      <div role="tablist" aria-label={ariaLabel} className="hidden gap-7 overflow-x-auto border-b border-slate-200 bg-[#f4f1ed] px-1 sm:flex">
         {tabs.map(tab => (
           <button
             key={tab.id}
