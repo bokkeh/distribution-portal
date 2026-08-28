@@ -2,8 +2,8 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
-import { Check, Clock3, Pencil } from 'lucide-react'
-import { updateTaskDetails, updateTaskStatus } from '@/actions/tasks'
+import { Check, Clock3, Pencil, Trash2 } from 'lucide-react'
+import { deleteTask, updateTaskDetails, updateTaskStatus } from '@/actions/tasks'
 import type { TaskListItem } from '@/lib/tasks/read'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -27,6 +27,18 @@ export function TaskList({ items, mode, compact = false, nowIso }: { items: Task
       const result = await updateTaskStatus(task.id, status)
       if (result.error) setError(result.error)
       else setTasks((current) => current.map((item) => item.id === task.id ? { ...item, status, completedAt: status === 'completed' ? new Date().toISOString() : null } : item))
+      setPendingId(null)
+    })
+  }
+
+  function removeTask(task: TaskListItem) {
+    if (!window.confirm(`Delete “${task.title}”? This cannot be undone.`)) return
+    setPendingId(task.id)
+    setError(null)
+    startTransition(async () => {
+      const result = await deleteTask(task.id)
+      if (result.error) setError(result.error)
+      else setTasks((current) => current.filter((item) => item.id !== task.id))
       setPendingId(null)
     })
   }
@@ -75,6 +87,19 @@ export function TaskList({ items, mode, compact = false, nowIso }: { items: Task
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 {!compact ? <Button type="button" size="sm" variant="outline" onClick={() => setEditingId((current) => current === task.id ? null : task.id)}><Pencil className="mr-1 h-4 w-4" />Edit</Button> : null}
+                {!compact ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                    onClick={() => removeTask(task)}
+                    disabled={pendingId === task.id}
+                    aria-label={`Delete ${task.title}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                ) : null}
                 {task.status !== 'completed' && task.status !== 'cancelled' ? (
                   <Button type="button" size="sm" onClick={() => changeStatus(task, 'completed')} disabled={pendingId === task.id}>
                     <Check className="mr-1 h-4 w-4" /> Complete

@@ -224,6 +224,31 @@ export async function updateTaskDetails(input: {
   }
 }
 
+export async function deleteTask(taskId: string) {
+  try {
+    const session = await requireRole(...TASK_ROLES)
+    const roles = session.user.roles ?? [session.user.role as string]
+    const [task] = await db.select().from(crmTasks).where(eq(crmTasks.id, taskId)).limit(1)
+    if (!task) throw new Error('Task not found.')
+    const canManageAny = roles.some((role) => ['admin', 'staff', 'sales_manager'].includes(role))
+    if (!canManageAny && task.assignedToUserId !== session.user.id && task.createdByUserId !== session.user.id) {
+      throw new Error('You cannot delete this task.')
+    }
+
+    await db.delete(crmTasks).where(eq(crmTasks.id, taskId))
+
+    await logActivityEvent({
+      entityType: 'task', entityId: task.id, actorUserId: session.user.id,
+      kind: 'task_deleted', title: 'Task deleted', body: `${task.title} was deleted.`,
+      metadata: { accountId: task.accountId },
+    })
+    revalidateTaskPaths(task.accountId)
+    return { success: true as const }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Unable to delete task.' }
+  }
+}
+
 function optionalString(value?: string | null) {
   return value?.trim() || null
 }
