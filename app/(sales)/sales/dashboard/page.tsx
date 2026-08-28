@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { and, desc, eq, inArray, sum } from 'drizzle-orm'
+import { and, desc, eq, inArray, ne, sum } from 'drizzle-orm'
 import { AlertCircle, ArrowRight, Building2, CalendarClock, DollarSign, Map as MapIcon, Target, Users, Wine } from 'lucide-react'
 import { requireRole } from '@/lib/auth/session'
 import { db } from '@/db'
@@ -79,7 +79,7 @@ export default async function SalesDashboardPage() {
   const recentOrders = await db
     .select()
     .from(orders)
-    .where(eq(orders.attributedSalesMemberId, member.id))
+    .where(and(eq(orders.attributedSalesMemberId, member.id), ne(orders.status, 'cancelled')))
     .orderBy(desc(orders.createdAt))
     .limit(12)
 
@@ -153,7 +153,7 @@ export default async function SalesDashboardPage() {
         const repOrders = await db
           .select({ total: orders.total })
           .from(orders)
-          .where(eq(orders.attributedSalesMemberId, teamMember.id))
+          .where(and(eq(orders.attributedSalesMemberId, teamMember.id), ne(orders.status, 'cancelled')))
           .orderBy(desc(orders.createdAt))
           .limit(20)
 

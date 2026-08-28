@@ -194,9 +194,24 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
                 </Button>
               </form>
             )}
-            {order.status === 'pending' && (
+            {order.status === 'fulfilled' && (
+              <form action={updateOrderStatus.bind(null, order.id, 'confirmed')}>
+                <ConfirmSubmitButton variant="outline" className="w-full" title="Unfulfill this order?" description="The order will move back to confirmed status." confirmLabel="Unfulfill Order">Unfulfill Order</ConfirmSubmitButton>
+              </form>
+            )}
+            {order.status !== 'cancelled' && (
               <form action={updateOrderStatus.bind(null, order.id, 'cancelled')}>
-                <ConfirmSubmitButton variant="destructive" className="w-full" title="Cancel this order?" description="The order status will be set to cancelled." confirmLabel="Cancel Order">Cancel Order</ConfirmSubmitButton>
+                <ConfirmSubmitButton
+                  variant="destructive"
+                  className="w-full"
+                  title="Cancel this order?"
+                  description={order.status === 'pending'
+                    ? 'The order status will be set to cancelled.'
+                    : `This order is already ${order.status}. Cancelling will remove it from revenue totals and keep it visible here as a cancelled record.`}
+                  confirmLabel="Cancel Order"
+                >
+                  Cancel Order
+                </ConfirmSubmitButton>
               </form>
             )}
           </CardContent>
