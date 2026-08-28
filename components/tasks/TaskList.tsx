@@ -12,7 +12,14 @@ function accountHref(mode: 'admin' | 'staff' | 'sales', accountId: string) {
   return mode === 'sales' ? `/sales/accounts/${accountId}` : `/${mode}/crm/${accountId}`
 }
 
-export function TaskList({ items, mode, compact = false, nowIso }: { items: TaskListItem[]; mode: 'admin' | 'staff' | 'sales'; compact?: boolean; nowIso: string }) {
+export function TaskList({ items, mode, compact = false, nowIso, assigneeOptions = [], canReassign = false }: {
+  items: TaskListItem[]
+  mode: 'admin' | 'staff' | 'sales'
+  compact?: boolean
+  nowIso: string
+  assigneeOptions?: Array<{ id: string; name: string }>
+  canReassign?: boolean
+}) {
   const [tasks, setTasks] = useState(items)
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -51,10 +58,12 @@ export function TaskList({ items, mode, compact = false, nowIso }: { items: Task
       const title = String(formData.get('title') ?? '')
       const description = String(formData.get('description') ?? '')
       const priority = String(formData.get('priority') ?? 'normal') as TaskListItem['priority']
-      const result = await updateTaskDetails({ taskId: task.id, title, description, priority, dueAt, assignedToUserId: task.assignedToUserId })
+      const assignedToUserId = canReassign ? String(formData.get('assignedToUserId') ?? task.assignedToUserId) : task.assignedToUserId
+      const result = await updateTaskDetails({ taskId: task.id, title, description, priority, dueAt, assignedToUserId })
       if (result.error) setError(result.error)
       else {
-        setTasks((current) => current.map((item) => item.id === task.id ? { ...item, title, description: description || null, priority, dueAt } : item))
+        const assigneeName = assigneeOptions.find((option) => option.id === assignedToUserId)?.name ?? task.assigneeName
+        setTasks((current) => current.map((item) => item.id === task.id ? { ...item, title, description: description || null, priority, dueAt, assignedToUserId, assigneeName } : item))
         setEditingId(null)
       }
       setPendingId(null)
@@ -127,6 +136,14 @@ export function TaskList({ items, mode, compact = false, nowIso }: { items: Task
                 <input name="dueAt" type="datetime-local" defaultValue={new Date(new Date(task.dueAt).getTime() - new Date(task.dueAt).getTimezoneOffset() * 60_000).toISOString().slice(0, 16)} required className="h-10 rounded-lg border border-slate-200 px-3 text-sm" />
                 <textarea name="description" defaultValue={task.description ?? ''} className="min-h-24 rounded-lg border border-slate-200 px-3 py-2 text-sm sm:col-span-2" />
                 <select name="priority" defaultValue={task.priority} className="h-10 rounded-lg border border-slate-200 px-3 text-sm"><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select>
+                {canReassign ? (
+                  <select name="assignedToUserId" defaultValue={task.assignedToUserId} className="h-10 rounded-lg border border-slate-200 px-3 text-sm sm:col-span-2">
+                    {assigneeOptions.some((option) => option.id === task.assignedToUserId)
+                      ? null
+                      : <option value={task.assignedToUserId}>{task.assigneeName}</option>}
+                    {assigneeOptions.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
+                  </select>
+                ) : null}
                 <Button type="submit" disabled={pendingId === task.id}>Save changes</Button>
               </form>
             ) : null}
