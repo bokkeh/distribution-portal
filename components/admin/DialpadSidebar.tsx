@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Phone, X, Delete, Send, CheckCircle2, AlertCircle, MessageSquare, PhoneCall, PhoneOff } from 'lucide-react'
-import { sendDirectSms, initiateCall } from '@/actions/notifications'
+import { Phone, X, Delete, Send, CheckCircle2, AlertCircle, MessageSquare, PhoneCall } from 'lucide-react'
+import { sendDirectSms } from '@/actions/notifications'
+import { useCall } from '@/lib/call/CallContext'
 import { cn } from '@/lib/utils'
 
 const KEYS = [
@@ -13,7 +14,6 @@ const KEYS = [
 ]
 
 type Tab = 'sms' | 'call'
-type CallStatus = 'idle' | 'calling' | 'connected' | 'ended' | 'error'
 
 export function DialpadButton({ onClick, dark = false }: { onClick: () => void; dark?: boolean }) {
   return (
@@ -31,14 +31,15 @@ export function DialpadButton({ onClick, dark = false }: { onClick: () => void; 
 }
 
 export function DialpadSidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { callState, startCall } = useCall()
   const [tab, setTab] = useState<Tab>('sms')
   const [number, setNumber] = useState('')
   const [name, setName] = useState('')
   const [message, setMessage] = useState('')
   const [smsStatus, setSmsStatus] = useState<'idle' | 'success' | 'error'>('idle')
-  const [callStatus, setCallStatus] = useState<CallStatus>('idle')
   const [errorMsg, setErrorMsg] = useState('')
   const [isPending, startTransition] = useTransition()
+  const callInProgress = callState !== 'idle' && callState !== 'error'
 
   function press(key: string) {
     setNumber(prev => prev + key)
@@ -53,7 +54,6 @@ export function DialpadSidebar({ open, onClose }: { open: boolean; onClose: () =
     setName('')
     setMessage('')
     setSmsStatus('idle')
-    setCallStatus('idle')
     setErrorMsg('')
   }
 
@@ -71,31 +71,19 @@ export function DialpadSidebar({ open, onClose }: { open: boolean; onClose: () =
     })
   }
 
-  function handleCall() {
-    if (!number.trim()) return
-    setCallStatus('calling')
-    setErrorMsg('')
-    startTransition(async () => {
-      const result = await initiateCall(number.trim(), name.trim())
-      if (result?.error) {
-        setCallStatus('error')
-        setErrorMsg(result.error)
-      } else {
-        setCallStatus('connected')
-      }
-    })
-  }
-
-  function handleHangup() {
-    setCallStatus('ended')
-    setTimeout(() => setCallStatus('idle'), 2000)
-  }
-
   const displayNumber = number
     .replace(/\D/g, '')
     .replace(/^1?(\d{0,3})(\d{0,3})(\d{0,4}).*/, (_, a, b, c) =>
       [a, b && `-${b}`, c && `-${c}`].filter(Boolean).join('')
     )
+
+  function handleCall() {
+    const trimmedNumber = number.trim()
+    if (!trimmedNumber || callInProgress) return
+
+    startCall(trimmedNumber, name.trim() || displayNumber || trimmedNumber)
+    onClose()
+  }
 
   return (
     <>
@@ -134,7 +122,7 @@ export function DialpadSidebar({ open, onClose }: { open: boolean; onClose: () =
           ] as { id: Tab; label: string; icon: React.ElementType }[]).map(({ id, label, icon: Icon }) => (
             <button
               key={id}
-              onClick={() => { setTab(id); setSmsStatus('idle'); setCallStatus('idle'); setErrorMsg('') }}
+              onClick={() => { setTab(id); setSmsStatus('idle'); setErrorMsg('') }}
               className={cn(
                 'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-colors',
                 tab === id
@@ -172,7 +160,7 @@ export function DialpadSidebar({ open, onClose }: { open: boolean; onClose: () =
               <button
                 key={key}
                 onClick={() => press(key)}
-                disabled={tab === 'call' && callStatus === 'connected'}
+                disabled={tab === 'call' && callInProgress}
                 className="h-12 rounded-xl bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-900 font-semibold text-base transition-all active:scale-95"
               >
                 {key}
@@ -207,22 +195,6 @@ export function DialpadSidebar({ open, onClose }: { open: boolean; onClose: () =
             </div>
           )}
 
-          {/* Call: status display */}
-          {tab === 'call' && callStatus !== 'idle' && (
-            <div className={cn(
-              'flex items-center gap-2 rounded-xl px-3 py-3 text-sm font-medium border',
-              callStatus === 'calling'   && 'bg-amber-50 border-amber-200 text-amber-700',
-              callStatus === 'connected' && 'bg-green-50 border-green-200 text-green-700',
-              callStatus === 'ended'     && 'bg-slate-50 border-slate-200 text-slate-500',
-              callStatus === 'error'     && 'bg-red-50 border-red-200 text-red-700',
-            )}>
-              {callStatus === 'calling'   && <><span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />Calling {displayNumber || number}…</>}
-              {callStatus === 'connected' && <><PhoneCall className="w-4 h-4" />Call initiated</>}
-              {callStatus === 'ended'     && <><PhoneOff className="w-4 h-4" />Call ended</>}
-              {callStatus === 'error'     && <><AlertCircle className="w-4 h-4 shrink-0" /><span>{errorMsg}</span></>}
-            </div>
-          )}
-
           {/* SMS status */}
           {tab === 'sms' && smsStatus === 'success' && (
             <div className="flex items-center gap-2 rounded-xl bg-green-50 border border-green-200 px-3 py-2 text-sm text-green-700">
@@ -247,22 +219,14 @@ export function DialpadSidebar({ open, onClose }: { open: boolean; onClose: () =
               <Send className="w-4 h-4" />
               {isPending ? 'Sending…' : 'Send SMS'}
             </button>
-          ) : callStatus === 'connected' || callStatus === 'calling' ? (
-            <button
-              onClick={handleHangup}
-              className="flex items-center justify-center gap-2 w-full rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold text-sm py-3 transition-colors"
-            >
-              <PhoneOff className="w-4 h-4" />
-              Hang Up
-            </button>
           ) : (
             <button
               onClick={handleCall}
-              disabled={!number.trim() || isPending || callStatus === 'ended'}
+              disabled={!number.trim() || callInProgress}
               className="flex items-center justify-center gap-2 w-full rounded-xl bg-green-600 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm py-3 transition-colors"
             >
               <PhoneCall className="w-4 h-4" />
-              {isPending ? 'Connecting…' : 'Call'}
+              {callInProgress ? 'Call in progress' : 'Call'}
             </button>
           )}
         </div>
