@@ -14,6 +14,8 @@ import { getSmsInboxSummary } from '@/lib/inbox/summary'
 import { getSystemHealthSnapshot } from '@/lib/ops/system-health'
 import { RevenueChart } from '@/components/dashboard/RevenueChart'
 import type { MonthlyRevenuePoint } from '@/components/dashboard/RevenueChart'
+import { OverheadTargetEditor } from '@/components/dashboard/OverheadTargetEditor'
+import { getOverheadTargets } from '@/lib/dashboard/overhead'
 import { IndustryNewsWidget } from '@/components/news/IndustryNewsWidget'
 import { requireAdmin } from '@/lib/auth/session'
 import { getTasksForView } from '@/lib/tasks/read'
@@ -203,10 +205,18 @@ export default async function AdminDashboard({
     })(),
   ])
 
-  const chartData: MonthlyRevenuePoint[] = monthlyRevenue.map((row) => ({
-    month: row.month.split(' ')[0],
-    revenue: Number(row.revenue),
-  }))
+  const monthKeys = monthlyRevenue.map((row) => new Date(row.monthOrder).toISOString().slice(0, 7))
+  const overheadTargets = await getOverheadTargets(monthKeys)
+  const chartData: MonthlyRevenuePoint[] = monthlyRevenue.map((row, index) => {
+    const monthKey = monthKeys[index]
+    return {
+      month: row.month.split(' ')[0],
+      monthKey,
+      revenue: Number(row.revenue),
+      overhead: overheadTargets[monthKey],
+    }
+  })
+  const overheadMonths = chartData.map((point) => ({ monthKey: point.monthKey, label: point.month, amount: point.overhead }))
 
   const revenueSparkline = monthlyRevenue.map((row) => Number(row.revenue))
   const ordersSparkline = monthlyRevenue.map((row) => Number(row.orderCount))
@@ -330,9 +340,12 @@ export default async function AdminDashboard({
 
       {chartData.length > 0 && (
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
             <CardTitle className="text-base">{hasDateFilter ? 'Revenue Trend' : 'Monthly Revenue (Last 12 Months)'}</CardTitle>
-            <Link href="/admin/orders" className="text-xs text-primary hover:underline">View orders</Link>
+            <div className="flex items-center gap-3">
+              <OverheadTargetEditor months={overheadMonths} />
+              <Link href="/admin/orders" className="text-xs text-primary hover:underline">View orders</Link>
+            </div>
           </CardHeader>
           <CardContent className="pt-0 pb-4">
             <RevenueChart data={chartData} />

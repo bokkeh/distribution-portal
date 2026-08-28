@@ -1,18 +1,22 @@
 'use client'
 
 import {
-  AreaChart,
+  ComposedChart,
   Area,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
+  Legend,
   ResponsiveContainer,
 } from 'recharts'
 
 export type MonthlyRevenuePoint = {
   month: string   // e.g. "Jan", "Feb"
+  monthKey: string // e.g. "2026-08"
   revenue: number
+  overhead: number
 }
 
 function formatK(value: number) {
@@ -20,10 +24,14 @@ function formatK(value: number) {
   return `$${value.toFixed(0)}`
 }
 
+function formatDollars(value: number) {
+  return `$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+}
+
 export function RevenueChart({ data }: { data: MonthlyRevenuePoint[] }) {
   return (
     <ResponsiveContainer width="100%" height={220}>
-      <AreaChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+      <ComposedChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
         <defs>
           <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.18} />
@@ -45,9 +53,10 @@ export function RevenueChart({ data }: { data: MonthlyRevenuePoint[] }) {
           width={40}
         />
         <Tooltip
-          formatter={(value) => [`$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`, 'Revenue']}
+          formatter={(value, name) => [formatDollars(Number(value)), name === 'overhead' ? 'Overhead' : 'Revenue']}
           contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: 12 }}
         />
+        <Legend wrapperStyle={{ fontSize: 11 }} formatter={(value) => value === 'overhead' ? 'Overhead line' : 'Revenue'} />
         <Area
           type="monotone"
           dataKey="revenue"
@@ -57,7 +66,17 @@ export function RevenueChart({ data }: { data: MonthlyRevenuePoint[] }) {
           dot={false}
           activeDot={{ r: 4, fill: '#3b82f6' }}
         />
-      </AreaChart>
+        <Line
+          type="stepAfter"
+          dataKey="overhead"
+          stroke="#ef4444"
+          strokeWidth={2}
+          strokeDasharray="6 4"
+          dot={false}
+          activeDot={false}
+          isAnimationActive={false}
+        />
+      </ComposedChart>
     </ResponsiveContainer>
   )
 }

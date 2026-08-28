@@ -330,6 +330,13 @@
       "when": 1787922000000,
       "tag": "0061_global_quick_add",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1787943000000,
+      "tag": "0062_dashboard_overhead_targets",
+      "breakpoints": true
     }
   ]
 }
