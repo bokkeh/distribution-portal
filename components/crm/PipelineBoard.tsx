@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   closestCenter,
@@ -23,7 +22,8 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { toast } from 'sonner'
-import { Clock3, GripVertical, Plus, Trash2 } from 'lucide-react'
+import * as Popover from '@radix-ui/react-popover'
+import { Clock3, GripVertical, Plus, Search, Trash2 } from 'lucide-react'
 import {
   createPipelineStage,
   deletePipelineStage,
@@ -251,9 +251,91 @@ function AccountCard({
   )
 }
 
+function AddAccountPopover({
+  stage,
+  allAccounts,
+  excludedAccountIds,
+  actionClassName,
+  onAssign,
+}: {
+  stage: PipelineStage
+  allAccounts: Account[]
+  excludedAccountIds: Set<string>
+  actionClassName: string
+  onAssign: (accountId: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+
+  const normalizedQuery = query.trim().toLowerCase()
+  const results = allAccounts
+    .filter((account) => !excludedAccountIds.has(account.id))
+    .filter((account) => {
+      if (!normalizedQuery) return true
+      const haystack = `${account.companyName} ${account.city ?? ''} ${account.state ?? ''}`.toLowerCase()
+      return haystack.includes(normalizedQuery)
+    })
+    .slice(0, 50)
+
+  function handleSelect(accountId: string) {
+    onAssign(accountId)
+    setOpen(false)
+    setQuery('')
+  }
+
+  return (
+    <Popover.Root open={open} onOpenChange={(next) => { setOpen(next); if (!next) setQuery('') }}>
+      <Popover.Trigger asChild>
+        <button
+          type="button"
+          className={`flex h-9 min-w-0 flex-1 items-center justify-center gap-2 rounded-lg px-3 text-sm font-bold text-slate-950 transition ${actionClassName}`}
+        >
+          <Plus className="h-4 w-4" />
+          Add
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content align="start" sideOffset={8} className="z-50 w-72 max-w-[85vw] rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
+          <p className="px-2 py-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">
+            Add account to {stage.label}
+          </p>
+          <div className="relative px-1 pb-2">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+            <input
+              autoFocus
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search accounts..."
+              className="w-full rounded-md border border-slate-200 py-2 pl-8 pr-3 text-sm outline-none focus:border-[#ff5a00]"
+            />
+          </div>
+          <div className="max-h-64 overflow-y-auto">
+            {results.length === 0 ? (
+              <p className="px-2 py-4 text-center text-xs text-slate-400">No matching accounts</p>
+            ) : (
+              results.map((account) => (
+                <button
+                  key={account.id}
+                  type="button"
+                  onClick={() => handleSelect(account.id)}
+                  className="flex w-full flex-col items-start rounded-md px-3 py-2 text-left text-sm transition hover:bg-slate-100"
+                >
+                  <span className="font-medium text-slate-900">{account.companyName}</span>
+                  <span className="text-xs text-slate-400">{[account.city, account.state].filter(Boolean).join(', ') || 'No location'}</span>
+                </button>
+              ))
+            )}
+          </div>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  )
+}
+
 function StageColumn({
   stage,
   accounts,
+  allAccounts,
   basePath,
   activeId,
   canManageStages,
@@ -264,11 +346,13 @@ function StageColumn({
   onStageDelete,
   renamingAccountId,
   onAccountRename,
+  onAccountAssign,
   isSaving,
   regionColors,
 }: {
   stage: PipelineStage
   accounts: Account[]
+  allAccounts: Account[]
   basePath: string
   activeId: string | null
   canManageStages: boolean
@@ -279,6 +363,7 @@ function StageColumn({
   onStageDelete: (stageId: string) => void
   renamingAccountId: string | null
   onAccountRename: (accountId: string, companyName: string) => void
+  onAccountAssign: (accountId: string, stageKey: string) => void
   isSaving: boolean
   regionColors: Record<string, string>
 }) {
@@ -312,6 +397,7 @@ function StageColumn({
     transition,
   }
   const tone = getStageTone(stage)
+  const stageAccountIds = useMemo(() => new Set(accounts.map((account) => account.id)), [accounts])
 
   function saveStageName() {
     setIsEditingStage(false)
@@ -372,10 +458,13 @@ function StageColumn({
         {(canCreateAccounts || canManageStages) ? (
           <div className="mt-3 flex items-center gap-2">
             {canCreateAccounts ? (
-              <Link href={`/admin/crm/new?stage=${encodeURIComponent(stage.stageKey)}`} className={`flex h-9 min-w-0 flex-1 items-center gap-2 rounded-lg px-3 text-sm font-bold text-slate-950 transition ${tone.action}`}>
-                  <Plus className="h-4 w-4" />
-                  New
-              </Link>
+              <AddAccountPopover
+                stage={stage}
+                allAccounts={allAccounts}
+                excludedAccountIds={stageAccountIds}
+                actionClassName={tone.action}
+                onAssign={(accountId) => onAccountAssign(accountId, stage.stageKey)}
+              />
             ) : null}
             {canManageStages ? (
               <Button type="button" size="icon" variant="ghost" className={`h-9 w-9 ${tone.action}`} disabled={isSaving} onClick={() => onStageDelete(stage.id)} aria-label={`Delete ${stage.label} stage`}>
@@ -519,6 +608,24 @@ export function PipelineBoard({
     })
   }
 
+  function handleAccountAssign(accountId: string, stageKey: string) {
+    const account = accounts.find((item) => item.id === accountId)
+    if (!account || account.dealStage === stageKey) return
+
+    const previousStage = account.dealStage
+    setAccounts((prev) => prev.map((item) => item.id === accountId ? { ...item, dealStage: stageKey } : item))
+
+    startTransition(async () => {
+      try {
+        await updateDealStage(accountId, stageKey)
+        toast.success('Account added to stage')
+      } catch (error) {
+        setAccounts((prev) => prev.map((item) => item.id === accountId ? { ...item, dealStage: previousStage } : item))
+        toast.error(error instanceof Error ? error.message : 'Failed to add account to stage')
+      }
+    })
+  }
+
   function handleStageLabelChange(stageId: string, value: string) {
     setStageLabels((prev) => ({ ...prev, [stageId]: value }))
   }
@@ -649,6 +756,7 @@ export function PipelineBoard({
                 key={stage.id}
                 stage={stage}
                 accounts={columnAccounts}
+                allAccounts={accounts}
                 basePath={basePath}
                 activeId={activeId}
                 canManageStages={canManageStages}
@@ -659,6 +767,7 @@ export function PipelineBoard({
                 onStageDelete={handleStageDelete}
                 renamingAccountId={renamingAccountId}
                 onAccountRename={handleAccountRename}
+                onAccountAssign={handleAccountAssign}
                 isSaving={false}
                 regionColors={regionColors}
               />
