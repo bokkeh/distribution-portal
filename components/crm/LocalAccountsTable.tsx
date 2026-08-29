@@ -757,9 +757,9 @@ function AccountTable({
   if (accounts.length === 0) return null
 
   return (
-    <div className="hidden overflow-x-auto md:block">
+    <div className="hidden max-h-[calc(100vh-14rem)] overflow-auto md:block">
     <table className="w-full">
-      <thead className="border-b bg-slate-50">
+      <thead className="sticky top-0 z-10 border-b bg-slate-50">
         <tr>
           <th className="w-8 px-4 py-3" />
           {visibleColumns.map((column) => renderHeaderCell({ column, sortBy, sortDirection, onSort }))}

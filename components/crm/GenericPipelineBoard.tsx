@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
 import {
-  closestCenter,
   DndContext,
   DragOverlay,
+  MeasuringStrategy,
+  pointerWithin,
   PointerSensor,
   useDraggable,
   useDroppable,
@@ -460,28 +461,36 @@ export function GenericPipelineBoard({
         </div>
       ) : null}
 
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragEnd={onDragEnd}>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={pointerWithin}
+        measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+      >
         <SortableContext items={stages.map((stage) => getStageSortId(stage.id))} strategy={horizontalListSortingStrategy}>
-          <div className="flex gap-6 overflow-x-auto pb-6 pt-1 [scrollbar-color:#cbd5e1_transparent]">
-            {stageItems.map(({ stage, items: columnItems }) => (
-              <StageColumn
-                key={stage.id}
-                stage={stage}
-                items={columnItems}
-                activeId={activeId}
-                canManageStages={canManageStages}
-                stageLabelDraft={stageLabels[stage.id] ?? stage.label}
-                onStageLabelChange={handleStageLabelChange}
-                onStageRename={handleStageRename}
-                onStageDelete={handleStageDelete}
-                isSaving={false}
-                stages={stages}
-                cardFields={cardFields}
-                fieldOptions={fieldOptions}
-                updateItemStage={updateItemStage}
-                onQuickMove={handleQuickMove}
-              />
-            ))}
+          <div className="max-h-[calc(100vh-14rem)] overflow-auto overscroll-contain pb-6 pt-1 [scrollbar-color:#cbd5e1_transparent]">
+            <div className="flex min-h-full items-stretch gap-6">
+              {stageItems.map(({ stage, items: columnItems }) => (
+                <StageColumn
+                  key={stage.id}
+                  stage={stage}
+                  items={columnItems}
+                  activeId={activeId}
+                  canManageStages={canManageStages}
+                  stageLabelDraft={stageLabels[stage.id] ?? stage.label}
+                  onStageLabelChange={handleStageLabelChange}
+                  onStageRename={handleStageRename}
+                  onStageDelete={handleStageDelete}
+                  isSaving={false}
+                  stages={stages}
+                  cardFields={cardFields}
+                  fieldOptions={fieldOptions}
+                  updateItemStage={updateItemStage}
+                  onQuickMove={handleQuickMove}
+                />
+              ))}
+            </div>
           </div>
         </SortableContext>
 

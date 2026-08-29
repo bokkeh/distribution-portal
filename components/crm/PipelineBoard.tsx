@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  closestCenter,
   DndContext,
   DragOverlay,
+  MeasuringStrategy,
+  pointerWithin,
   PointerSensor,
   useDraggable,
   useDroppable,
@@ -839,35 +840,43 @@ export function PipelineBoard({
         </div>
       ) : null}
 
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragEnd={onDragEnd}>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={pointerWithin}
+        measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+      >
         <SortableContext items={stages.map((stage) => getStageSortId(stage.id))} strategy={horizontalListSortingStrategy}>
-          <div className="flex gap-6 overflow-x-auto pb-6 pt-1 [scrollbar-color:#cbd5e1_transparent]">
-            {stageAccounts.map(({ stage, accounts: columnAccounts }) => (
-              <StageColumn
-                key={stage.id}
-                stage={stage}
-                stages={stages}
-                accounts={columnAccounts}
-                allAccounts={accounts}
-                basePath={basePath}
-                activeId={activeId}
-                canManageStages={canManageStages}
-                canCreateAccounts={canCreateAccounts}
-                stageLabelDraft={stageLabels[stage.id] ?? stage.label}
-                onStageLabelChange={handleStageLabelChange}
-                onStageRename={handleStageRename}
-                onStageDelete={handleStageDelete}
-                renamingAccountId={renamingAccountId}
-                onAccountRename={handleAccountRename}
-                onInlineChange={handleInlineChange}
-                onAccountAssign={handleAccountAssign}
-                onQuickMove={handleQuickMove}
-                isSaving={false}
-                regionColors={regionColors}
-                regionOptions={inlineRegionOptions}
-                cardFields={cardFields}
-              />
-            ))}
+          <div className="max-h-[calc(100vh-14rem)] overflow-auto overscroll-contain pb-6 pt-1 [scrollbar-color:#cbd5e1_transparent]">
+            <div className="flex min-h-full items-stretch gap-6">
+              {stageAccounts.map(({ stage, accounts: columnAccounts }) => (
+                <StageColumn
+                  key={stage.id}
+                  stage={stage}
+                  stages={stages}
+                  accounts={columnAccounts}
+                  allAccounts={accounts}
+                  basePath={basePath}
+                  activeId={activeId}
+                  canManageStages={canManageStages}
+                  canCreateAccounts={canCreateAccounts}
+                  stageLabelDraft={stageLabels[stage.id] ?? stage.label}
+                  onStageLabelChange={handleStageLabelChange}
+                  onStageRename={handleStageRename}
+                  onStageDelete={handleStageDelete}
+                  renamingAccountId={renamingAccountId}
+                  onAccountRename={handleAccountRename}
+                  onInlineChange={handleInlineChange}
+                  onAccountAssign={handleAccountAssign}
+                  onQuickMove={handleQuickMove}
+                  isSaving={false}
+                  regionColors={regionColors}
+                  regionOptions={inlineRegionOptions}
+                  cardFields={cardFields}
+                />
+              ))}
+            </div>
           </div>
         </SortableContext>
 
