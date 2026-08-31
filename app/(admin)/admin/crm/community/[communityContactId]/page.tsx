@@ -21,6 +21,8 @@ import {
   communityContactNotes,
   communityContacts,
   communityEventAttendance,
+  eventParticipants,
+  events,
   smsMessages,
   tastings,
   users,
@@ -60,7 +62,7 @@ export default async function CommunityContactProfilePage({
     // Retain the stored value so legacy numbers can still match older message rows.
   }
 
-  const [notes, attendance, emailHistory, smsHistory, eventOptions, activity] = await Promise.all([
+  const [notes, tastingAttendance, eventHistory, emailHistory, smsHistory, tastingOptions, activity] = await Promise.all([
     db.select({
       id: communityContactNotes.id,
       body: communityContactNotes.body,
@@ -83,6 +85,23 @@ export default async function CommunityContactProfilePage({
       .innerJoin(tastings, eq(communityEventAttendance.tastingId, tastings.id))
       .where(eq(communityEventAttendance.communityContactId, communityContactId))
       .orderBy(desc(communityEventAttendance.attendedAt)),
+    db.select({
+      participantId: eventParticipants.id,
+      eventId: events.id,
+      title: events.title,
+      startAt: events.startAt,
+      eventType: events.eventType,
+      venueName: events.venueName,
+      city: events.city,
+      state: events.state,
+      rsvpStatus: eventParticipants.rsvpStatus,
+      attendanceStatus: eventParticipants.attendanceStatus,
+      source: eventParticipants.source,
+      notes: eventParticipants.notes,
+    }).from(eventParticipants)
+      .innerJoin(events, eq(eventParticipants.eventId, events.id))
+      .where(eq(eventParticipants.communityContactId, communityContactId))
+      .orderBy(desc(events.startAt)),
     db.select({
       id: communityContactCommunications.id,
       channel: communityContactCommunications.channel,
@@ -180,7 +199,8 @@ export default async function CommunityContactProfilePage({
               <div><p className="text-xs uppercase tracking-wide text-slate-400">Phone</p><a href={`tel:${contact.phone}`} className="font-medium text-slate-900 hover:text-[#ff5a00] hover:underline">{formatPhone(contact.phone) ?? contact.phone}</a></div>
               <div><p className="text-xs uppercase tracking-wide text-slate-400">Location</p><p className="font-medium text-slate-900">{address || 'No address entered'}</p></div>
               <div><p className="text-xs uppercase tracking-wide text-slate-400">Source</p><p className="font-medium capitalize text-slate-900">{contact.source.replaceAll('_', ' ')}</p></div>
-              <div><p className="text-xs uppercase tracking-wide text-slate-400">Events attended</p><p className="font-medium text-slate-900">{attendance.length}</p></div>
+              <div><p className="text-xs uppercase tracking-wide text-slate-400">Events attended</p><p className="font-medium text-slate-900">{eventHistory.filter((item) => item.attendanceStatus === 'checked_in').length}</p></div>
+              <div><p className="text-xs uppercase tracking-wide text-slate-400">Tasting interactions</p><p className="font-medium text-slate-900">{tastingAttendance.length}</p></div>
             </CardContent>
           </Card>
 
@@ -199,24 +219,31 @@ export default async function CommunityContactProfilePage({
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card className="shadow-none">
-          <CardHeader><CardTitle className="flex items-center gap-2"><CalendarDays className="h-5 w-5 text-[#ff5a00]" />Events attended</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="flex items-center gap-2"><CalendarDays className="h-5 w-5 text-[#ff5a00]" />Tastings</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <form action={addCommunityEventAttendance} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <input type="hidden" name="contactId" value={contact.id} />
               <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-                <select name="tastingId" required className="w-full bg-white" defaultValue=""><option value="" disabled>Select an event</option>{eventOptions.map((event) => <option key={event.id} value={event.id}>{formatDate(event.scheduledAt)} · {event.eventName}{event.city || event.state ? ` · ${[event.city, event.state].filter(Boolean).join(', ')}` : ''}</option>)}</select>
-                <Button type="submit">Record attendance</Button>
+                <select name="tastingId" required className="w-full bg-white" defaultValue=""><option value="" disabled>Select a tasting</option>{tastingOptions.map((event) => <option key={event.id} value={event.id}>{formatDate(event.scheduledAt)} · {event.eventName}{event.city || event.state ? ` · ${[event.city, event.state].filter(Boolean).join(', ')}` : ''}</option>)}</select>
+                <Button type="submit">Record tasting</Button>
               </div>
               <Input name="notes" className="mt-3 bg-white" placeholder="Optional attendance note" />
             </form>
-            {attendance.length ? attendance.map((item) => (
+            {tastingAttendance.length ? tastingAttendance.map((item) => (
               <div key={item.id} className="rounded-xl border border-slate-200 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div><p className="font-semibold text-slate-900">{item.eventName}</p><p className="mt-1 text-xs text-slate-500">Attended {formatDate(item.attendedAt)} · {[item.city, item.state].filter(Boolean).join(', ') || 'Location not entered'}</p>{item.notes ? <p className="mt-2 text-sm text-slate-600">{item.notes}</p> : null}</div>
                   <form action={removeCommunityEventAttendance}><input type="hidden" name="contactId" value={contact.id} /><input type="hidden" name="attendanceId" value={item.id} /><Button type="submit" variant="ghost" size="sm" className="text-red-600">Remove</Button></form>
                 </div>
               </div>
-            )) : <p className="text-sm text-slate-500">No event attendance recorded yet.</p>}
+            )) : <p className="text-sm text-slate-500">No tasting attendance or collection history recorded yet.</p>}
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-none">
+          <CardHeader><CardTitle className="flex items-center gap-2"><CalendarDays className="h-5 w-5 text-[#ff5a00]" />Events</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            {eventHistory.length ? eventHistory.map((item) => <Link key={item.participantId} href={`/admin/events/${item.eventId}`} className="block rounded-xl border border-slate-200 p-4 transition-colors hover:border-[#ff5a00] hover:bg-orange-50/30"><div className="flex flex-wrap items-start justify-between gap-2"><div><p className="font-semibold text-slate-900">{item.title}</p><p className="mt-1 text-xs text-slate-500">{formatDate(item.startAt)} · {[item.venueName, item.city, item.state].filter(Boolean).join(', ') || 'Location not entered'}</p></div><div className="flex gap-1"><Badge variant="outline">{item.rsvpStatus}</Badge><Badge variant={item.attendanceStatus === 'checked_in' ? 'success' : item.attendanceStatus === 'no_show' ? 'destructive' : 'secondary'}>{item.attendanceStatus.replaceAll('_', ' ')}</Badge></div></div>{item.notes ? <p className="mt-2 text-sm text-slate-600">{item.notes}</p> : null}</Link>) : <p className="text-sm text-slate-500">No event RSVPs or attendance recorded yet.</p>}
           </CardContent>
         </Card>
 

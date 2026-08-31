@@ -159,6 +159,43 @@ async function sendEmail({
   }
 }
 
+export async function sendEventEmail({
+  to,
+  recipientName,
+  subject,
+  title,
+  intro,
+  detailsHtml,
+  ctaLabel,
+  ctaHref,
+  userId,
+}: {
+  to: string
+  recipientName?: string | null
+  subject: string
+  title: string
+  intro?: string
+  detailsHtml: string
+  ctaLabel?: string
+  ctaHref?: string
+  userId?: string | null
+}) {
+  return sendEmail({
+    to,
+    recipientName,
+    subject,
+    userId,
+    html: renderEmailCard({
+      eyebrow: 'AHAWC Event',
+      title: escapeHtml(title),
+      intro: intro ? escapeHtml(intro) : undefined,
+      body: detailsHtml,
+      ctaLabel,
+      ctaHref,
+    }),
+  })
+}
+
 export async function sendRepAssistedOrderEmail({
   to,
   businessName,

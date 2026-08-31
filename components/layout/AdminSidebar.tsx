@@ -59,6 +59,7 @@ const navSections = [
     title: 'Customers',
     items: [
       { href: '/admin/crm', label: 'CRM / Accounts', icon: Building2, feature: 'crm' },
+      { href: '/admin/events', label: 'Events', icon: CalendarDays, feature: 'events' },
       { href: '/admin/pull-through', label: 'Pull-Through', icon: Gauge, feature: 'crm' },
       { href: '/admin/inbox', label: 'SMS Inbox', icon: MessageSquare, feature: 'inbox' },
     ],

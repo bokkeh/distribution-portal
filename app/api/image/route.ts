@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { generateSignedReadUrl } from '@/lib/gcs/client'
 
-const ALLOWED_PREFIXES = ['uploads/', 'avatars/', 'documents/', 'tastings/', 'products/', 'deliveries/', 'account-media/', 'promotion-catalog/']
+const ALLOWED_PREFIXES = ['uploads/', 'avatars/', 'documents/', 'tastings/', 'events/', 'products/', 'deliveries/', 'account-media/', 'promotion-catalog/']
 
 // No auth required — used to proxy GCS objects (e.g. avatars) that cannot be made
 // publicly accessible because Public Access Prevention is enforced on the bucket.

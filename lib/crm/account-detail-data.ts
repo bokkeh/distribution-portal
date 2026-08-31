@@ -10,6 +10,7 @@ import {
   customerAccounts,
   deliveries,
   deliveryStops,
+  events,
   invoices,
   orders,
   products,
@@ -129,6 +130,7 @@ function categorizeActivity(entityType: string, kind: string) {
   if (entityType === 'order') return 'orders'
   if (entityType === 'delivery') return 'deliveries'
   if (entityType === 'tasting') return 'tastings'
+  if (entityType === 'event') return 'events'
   if (entityType === 'task') return 'tasks'
   if (normalizedKind.includes('account') || normalizedKind.includes('contact') || normalizedKind.includes('payment') || normalizedKind.includes('credit') || normalizedKind.includes('preference')) {
     return 'profile_updates'
@@ -154,6 +156,7 @@ function mapActivityEvent(
   refs: {
     invoices: Map<string, string>
     tastingNames: Map<string, string>
+    eventNames: Map<string, string>
   },
   mode: 'admin' | 'staff' | 'sales'
 ): AccountActivityItem {
@@ -170,6 +173,9 @@ function mapActivityEvent(
   } else if (row.entityType === 'tasting') {
     relatedLabel = refs.tastingNames.get(row.entityId) ?? `Tasting #${row.entityId.slice(-8).toUpperCase()}`
     relatedHref = mode === 'admin' ? `/admin/tastings/${row.entityId}` : null
+  } else if (row.entityType === 'event') {
+    relatedLabel = refs.eventNames.get(row.entityId) ?? `Event #${row.entityId.slice(-8).toUpperCase()}`
+    relatedHref = mode === 'sales' ? null : `/${mode}/events/${row.entityId}`
   } else if (row.entityType === 'invoice') {
     relatedLabel = refs.invoices.get(row.entityId) ?? `Invoice #${row.entityId.slice(-8).toUpperCase()}`
     relatedHref = mode === 'admin' ? `/admin/invoicing/${row.entityId}` : null
@@ -197,7 +203,7 @@ function mapActivityEvent(
   }
 }
 
-async function getActivityRows(entityType: 'account' | 'order' | 'delivery' | 'tasting' | 'invoice' | 'task', entityIds: string[]) {
+async function getActivityRows(entityType: 'account' | 'order' | 'delivery' | 'tasting' | 'event' | 'invoice' | 'task', entityIds: string[]) {
   if (entityIds.length === 0) return [] as RawActivityEvent[]
 
   return db
@@ -447,9 +453,10 @@ export async function getAccountInventoryHistory(accountId: string) {
 
 export async function getAccountActivityFeed(accountId: string, mode: 'admin' | 'staff' | 'sales') {
   try {
-    const [invoiceRefs, tastingRefs, orderRefs, deliveryRefs, taskRefs] = await Promise.all([
+    const [invoiceRefs, tastingRefs, eventRefs, orderRefs, deliveryRefs, taskRefs] = await Promise.all([
       db.select({ id: invoices.id, invoiceNumber: invoices.invoiceNumber }).from(invoices).where(eq(invoices.customerId, accountId)),
       db.select({ id: tastings.id, eventName: tastings.eventName }).from(tastings).where(eq(tastings.customerId, accountId)),
+      db.select({ id: events.id, title: events.title }).from(events).where(eq(events.accountId, accountId)),
       db.select({ id: orders.id }).from(orders).where(eq(orders.customerId, accountId)),
       db
         .select({ id: deliveries.id })
@@ -462,14 +469,16 @@ export async function getAccountActivityFeed(accountId: string, mode: 'admin' | 
     const orderIds = orderRefs.map((row) => row.id)
     const invoiceIds = invoiceRefs.map((row) => row.id)
     const tastingIds = tastingRefs.map((row) => row.id)
+    const eventIds = eventRefs.map((row) => row.id)
     const deliveryIds = Array.from(new Set(deliveryRefs.map((row) => row.id)))
     const taskIds = taskRefs.map((row) => row.id)
 
-    const [accountRows, orderRows, deliveryRows, tastingRows, invoiceRows, taskRows] = await Promise.all([
+    const [accountRows, orderRows, deliveryRows, tastingRows, eventRows, invoiceRows, taskRows] = await Promise.all([
       getActivityRows('account', [accountId]),
       getActivityRows('order', orderIds),
       getActivityRows('delivery', deliveryIds),
       getActivityRows('tasting', tastingIds),
+      getActivityRows('event', eventIds),
       getActivityRows('invoice', invoiceIds),
       getActivityRows('task', taskIds),
     ])
@@ -477,9 +486,10 @@ export async function getAccountActivityFeed(accountId: string, mode: 'admin' | 
     const refs = {
       invoices: new Map(invoiceRefs.map((row) => [row.id, row.invoiceNumber])),
       tastingNames: new Map(tastingRefs.map((row) => [row.id, row.eventName])),
+      eventNames: new Map(eventRefs.map((row) => [row.id, row.title])),
     }
 
-    return [...accountRows, ...orderRows, ...deliveryRows, ...tastingRows, ...invoiceRows, ...taskRows]
+    return [...accountRows, ...orderRows, ...deliveryRows, ...tastingRows, ...eventRows, ...invoiceRows, ...taskRows]
       .map((row) => mapActivityEvent(row, refs, mode))
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
   } catch (error) {

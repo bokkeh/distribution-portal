@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
       const ext = getExtension(filename, fileContentType)
       const uniqueFilename = `${uuidv4()}.${ext}`
       const result = await generateSignedUploadUrl(uniqueFilename, fileContentType, folder ?? 'uploads')
-      return NextResponse.json({ uploadUrl: result.uploadUrl, publicUrl: result.publicUrl, filename: uniqueFilename })
+      return NextResponse.json({ uploadUrl: result.uploadUrl, publicUrl: result.publicUrl, filePath: `${folder ?? 'uploads'}/${uniqueFilename}`, filename: uniqueFilename })
     }
 
     // Multipart form data → server-side buffer upload

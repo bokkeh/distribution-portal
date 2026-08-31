@@ -30,7 +30,7 @@ function getStorage() {
   return _storage
 }
 
-const ALLOWED_FOLDERS = new Set(['uploads', 'avatars', 'documents', 'tastings', 'products', 'sales-routes', 'deliveries', 'account-media', 'promotion-catalog'])
+const ALLOWED_FOLDERS = new Set(['uploads', 'avatars', 'documents', 'tastings', 'events', 'products', 'sales-routes', 'deliveries', 'account-media', 'promotion-catalog'])
 
 function validateFolder(folder: string): string {
   if (!ALLOWED_FOLDERS.has(folder)) throw new Error(`Invalid upload folder: ${folder}`)
@@ -91,6 +91,13 @@ export async function uploadBuffer(
     publicUrl: getPublicUrl(filePath),
     filePath,
   }
+}
+
+export async function deleteObject(filePath: string) {
+  validateFolder(filePath.split('/')[0] ?? '')
+  if (filePath.includes('..')) throw new Error('Invalid object path')
+  const storage = getStorage()
+  await storage.bucket(process.env.GCS_BUCKET_NAME ?? '').file(filePath).delete({ ignoreNotFound: true })
 }
 
 export function getPublicUrl(filePath: string): string {

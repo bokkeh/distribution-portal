@@ -1,7 +1,7 @@
 ﻿import Link from 'next/link'
 import { and, asc, count, desc, eq, inArray, or } from 'drizzle-orm'
 import { db } from '@/db'
-import { contacts, crmPipelineStages, deliveries, deliveryStops, invoices, orders, salesMembers, salesRegions, smsMessages, tastingReports, tastings, users } from '@/db/schema'
+import { contacts, crmPipelineStages, deliveries, deliveryStops, eventParticipants, events, invoices, orders, salesMembers, salesRegions, smsMessages, tastingReports, tastings, users } from '@/db/schema'
 import { syncToHubSpot } from '@/actions/crm'
 import { getCRMAccountDetail } from '@/lib/crm/account-read'
 import {
@@ -192,6 +192,7 @@ export async function AccountRecordPage({
   const quickActions = [
     ...(createOrderHref ? [{ label: 'Create Order', href: createOrderHref, icon: Plus }] : []),
     ...(mode === 'admin' ? [{ label: 'Add Delivery', href: '/admin/deliveries/new', icon: Truck }] : []),
+    ...(mode !== 'sales' ? [{ label: 'Add Event', href: `/${mode}/events?accountId=${account.id}`, icon: CalendarDays }] : []),
     { label: 'Add Tasting', href: `/${mode}/tastings?account=${account.id}`, icon: CalendarDays },
     { label: 'Add Note', href: getTabHref(basePath, 'notes-activity'), icon: FileText },
   ]
@@ -210,6 +211,7 @@ export async function AccountRecordPage({
         recentDeliveries: Array<{ deliveryId: string; status: string; weekStartDate: string; stopStatus: string; completedAt: Date | null; proofOfDeliveryUrl: string | null; shelfPhotoUrl: string | null }>
         recentTexts: Array<{ id: string; direction: string; body: string; createdAt: Date; phoneNumber: string }>
         recentTastings: Array<{ id: string; eventName: string; status: string; scheduledAt: Date; endAt: Date | null; reportSubmittedAt: Date | null }>
+        recentEvents: Array<{ id: string; title: string; status: string; startAt: Date; attendeeCount: number }>
         notes: Awaited<ReturnType<typeof getAccountNotes>>
         inventoryItems: Awaited<ReturnType<typeof getAccountInventoryOnHand>>
         activityItems: Awaited<ReturnType<typeof getAccountActivityFeed>>
@@ -344,6 +346,8 @@ export async function AccountRecordPage({
       mediaItems: mediaItems.status === 'fulfilled' ? mediaItems.value : [],
     }
 
+    const recentEvents = await db.select({ id: events.id, title: events.title, status: events.status, startAt: events.startAt, attendeeCount: count(eventParticipants.id) }).from(events).leftJoin(eventParticipants, eq(eventParticipants.eventId, events.id)).where(eq(events.accountId, accountId)).groupBy(events.id).orderBy(desc(events.startAt)).limit(6)
+
     const smartInsights = await generateAccountSmartInsights({
       account,
       accountContacts: resolvedOverviewData.accountContacts,
@@ -360,6 +364,7 @@ export async function AccountRecordPage({
 
     overviewData = {
       ...resolvedOverviewData,
+      recentEvents,
       smartInsights,
     }
   }
@@ -673,6 +678,13 @@ export async function AccountRecordPage({
                         })}
                       </div>
                     )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between pb-3"><CardTitle className="flex items-center gap-2"><CalendarDays className="h-4 w-4" />Events Hosted</CardTitle>{mode !== 'sales' ? <Link href={`/${mode}/events?accountId=${account.id}`} className="text-xs font-medium text-blue-600 hover:underline">View events</Link> : null}</CardHeader>
+                  <CardContent>
+                    {overviewData.recentEvents.length === 0 ? <p className="text-sm text-slate-500">No events associated with this account yet.</p> : <div className="space-y-2">{overviewData.recentEvents.map((hostedEvent) => <Link key={hostedEvent.id} href={`/${mode}/events/${hostedEvent.id}`} className="block rounded-xl border border-slate-100 px-3 py-3 transition-colors hover:border-[#ff5a00]"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-medium text-slate-900">{hostedEvent.title}</p><p className="text-xs text-muted-foreground">{formatDate(hostedEvent.startAt)} · {hostedEvent.attendeeCount} RSVP{hostedEvent.attendeeCount === 1 ? '' : 's'}</p></div><Badge variant="secondary" className="text-xs">{hostedEvent.status}</Badge></div></Link>)}</div>}
                   </CardContent>
                 </Card>
 

@@ -68,6 +68,12 @@ export const isDeliveryTrackingRateLimited = makeLimiter('delivery-tracking', 60
 /** Public community/newsletter signup: 5 submissions / hour per IP */
 export const isCommunitySignupRateLimited = makeLimiter('community-signup', 5, '1 h')
 
+/** Public event RSVP: 8 submissions / hour per event+viewer */
+export const isEventRsvpRateLimited = makeLimiter('event-rsvp', 8, '1 h')
+
+/** Public attendee media upload: 20 files / hour per event+viewer */
+export const isEventUploadRateLimited = makeLimiter('event-upload', 40, '1 h')
+
 // ---------------------------------------------------------------------------
 // Shared 429 response
 // ---------------------------------------------------------------------------

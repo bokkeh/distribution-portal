@@ -20,6 +20,7 @@ const navItems = [
   { href: '/staff/orders',    label: 'Orders',    icon: ShoppingCart, feature: 'orders' },
   { href: '/staff/invoicing', label: 'Invoicing', icon: FileText, feature: 'invoicing' },
   { href: '/staff/crm',       label: 'Accounts',  icon: Building2, feature: 'crm' },
+  { href: '/staff/events',    label: 'Events',    icon: CalendarDays, feature: 'events' },
   { href: '/staff/pull-through', label: 'Pull-Through', icon: Gauge, feature: 'crm' },
   { href: '/staff/inbox',     label: 'SMS Inbox', icon: MessageSquare, feature: 'inbox' },
   { href: '/staff/inventory', label: 'Inventory', icon: Package, feature: 'inventory' },

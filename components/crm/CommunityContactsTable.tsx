@@ -13,7 +13,7 @@ export type CommunityContactRow = {
   email: string
   phone: string
   status: 'subscribed' | 'unsubscribed'
-  source: 'public_signup' | 'admin_entry' | 'import'
+  source: 'public_signup' | 'admin_entry' | 'import' | 'event_rsvp' | 'event_manual' | 'event_import'
   createdAt: Date | string
 }
 
@@ -21,6 +21,9 @@ const sourceLabels: Record<CommunityContactRow['source'], string> = {
   public_signup: 'Signup link',
   admin_entry: 'Admin entry',
   import: 'Import',
+  event_rsvp: 'Event RSVP',
+  event_manual: 'Event attendee',
+  event_import: 'Event import',
 }
 
 export function CommunityContactsTable({ contacts }: { contacts: CommunityContactRow[] }) {

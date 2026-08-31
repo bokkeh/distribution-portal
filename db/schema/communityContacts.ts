@@ -15,9 +15,10 @@ export const communityContacts = pgTable('community_contacts', {
   postalCode: text('postal_code'),
   country: text('country').notNull().default('US'),
   status: text('status', { enum: ['subscribed', 'unsubscribed'] }).notNull().default('subscribed'),
-  source: text('source', { enum: ['public_signup', 'admin_entry', 'import'] }).notNull(),
+  source: text('source', { enum: ['public_signup', 'admin_entry', 'import', 'event_rsvp', 'event_manual', 'event_import'] }).notNull(),
   dealStage: text('deal_stage'),
   marketingConsentAt: timestamp('marketing_consent_at', { withTimezone: true }).notNull().defaultNow(),
+  smsConsentAt: timestamp('sms_consent_at', { withTimezone: true }),
   createdByUserId: uuid('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -69,5 +70,7 @@ export const communityContactCommunications = pgTable('community_contact_communi
 export type CommunityContact = typeof communityContacts.$inferSelect
 export type NewCommunityContact = typeof communityContacts.$inferInsert
 export type CommunityContactNote = typeof communityContactNotes.$inferSelect
-export type CommunityEventAttendance = typeof communityEventAttendance.$inferSelect
+/** Legacy tasting attendance. The database name is retained to preserve existing data. */
+export type CommunityTastingAttendance = typeof communityEventAttendance.$inferSelect
+export type CommunityEventAttendance = CommunityTastingAttendance
 export type CommunityContactCommunication = typeof communityContactCommunications.$inferSelect

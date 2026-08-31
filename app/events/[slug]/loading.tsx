@@ -1,0 +1,1 @@
+export default function PublicEventLoading() { return <main className="min-h-screen animate-pulse bg-[#f4f1ed]"><div className="h-[68vh] bg-slate-800" /><div className="mx-auto grid max-w-6xl gap-8 p-8 lg:grid-cols-2"><div className="h-64 rounded-2xl bg-slate-200" /><div className="h-64 rounded-2xl bg-slate-200" /></div></main> }

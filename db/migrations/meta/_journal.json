@@ -358,6 +358,13 @@
       "when": 1788242400000,
       "tag": "0065_community_contact_profiles",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1788249600000,
+      "tag": "0066_events_workflow",
+      "breakpoints": true
     }
   ]
 }

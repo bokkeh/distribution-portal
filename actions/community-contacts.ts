@@ -147,13 +147,13 @@ export async function addCommunityEventAttendance(formData: FormData) {
     entityType: 'community_contact',
     entityId: contactId,
     actorUserId: session.user.id,
-    kind: 'community_event_attendance_added',
-    title: 'Event attendance recorded',
+    kind: 'community_tasting_attendance_added',
+    title: 'Tasting attendance recorded',
     body: `${tasting.eventName} on ${attendedAt.toLocaleDateString('en-US')}.`,
     metadata: { tastingId },
   })
   revalidatePath(contactPath(contactId))
-  redirect(contactPath(contactId, 'success', 'Event attendance saved.'))
+  redirect(contactPath(contactId, 'success', 'Tasting attendance saved.'))
 }
 
 export async function removeCommunityEventAttendance(formData: FormData) {
@@ -162,7 +162,7 @@ export async function removeCommunityEventAttendance(formData: FormData) {
   const attendanceId = String(formData.get('attendanceId') ?? '')
   await requireCommunityContact(contactId)
   await db.delete(communityEventAttendance).where(and(eq(communityEventAttendance.id, attendanceId), eq(communityEventAttendance.communityContactId, contactId)))
-  await logActivityEvent({ entityType: 'community_contact', entityId: contactId, actorUserId: session.user.id, kind: 'community_event_attendance_removed', title: 'Event attendance removed' })
+  await logActivityEvent({ entityType: 'community_contact', entityId: contactId, actorUserId: session.user.id, kind: 'community_tasting_attendance_removed', title: 'Tasting attendance removed' })
   revalidatePath(contactPath(contactId))
   redirect(contactPath(contactId, 'success', 'Attendance removed.'))
 }

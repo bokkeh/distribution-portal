@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth/config'
 import { db } from '@/db'
-import { invoices, tastings, users } from '@/db/schema'
+import { events, invoices, tastings, users } from '@/db/schema'
 import { ilike, or, desc } from 'drizzle-orm'
 import { searchAccounts } from '@/lib/search/account-search'
 
@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
     label: string
     sublabel?: string
     href: string
-    type: 'order' | 'account' | 'invoice' | 'tasting' | 'delivery' | 'user'
+    type: 'order' | 'account' | 'invoice' | 'tasting' | 'event' | 'delivery' | 'user'
   }> = []
 
   await Promise.all([
@@ -62,6 +62,19 @@ export async function GET(req: NextRequest) {
         href: `/admin/tastings/${r.id}`,
       }))),
 
+    // Events (kept distinct from tastings)
+    db.select({ id: events.id, title: events.title, city: events.city, status: events.status })
+      .from(events)
+      .where(or(ilike(events.title, like), ilike(events.city, like), ilike(events.venueName, like)))
+      .orderBy(desc(events.startAt))
+      .limit(5)
+      .then(rows => rows.forEach(r => results.push({
+        id: r.id, type: 'event',
+        label: r.title,
+        sublabel: [r.city, r.status].filter(Boolean).join(' · ') || undefined,
+        href: `/${isAdmin ? 'admin' : 'staff'}/events/${r.id}`,
+      }))),
+
     // Users
     isAdmin ? db.select({ id: users.id, name: users.name, email: users.email, role: users.role })
       .from(users)
@@ -75,7 +88,7 @@ export async function GET(req: NextRequest) {
       }))) : Promise.resolve(),
   ])
 
-  const typeOrder = { account: 0, invoice: 1, tasting: 2, user: 3, order: 4, delivery: 5 }
+  const typeOrder = { account: 0, event: 1, invoice: 2, tasting: 3, user: 4, order: 5, delivery: 6 }
   return NextResponse.json(results
     .sort((left, right) => typeOrder[left.type] - typeOrder[right.type])
     .slice(0, 15))

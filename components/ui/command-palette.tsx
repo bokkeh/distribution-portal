@@ -17,7 +17,7 @@ type SearchResult = {
   label: string
   sublabel?: string
   href: string
-  type: 'order' | 'account' | 'invoice' | 'tasting' | 'delivery' | 'user'
+  type: 'order' | 'account' | 'invoice' | 'tasting' | 'event' | 'delivery' | 'user'
 }
 
 const NAV_ITEMS = [
@@ -33,6 +33,7 @@ const NAV_ITEMS = [
   { label: 'Inventory', href: '/admin/inventory', icon: Package, section: 'Navigation' },
   { label: 'Background Jobs', href: '/admin/jobs', icon: Cpu, section: 'Navigation' },
   { label: 'Tastings', href: '/admin/tastings', icon: CalendarDays, section: 'Navigation' },
+  { label: 'Events', href: '/admin/events', icon: CalendarDays, section: 'Navigation' },
   { label: 'Tasting ROI', href: '/admin/tastings?tab=roi', icon: TrendingUp, section: 'Navigation' },
   { label: 'CRM / Accounts', href: '/admin/crm', icon: Building2, section: 'Navigation' },
   { label: 'SMS Inbox', href: '/admin/inbox', icon: MessageSquare, section: 'Navigation' },
@@ -55,6 +56,7 @@ const typeIcon: Record<SearchResult['type'], React.ElementType> = {
   account: Building2,
   invoice: Receipt,
   tasting: CalendarDays,
+  event: CalendarDays,
   delivery: Truck,
   user: Users,
 }
@@ -64,6 +66,7 @@ const typeHref: Record<SearchResult['type'], (id: string) => string> = {
   account: (id) => `/admin/crm/${id}`,
   invoice: (id) => `/admin/invoicing/${id}`,
   tasting: (id) => `/admin/tastings/${id}`,
+  event: (id) => `/admin/events/${id}`,
   delivery: (id) => `/admin/deliveries/${id}`,
   user: (id) => `/admin/users/${id}`,
 }

@@ -3,7 +3,7 @@ import { auth } from '@/lib/auth/config'
 import { generateSignedReadUrl } from '@/lib/gcs/client'
 
 const GCS_BASE = `https://storage.googleapis.com/${process.env.GCS_BUCKET_NAME}/`
-const ALLOWED_PREFIXES = ['uploads/', 'avatars/', 'documents/', 'tastings/', 'products/', 'deliveries/', 'sales-routes/', 'account-media/']
+const ALLOWED_PREFIXES = ['uploads/', 'avatars/', 'documents/', 'tastings/', 'events/', 'products/', 'deliveries/', 'sales-routes/', 'account-media/']
 
 function extractObjectPath(rawUrl: string) {
   const path = rawUrl.startsWith(GCS_BASE)
