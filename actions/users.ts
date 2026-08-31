@@ -9,6 +9,7 @@ import { db } from '@/db'
 import { customerAccounts, drivers, userFeatureSettings, userPreferences, users } from '@/db/schema'
 import { requireAdmin } from '@/lib/auth/session'
 import { notify } from '@/lib/notifications/dispatch'
+import { sendWelcomeEmail } from '@/lib/resend/client'
 
 const ALL_ROLES = ['admin', 'staff', 'driver', 'customer', 'taster', 'sales_rep', 'sales_manager'] as const
 type UserRole = typeof ALL_ROLES[number]
@@ -38,7 +39,10 @@ function isMissingUserFeatureTable(error: unknown) {
   return message.includes('user_feature_settings') && message.includes('does not exist')
 }
 
-export async function createUser(formData: FormData) {
+export async function createUser(
+  _prev: { error?: string; success?: boolean; userId?: string; name?: string; email?: string; password?: string; roleLabel?: string } | null,
+  formData: FormData
+): Promise<{ error?: string; success?: boolean; userId?: string; name?: string; email?: string; password?: string; roleLabel?: string }> {
   await requireAdmin()
 
   const name = formData.get('name') as string
@@ -131,7 +135,37 @@ export async function createUser(formData: FormData) {
   }
 
   revalidatePath('/admin/users')
-  redirect('/admin/users')
+  return {
+    success: true,
+    userId: user.id,
+    name: user.name,
+    email: user.email,
+    password,
+    roleLabel: formatRoleLabel(role),
+  }
+}
+
+export async function sendUserWelcomeEmail(
+  _prev: { error?: string; success?: boolean } | null,
+  formData: FormData
+): Promise<{ error?: string; success?: boolean }> {
+  try {
+    await requireAdmin()
+
+    const name = formData.get('name') as string
+    const email = formData.get('email') as string
+    const password = formData.get('password') as string
+    const roleLabel = formData.get('roleLabel') as string
+
+    if (!name || !email || !password) {
+      return { error: 'Missing account details for this email.' }
+    }
+
+    await sendWelcomeEmail({ to: email, name, password, role: roleLabel })
+    return { success: true }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) }
+  }
 }
 
 export async function deactivateUser(userId: string) {

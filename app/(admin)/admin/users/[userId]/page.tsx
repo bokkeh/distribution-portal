@@ -98,7 +98,7 @@ export default async function UserDetailPage({ params }: { params: Promise<{ use
           accountId={account?.id}
         />
 
-        <UserPasswordResetCard userId={user.id} email={user.email} />
+        <UserPasswordResetCard userId={user.id} email={user.email} name={user.name} roleLabel={user.role.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())} />
 
         <Card>
           <CardHeader><CardTitle>Role Summary</CardTitle></CardHeader>

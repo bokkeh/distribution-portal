@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
-import { resetUserPassword } from '@/actions/users'
+import { resetUserPassword, sendUserWelcomeEmail } from '@/actions/users'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -11,10 +11,13 @@ import { Label } from '@/components/ui/label'
 type UserPasswordResetCardProps = {
   userId: string
   email: string
+  name: string
+  roleLabel: string
 }
 
-export function UserPasswordResetCard({ userId, email }: UserPasswordResetCardProps) {
+export function UserPasswordResetCard({ userId, email, name, roleLabel }: UserPasswordResetCardProps) {
   const [state, action, pending] = useActionState(resetUserPassword, null)
+  const [emailState, sendEmailAction, emailPending] = useActionState(sendUserWelcomeEmail, null)
   const formRef = useRef<HTMLFormElement>(null)
 
   useEffect(() => {
@@ -28,6 +31,11 @@ export function UserPasswordResetCard({ userId, email }: UserPasswordResetCardPr
       toast.success('Password reset')
     }
   }, [state])
+
+  useEffect(() => {
+    if (emailState?.error) toast.error('Failed to send email', { description: emailState.error })
+    else if (emailState?.success) toast.success('Login email sent')
+  }, [emailState])
 
   return (
     <Card>
@@ -57,7 +65,7 @@ export function UserPasswordResetCard({ userId, email }: UserPasswordResetCardPr
         </form>
 
         {state?.success && state.temporaryPassword ? (
-          <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
             <p className="text-sm font-medium text-slate-900">
               New temporary password for {email}
             </p>
@@ -69,6 +77,15 @@ export function UserPasswordResetCard({ userId, email }: UserPasswordResetCardPr
             <p className="text-xs text-slate-600">
               Share this securely with the user. Their previous password no longer works.
             </p>
+            <form action={sendEmailAction}>
+              <input type="hidden" name="name" value={name} />
+              <input type="hidden" name="email" value={email} />
+              <input type="hidden" name="password" value={state.temporaryPassword} />
+              <input type="hidden" name="roleLabel" value={roleLabel} />
+              <Button type="submit" variant="outline" size="sm" disabled={emailPending}>
+                {emailPending ? 'Sending...' : 'Email login details to user'}
+              </Button>
+            </form>
           </div>
         ) : null}
       </CardContent>
