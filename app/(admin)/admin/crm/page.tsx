@@ -342,7 +342,7 @@ export default async function CRMPage({
     dealStage: contact.dealStage,
     title: `${contact.firstName} ${contact.lastName}`.trim(),
     subtitle: contact.email,
-    href: null,
+    href: `/admin/crm/community/${contact.id}`,
     fields: {
       email: contact.email,
       phone: contact.phone,

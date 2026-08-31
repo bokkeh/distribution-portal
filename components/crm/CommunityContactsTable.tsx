@@ -1,6 +1,7 @@
 'use client'
 
 import { useDeferredValue, useState } from 'react'
+import Link from 'next/link'
 import { Search } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { PhoneSmsButton } from './PhoneSmsButton'
@@ -66,7 +67,7 @@ export function CommunityContactsTable({ contacts }: { contacts: CommunityContac
           <tbody className="divide-y divide-slate-200">
             {filtered.map((contact) => (
               <tr key={contact.id} className="hover:bg-slate-50">
-                <td className="px-4 py-3 font-semibold text-slate-900">{contact.firstName} {contact.lastName}</td>
+                <td className="px-4 py-3 font-semibold text-slate-900"><Link href={`/admin/crm/community/${contact.id}`} className="decoration-[#ff5a00] underline-offset-4 hover:text-[#ff5a00] hover:underline">{contact.firstName} {contact.lastName}</Link></td>
                 <td className="px-4 py-3 text-sm text-slate-600"><a href={`mailto:${contact.email}`} className="hover:text-[#ff5a00] hover:underline">{contact.email}</a></td>
                 <td className="px-4 py-3"><PhoneSmsButton phone={contact.phone} recipientName={`${contact.firstName} ${contact.lastName}`} /></td>
                 <td className="px-4 py-3 text-sm text-slate-600">{sourceLabels[contact.source]}</td>
