@@ -77,6 +77,7 @@ function getDefaultHoursWorked(report: ReportRecord, invoice: InvoiceRecord) {
 export function TastingSubmissionDetail({
   tasting,
   report,
+  reportPhotoDraft,
   invoice,
   user,
   adminHourlyRate,
@@ -102,6 +103,10 @@ export function TastingSubmissionDetail({
     notes: string | null
   }
   report: ReportRecord
+  reportPhotoDraft: {
+    setupPhotoUrl: string | null
+    shelfPhotoUrls: string[]
+  } | null
   invoice: InvoiceRecord
   user: {
     name: string | null | undefined
@@ -185,6 +190,7 @@ export function TastingSubmissionDetail({
           key={`${tasting.id}:${reportMode}`}
           tasting={tasting}
           report={report}
+          reportPhotoDraft={reportPhotoDraft}
           reportMode={reportMode}
           startFromScratchHref={reportBlankHref}
           standardHref={reportStandardHref}

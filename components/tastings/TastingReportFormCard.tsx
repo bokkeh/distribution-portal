@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { submitTastingReport } from '@/actions/tastings'
+import { saveTastingReportPhotoDraft, submitTastingReport } from '@/actions/tastings'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -38,6 +38,7 @@ const MAX_SHELF_PHOTOS = 4
 export function TastingReportFormCard({
   tasting,
   report,
+  reportPhotoDraft = null,
   success,
   error,
   compact = false,
@@ -52,6 +53,10 @@ export function TastingReportFormCard({
     scheduledAt: Date
   }
   report: ReportRecord
+  reportPhotoDraft?: {
+    setupPhotoUrl: string | null
+    shelfPhotoUrls: string[]
+  } | null
   success?: string
   error?: string
   compact?: boolean
@@ -69,19 +74,47 @@ export function TastingReportFormCard({
   )
 
   // Photo state
-  const [setupPhotoUrl, setSetupPhotoUrl] = useState(activeReport?.setupPhotoUrl ?? '')
-  const [shelfPhotoUrls, setShelfPhotoUrls] = useState<string[]>(activeReport?.shelfPhotoUrls ?? [])
+  const [setupPhotoUrl, setSetupPhotoUrl] = useState(reportPhotoDraft?.setupPhotoUrl ?? activeReport?.setupPhotoUrl ?? '')
+  const [shelfPhotoUrls, setShelfPhotoUrls] = useState<string[]>(
+    reportPhotoDraft?.shelfPhotoUrls.length ? reportPhotoDraft.shelfPhotoUrls : activeReport?.shelfPhotoUrls ?? [],
+  )
   const [uploadingSetup, setUploadingSetup] = useState(false)
   const [uploadingShelf, setUploadingShelf] = useState<boolean[]>([false, false, false, false])
+  const isUploadingPhoto = uploadingSetup || uploadingShelf.some(Boolean)
 
   useEffect(() => {
     if (success === 'Tasting report submitted.') reportDraft.clearDraft()
   }, [reportDraft, success])
 
-  useEffect(() => {
-    setSetupPhotoUrl(activeReport?.setupPhotoUrl ?? '')
-    setShelfPhotoUrls(activeReport?.shelfPhotoUrls ?? [])
-  }, [activeReport])
+  async function uploadTastingPhoto(file: File, filename: string) {
+    const contentType = file.type || 'image/jpeg'
+    const signedUrlResponse = await fetch('/api/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename, contentType, folder: 'tastings' }),
+    })
+    const signedUrlPayload = await signedUrlResponse.json().catch(() => null)
+    if (!signedUrlResponse.ok || !signedUrlPayload?.uploadUrl || !signedUrlPayload?.publicUrl) {
+      throw new Error(signedUrlPayload?.error || 'Could not prepare the upload.')
+    }
+
+    const uploadResponse = await fetch(signedUrlPayload.uploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': contentType },
+      body: file,
+    })
+    if (!uploadResponse.ok) throw new Error('Cloud upload failed. Please try again.')
+
+    return String(signedUrlPayload.publicUrl)
+  }
+
+  async function persistPhotoDraft(nextSetupPhotoUrl: string, nextShelfPhotoUrls: string[]) {
+    await saveTastingReportPhotoDraft({
+      tastingId: tasting.id,
+      setupPhotoUrl: nextSetupPhotoUrl || null,
+      shelfPhotoUrls: nextShelfPhotoUrls,
+    })
+  }
 
   async function handleUploadSetup(file: File) {
     if (file.size > 10 * 1024 * 1024) {
@@ -90,15 +123,10 @@ export function TastingReportFormCard({
     }
     setUploadingSetup(true)
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('folder', 'tastings')
-      formData.append('filename', `setup-${file.name}`)
-      const res = await fetch('/api/upload', { method: 'POST', body: formData })
-      const payload = await res.json().catch(() => null)
-      if (!res.ok) throw new Error(payload?.error || 'Upload failed')
-      setSetupPhotoUrl(payload.publicUrl)
-      toast.success('Setup photo uploaded')
+      const publicUrl = await uploadTastingPhoto(file, `setup-${file.name}`)
+      setSetupPhotoUrl(publicUrl)
+      await persistPhotoDraft(publicUrl, shelfPhotoUrls)
+      toast.success('Setup photo saved to your report draft')
     } catch (e) {
       toast.error('Upload failed', { description: e instanceof Error ? e.message : undefined })
     } finally {
@@ -113,19 +141,12 @@ export function TastingReportFormCard({
     }
     setUploadingShelf(prev => { const next = [...prev]; next[index] = true; return next })
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('folder', 'tastings')
-      formData.append('filename', `shelf-${index + 1}-${file.name}`)
-      const res = await fetch('/api/upload', { method: 'POST', body: formData })
-      const payload = await res.json().catch(() => null)
-      if (!res.ok) throw new Error(payload?.error || 'Upload failed')
-      setShelfPhotoUrls(prev => {
-        const next = [...prev]
-        next[index] = payload.publicUrl
-        return next
-      })
-      toast.success(`Shelf photo ${index + 1} uploaded`)
+      const publicUrl = await uploadTastingPhoto(file, `shelf-${index + 1}-${file.name}`)
+      const nextShelfPhotoUrls = [...shelfPhotoUrls]
+      nextShelfPhotoUrls[index] = publicUrl
+      setShelfPhotoUrls(nextShelfPhotoUrls)
+      await persistPhotoDraft(setupPhotoUrl, nextShelfPhotoUrls)
+      toast.success(`Shelf photo ${index + 1} saved to your report draft`)
     } catch (e) {
       toast.error('Upload failed', { description: e instanceof Error ? e.message : undefined })
     } finally {
@@ -165,7 +186,10 @@ export function TastingReportFormCard({
 
         {/* Photo Upload Section */}
         <div className="mb-6 space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Event Photos</p>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Event Photos</p>
+            <p className="mt-1 text-xs text-slate-500">Each photo saves immediately and will return if this page refreshes or times out.</p>
+          </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
             {/* Setup photo */}
             <label className="block cursor-pointer sm:col-span-1">
@@ -184,8 +208,8 @@ export function TastingReportFormCard({
                     className="mt-1 text-[10px] font-medium text-violet-600 underline">Preview</a>
                 )}
               </span>
-              <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="hidden"
-                onChange={e => { const f = e.target.files?.[0]; if (f) void handleUploadSetup(f) }} />
+              <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="hidden" disabled={isUploadingPhoto}
+                onChange={e => { const f = e.target.files?.[0]; e.currentTarget.value = ''; if (f) void handleUploadSetup(f) }} />
             </label>
 
             {/* Shelf photos */}
@@ -206,8 +230,8 @@ export function TastingReportFormCard({
                       className="mt-1 text-[10px] font-medium text-violet-600 underline">Preview</a>
                   )}
                 </span>
-                <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="hidden"
-                  onChange={e => { const f = e.target.files?.[0]; if (f) void handleUploadShelf(f, i) }} />
+                <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="hidden" disabled={isUploadingPhoto}
+                  onChange={e => { const f = e.target.files?.[0]; e.currentTarget.value = ''; if (f) void handleUploadShelf(f, i) }} />
               </label>
             ))}
           </div>

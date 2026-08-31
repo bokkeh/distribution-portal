@@ -4,7 +4,7 @@ import { and, eq, gte, lte } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { db } from '@/db'
-import { customerAccounts, salesMembers, tasterAvailability, tasterInvoices, tastingReports, tastings, users } from '@/db/schema'
+import { customerAccounts, salesMembers, tasterAvailability, tasterInvoices, tastingReportPhotoDrafts, tastingReports, tastings, users } from '@/db/schema'
 import { requireFeature, requireRole } from '@/lib/auth/session'
 import { notify } from '@/lib/notifications/dispatch'
 import { sendTasterInvoiceNotification } from '@/lib/resend/client'
@@ -1014,6 +1014,73 @@ export async function reassignTasting(formData: FormData) {
   redirect(`${tastingRedirectPath(mode)}?success=${encodeURIComponent('Tasting reassigned and tasters notified.')}`)
 }
 
+function normalizeTastingPhotoUrl(value: string | null | undefined) {
+  const trimmed = value?.trim()
+  if (!trimmed) return null
+  if (trimmed.length > 4096) throw new Error('Photo URL is too long.')
+
+  if (trimmed.startsWith('/api/image?')) {
+    const parsed = new URL(trimmed, 'https://portal.local')
+    if (parsed.searchParams.get('path')?.startsWith('tastings/')) return trimmed
+  }
+
+  try {
+    const parsed = new URL(trimmed)
+    if (parsed.protocol === 'https:' && parsed.hostname === 'storage.googleapis.com' && parsed.pathname.includes('/tastings/')) {
+      return trimmed
+    }
+  } catch {
+    // Invalid URLs fall through to the validation error below.
+  }
+
+  throw new Error('Only tasting photo uploads can be saved to this draft.')
+}
+
+export async function saveTastingReportPhotoDraft(input: {
+  tastingId: string
+  setupPhotoUrl: string | null
+  shelfPhotoUrls: string[]
+}) {
+  const session = await requireFeature('tastings', 'taster', 'admin')
+  const [tasting] = await db
+    .select({ id: tastings.id, assignedUserId: tastings.assignedUserId })
+    .from(tastings)
+    .where(eq(tastings.id, input.tastingId))
+    .limit(1)
+
+  if (!tasting) throw new Error('Tasting not found.')
+
+  const roles = session.user.roles ?? [session.user.role]
+  if (!roles.includes('admin') && tasting.assignedUserId !== session.user.id) {
+    throw new Error('You do not have permission to update this tasting report.')
+  }
+
+  const setupPhotoUrl = normalizeTastingPhotoUrl(input.setupPhotoUrl)
+  const shelfPhotoUrls = input.shelfPhotoUrls
+    .slice(0, 4)
+    .map((url) => normalizeTastingPhotoUrl(url) ?? '')
+
+  await db
+    .insert(tastingReportPhotoDrafts)
+    .values({
+      tastingId: tasting.id,
+      savedByUserId: session.user.id,
+      setupPhotoUrl,
+      shelfPhotoUrls,
+    })
+    .onConflictDoUpdate({
+      target: tastingReportPhotoDrafts.tastingId,
+      set: {
+        savedByUserId: session.user.id,
+        setupPhotoUrl,
+        shelfPhotoUrls,
+        updatedAt: new Date(),
+      },
+    })
+
+  return { success: true }
+}
+
 export async function submitTastingReport(formData: FormData) {
   const session = await requireFeature('tastings', 'taster', 'admin')
   const tastingId = formData.get('tastingId') as string
@@ -1121,6 +1188,7 @@ export async function submitTastingReport(formData: FormData) {
       ...payload,
     })
   }
+  await db.delete(tastingReportPhotoDrafts).where(eq(tastingReportPhotoDrafts.tastingId, tastingId))
   await logActivityEvent({
     entityType: 'tasting',
     entityId: tastingId,

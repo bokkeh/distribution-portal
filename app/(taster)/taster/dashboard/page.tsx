@@ -4,7 +4,7 @@ import { CalendarDays, CheckCircle2, Clock3, DollarSign, FileText, Mail, Phone, 
 import { requireFeature } from '@/lib/auth/session'
 import { getTastingsForView } from '@/actions/tastings'
 import { db } from '@/db'
-import { tasterInvoices, tastingReports, tastings, users } from '@/db/schema'
+import { tasterInvoices, tastingReportPhotoDrafts, tastingReports, tastings, users } from '@/db/schema'
 import { getUserPreferences } from '@/lib/preferences/read'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,7 @@ function isMissingTastingsTable(error: unknown) {
   return (
     (message.includes('tastings') && message.includes('does not exist')) ||
     (message.includes('tasting_reports') && message.includes('does not exist')) ||
+    (message.includes('tasting_report_photo_drafts') && message.includes('does not exist')) ||
     (message.includes('taster_invoices') && message.includes('does not exist'))
   )
 }
@@ -63,9 +64,12 @@ export default async function TasterDashboardPage({
     const featuredTasting = reportsNeeded[0] ?? nextTasting ?? null
     const submittedReports = tastingRows.filter(tasting => tasting.reportSubmittedAt)
 
-    const report = featuredTasting
-      ? await db.select().from(tastingReports).where(eq(tastingReports.tastingId, featuredTasting.id)).then(rows => rows[0] ?? null)
-      : null
+    const [report, reportPhotoDraft] = featuredTasting
+      ? await Promise.all([
+          db.select().from(tastingReports).where(eq(tastingReports.tastingId, featuredTasting.id)).then(rows => rows[0] ?? null),
+          db.select().from(tastingReportPhotoDrafts).where(eq(tastingReportPhotoDrafts.tastingId, featuredTasting.id)).then(rows => rows[0] ?? null),
+        ])
+      : [null, null]
 
     const invoiceRows = await db
       .select({
@@ -268,6 +272,10 @@ export default async function TasterDashboardPage({
                     setupPhotoUrl: report.setupPhotoUrl ?? null,
                     shelfPhotoUrls: (report.shelfPhotoUrls as string[] | null) ?? null,
                     submittedAt: report.submittedAt,
+                  } : null}
+                  reportPhotoDraft={reportPhotoDraft ? {
+                    setupPhotoUrl: reportPhotoDraft.setupPhotoUrl,
+                    shelfPhotoUrls: reportPhotoDraft.shelfPhotoUrls,
                   } : null}
                   success={params.success}
                   error={params.error}

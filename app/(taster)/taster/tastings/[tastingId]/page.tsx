@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { db } from '@/db'
-import { tasterInvoices, tastingReports, users } from '@/db/schema'
+import { tasterInvoices, tastingReportPhotoDrafts, tastingReports, users } from '@/db/schema'
 import { TastingSubmissionDetail } from '@/components/tastings/TastingSubmissionDetail'
 import { Button } from '@/components/ui/button'
 import { requireFeature } from '@/lib/auth/session'
@@ -23,6 +23,7 @@ function isMissingSubmissionTables(error: unknown) {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
   return (
     (message.includes('tasting_reports') && message.includes('does not exist')) ||
+    (message.includes('tasting_report_photo_drafts') && message.includes('does not exist')) ||
     (message.includes('taster_invoices') && message.includes('does not exist'))
   )
 }
@@ -76,8 +77,9 @@ export default async function TasterTastingDetailPage({
   }
 
   try {
-    const [report, invoice, assignedUser] = await Promise.all([
+    const [report, reportPhotoDraft, invoice, assignedUser] = await Promise.all([
       db.select().from(tastingReports).where(eq(tastingReports.tastingId, tastingId)).then(r => r[0] ?? null),
+      db.select().from(tastingReportPhotoDrafts).where(eq(tastingReportPhotoDrafts.tastingId, tastingId)).then(rows => rows[0] ?? null),
       db.select().from(tasterInvoices).where(eq(tasterInvoices.tastingId, tastingId)).then(rows => rows[0] ?? null),
       db.select({ phone: users.phone, tasterHourlyRate: users.tasterHourlyRate }).from(users).where(eq(users.id, tasting.assignedUserId)).then(rows => rows[0] ?? null),
     ])
@@ -163,6 +165,10 @@ export default async function TasterTastingDetailPage({
             setupPhotoUrl: report.setupPhotoUrl ?? null,
             shelfPhotoUrls: (report.shelfPhotoUrls as string[] | null) ?? null,
             submittedAt: coerceDateOrNull(report.submittedAt),
+          } : null}
+          reportPhotoDraft={reportPhotoDraft ? {
+            setupPhotoUrl: reportPhotoDraft.setupPhotoUrl,
+            shelfPhotoUrls: reportPhotoDraft.shelfPhotoUrls,
           } : null}
           invoice={invoice ? {
             payeeName: invoice.payeeName,
