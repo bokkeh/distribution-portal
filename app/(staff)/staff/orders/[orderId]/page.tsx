@@ -15,7 +15,7 @@ import { formatPaymentTerms } from '@/lib/orders/payment-terms'
 import { isMissingShippingStatusColumn } from '@/lib/orders/shipping-fallback'
 import { describePricingSource } from '@/lib/pricing/geographic'
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Download } from 'lucide-react'
 
 const shippingStatuses = ['not_scheduled', 'scheduled', 'out_for_delivery', 'delivered', 'issue'] as const
 
@@ -115,10 +115,13 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
             <CustomerRecordLink accountId={order.customerId} name={order.companyName ?? 'Unknown customer'} portal="staff" /> · {formatDate(order.createdAt)}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <OrderStatusBadge kind="payment" status={order.paymentStatus} />
           <OrderStatusBadge kind="order" status={order.status} />
           <OrderStatusBadge kind="shipping" status={order.shippingStatus} />
+          <a href={`/api/orders/${order.id}/pdf`} target="_blank" rel="noopener noreferrer">
+            <Button type="button" variant="outline" size="sm"><Download className="w-4 h-4 mr-2" />Download PDF</Button>
+          </a>
         </div>
       </div>
 

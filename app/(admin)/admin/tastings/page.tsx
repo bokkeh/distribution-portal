@@ -139,7 +139,7 @@ export default async function AdminTastingsPage({
         />
       </div>
       <div className="pt-6">
-        <UpcomingTastingsList mode="admin" tastings={data.tastings} />
+        <UpcomingTastingsList mode="admin" tastings={data.tastings} tasters={data.activeTasters} />
       </div>
       <div className="pt-6">
         <TastingROIView from={params.from} to={params.to} />

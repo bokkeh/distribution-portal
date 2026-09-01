@@ -11,6 +11,7 @@ import { ConfirmSubmitButton } from '@/components/ui/confirm-submit-button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatEasternTimeRange } from '@/lib/tastings/time'
 import { cn } from '@/lib/utils'
 import { TastingScheduleAssistant } from './TastingScheduleAssistant'
@@ -142,7 +143,7 @@ export function TastingsPlanner(props: Props) {
   return (
     <div className="space-y-6">
       <TastingScheduleBoard {...props} />
-      <UpcomingTastingsList mode={props.mode} tastings={props.tastings} />
+      <UpcomingTastingsList mode={props.mode} tastings={props.tastings} tasters={props.tasters} />
     </div>
   )
 }
@@ -444,11 +445,18 @@ export function TastingScheduleBoard({
   )
 }
 
-export function UpcomingTastingsList({ mode, tastings }: { mode: Props['mode']; tastings: TastingRow[] }) {
+export function UpcomingTastingsList({ mode, tastings, tasters }: { mode: Props['mode']; tastings: TastingRow[]; tasters?: Props['tasters'] }) {
   const [now] = useState(() => Date.now())
   const [activeTab, setActiveTab] = useState<'upcoming' | 'previous'>('upcoming')
   const [previousFrom, setPreviousFrom] = useState('')
   const [previousTo, setPreviousTo] = useState('')
+  const [selectedTasterId, setSelectedTasterId] = useState('')
+
+  const canFilterByTaster = mode !== 'taster' && (tasters?.length ?? 0) > 0
+  const tasterOptions = useMemo(
+    () => [...(tasters ?? [])].sort((left, right) => left.name.localeCompare(right.name)),
+    [tasters],
+  )
 
   const calendarVisibleTastings = useMemo(
     () => tastings.filter((tasting) => isCalendarVisibleStatus(tasting.status)),
@@ -457,16 +465,18 @@ export function UpcomingTastingsList({ mode, tastings }: { mode: Props['mode']; 
   const upcomingTastings = useMemo(
     () =>
       calendarVisibleTastings
+        .filter((tasting) => !selectedTasterId || tasting.assignedUserId === selectedTasterId)
         .filter((tasting) => new Date(tasting.scheduledAt).getTime() >= now)
         .sort((left, right) => new Date(left.scheduledAt).getTime() - new Date(right.scheduledAt).getTime()),
-    [calendarVisibleTastings, now],
+    [calendarVisibleTastings, now, selectedTasterId],
   )
   const previousTastings = useMemo(
     () =>
       tastings
+        .filter((tasting) => !selectedTasterId || tasting.assignedUserId === selectedTasterId)
         .filter((tasting) => new Date(tasting.scheduledAt).getTime() < now)
         .sort((left, right) => new Date(right.scheduledAt).getTime() - new Date(left.scheduledAt).getTime()),
-    [tastings, now],
+    [tastings, now, selectedTasterId],
   )
   const filteredPreviousTastings = useMemo(() => {
     return previousTastings.filter((tasting) => {
@@ -535,34 +545,58 @@ export function UpcomingTastingsList({ mode, tastings }: { mode: Props['mode']; 
           aria-labelledby={`${mode}-${activeTab}-tastings-tab`}
           className="space-y-4 px-5 pb-6 sm:px-7 sm:pb-7"
         >
-          {activeTab === 'previous' ? (
+          {canFilterByTaster || activeTab === 'previous' ? (
             <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <div className="space-y-1">
-                <Label htmlFor={`${mode}-previous-from`} className="text-xs uppercase tracking-wide text-slate-500">From</Label>
-                <Input
-                  id={`${mode}-previous-from`}
-                  type="date"
-                  value={previousFrom}
-                  onChange={(event) => setPreviousFrom(event.target.value)}
-                  className="w-auto min-w-[160px] bg-white"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor={`${mode}-previous-to`} className="text-xs uppercase tracking-wide text-slate-500">To</Label>
-                <Input
-                  id={`${mode}-previous-to`}
-                  type="date"
-                  value={previousTo}
-                  onChange={(event) => setPreviousTo(event.target.value)}
-                  className="w-auto min-w-[160px] bg-white"
-                />
-              </div>
-              {(previousFrom || previousTo) ? (
+              {canFilterByTaster ? (
+                <div className="space-y-1">
+                  <Label htmlFor={`${mode}-taster-filter`} className="text-xs uppercase tracking-wide text-slate-500">Taster</Label>
+                  <Select
+                    value={selectedTasterId || 'all'}
+                    onValueChange={(value) => setSelectedTasterId(value === 'all' ? '' : value)}
+                  >
+                    <SelectTrigger id={`${mode}-taster-filter`} className="h-10 w-auto min-w-[200px] bg-white">
+                      <SelectValue placeholder="All tasters" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All tasters</SelectItem>
+                      {tasterOptions.map((taster) => (
+                        <SelectItem key={taster.id} value={taster.id}>{taster.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
+              {activeTab === 'previous' ? (
+                <>
+                  <div className="space-y-1">
+                    <Label htmlFor={`${mode}-previous-from`} className="text-xs uppercase tracking-wide text-slate-500">From</Label>
+                    <Input
+                      id={`${mode}-previous-from`}
+                      type="date"
+                      value={previousFrom}
+                      onChange={(event) => setPreviousFrom(event.target.value)}
+                      className="w-auto min-w-[160px] bg-white"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor={`${mode}-previous-to`} className="text-xs uppercase tracking-wide text-slate-500">To</Label>
+                    <Input
+                      id={`${mode}-previous-to`}
+                      type="date"
+                      value={previousTo}
+                      onChange={(event) => setPreviousTo(event.target.value)}
+                      className="w-auto min-w-[160px] bg-white"
+                    />
+                  </div>
+                </>
+              ) : null}
+              {(selectedTasterId || previousFrom || previousTo) ? (
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
                   onClick={() => {
+                    setSelectedTasterId('')
                     setPreviousFrom('')
                     setPreviousTo('')
                   }}
