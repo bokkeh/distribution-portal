@@ -482,9 +482,12 @@ export async function upsertAccountInventoryItem(formData: FormData) {
   const beforeBottles = roundInventoryValue(Number(existingItem?.bottlesOnHand ?? '0'))
   const deltaCases = roundInventoryValue(cases - beforeCases)
   const deltaBottles = roundInventoryValue(bottles - beforeBottles)
+  const dateChanged = existingItem
+    ? effectiveAt.toISOString().slice(0, 10) !== new Date(existingItem.updatedAt).toISOString().slice(0, 10)
+    : true
 
-  if (deltaCases === 0 && deltaBottles === 0) {
-    return { error: 'Enter a changed inventory amount before saving.' }
+  if (deltaCases === 0 && deltaBottles === 0 && !dateChanged) {
+    return { error: 'Enter a changed inventory amount or date before saving.' }
   }
 
   const changeType = existingItem ? 'manual_update' : 'manual_add'
@@ -509,9 +512,11 @@ export async function upsertAccountInventoryItem(formData: FormData) {
     entityId: accountId,
     actorUserId: session.user.id,
     kind: existingItem ? 'account_inventory_updated' : 'account_inventory_added',
-    title: existingItem ? 'Inventory quantity updated' : 'Inventory item added',
+    title: existingItem ? (deltaCases === 0 && deltaBottles === 0 ? 'Inventory date corrected' : 'Inventory quantity updated') : 'Inventory item added',
     body: existingItem
-      ? `${product.name} changed from ${toInventoryFixed(beforeCases)} cases / ${toInventoryFixed(beforeBottles)} bottles to ${toInventoryFixed(cases)} cases / ${toInventoryFixed(bottles)} bottles.`
+      ? (deltaCases === 0 && deltaBottles === 0
+        ? `${product.name} count date was corrected to ${effectiveAt.toISOString().slice(0, 10)} with no change to quantity.`
+        : `${product.name} changed from ${toInventoryFixed(beforeCases)} cases / ${toInventoryFixed(beforeBottles)} bottles to ${toInventoryFixed(cases)} cases / ${toInventoryFixed(bottles)} bottles.`)
       : `${product.name} was added with ${toInventoryFixed(cases)} cases and ${toInventoryFixed(bottles)} bottles.`,
     metadata: {
       productId,
@@ -606,10 +611,6 @@ export async function updateAccountInventoryAdjustment(formData: FormData) {
     return { error: error instanceof Error ? error.message : 'Adjustment is invalid.' }
   }
 
-  if (deltaCases === 0 && deltaBottles === 0) {
-    return { error: 'Enter a change amount before saving.' }
-  }
-
   const [existingAdjustment] = await db
     .select()
     .from(accountInventoryAdjustments)
@@ -617,6 +618,13 @@ export async function updateAccountInventoryAdjustment(formData: FormData) {
     .limit(1)
 
   if (!existingAdjustment) return { error: 'Inventory change not found.' }
+
+  const dateChanged = effectiveAt.toISOString().slice(0, 10) !== new Date(existingAdjustment.effectiveAt).toISOString().slice(0, 10)
+  const notesChanged = notes !== (existingAdjustment.notes ?? null)
+
+  if (deltaCases === 0 && deltaBottles === 0 && !dateChanged && !notesChanged) {
+    return { error: 'Enter a change amount, date, or note before saving.' }
+  }
 
   await db.update(accountInventoryAdjustments).set({
     changeType: 'manual_edit',
