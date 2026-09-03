@@ -1,6 +1,11 @@
 import Image from 'next/image'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { InvoiceDetailData } from '@/lib/invoices/read'
+import {
+  ACH_REMITTANCE_LINES,
+  CHECK_REMITTANCE_LINES,
+  WIRE_TRANSFER_LINES,
+} from '@/lib/invoices/constants'
 
 const PAYMENT_TERMS_LABELS: Record<string, string> = {
   PREPAID: 'Prepaid',
@@ -140,46 +145,61 @@ export function InvoiceVisual({ invoice }: { invoice: InvoiceDetailData }) {
       </div>
 
       <div className="border-t border-slate-200 bg-slate-50/80 px-6 py-6 sm:px-8">
-        <div className="ml-auto max-w-sm space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_12px_30px_-28px_rgba(15,23,42,0.32)]">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-slate-500">Subtotal</span>
-            <span className="font-medium text-slate-900">{formatCurrency(invoice.amount)}</span>
+        <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_12px_30px_-28px_rgba(15,23,42,0.32)] sm:min-w-[280px]">
+            <div className="text-sm leading-6 text-slate-700">
+              <p className="font-semibold text-slate-900">Please remit checks to:</p>
+              {CHECK_REMITTANCE_LINES.map((line) => <p key={line}>{line}</p>)}
+
+              <p className="mt-4 font-semibold text-slate-900">For ACH:</p>
+              {ACH_REMITTANCE_LINES.map((line) => <p key={line}>{line}</p>)}
+
+              <p className="mt-4 font-semibold text-slate-900">Wire Transfer Information:</p>
+              {WIRE_TRANSFER_LINES.map((line) => <p key={line}>{line}</p>)}
+            </div>
           </div>
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-slate-500">Tax</span>
-            <span className="font-medium text-slate-900">{formatCurrency(invoice.tax)}</span>
-          </div>
-          {hasAppliedStripeFee ? (
+
+          <div className="w-full max-w-sm space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_12px_30px_-28px_rgba(15,23,42,0.32)]">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-500">{appliedMethodLabel} fee</span>
-              <span className="font-medium text-slate-900">{formatCurrency(appliedProcessingFee)}</span>
+              <span className="text-slate-500">Subtotal</span>
+              <span className="font-medium text-slate-900">{formatCurrency(invoice.amount)}</span>
             </div>
-          ) : null}
-          <div className="flex items-center justify-between border-t border-slate-200 pt-3 text-base font-bold">
-            <span className="text-slate-900">Total</span>
-            <span className="text-blue-700">{formatCurrency(totalDisplay)}</span>
-          </div>
-          {hasAppliedStripeFee ? (
-            <p className="border-t border-dashed border-slate-200 pt-3 text-xs text-slate-500">
-              Total reflects the Stripe {appliedMethodLabel.toLowerCase()} checkout amount.
-            </p>
-          ) : hideStripeCheckoutBreakdown ? null : (
-            <div className="border-t border-dashed border-slate-200 pt-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Stripe Checkout Totals</p>
-              <div className="mt-2 space-y-2 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-500">ACH total</span>
-                  <span className="font-medium text-slate-900">{formatCurrency(invoice.stripeCheckout.achTotal)}</span>
-                </div>
-                <p className="text-xs text-slate-500">Includes {formatCurrency(invoice.stripeCheckout.achFee)} ACH fee.</p>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-500">Card total</span>
-                  <span className="font-medium text-slate-900">{formatCurrency(invoice.stripeCheckout.cardTotal)}</span>
-                </div>
-                <p className="text-xs text-slate-500">Includes {formatCurrency(invoice.stripeCheckout.cardFee)} credit card fee.</p>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-slate-500">Tax</span>
+              <span className="font-medium text-slate-900">{formatCurrency(invoice.tax)}</span>
+            </div>
+            {hasAppliedStripeFee ? (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-500">{appliedMethodLabel} fee</span>
+                <span className="font-medium text-slate-900">{formatCurrency(appliedProcessingFee)}</span>
               </div>
+            ) : null}
+            <div className="flex items-center justify-between border-t border-slate-200 pt-3 text-base font-bold">
+              <span className="text-slate-900">Total</span>
+              <span className="text-blue-700">{formatCurrency(totalDisplay)}</span>
             </div>
-          )}
+            {hasAppliedStripeFee ? (
+              <p className="border-t border-dashed border-slate-200 pt-3 text-xs text-slate-500">
+                Total reflects the Stripe {appliedMethodLabel.toLowerCase()} checkout amount.
+              </p>
+            ) : hideStripeCheckoutBreakdown ? null : (
+              <div className="border-t border-dashed border-slate-200 pt-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Stripe Checkout Totals</p>
+                <div className="mt-2 space-y-2 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">ACH total</span>
+                    <span className="font-medium text-slate-900">{formatCurrency(invoice.stripeCheckout.achTotal)}</span>
+                  </div>
+                  <p className="text-xs text-slate-500">Includes {formatCurrency(invoice.stripeCheckout.achFee)} ACH fee.</p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">Card total</span>
+                    <span className="font-medium text-slate-900">{formatCurrency(invoice.stripeCheckout.cardTotal)}</span>
+                  </div>
+                  <p className="text-xs text-slate-500">Includes {formatCurrency(invoice.stripeCheckout.cardFee)} credit card fee.</p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -1,5 +1,10 @@
 import { Document, Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer'
 import type { InvoiceDetailData } from '@/lib/invoices/read'
+import {
+  ACH_REMITTANCE_LINES,
+  CHECK_REMITTANCE_LINES,
+  WIRE_TRANSFER_LINES,
+} from '@/lib/invoices/constants'
 
 const PAYMENT_TERMS_LABELS: Record<string, string> = {
   PREPAID: 'Prepaid', DUE_ON_RECEIPT: 'Due on Receipt',
@@ -36,7 +41,10 @@ const styles = StyleSheet.create({
   qtyCell: { width: '12%', textAlign: 'right' },
   unitCell: { width: '18%', textAlign: 'right' },
   totalCell: { width: '18%', textAlign: 'right' },
-  totalsWrap: { display: 'flex', alignItems: 'flex-end' },
+  totalsWrap: { display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  checkMailingBox: { width: 220, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 16, padding: 16, backgroundColor: '#f8fafc' },
+  paymentHeading: { fontSize: 10, fontWeight: 700, color: '#0f172a', marginBottom: 4 },
+  paymentSection: { marginTop: 10 },
   totalsBox: { width: 220, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 16, padding: 16 },
   totalRow: { display: 'flex', flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8, fontSize: 10 },
   grandTotal: { borderTopWidth: 1, borderTopColor: '#e2e8f0', paddingTop: 10, marginTop: 6, fontSize: 13, fontWeight: 700, color: '#1d4ed8' },
@@ -130,6 +138,20 @@ export function InvoicePdfDocument({ invoice, logoDataUrl }: { invoice: InvoiceD
         </View>
 
         <View style={styles.totalsWrap}>
+          <View style={styles.checkMailingBox}>
+            <Text style={styles.paymentHeading}>Please remit checks to:</Text>
+            {CHECK_REMITTANCE_LINES.map((line) => <Text key={line} style={styles.panelText}>{line}</Text>)}
+
+            <View style={styles.paymentSection}>
+              <Text style={styles.paymentHeading}>For ACH:</Text>
+              {ACH_REMITTANCE_LINES.map((line) => <Text key={line} style={styles.panelText}>{line}</Text>)}
+            </View>
+
+            <View style={styles.paymentSection}>
+              <Text style={styles.paymentHeading}>Wire Transfer Information:</Text>
+              {WIRE_TRANSFER_LINES.map((line) => <Text key={line} style={styles.panelText}>{line}</Text>)}
+            </View>
+          </View>
           <View style={styles.totalsBox}>
             <View style={styles.totalRow}>
               <Text>Subtotal</Text>
