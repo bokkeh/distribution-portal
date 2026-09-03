@@ -14,6 +14,7 @@ import { IndustryNewsWidget } from '@/components/news/IndustryNewsWidget'
 import { CustomerRecordLink } from '@/components/crm/CustomerRecordLink'
 import { getTasksForView } from '@/lib/tasks/read'
 import { TaskDashboardModule } from '@/components/tasks/TaskDashboardModule'
+import { formatOrderTypeLabel } from '@/lib/orders/status'
 
 export default async function StaffDashboard() {
   const session = await requireAdminOrStaff()
@@ -109,7 +110,7 @@ export default async function StaffDashboard() {
                   <td className="px-6 py-4 text-sm font-medium">
                     <CustomerRecordLink accountId={o.customerId} name={o.companyName ?? '—'} portal="staff" />
                   </td>
-                  <td className="px-6 py-4"><Badge variant="secondary">{o.orderType}</Badge></td>
+                  <td className="px-6 py-4"><Badge variant="secondary">{formatOrderTypeLabel(o.orderType)}</Badge></td>
                   <td className="px-6 py-4"><Badge variant={statusColor[o.status]}>{o.status}</Badge></td>
                   <td className="px-6 py-4 text-sm font-semibold">{formatCurrency(o.total)}</td>
                   <td className="px-6 py-4 text-sm text-muted-foreground">{formatDate(o.createdAt)}</td>

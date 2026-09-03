@@ -26,6 +26,7 @@ export default async function AdminOrdersPage({
     shippingStatus: 'not_scheduled' | 'scheduled' | 'out_for_delivery' | 'delivered' | 'issue'
     orderType: 'paid' | 'sample'
     paymentStatus: string
+    paymentMethod: string | null
     createdAt: Date
     customerId: string
     companyName: string | null
@@ -40,6 +41,7 @@ export default async function AdminOrdersPage({
         shippingStatus: orders.shippingStatus,
         orderType: orders.orderType,
         paymentStatus: orders.paymentStatus,
+        paymentMethod: orders.paymentMethod,
         createdAt: orders.createdAt,
         customerId: orders.customerId,
         companyName: customerAccounts.companyName,
@@ -64,7 +66,7 @@ export default async function AdminOrdersPage({
       .from(orders)
       .leftJoin(customerAccounts, eq(orders.customerId, customerAccounts.id))
       .orderBy(desc(orders.createdAt))
-      .then(rows => rows.map(row => ({ ...row, quantity: 0, paymentStatus: 'not_applicable', shippingStatus: 'not_scheduled' as const })))
+      .then(rows => rows.map(row => ({ ...row, quantity: 0, paymentStatus: 'not_applicable', paymentMethod: null, shippingStatus: 'not_scheduled' as const })))
   }
 
   const orderIds = allOrders.map(order => order.id)

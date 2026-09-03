@@ -14,7 +14,7 @@ import { notify } from '@/lib/notifications/dispatch'
 import { logActivityEvent } from '@/lib/activity/log'
 import { formatPaymentTerms } from '@/lib/orders/payment-terms'
 import { buildPricedLineItems, computeDeliveryFee, type CheckoutOrderType, type PurchaseUnit } from '@/lib/orders/checkout'
-import type { OrderPaymentStatus } from '@/db/schema'
+import type { OrderPaymentMethod, OrderPaymentStatus } from '@/db/schema'
 import { formatDate } from '@/lib/utils'
 
 function uniqueEmails(...values: Array<string | null | undefined>) {
@@ -175,6 +175,7 @@ export async function createOrder(formData: FormData) {
     const preferredDeliveryTime = (formData.get('preferredDeliveryTime') as string | null)?.trim() || null
     const deliveryRequirements = (formData.get('deliveryRequirements') as string | null)?.trim() || null
     const requestedPaymentTerms = (formData.get('paymentTerms') as string | null)?.trim() || null
+    const requestedPaymentType = (formData.get('paymentType') as string | null)?.trim() || 'unpaid'
     const orderedDateInput = (formData.get('orderedDate') as string | null)?.trim() || null
     const paymentMethod = (formData.get('paymentMethod') as string | null) ?? null
     const processingFee = Number((formData.get('processingFee') as string | null) ?? '0')
@@ -284,7 +285,8 @@ export async function createOrder(formData: FormData) {
     const sanitizedProcessingFee = Number.isFinite(processingFee) && processingFee > 0 ? processingFee : 0
     const deliveryFee = computeDeliveryFee(deliveryTiming, preferredDeliveryDay)
     const total = subtotal + tax + deliveryFee + sanitizedProcessingFee
-    let paymentStatus: OrderPaymentStatus = 'not_applicable'
+    let paymentStatus: OrderPaymentStatus = orderType === 'sample' ? 'not_applicable' : 'unpaid'
+    let orderPaymentMethod: OrderPaymentMethod | null = null
     let paidAt: Date | null = null
 
     if (isCustomerOrder) {
@@ -327,7 +329,19 @@ export async function createOrder(formData: FormData) {
       }
 
       paymentStatus = nextPaymentStatus
+      orderPaymentMethod = 'stripe'
       paidAt = paymentStatus === 'paid' ? new Date() : null
+    } else if (orderType !== 'sample') {
+      if (!['unpaid', 'check', 'cod', 'paid'].includes(requestedPaymentType)) {
+        throw new Error('Choose a valid payment type.')
+      }
+      if (requestedPaymentType === 'check') orderPaymentMethod = 'check'
+      if (requestedPaymentType === 'cod') orderPaymentMethod = 'cod'
+      if (requestedPaymentType === 'paid') {
+        paymentStatus = 'paid'
+        orderPaymentMethod = 'manual'
+        paidAt = new Date()
+      }
     }
 
     const deliverySummary = [
@@ -357,6 +371,7 @@ export async function createOrder(formData: FormData) {
       paymentTerms,
       stripePaymentIntentId: paymentIntentId,
       paymentStatus,
+      paymentMethod: orderPaymentMethod,
       paidAt,
       status: 'pending',
       shippingStatus: 'not_scheduled',
@@ -400,7 +415,7 @@ export async function createOrder(formData: FormData) {
       kind: 'order_created',
       title: 'Order created',
       body: `${isAssisted ? 'An assisted' : 'A'} ${purchaseUnit} order totaling $${total.toFixed(2)} was created.`,
-      metadata: { customerId, isAssisted, assistedByUserId, assistanceType, relatedTastingId },
+      metadata: { customerId, isAssisted, assistedByUserId, assistanceType, relatedTastingId, paymentStatus, paymentMethod: orderPaymentMethod },
     })
 
     const [customerAccount] = await db
@@ -539,6 +554,7 @@ export async function applyWebhookOrderPaymentUpdate(
     .update(orders)
     .set({
       paymentStatus: nextPaymentStatus,
+      paymentMethod: 'stripe',
       paidAt: nextPaymentStatus === 'paid' ? new Date() : null,
     })
     .where(eq(orders.id, order.id))
@@ -568,6 +584,69 @@ export async function applyWebhookOrderPaymentUpdate(
   revalidatePath(`/admin/orders/${order.id}`)
   revalidatePath('/staff/orders')
   revalidatePath(`/staff/orders/${order.id}`)
+}
+
+export async function updateOrderPaymentType(formData: FormData) {
+  const session = await requireRole('admin', 'staff')
+  const roles = session.user.roles ?? [session.user.role as string]
+  const mode = roles.includes('admin') ? 'admin' : 'staff'
+  const orderId = String(formData.get('orderId') ?? '')
+  const paymentType = String(formData.get('paymentType') ?? '')
+  const redirectBase = `/${mode}/orders/${orderId}`
+
+  if (!['unpaid', 'check', 'cod', 'paid'].includes(paymentType)) {
+    redirect(`${redirectBase}?error=${encodeURIComponent('Choose a valid payment type.')}`)
+  }
+
+  const [order] = await db
+    .select({
+      id: orders.id,
+      customerId: orders.customerId,
+      orderType: orders.orderType,
+      paymentStatus: orders.paymentStatus,
+      paymentMethod: orders.paymentMethod,
+      stripePaymentIntentId: orders.stripePaymentIntentId,
+    })
+    .from(orders)
+    .where(eq(orders.id, orderId))
+    .limit(1)
+
+  if (!order) redirect(`${redirectBase}?error=${encodeURIComponent('Order not found.')}`)
+  if (order.orderType === 'sample') redirect(`${redirectBase}?error=${encodeURIComponent('Sample orders do not require payment.')}`)
+  if (order.stripePaymentIntentId) redirect(`${redirectBase}?error=${encodeURIComponent('Stripe controls the payment status for this order.')}`)
+
+  const nextStatus: OrderPaymentStatus = paymentType === 'paid' ? 'paid' : 'unpaid'
+  const nextMethod: OrderPaymentMethod | null = paymentType === 'check'
+    ? 'check'
+    : paymentType === 'cod'
+      ? 'cod'
+      : paymentType === 'paid'
+        ? 'manual'
+        : null
+
+  await db.update(orders).set({
+    paymentStatus: nextStatus,
+    paymentMethod: nextMethod,
+    paidAt: nextStatus === 'paid' ? new Date() : null,
+  }).where(eq(orders.id, order.id))
+
+  await logActivityEvent({
+    entityType: 'order',
+    entityId: order.id,
+    actorUserId: session.user.id,
+    kind: 'order_payment_type_changed',
+    title: 'Order payment updated',
+    body: paymentType === 'paid' ? 'Order manually marked paid.' : `Payment type set to ${paymentType}.`,
+    metadata: {
+      previousPaymentStatus: order.paymentStatus,
+      previousPaymentMethod: order.paymentMethod,
+      paymentStatus: nextStatus,
+      paymentMethod: nextMethod,
+    },
+  })
+
+  revalidateOrderDatePaths(order.id, order.customerId)
+  redirect(`${redirectBase}?success=${encodeURIComponent('Payment type updated.')}`)
 }
 
 export async function updateOrderStatus(orderId: string, status: 'pending' | 'confirmed' | 'fulfilled' | 'cancelled') {

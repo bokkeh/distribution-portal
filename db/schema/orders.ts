@@ -6,8 +6,10 @@ import { salesMembers } from './salesMembers'
 import { geographicPricingRules } from './geographicPricingRules'
 import { tastings } from './tastings'
 
-export const ORDER_PAYMENT_STATUSES = ['not_applicable', 'requires_action', 'processing', 'paid', 'failed', 'canceled'] as const
+export const ORDER_PAYMENT_STATUSES = ['not_applicable', 'unpaid', 'requires_action', 'processing', 'paid', 'failed', 'canceled'] as const
 export type OrderPaymentStatus = typeof ORDER_PAYMENT_STATUSES[number]
+export const ORDER_PAYMENT_METHODS = ['stripe', 'check', 'cod', 'manual'] as const
+export type OrderPaymentMethod = typeof ORDER_PAYMENT_METHODS[number]
 
 export const orders = pgTable('orders', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -16,7 +18,8 @@ export const orders = pgTable('orders', {
   orderType: text('order_type', { enum: ['paid', 'sample'] }).notNull(),
   paymentTerms: text('payment_terms').default('NET30'),
   stripePaymentIntentId: text('stripe_payment_intent_id'),
-  paymentStatus: text('payment_status', { enum: ORDER_PAYMENT_STATUSES }).notNull().default('not_applicable'),
+  paymentStatus: text('payment_status', { enum: ORDER_PAYMENT_STATUSES }).notNull().default('unpaid'),
+  paymentMethod: text('payment_method', { enum: ORDER_PAYMENT_METHODS }),
   paidAt: timestamp('paid_at', { withTimezone: true }),
   status: text('status', { enum: ['pending', 'confirmed', 'fulfilled', 'cancelled'] }).notNull().default('pending'),
   shippingStatus: text('shipping_status', { enum: ['not_scheduled', 'scheduled', 'out_for_delivery', 'delivered', 'issue'] }).notNull().default('not_scheduled'),

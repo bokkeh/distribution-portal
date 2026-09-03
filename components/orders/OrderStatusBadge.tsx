@@ -15,6 +15,7 @@ const statusTones: Record<OrderStatusKind, Record<string, StatusTone>> = {
   },
   payment: {
     not_applicable: 'inactive',
+    unpaid: 'warning',
     requires_action: 'warning',
     processing: 'active',
     paid: 'success',

@@ -13,6 +13,7 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { getCustomerPaymentBreakdown, type CustomerPaymentMethod } from '@/lib/stripe/fees'
 import { resolveGeographicCasePrice, type GeographicPricingRuleInput } from '@/lib/pricing/geographic'
+import { formatOrderTypeLabel } from '@/lib/orders/status'
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '')
 
@@ -209,7 +210,7 @@ export default function CheckoutClient({
         <CardHeader><CardTitle>Order Summary</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">Customer: {customerName}</p>
-          <p className="text-sm text-muted-foreground">Order Type: <strong>{orderType}</strong></p>
+          <p className="text-sm text-muted-foreground">Order Type: <strong>{formatOrderTypeLabel(orderType)}</strong></p>
           <div className="space-y-2 border-t pt-3">
             {items.map(item => {
               const price = getDisplayedPrice(item, orderType, pricingRules, pricingAccountId, pricingBusinessType, pricingState, pricingCounty)

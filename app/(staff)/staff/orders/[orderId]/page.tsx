@@ -5,11 +5,12 @@ import { notFound } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { OrderStatusBadge } from '@/components/orders/OrderStatusBadge'
+import { OrderPaymentTypeForm } from '@/components/orders/OrderPaymentTypeForm'
 import { CustomerRecordLink } from '@/components/crm/CustomerRecordLink'
 import { Button } from '@/components/ui/button'
 import { ConfirmSubmitButton } from '@/components/ui/confirm-submit-button'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { formatStatusLabel } from '@/lib/orders/status'
+import { formatOrderPaymentMethodLabel, formatOrderTypeLabel, formatStatusLabel } from '@/lib/orders/status'
 import { updateOrderShippingStatus, updateOrderStatus } from '@/actions/orders'
 import { formatPaymentTerms } from '@/lib/orders/payment-terms'
 import { isMissingShippingStatusColumn } from '@/lib/orders/shipping-fallback'
@@ -32,6 +33,8 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
         shippingStatus: 'not_scheduled' | 'scheduled' | 'out_for_delivery' | 'delivered' | 'issue'
         orderType: 'paid' | 'sample'
         paymentStatus: string
+        paymentMethod: string | null
+        stripePaymentIntentId: string | null
         paymentTerms: string | null
         notes: string | null
         createdAt: Date
@@ -51,6 +54,8 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
         shippingStatus: orders.shippingStatus,
         orderType: orders.orderType,
         paymentStatus: orders.paymentStatus,
+        paymentMethod: orders.paymentMethod,
+        stripePaymentIntentId: orders.stripePaymentIntentId,
         paymentTerms: orders.paymentTerms,
         notes: orders.notes,
         createdAt: orders.createdAt,
@@ -80,7 +85,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
       .from(orders)
       .leftJoin(customerAccounts, eq(orders.customerId, customerAccounts.id))
       .where(eq(orders.id, orderId))
-      .then(rows => rows.map(row => ({ ...row, paymentStatus: 'not_applicable', shippingStatus: 'not_scheduled' as const })))
+      .then(rows => rows.map(row => ({ ...row, paymentStatus: 'not_applicable', paymentMethod: null, stripePaymentIntentId: null, shippingStatus: 'not_scheduled' as const })))
   }
 
   if (!order) notFound()
@@ -168,13 +173,15 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
           <CardHeader><CardTitle>Tracking</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div className="text-sm space-y-2">
-              <div className="flex justify-between"><span className="text-muted-foreground">Type</span><Badge variant="outline">{order.orderType}</Badge></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Order Type</span><Badge variant="outline">{formatOrderTypeLabel(order.orderType)}</Badge></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Payment</span><OrderStatusBadge kind="payment" status={order.paymentStatus} /></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Payment Type</span><span className="font-medium">{formatOrderPaymentMethodLabel(order.paymentMethod)}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Order Status</span><OrderStatusBadge kind="order" status={order.status} /></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Shipping</span><OrderStatusBadge kind="shipping" status={order.shippingStatus} /></div>
               <div className="flex justify-between gap-3"><span className="text-muted-foreground">Payment Terms</span><span className="text-right font-medium">{formatPaymentTerms(order.paymentTerms)}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Total</span><span className="font-bold">{formatCurrency(order.total)}</span></div>
             </div>
+            <OrderPaymentTypeForm orderId={order.id} paymentStatus={order.paymentStatus} paymentMethod={order.paymentMethod} stripeManaged={Boolean(order.stripePaymentIntentId)} />
             <form action={updateOrderShippingStatus.bind(null, order.id)} className="space-y-2">
               <label htmlFor="shippingStatus" className="text-sm font-medium text-slate-900">Shipping Status</label>
               <select id="shippingStatus" name="shippingStatus" defaultValue={order.shippingStatus} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">

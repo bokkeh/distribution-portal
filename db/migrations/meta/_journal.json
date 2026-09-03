@@ -365,6 +365,13 @@
       "when": 1788249600000,
       "tag": "0066_events_workflow",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1788411600000,
+      "tag": "0067_order_payment_classification",
+      "breakpoints": true
     }
   ]
 }

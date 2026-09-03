@@ -36,6 +36,7 @@ interface Customer {
 }
 
 type PurchaseUnit = 'case' | 'bottle'
+type ManualPaymentType = 'unpaid' | 'check' | 'cod' | 'paid'
 
 interface LineItem {
   productId: string
@@ -85,6 +86,7 @@ export default function OrderFormClient({
   const [notes, setNotes] = useState('')
   const [search, setSearch] = useState('')
   const [paymentTerms, setPaymentTerms] = useState(initialCustomer?.paymentTerms ?? 'PREPAID')
+  const [paymentType, setPaymentType] = useState<ManualPaymentType>('unpaid')
   const [orderedDate, setOrderedDate] = useState(getTodayInputValue())
 
   const selectedCustomer = customers.find((customer) => customer.id === customerId) ?? null
@@ -195,6 +197,7 @@ export default function OrderFormClient({
     formData.append('purchaseUnit', purchaseUnit)
     formData.append('notes', notes)
     formData.append('orderedDate', orderedDate)
+    formData.append('paymentType', paymentType)
     if (mode === 'admin') {
       formData.append('paymentTerms', paymentTerms)
     }
@@ -285,6 +288,22 @@ export default function OrderFormClient({
                   </select>
                 </div>
               ) : null}
+
+              <div className="space-y-2">
+                <Label htmlFor="paymentType">Payment Type</Label>
+                <select
+                  id="paymentType"
+                  value={paymentType}
+                  onChange={e => setPaymentType(e.target.value as ManualPaymentType)}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="unpaid">Unpaid</option>
+                  <option value="check">Check</option>
+                  <option value="cod">COD</option>
+                  <option value="paid">Paid — manually confirmed</option>
+                </select>
+                <p className="text-xs text-muted-foreground">Only select Paid after payment has actually been received. Stripe payments update automatically.</p>
+              </div>
 
               <div className="space-y-2">
                 <Label>Notes</Label>

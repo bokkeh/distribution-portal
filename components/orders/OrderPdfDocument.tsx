@@ -1,7 +1,7 @@
 import { Document, Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer'
 import type { OrderPdfData } from '@/lib/orders/read'
 import { formatPaymentTerms } from '@/lib/orders/payment-terms'
-import { formatStatusLabel } from '@/lib/orders/status'
+import { formatOrderTypeLabel, formatStatusLabel } from '@/lib/orders/status'
 
 const styles = StyleSheet.create({
   page: { padding: 36, backgroundColor: '#ffffff', fontSize: 11, color: '#0f172a' },
@@ -84,7 +84,7 @@ export function OrderPdfDocument({ order, logoDataUrl }: { order: OrderPdfData; 
             <Text style={styles.panelEyebrow}>Details</Text>
             <Text style={styles.panelText}>Payment terms: {formatPaymentTerms(order.paymentTerms)}</Text>
             <Text style={styles.panelText}>Shipping status: {formatStatusLabel(order.shippingStatus)}</Text>
-            <Text style={styles.panelText}>Order type: {formatStatusLabel(order.orderType)}</Text>
+            <Text style={styles.panelText}>Order type: {formatOrderTypeLabel(order.orderType)}</Text>
             <Text style={[styles.panelText, { marginTop: 10 }]}>Linked invoice</Text>
             <Text style={styles.panelText}>{order.linkedInvoiceNumber ?? 'No invoice issued yet'}</Text>
           </View>

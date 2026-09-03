@@ -11,6 +11,7 @@ import { isMissingShippingStatusColumn } from '@/lib/orders/shipping-fallback'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import { BulkOrderStatusForm } from '@/components/orders/BulkOrderStatusForm'
+import { formatOrderPaymentMethodLabel, formatOrderTypeLabel } from '@/lib/orders/status'
 
 export default async function StaffOrdersPage() {
   let allOrders: Array<{
@@ -21,6 +22,7 @@ export default async function StaffOrdersPage() {
     shippingStatus: 'not_scheduled' | 'scheduled' | 'out_for_delivery' | 'delivered' | 'issue'
     orderType: 'paid' | 'sample'
     paymentStatus: string
+    paymentMethod: string | null
     createdAt: Date
     notes: string | null
     customerId: string
@@ -36,6 +38,7 @@ export default async function StaffOrdersPage() {
         shippingStatus: orders.shippingStatus,
         orderType: orders.orderType,
         paymentStatus: orders.paymentStatus,
+        paymentMethod: orders.paymentMethod,
         createdAt: orders.createdAt,
         notes: orders.notes,
         customerId: orders.customerId,
@@ -62,7 +65,7 @@ export default async function StaffOrdersPage() {
       .from(orders)
       .leftJoin(customerAccounts, eq(orders.customerId, customerAccounts.id))
       .orderBy(desc(orders.createdAt))
-      .then(rows => rows.map(row => ({ ...row, quantity: 0, paymentStatus: 'not_applicable', shippingStatus: 'not_scheduled' as const })))
+      .then(rows => rows.map(row => ({ ...row, quantity: 0, paymentStatus: 'not_applicable', paymentMethod: null, shippingStatus: 'not_scheduled' as const })))
   }
 
   const orderIds = allOrders.map(order => order.id)
@@ -107,7 +110,7 @@ export default async function StaffOrdersPage() {
                 <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Order #</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Customer</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Qty</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Type</th>
+                <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Order Type</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Payment</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Order Status</th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Shipping</th>
@@ -124,8 +127,8 @@ export default async function StaffOrdersPage() {
                     <CustomerRecordLink accountId={order.customerId} name={order.companyName ?? 'Unknown customer'} portal="staff" />
                   </td>
                   <td className="px-6 py-4 text-sm">{order.quantity}</td>
-                  <td className="px-6 py-4"><Badge variant="outline">{order.orderType}</Badge></td>
-                  <td className="px-6 py-4"><OrderStatusBadge kind="payment" status={order.paymentStatus} /></td>
+                  <td className="px-6 py-4"><Badge variant="outline">{formatOrderTypeLabel(order.orderType)}</Badge></td>
+                  <td className="px-6 py-4"><div className="flex flex-col items-start gap-1"><OrderStatusBadge kind="payment" status={order.paymentStatus} />{order.paymentMethod ? <span className="text-xs text-slate-500">{formatOrderPaymentMethodLabel(order.paymentMethod)}</span> : null}</div></td>
                   <td className="px-6 py-4"><OrderStatusBadge kind="order" status={order.status} /></td>
                   <td className="px-6 py-4"><OrderStatusBadge kind="shipping" status={order.shippingStatus} /></td>
                   <td className="px-6 py-4 text-sm font-semibold">{formatCurrency(order.total)}</td>

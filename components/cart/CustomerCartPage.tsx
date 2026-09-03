@@ -9,6 +9,7 @@ import { Trash2, Plus, Minus, ShoppingCart, ArrowRight, ImageIcon } from 'lucide
 import Link from 'next/link'
 import Image from 'next/image'
 import { resolveGeographicCasePrice, type GeographicPricingRuleInput } from '@/lib/pricing/geographic'
+import { formatOrderTypeLabel } from '@/lib/orders/status'
 
 function getDisplayedPrice(
   item: { productId: string; price: string; samplePrice: string; quantity: number },
@@ -65,7 +66,7 @@ export default function CustomerCartPage({
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Your Cart</h1>
-          <p className="mt-1 text-muted-foreground">{itemCount()} item(s) · <Badge variant="outline">{orderType} order</Badge></p>
+          <p className="mt-1 text-muted-foreground">{itemCount()} item(s) · <Badge variant="outline">{formatOrderTypeLabel(orderType)}</Badge></p>
         </div>
         <button onClick={clearCart} className="text-sm text-red-500 hover:text-red-700">Clear cart</button>
       </div>

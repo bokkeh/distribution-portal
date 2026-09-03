@@ -23,6 +23,7 @@ import { OrderStatusBadge } from '@/components/orders/OrderStatusBadge'
 import { CustomerRecordLink } from '@/components/crm/CustomerRecordLink'
 import { EmptyState } from '@/components/ui/empty-state'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatOrderPaymentMethodLabel, formatOrderTypeLabel } from '@/lib/orders/status'
 
 export type OrderRow = {
   id: string
@@ -32,6 +33,7 @@ export type OrderRow = {
   shippingStatus: 'not_scheduled' | 'scheduled' | 'out_for_delivery' | 'delivered' | 'issue'
   orderType: 'paid' | 'sample'
   paymentStatus: string
+  paymentMethod: string | null
   createdAt: Date | string
   customerId: string
   companyName: string | null
@@ -43,7 +45,7 @@ const COLUMN_OPTIONS = [
   { key: 'customer', label: 'Customer' },
   { key: 'status', label: 'Order Status' },
   { key: 'quantity', label: 'Qty' },
-  { key: 'type', label: 'Type' },
+  { key: 'type', label: 'Order Type' },
   { key: 'payment', label: 'Payment' },
   { key: 'shipping', label: 'Shipping' },
   { key: 'total', label: 'Total' },
@@ -166,9 +168,9 @@ function renderCell(order: OrderRow, column: ColumnKey) {
     case 'quantity':
       return <td key={column} className="px-6 py-4 text-right text-sm">{order.quantity}</td>
     case 'type':
-      return <td key={column} className="px-6 py-4"><Badge variant="outline">{order.orderType}</Badge></td>
+      return <td key={column} className="px-6 py-4"><Badge variant="outline">{formatOrderTypeLabel(order.orderType)}</Badge></td>
     case 'payment':
-      return <td key={column} className="px-6 py-4"><OrderStatusBadge kind="payment" status={order.paymentStatus} /></td>
+      return <td key={column} className="px-6 py-4"><div className="flex flex-col items-start gap-1"><OrderStatusBadge kind="payment" status={order.paymentStatus} />{order.paymentMethod ? <span className="text-xs text-slate-500">{formatOrderPaymentMethodLabel(order.paymentMethod)}</span> : null}</div></td>
     case 'shipping':
       return <td key={column} className="px-6 py-4"><OrderStatusBadge kind="shipping" status={order.shippingStatus} /></td>
     case 'total':
@@ -187,11 +189,14 @@ export function OrdersTable({ orders }: { orders: OrderRow[] }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
 
   useEffect(() => {
-    setSelectedColumns(readStoredColumns())
-    const storedSort = readStoredSort()
-    setSortBy(storedSort.sortBy)
-    setSortDirection(storedSort.sortDirection)
-    setReady(true)
+    const timer = window.setTimeout(() => {
+      setSelectedColumns(readStoredColumns())
+      const storedSort = readStoredSort()
+      setSortBy(storedSort.sortBy)
+      setSortDirection(storedSort.sortDirection)
+      setReady(true)
+    }, 0)
+    return () => window.clearTimeout(timer)
   }, [])
 
   useEffect(() => {

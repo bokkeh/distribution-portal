@@ -161,6 +161,7 @@ const orderInputSchema = z.object({
   orderedDate: z.string().min(1),
   purchaseUnit: z.enum(['case', 'bottle']).default('case'),
   orderType: z.enum(['paid', 'sample']).default('paid'),
+  paymentType: z.enum(['unpaid', 'check', 'cod', 'paid']).default('unpaid'),
   paymentTerms: z.string().optional(),
   notes: z.string().optional(),
   items: z.array(z.object({ productId: z.string().uuid(), quantity: z.number().positive() })).min(1),
@@ -179,6 +180,7 @@ export async function quickCreateOrder(input: z.input<typeof orderInputSchema>) 
     data.set('orderedDate', parsed.orderedDate)
     data.set('purchaseUnit', parsed.purchaseUnit)
     data.set('orderType', parsed.orderType)
+    data.set('paymentType', parsed.paymentType)
     data.set('paymentTerms', parsed.paymentTerms || 'PREPAID')
     data.set('notes', parsed.notes || '')
     data.set('items', JSON.stringify(parsed.items))

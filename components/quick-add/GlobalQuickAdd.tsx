@@ -196,6 +196,7 @@ export function GlobalQuickAdd({ compact = false, dark = false }: { compact?: bo
         result = await quickCreateOrder({
           accountId: account!.id, orderedDate: String(form.get('orderedDate')), purchaseUnit: items[0]?.unit ?? 'case',
           orderType: String(form.get('orderType') || 'paid') as 'paid' | 'sample', paymentTerms: String(form.get('paymentTerms') || 'PREPAID'),
+          paymentType: String(form.get('paymentType') || 'unpaid') as 'unpaid' | 'check' | 'cod' | 'paid',
           notes: String(form.get('notes') ?? ''), items: items.map((item) => ({ productId: item.productId, quantity: item.quantity })),
           isAssisted: action === 'assisted-order', assistedByUserId: String(form.get('assistedByUserId') || bootstrap?.currentUser.id || ''),
           assistanceType: String(form.get('assistanceType') || 'rep_placed'), relatedTastingId: String(form.get('relatedTastingId') || '') || null,
@@ -294,10 +295,11 @@ export function GlobalQuickAdd({ compact = false, dark = false }: { compact?: bo
                 </> : null}
 
                 {action === 'order' || action === 'assisted-order' ? <>
-                  <div className="grid gap-4 sm:grid-cols-2"><div><Label>Order date</Label><input name="orderedDate" type="date" defaultValue={localDate()} className={inputClass} required /></div><div><Label>Order type</Label><select name="orderType" className={inputClass}><option value="paid">Paid order</option><option value="sample">Sample order</option></select></div></div>
+                  <div className="grid gap-4 sm:grid-cols-2"><div><Label>Order date</Label><input name="orderedDate" type="date" defaultValue={localDate()} className={inputClass} required /></div><div><Label>Order type</Label><select name="orderType" className={inputClass}><option value="paid">Standard order</option><option value="sample">Sample order</option></select></div></div>
                   <ProductLines items={items} onChange={setItems} products={bootstrap?.products ?? []} sharedUnit />
                   <div className="rounded-xl bg-slate-900 px-4 py-3 text-white"><p className="text-xs uppercase tracking-wide text-slate-400">Estimated subtotal</p><p className="mt-1 text-xl font-bold">${estimatedTotal.toFixed(2)}</p></div>
                   <div><Label>Payment terms</Label><select name="paymentTerms" className={inputClass}><option value="PREPAID">Prepaid</option><option value="NET15">Net 15</option><option value="NET30">Net 30</option><option value="NET45">Net 45</option></select></div>
+                  <div><Label>Payment type</Label><select name="paymentType" defaultValue="unpaid" className={inputClass}><option value="unpaid">Unpaid</option><option value="check">Check</option><option value="cod">COD</option><option value="paid">Paid — manually confirmed</option></select><p className="mt-1 text-xs text-slate-500">Do not select Paid until payment has actually been received.</p></div>
                   {action === 'assisted-order' ? <><div><Label>Assisted by</Label><select name="assistedByUserId" defaultValue={bootstrap?.currentUser.id} className={inputClass}>{bootstrap?.users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select></div><div><Label>Assistance type</Label><select name="assistanceType" className={inputClass}><option value="rep_placed">Rep placed order</option><option value="phone_order">Phone order</option><option value="in_person">In-person order</option><option value="follow_up">Follow-up order</option><option value="tasting_conversion">Tasting conversion</option><option value="other">Other</option></select></div><div><Label>Related tasting</Label><select name="relatedTastingId" className={inputClass}><option value="">None</option>{related.tastings.map((tasting) => <option key={tasting.id} value={tasting.id}>{new Date(tasting.scheduledAt).toLocaleDateString()} · {tasting.status}</option>)}</select></div></> : null}
                   <div><Label>Notes</Label><textarea name="notes" className={textareaClass} /></div>
                 </> : null}
