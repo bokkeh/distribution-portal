@@ -58,7 +58,7 @@ export async function createTask(input: CreateTaskInput) {
     const parsed = taskInputSchema.parse(input)
     const roles = session.user.roles ?? [session.user.role as string]
     const account = await assertAccountAccess(session, parsed.accountId)
-    const canAssignOthers = roles.some((role) => ['admin', 'staff', 'sales_manager'].includes(role))
+    const canAssignOthers = roles.some((role) => TASK_ROLES.includes(role as typeof TASK_ROLES[number]))
     const assignedToUserId = canAssignOthers && parsed.assignedToUserId ? parsed.assignedToUserId : session.user.id
 
     const [assignee] = await db.select({ id: users.id, name: users.name, roles: users.roles, active: users.active })
@@ -183,13 +183,14 @@ export async function updateTaskDetails(input: {
     const [task] = await db.select().from(crmTasks).where(eq(crmTasks.id, input.taskId)).limit(1)
     if (!task) throw new Error('Task not found.')
     const canManageAny = roles.some((role) => ['admin', 'staff', 'sales_manager'].includes(role))
+    const canReassign = canManageAny || task.createdByUserId === session.user.id
     if (!canManageAny && task.assignedToUserId !== session.user.id && task.createdByUserId !== session.user.id) throw new Error('You cannot edit this task.')
 
     const title = input.title.trim()
     const dueAt = new Date(input.dueAt)
     if (!title) throw new Error('Task title is required.')
     if (Number.isNaN(dueAt.getTime())) throw new Error('Choose a valid due date and time.')
-    const assignedToUserId = canManageAny ? input.assignedToUserId : task.assignedToUserId
+    const assignedToUserId = canReassign ? input.assignedToUserId : task.assignedToUserId
     const [assignee] = await db.select({ id: users.id, active: users.active, roles: users.roles }).from(users).where(eq(users.id, assignedToUserId)).limit(1)
     if (!assignee?.active || !assignee.roles.some((role) => TASK_ROLES.includes(role as typeof TASK_ROLES[number]))) throw new Error('Choose an eligible active assignee.')
 

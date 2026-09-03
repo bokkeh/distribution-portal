@@ -37,7 +37,7 @@ export function TasksScopeTabs({
     <>
       {canViewOrganization ? (
         <div className="flex gap-2 text-sm">
-          <button type="button" onClick={() => selectScope(false)} className={`rounded-lg px-3 py-2 ${!organization ? 'bg-slate-900 text-white' : 'bg-white text-slate-600'}`}>Assigned to me</button>
+          <button type="button" onClick={() => selectScope(false)} className={`rounded-lg px-3 py-2 ${!organization ? 'bg-slate-900 text-white' : 'bg-white text-slate-600'}`}>My tasks</button>
           <button type="button" onClick={() => selectScope(true)} className={`rounded-lg px-3 py-2 ${organization ? 'bg-slate-900 text-white' : 'bg-white text-slate-600'}`}>Organization</button>
         </div>
       ) : null}

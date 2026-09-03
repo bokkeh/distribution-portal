@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 
 export async function TasksPage({ mode, userId, roles, organization = false }: { mode: 'admin' | 'staff' | 'sales'; userId: string; roles: string[]; organization?: boolean }) {
   const canViewOrganization = roles.some((role) => ['admin', 'staff', 'sales_manager'].includes(role))
-  const canReassign = roles.some((role) => ['admin', 'staff', 'sales_manager'].includes(role))
+  const canReassign = roles.some((role) => TASK_ROLES.includes(role as typeof TASK_ROLES[number]))
   const [assignedToMeTasks, organizationTasks, assigneeRows] = await Promise.all([
     getTasksForView({ userId, roles, includeOrganization: false }),
     canViewOrganization ? getTasksForView({ userId, roles, includeOrganization: true }) : Promise.resolve([]),
