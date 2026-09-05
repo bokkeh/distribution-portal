@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { IndustryNewsWidget } from '@/components/news/IndustryNewsWidget'
-import { getReorderFollowUps, LOW_INVENTORY_CASE_THRESHOLD, SINGLE_CASE_REORDER_DELAY_DAYS } from '@/lib/sales/reorder-follow-ups'
+import { getReorderFollowUps, LOW_INVENTORY_BOTTLE_THRESHOLD, SINGLE_CASE_REORDER_DELAY_DAYS } from '@/lib/sales/reorder-follow-ups'
 import { getTasksForView } from '@/lib/tasks/read'
 import { TaskDashboardModule } from '@/components/tasks/TaskDashboardModule'
 
@@ -188,7 +188,7 @@ export default async function SalesDashboardPage() {
       label: 'Reorder follow-ups',
       count: reorderTargets.length,
       href: '/sales/accounts',
-      description: `Accounts at ${LOW_INVENTORY_CASE_THRESHOLD} case left, plus ${SINGLE_CASE_REORDER_DELAY_DAYS}-day 1-case follow-ups.`,
+      description: `Accounts at ${LOW_INVENTORY_BOTTLE_THRESHOLD} bottles left, plus ${SINGLE_CASE_REORDER_DELAY_DAYS}-day 1-case follow-ups.`,
       tone: reorderTargets.length > 0 ? 'warning' : 'success',
     },
     {

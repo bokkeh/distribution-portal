@@ -5,6 +5,7 @@ import { mergeContacts, mergeCustomerAccounts, updateCommunityContactDealStage, 
 import { db } from '@/db'
 import {
   activityEvents,
+  accountInventoryOnHand,
   communityContacts,
   contacts,
   crmPipelineStages,
@@ -15,6 +16,7 @@ import {
   invoices,
   orderItems,
   orders,
+  products,
   salesMembers,
   salesRegions,
   tastings,
@@ -256,10 +258,15 @@ export default async function CRMPage({
   const hubspotPipelineStages = coercePipelineStages(hubspotStageRows)
   const hubspotStageMap = new Map(hubspotStageAssignments.map((row) => [row.hubspotCompanyId, row.stageKey]))
   const accountIds = accounts.map((account) => account.id)
-  const [pendingStats, totalStats, orderStats, accountActivityStats, orderActivityStats, invoiceActivityStats, tastingActivityStats, deliveryActivityStats] = await Promise.all([
+  const [pendingStats, totalStats, orderStats, inventoryStats, accountActivityStats, orderActivityStats, invoiceActivityStats, tastingActivityStats, deliveryActivityStats] = await Promise.all([
     accountIds.length === 0 ? [] : db.select({ customerId: orders.customerId, cases: sql<number>`coalesce(sum(${orderItems.quantity}::numeric), 0)`.as('cases') }).from(orders).innerJoin(orderItems, eq(orderItems.orderId, orders.id)).where(and(inArray(orders.customerId, accountIds), inArray(orders.status, ['pending', 'confirmed']))).groupBy(orders.customerId),
     accountIds.length === 0 ? [] : db.select({ customerId: orders.customerId, cases: sql<number>`coalesce(sum(${orderItems.quantity}::numeric), 0)`.as('cases') }).from(orders).innerJoin(orderItems, eq(orderItems.orderId, orders.id)).where(and(inArray(orders.customerId, accountIds), inArray(orders.status, ['confirmed', 'fulfilled']))).groupBy(orders.customerId),
     accountIds.length === 0 ? [] : db.select({ customerId: orders.customerId, orderCount: countDistinct(orders.id), lastOrderAt: max(orders.createdAt).as('last_order_at') }).from(orders).where(and(inArray(orders.customerId, accountIds), ne(orders.status, 'cancelled'))).groupBy(orders.customerId),
+    accountIds.length === 0 ? [] : db.select({
+      customerId: accountInventoryOnHand.accountId,
+      bottlesOnHand: sql<number>`coalesce(sum((${accountInventoryOnHand.casesOnHand}::numeric * ${products.bottlesPerCase}) + ${accountInventoryOnHand.bottlesOnHand}::numeric), 0)::float`.as('bottles_on_hand'),
+      lastInventoryCheckAt: max(accountInventoryOnHand.updatedAt).as('last_inventory_check_at'),
+    }).from(accountInventoryOnHand).innerJoin(products, eq(accountInventoryOnHand.productId, products.id)).where(inArray(accountInventoryOnHand.accountId, accountIds)).groupBy(accountInventoryOnHand.accountId),
     accountIds.length === 0 ? [] : db.select({ customerId: activityEvents.entityId, lastActivityAt: max(activityEvents.createdAt).as('last_activity_at') }).from(activityEvents).where(and(eq(activityEvents.entityType, 'account'), inArray(activityEvents.entityId, accountIds))).groupBy(activityEvents.entityId),
     accountIds.length === 0 ? [] : db.select({ customerId: orders.customerId, lastActivityAt: max(activityEvents.createdAt).as('last_activity_at') }).from(activityEvents).innerJoin(orders, eq(activityEvents.entityId, orders.id)).where(and(eq(activityEvents.entityType, 'order'), inArray(orders.customerId, accountIds))).groupBy(orders.customerId),
     accountIds.length === 0 ? [] : db.select({ customerId: invoices.customerId, lastActivityAt: max(activityEvents.createdAt).as('last_activity_at') }).from(activityEvents).innerJoin(invoices, eq(activityEvents.entityId, invoices.id)).where(and(eq(activityEvents.entityType, 'invoice'), inArray(invoices.customerId, accountIds))).groupBy(invoices.customerId),
@@ -270,6 +277,7 @@ export default async function CRMPage({
   const pendingMap = new Map(pendingStats.map((row) => [row.customerId, Number(row.cases)]))
   const totalMap = new Map(totalStats.map((row) => [row.customerId, Number(row.cases)]))
   const orderMap = new Map(orderStats.map((row) => [row.customerId, row]))
+  const inventoryMap = new Map(inventoryStats.map((row) => [row.customerId, row]))
   const pullThroughMap = new Map(pullThroughDataset.rows.map((row) => [row.accountId, row]))
   const accountActivityMap = new Map(accountActivityStats.map((row) => [row.customerId, row.lastActivityAt]))
   const orderActivityMap = new Map(orderActivityStats.map((row) => [row.customerId, row.lastActivityAt]))
@@ -295,6 +303,11 @@ export default async function CRMPage({
     const generalOrders = orderMap.get(account.id)
     const lastOrderAt = pullThrough?.orders.lastOrderAt ?? generalOrders?.lastOrderAt ?? null
     const fallbackDaysSince = lastOrderAt ? Math.max(0, Math.floor((now - new Date(lastOrderAt).getTime()) / 86_400_000)) : null
+    const inventory = inventoryMap.get(account.id)
+    const lastInventoryCheckAt = inventory?.lastInventoryCheckAt ?? null
+    const daysSinceLastInventoryCheck = lastInventoryCheckAt
+      ? Math.max(0, Math.floor((now - new Date(lastInventoryCheckAt).getTime()) / 86_400_000))
+      : null
     const locationFallback = [account.city, account.state].filter(Boolean).join(', ') || null
 
     return {
@@ -307,6 +320,9 @@ export default async function CRMPage({
       orderCount: pullThrough?.orders.totalOrders ?? Number(generalOrders?.orderCount ?? 0),
       daysSinceLastOrder: pullThrough?.orders.daysSinceLastOrder ?? fallbackDaysSince,
       pullThroughScore: pullThrough?.pullThrough.score ?? null,
+      inventoryBottlesOnHand: Number(inventory?.bottlesOnHand ?? 0),
+      lastInventoryCheckAt,
+      daysSinceLastInventoryCheck,
       lastActivityAt: getMostRecentDate(pullThrough?.lastActivityAt, accountActivityMap.get(account.id), orderActivityMap.get(account.id), invoiceActivityMap.get(account.id), tastingActivityMap.get(account.id), deliveryActivityMap.get(account.id), lastOrderAt),
     }
   })

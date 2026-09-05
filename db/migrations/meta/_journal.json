@@ -372,6 +372,27 @@
       "when": 1788411600000,
       "tag": "0067_order_payment_classification",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1788501600000,
+      "tag": "0068_order_account_inventory",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1788555600000,
+      "tag": "0069_account_inventory_bottles",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1788642000000,
+      "tag": "0070_inventory_absolute_checks",
+      "breakpoints": true
     }
   ]
 }

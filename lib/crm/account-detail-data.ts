@@ -60,6 +60,7 @@ export type AccountInventoryHistoryEvent = {
   productName: string | null
   deltaCases: number
   deltaBottles: number
+  recordedBottlesOnHand?: number | null
   resultingCasesOnHand?: number | null
   resultingBottlesOnHand?: number | null
   actorName?: string | null
@@ -117,6 +118,10 @@ function toNumericValue(value: unknown) {
     return Number.isFinite(parsed) ? parsed : 0
   }
   return 0
+}
+
+function toInventoryFixed(value: number) {
+  return (Math.round(value * 100) / 100).toFixed(2)
 }
 
 function categorizeActivity(entityType: string, kind: string) {
@@ -255,7 +260,7 @@ export async function getAccountNotes(accountId: string) {
 
 export async function getAccountInventoryOnHand(accountId: string) {
   try {
-    return await db
+    const rows = await db
       .select({
         id: accountInventoryOnHand.id,
         accountId: accountInventoryOnHand.accountId,
@@ -265,6 +270,7 @@ export async function getAccountInventoryOnHand(accountId: string) {
         unitType: accountInventoryOnHand.unitType,
         casesOnHand: accountInventoryOnHand.casesOnHand,
         bottlesOnHand: accountInventoryOnHand.bottlesOnHand,
+        bottlesPerCase: products.bottlesPerCase,
         updatedByUserId: accountInventoryOnHand.updatedByUserId,
         updatedByName: users.name,
         updatedByRole: users.role,
@@ -272,8 +278,19 @@ export async function getAccountInventoryOnHand(accountId: string) {
       })
       .from(accountInventoryOnHand)
       .leftJoin(users, eq(accountInventoryOnHand.updatedByUserId, users.id))
+      .innerJoin(products, eq(accountInventoryOnHand.productId, products.id))
       .where(eq(accountInventoryOnHand.accountId, accountId))
       .orderBy(desc(accountInventoryOnHand.updatedAt), accountInventoryOnHand.productName)
+
+    return rows.map((row) => ({
+      ...row,
+      unitType: 'bottle',
+      casesOnHand: '0.00',
+      bottlesOnHand: toInventoryFixed(
+        toNumericValue(row.bottlesOnHand)
+          + toNumericValue(row.casesOnHand) * row.bottlesPerCase,
+      ),
+    } satisfies AccountInventoryItem))
   } catch (error) {
     if (isMissingInventoryColumn(error)) {
       const legacyRows = await db.execute(sql`
@@ -285,11 +302,13 @@ export async function getAccountInventoryOnHand(accountId: string) {
           account_inventory_on_hand.product_name,
           account_inventory_on_hand.unit_type,
           account_inventory_on_hand.quantity_on_hand,
+          products.bottles_per_case,
           account_inventory_on_hand.updated_by_user_id,
           account_inventory_on_hand.updated_at,
           users.name as updated_by_name,
           users.role as updated_by_role
         from account_inventory_on_hand
+        inner join products on products.id = account_inventory_on_hand.product_id
         left join users on users.id = account_inventory_on_hand.updated_by_user_id
         where account_inventory_on_hand.account_id = ${accountId}::uuid
         order by account_inventory_on_hand.updated_at desc, account_inventory_on_hand.product_name asc
@@ -304,9 +323,11 @@ export async function getAccountInventoryOnHand(accountId: string) {
           productId: String(value.product_id),
           sku: String(value.sku ?? ''),
           productName: String(value.product_name ?? ''),
-          unitType: typeof value.unit_type === 'string' ? value.unit_type : null,
-          casesOnHand: String(value.quantity_on_hand ?? '0'),
-          bottlesOnHand: '0',
+          unitType: 'bottle',
+          casesOnHand: '0.00',
+          bottlesOnHand: toInventoryFixed(
+            toNumericValue(value.quantity_on_hand) * toNumericValue(value.bottles_per_case || 12),
+          ),
           updatedByUserId: typeof value.updated_by_user_id === 'string' ? value.updated_by_user_id : null,
           updatedByName: typeof value.updated_by_name === 'string' ? value.updated_by_name : null,
           updatedByRole: typeof value.updated_by_role === 'string' ? value.updated_by_role : null,
@@ -346,14 +367,17 @@ export async function getAccountInventoryHistory(accountId: string) {
         productName: accountInventoryAdjustments.productName,
         deltaCases: accountInventoryAdjustments.deltaCases,
         deltaBottles: accountInventoryAdjustments.deltaBottles,
+        recordedBottlesOnHand: accountInventoryAdjustments.recordedBottlesOnHand,
         resultingCasesOnHand: accountInventoryAdjustments.resultingCasesOnHand,
         resultingBottlesOnHand: accountInventoryAdjustments.resultingBottlesOnHand,
+        bottlesPerCase: products.bottlesPerCase,
         notes: accountInventoryAdjustments.notes,
         actorName: users.name,
         actorRole: users.role,
       })
       .from(accountInventoryAdjustments)
       .leftJoin(users, eq(accountInventoryAdjustments.createdByUserId, users.id))
+      .innerJoin(products, eq(accountInventoryAdjustments.productId, products.id))
       .where(eq(accountInventoryAdjustments.accountId, accountId))
       .orderBy(accountInventoryAdjustments.effectiveAt, accountInventoryAdjustments.createdAt)
 
@@ -361,18 +385,24 @@ export async function getAccountInventoryHistory(accountId: string) {
       id: row.id,
       kind: row.changeType,
       title:
-        row.changeType === 'manual_add'
-          ? 'Inventory item added'
+        row.changeType === 'order_fulfillment'
+          ? 'Paid order added to inventory'
+          : row.changeType === 'manual_add'
+          ? 'Inventory count recorded'
           : row.changeType === 'manual_remove'
             ? 'Inventory item removed'
-            : 'Inventory quantity updated',
+            : 'Inventory count recorded',
       createdAt: row.effectiveAt,
       productId: row.productId,
       productName: row.productName,
-      deltaCases: toNumericValue(row.deltaCases),
-      deltaBottles: toNumericValue(row.deltaBottles),
-      resultingCasesOnHand: toNumericValue(row.resultingCasesOnHand),
-      resultingBottlesOnHand: toNumericValue(row.resultingBottlesOnHand),
+      deltaCases: 0,
+      deltaBottles: toNumericValue(row.deltaBottles) + toNumericValue(row.deltaCases) * row.bottlesPerCase,
+      recordedBottlesOnHand: row.recordedBottlesOnHand == null
+        ? null
+        : toNumericValue(row.recordedBottlesOnHand),
+      resultingCasesOnHand: 0,
+      resultingBottlesOnHand: toNumericValue(row.resultingBottlesOnHand)
+        + toNumericValue(row.resultingCasesOnHand) * row.bottlesPerCase,
       actorName: row.actorName,
       actorRole: row.actorRole,
       notes: row.notes,

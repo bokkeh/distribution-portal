@@ -1,5 +1,5 @@
 import { db } from '@/db'
-import { activityEvents, contacts, crmPipelineStages, customerAccounts, deliveries, deliveryStops, invoices, orderItems, orders, salesMembers, salesRegions, tastings, users } from '@/db/schema'
+import { accountInventoryOnHand, activityEvents, contacts, crmPipelineStages, customerAccounts, deliveries, deliveryStops, invoices, orderItems, orders, products, salesMembers, salesRegions, tastings, users } from '@/db/schema'
 import { sql, eq, and, inArray, asc, max } from 'drizzle-orm'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -138,7 +138,7 @@ export default async function StaffCRMPage({
 
   // Order stats per customer
   const accountIds = accounts.map(a => a.id)
-  const [pendingStats, totalStats, lastOrderStats, accountActivityStats, orderActivityStats, invoiceActivityStats, tastingActivityStats, deliveryActivityStats] = await Promise.all([
+  const [pendingStats, totalStats, lastOrderStats, inventoryStats, accountActivityStats, orderActivityStats, invoiceActivityStats, tastingActivityStats, deliveryActivityStats] = await Promise.all([
     accountIds.length === 0 ? [] : db
       .select({
         customerId: orders.customerId,
@@ -165,6 +165,16 @@ export default async function StaffCRMPage({
       .from(orders)
       .where(inArray(orders.customerId, accountIds))
       .groupBy(orders.customerId),
+    accountIds.length === 0 ? [] : db
+      .select({
+        customerId: accountInventoryOnHand.accountId,
+        bottlesOnHand: sql<number>`coalesce(sum((${accountInventoryOnHand.casesOnHand}::numeric * ${products.bottlesPerCase}) + ${accountInventoryOnHand.bottlesOnHand}::numeric), 0)::float`.as('bottles_on_hand'),
+        lastInventoryCheckAt: max(accountInventoryOnHand.updatedAt).as('last_inventory_check_at'),
+      })
+      .from(accountInventoryOnHand)
+      .innerJoin(products, eq(accountInventoryOnHand.productId, products.id))
+      .where(inArray(accountInventoryOnHand.accountId, accountIds))
+      .groupBy(accountInventoryOnHand.accountId),
     accountIds.length === 0 ? [] : db
       .select({
         customerId: activityEvents.entityId,
@@ -215,28 +225,40 @@ export default async function StaffCRMPage({
   const pendingMap = new Map(pendingStats.map(r => [r.customerId, Number(r.cases)]))
   const totalMap = new Map(totalStats.map(r => [r.customerId, Number(r.cases)]))
   const lastOrderMap = new Map(lastOrderStats.map(r => [r.customerId, r.lastOrderAt]))
+  const inventoryMap = new Map(inventoryStats.map(r => [r.customerId, r]))
   const accountActivityMap = new Map(accountActivityStats.map(r => [r.customerId, r.lastActivityAt]))
   const orderActivityMap = new Map(orderActivityStats.map(r => [r.customerId, r.lastActivityAt]))
   const invoiceActivityMap = new Map(invoiceActivityStats.map(r => [r.customerId, r.lastActivityAt]))
   const tastingActivityMap = new Map(tastingActivityStats.map(r => [r.customerId, r.lastActivityAt]))
   const deliveryActivityMap = new Map(deliveryActivityStats.map(r => [r.customerId, r.lastActivityAt]))
 
-  const accountRows = accounts.map(a => ({
-    ...a,
-    regionId: a.assignedRegionId,
-    regionName: a.salesRegionName,
-    pendingCases: pendingMap.get(a.id) ?? 0,
-    totalCasesPurchased: totalMap.get(a.id) ?? 0,
-    healthScore: 0,
-    lastActivityAt: getMostRecentDate(
-      accountActivityMap.get(a.id),
-      orderActivityMap.get(a.id),
-      invoiceActivityMap.get(a.id),
-      tastingActivityMap.get(a.id),
-      deliveryActivityMap.get(a.id),
-      lastOrderMap.get(a.id),
-    ),
-  }))
+  const now = Date.now()
+  const accountRows = accounts.map(a => {
+    const inventory = inventoryMap.get(a.id)
+    const lastInventoryCheckAt = inventory?.lastInventoryCheckAt ?? null
+
+    return {
+      ...a,
+      regionId: a.assignedRegionId,
+      regionName: a.salesRegionName,
+      pendingCases: pendingMap.get(a.id) ?? 0,
+      totalCasesPurchased: totalMap.get(a.id) ?? 0,
+      healthScore: 0,
+      inventoryBottlesOnHand: Number(inventory?.bottlesOnHand ?? 0),
+      lastInventoryCheckAt,
+      daysSinceLastInventoryCheck: lastInventoryCheckAt
+        ? Math.max(0, Math.floor((now - new Date(lastInventoryCheckAt).getTime()) / 86_400_000))
+        : null,
+      lastActivityAt: getMostRecentDate(
+        accountActivityMap.get(a.id),
+        orderActivityMap.get(a.id),
+        invoiceActivityMap.get(a.id),
+        tastingActivityMap.get(a.id),
+        deliveryActivityMap.get(a.id),
+        lastOrderMap.get(a.id),
+      ),
+    }
+  })
   const filteredAccounts = accounts.filter((account) => matchesAccountFilter(account, currentFilter))
   const filteredAccountRows = accountRows.filter((account) => matchesAccountFilter(account, currentFilter))
   const assignedToMeRows = currentSalesMember

@@ -20,6 +20,7 @@ import {
 } from '@/db/schema'
 import { createOrder } from '@/actions/orders'
 import { createTask, type CreateTaskInput } from '@/actions/tasks'
+import { upsertAccountInventoryItem } from '@/actions/crm-account'
 import { requireRole } from '@/lib/auth/session'
 import { logActivityEvent } from '@/lib/activity/log'
 import { notify } from '@/lib/notifications/dispatch'
@@ -153,6 +154,33 @@ export async function quickCreateNote(input: { accountId: string; noteBody: stri
     return { success: true as const }
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Unable to add note.' }
+  }
+}
+
+export async function quickAddAccountInventory(input: {
+  accountId: string
+  productId: string
+  bottlesOnHand: number
+  inventoryDate: string
+}) {
+  try {
+    const session = await requireRole(...QUICK_ADD_ROLES)
+    if (!input.accountId || !input.productId) throw new Error('Account and product are required.')
+    await assertQuickAccountAccess(session, input.accountId)
+
+    const formData = new FormData()
+    formData.set('accountId', input.accountId)
+    formData.set('productId', input.productId)
+    formData.set('bottlesOnHand', String(input.bottlesOnHand))
+    formData.set('inventoryDate', input.inventoryDate)
+
+    const result = await upsertAccountInventoryItem(formData)
+    if (result.error) return result
+
+    revalidateAccount(input.accountId)
+    return { success: true as const }
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Unable to add account inventory.' }
   }
 }
 

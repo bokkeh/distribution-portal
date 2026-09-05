@@ -2,7 +2,7 @@
 
 import { randomBytes } from 'crypto'
 import Stripe from 'stripe'
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, eq, inArray, ne } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { db } from '@/db'
@@ -14,6 +14,7 @@ import { notify } from '@/lib/notifications/dispatch'
 import { getPricingRulesForProducts, normalizeAccountGeography } from '@/lib/pricing/geographic-service'
 import { resolveProductUnitPrice } from '@/lib/pricing/product-price'
 import { getCustomerPaymentBreakdown, type CustomerPaymentMethod } from '@/lib/stripe/fees'
+import { syncOrderAccountInventory } from '@/lib/orders/account-inventory'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? 'sk_test_missing_configuration', { apiVersion: '2026-02-25.clover' })
 
@@ -99,11 +100,24 @@ async function applyInvoicePaid(
     actorUserId: string
     paymentReference: string
     journalReference: string
+    orderPaymentMethod: 'stripe' | 'manual'
     skipJournalEntry?: boolean
   },
 ) {
   const invoice = await getInvoiceSettlementContext(invoiceId)
-  if (!invoice || invoice.status === 'paid') return invoice
+  if (!invoice) return invoice
+
+  if (invoice.status === 'paid') {
+    if (invoice.orderId) {
+      await db.update(orders).set({
+        paymentStatus: 'paid',
+        paymentMethod: input.orderPaymentMethod,
+        paidAt: new Date(),
+      }).where(and(eq(orders.id, invoice.orderId), ne(orders.paymentStatus, 'paid')))
+      await syncOrderAccountInventory(invoice.orderId, input.actorUserId)
+    }
+    return invoice
+  }
 
   await db.update(invoices).set({
     status: 'paid',
@@ -114,6 +128,14 @@ async function applyInvoicePaid(
     paymentCompletedAt: new Date(),
     updatedAt: new Date(),
   }).where(eq(repAssistedOrders.invoiceId, invoiceId))
+
+  if (invoice.orderId) {
+    await db.update(orders).set({
+      paymentStatus: 'paid',
+      paymentMethod: input.orderPaymentMethod,
+      paidAt: new Date(),
+    }).where(and(eq(orders.id, invoice.orderId), ne(orders.paymentStatus, 'paid')))
+  }
 
   await logActivityEvent({
     entityType: 'invoice',
@@ -135,6 +157,7 @@ async function applyInvoicePaid(
       body: `${invoice.invoiceNumber} was marked paid for $${Number(invoice.total).toFixed(2)}.`,
       metadata: { invoiceId: invoice.id, paymentReference: input.paymentReference },
     })
+    await syncOrderAccountInventory(invoice.orderId, input.actorUserId)
   }
 
   if (!input.skipJournalEntry) {
@@ -180,6 +203,7 @@ export async function applyWebhookInvoicePaid(invoiceId: string, paymentIntentId
     actorUserId,
     paymentReference: paymentIntentId,
     journalReference: paymentIntentId,
+    orderPaymentMethod: 'stripe',
   })
 }
 
@@ -433,6 +457,7 @@ export async function markInvoicePaid(invoiceId: string) {
     actorUserId: session.user.id,
     paymentReference: 'manual_mark_paid',
     journalReference: invoiceId,
+    orderPaymentMethod: 'manual',
   })
 }
 
@@ -553,6 +578,7 @@ export async function recordOfflineInvoicePayment(formData: FormData) {
     actorUserId: session.user.id,
     paymentReference: note,
     journalReference: invoice.invoiceNumber,
+    orderPaymentMethod: 'manual',
     skipJournalEntry: true,
   })
 

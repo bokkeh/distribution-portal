@@ -3,10 +3,11 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import {
-  Building2, CalendarDays, CheckCircle2, ClipboardCheck, FileText, Loader2,
+  Boxes, Building2, CalendarDays, CheckCircle2, ClipboardCheck, FileText, Loader2,
   PackagePlus, Plus, ShoppingCart, Truck, UserPlus, X,
 } from 'lucide-react'
 import {
+  quickAddAccountInventory,
   quickCreateAccount,
   quickCreateDelivery,
   quickCreateNote,
@@ -19,7 +20,7 @@ import { AccountSearchSelect, type QuickAccount } from '@/components/quick-add/A
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
-type QuickAction = 'account' | 'person' | 'note' | 'task' | 'order' | 'assisted-order' | 'delivery' | 'tasting'
+type QuickAction = 'account' | 'person' | 'note' | 'task' | 'inventory' | 'order' | 'assisted-order' | 'delivery' | 'tasting'
 type Bootstrap = {
   currentUser: { id: string; name: string; roles: string[] }
   users: Array<{ id: string; name: string; roles: string[] }>
@@ -40,6 +41,7 @@ const ACTIONS: Array<{ action: QuickAction; label: string; icon: typeof Plus; gr
   { action: 'person', label: 'Add People', icon: UserPlus, group: 'CRM' },
   { action: 'note', label: 'Add Note', icon: FileText, group: 'CRM' },
   { action: 'task', label: 'Add Task', icon: ClipboardCheck, group: 'CRM' },
+  { action: 'inventory', label: 'Add Inventory', icon: Boxes, group: 'Sales Activity' },
   { action: 'order', label: 'Add Order', icon: ShoppingCart, group: 'Sales Activity' },
   { action: 'assisted-order', label: 'Add Assisted Order', icon: PackagePlus, group: 'Sales Activity' },
   { action: 'delivery', label: 'Add Delivery', icon: Truck, group: 'Sales Activity' },
@@ -192,6 +194,13 @@ export function GlobalQuickAdd({ compact = false, dark = false }: { compact?: bo
           reminderOffsetMinutes: Number(form.get('reminderOffsetMinutes') ?? 0),
           notificationChannels: form.getAll('notificationChannels') as Array<'in-app' | 'email' | 'sms'>,
         })
+      } else if (action === 'inventory') {
+        result = await quickAddAccountInventory({
+          accountId: account!.id,
+          productId: String(form.get('inventoryProductId') ?? ''),
+          bottlesOnHand: Number(form.get('bottlesOnHand') ?? 0),
+          inventoryDate: String(form.get('inventoryDate') ?? ''),
+        })
       } else if (action === 'order' || action === 'assisted-order') {
         result = await quickCreateOrder({
           accountId: account!.id, orderedDate: String(form.get('orderedDate')), purchaseUnit: items[0]?.unit ?? 'case',
@@ -292,6 +301,19 @@ export function GlobalQuickAdd({ compact = false, dark = false }: { compact?: bo
                   <div className="grid gap-4 sm:grid-cols-2"><div><Label>Due date</Label><input name="dueDate" type="date" defaultValue={localDate()} className={inputClass} required /></div><div><Label>Due time</Label><input name="dueTime" type="time" defaultValue="17:00" className={inputClass} /></div></div>
                   <div className="grid gap-4 sm:grid-cols-2"><div><Label>Priority</Label><select name="priority" className={inputClass}><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select></div><div><Label>Reminder</Label><select name="reminderOffsetMinutes" defaultValue="60" className={inputClass}><option value="0">At due time</option><option value="15">15 minutes before</option><option value="60">1 hour before</option><option value="1440">1 day before</option></select></div></div>
                   <div><Label>Notification channels</Label><div className="flex flex-wrap gap-4 text-sm text-slate-700">{(['in-app', 'email', 'sms'] as const).map((channel) => <label key={channel} className="flex items-center gap-2"><input type="checkbox" name="notificationChannels" value={channel} defaultChecked={channel === 'in-app' || channel === 'email'} />{channel === 'in-app' ? 'In-app' : channel.toUpperCase()}</label>)}</div></div>
+                </> : null}
+
+                {action === 'inventory' ? <>
+                  <div>
+                    <Label>Product</Label>
+                    <select name="inventoryProductId" className={inputClass} required>
+                      <option value="">Select product…</option>
+                      {bootstrap?.products.map((product) => <option key={product.id} value={product.id}>{product.name} · {product.sku}</option>)}
+                    </select>
+                  </div>
+                  <div><Label>Bottles on hand</Label><input name="bottlesOnHand" type="number" min="0" step="0.01" defaultValue="0" className={inputClass} required /></div>
+                  <div><Label>Inventory check date</Label><input name="inventoryDate" type="date" defaultValue={localDate()} className={inputClass} required /></div>
+                  <p className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs leading-relaxed text-blue-800">Account inventory is tracked in bottles. Paid, fulfilled case orders are converted automatically using that product&apos;s bottles-per-case quantity.</p>
                 </> : null}
 
                 {action === 'order' || action === 'assisted-order' ? <>

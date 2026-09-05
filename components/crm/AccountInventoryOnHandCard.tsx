@@ -14,6 +14,7 @@ import {
 import { Plus, Save, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
+  addAccountInventoryHistoryEntry,
   deleteAccountInventoryAdjustment,
   removeAccountInventoryItem,
   updateAccountInventoryAdjustment,
@@ -50,20 +51,17 @@ type HistoryRangeKey =
 
 type InventoryHistoryPoint = {
   label: string
-  cases: number
   bottles: number
   adjustments: number
 }
 
 type InventoryDraft = {
-  casesOnHand: string
   bottlesOnHand: string
   inventoryDate: string
 }
 
 type AdjustmentDraft = {
-  deltaCases: string
-  deltaBottles: string
+  recordedBottlesOnHand: string
   inventoryDate: string
   notes: string
 }
@@ -220,17 +218,14 @@ function buildHistoryBuckets(range: HistoryRangeKey, now: Date) {
 
 function buildInventoryHistorySeries(
   events: AccountInventoryHistoryEvent[],
-  totalCases: number,
   totalBottles: number,
   range: HistoryRangeKey,
 ) {
   const now = new Date()
   const buckets = buildHistoryBuckets(range, now)
   const eventsAsc = [...events].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
-  const allDeltaCases = eventsAsc.reduce((sum, event) => sum + event.deltaCases, 0)
   const allDeltaBottles = eventsAsc.reduce((sum, event) => sum + event.deltaBottles, 0)
 
-  let runningCases = roundInventoryValue(totalCases - allDeltaCases)
   let runningBottles = roundInventoryValue(totalBottles - allDeltaBottles)
   let eventIndex = 0
 
@@ -239,7 +234,6 @@ function buildInventoryHistorySeries(
 
     while (eventIndex < eventsAsc.length && eventsAsc[eventIndex].createdAt <= bucket.end) {
       const event = eventsAsc[eventIndex]
-      runningCases = roundInventoryValue(runningCases + event.deltaCases)
       runningBottles = roundInventoryValue(runningBottles + event.deltaBottles)
       if (event.createdAt >= bucket.start) {
         adjustments += 1
@@ -249,7 +243,6 @@ function buildInventoryHistorySeries(
 
     return {
       label: bucket.label,
-      cases: runningCases,
       bottles: runningBottles,
       adjustments,
     } satisfies InventoryHistoryPoint
@@ -278,16 +271,12 @@ function InventoryHistoryChart({
 }: {
   data: InventoryHistoryPoint[]
 }) {
-  const maxValue = Math.max(1, ...data.flatMap((point) => [point.cases, point.bottles]))
+  const maxValue = Math.max(1, ...data.map((point) => point.bottles))
 
   return (
     <ResponsiveContainer width="100%" height={240}>
       <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
         <defs>
-          <linearGradient id="inventoryCasesGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#2563eb" stopOpacity={0.16} />
-            <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
-          </linearGradient>
           <linearGradient id="inventoryBottlesGradient" x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%" stopColor="#059669" stopOpacity={0.14} />
             <stop offset="95%" stopColor="#059669" stopOpacity={0} />
@@ -305,18 +294,10 @@ function InventoryHistoryChart({
         <Tooltip
           contentStyle={{ borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: 12 }}
           formatter={(value, name) => [
-            `${Number(value ?? 0).toFixed(2)} ${name === 'cases' ? 'cases' : 'bottles'}`,
-            name === 'cases' ? 'Cases on Hand' : 'Bottles on Hand',
+            `${Number(value ?? 0).toFixed(2)} bottles`,
+            name === 'bottles' ? 'Bottles on Hand' : name,
           ]}
           labelFormatter={(label) => `Period: ${label}`}
-        />
-        <Area
-          type="monotone"
-          dataKey="cases"
-          stroke="#2563eb"
-          strokeWidth={2}
-          fill="url(#inventoryCasesGradient)"
-          activeDot={{ r: 4, fill: '#2563eb' }}
         />
         <Area
           type="monotone"
@@ -353,9 +334,12 @@ export function AccountInventoryOnHandCard({
   const [draftCounts, setDraftCounts] = useState<Record<string, InventoryDraft>>({})
   const [historyDrafts, setHistoryDrafts] = useState<Record<string, AdjustmentDraft>>({})
   const [selectedProductId, setSelectedProductId] = useState('')
-  const [newCases, setNewCases] = useState('0')
   const [newBottles, setNewBottles] = useState('0')
   const [newInventoryDate, setNewInventoryDate] = useState(toDateInputValue(new Date()))
+  const [logProductId, setLogProductId] = useState('')
+  const [logBottles, setLogBottles] = useState('0')
+  const [logInventoryDate, setLogInventoryDate] = useState(toDateInputValue(new Date()))
+  const [logNotes, setLogNotes] = useState('')
   const [historyRange, setHistoryRange] = useState<HistoryRangeKey>('30d')
 
   useEffect(() => {
@@ -372,7 +356,6 @@ export function AccountInventoryOnHandCard({
         inventoryItems.map((item) => [
           item.id,
           {
-            casesOnHand: item.casesOnHand,
             bottlesOnHand: item.bottlesOnHand,
             inventoryDate: toDateInputValue(item.updatedAt),
           },
@@ -387,8 +370,9 @@ export function AccountInventoryOnHandCard({
         inventoryHistory.map((event) => [
           event.id,
           {
-            deltaCases: event.deltaCases.toFixed(2),
-            deltaBottles: event.deltaBottles.toFixed(2),
+            recordedBottlesOnHand: Number(
+              event.recordedBottlesOnHand ?? event.resultingBottlesOnHand ?? 0,
+            ).toFixed(2),
             inventoryDate: toDateInputValue(event.createdAt),
             notes: event.notes ?? '',
           },
@@ -404,15 +388,18 @@ export function AccountInventoryOnHandCard({
     },
     [inventoryItems, products]
   )
-  const totalCases = inventoryItems.reduce((sum, item) => sum + Number(item.casesOnHand || 0), 0)
   const totalBottles = inventoryItems.reduce((sum, item) => sum + Number(item.bottlesOnHand || 0), 0)
   const historySeries = useMemo(
-    () => buildInventoryHistorySeries(inventoryHistory, totalCases, totalBottles, historyRange),
-    [historyRange, inventoryHistory, totalBottles, totalCases]
+    () => buildInventoryHistorySeries(inventoryHistory, totalBottles, historyRange),
+    [historyRange, inventoryHistory, totalBottles]
   )
   const visibleHistoryEvents = useMemo(
     () => buildVisibleHistoryEvents(inventoryHistory, historyRange),
     [historyRange, inventoryHistory]
+  )
+  const allHistoryEvents = useMemo(
+    () => [...inventoryHistory].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),
+    [inventoryHistory]
   )
   const totalAdjustmentsInView = visibleHistoryEvents.length
 
@@ -420,11 +407,10 @@ export function AccountInventoryOnHandCard({
     router.refresh()
   }
 
-  function saveProduct(productId: string, casesOnHand: string, bottlesOnHand: string, inventoryDate: string) {
+  function saveProduct(productId: string, bottlesOnHand: string, inventoryDate: string) {
     const formData = new FormData()
     formData.append('accountId', accountId)
     formData.append('productId', productId)
-    formData.append('casesOnHand', casesOnHand)
     formData.append('bottlesOnHand', bottlesOnHand)
     formData.append('inventoryDate', inventoryDate)
 
@@ -446,9 +432,8 @@ export function AccountInventoryOnHandCard({
       return
     }
 
-    saveProduct(selectedProductId, newCases, newBottles, newInventoryDate)
+    saveProduct(selectedProductId, newBottles, newInventoryDate)
     setSelectedProductId('')
-    setNewCases('0')
     setNewBottles('0')
     setNewInventoryDate(toDateInputValue(new Date()))
   }
@@ -473,8 +458,7 @@ export function AccountInventoryOnHandCard({
 
     const formData = new FormData()
     formData.append('adjustmentId', eventId)
-    formData.append('deltaCases', draft.deltaCases)
-    formData.append('deltaBottles', draft.deltaBottles)
+    formData.append('recordedBottlesOnHand', draft.recordedBottlesOnHand)
     formData.append('inventoryDate', draft.inventoryDate)
     formData.append('notes', draft.notes)
 
@@ -486,6 +470,35 @@ export function AccountInventoryOnHandCard({
       }
 
       toast.success('Inventory change updated')
+      refreshInventoryCard()
+    })
+  }
+
+  function addHistoryEntry() {
+    if (!logProductId) {
+      toast.error('Choose a product for the inventory log')
+      return
+    }
+
+    const formData = new FormData()
+    formData.append('accountId', accountId)
+    formData.append('productId', logProductId)
+    formData.append('bottlesOnHand', logBottles)
+    formData.append('inventoryDate', logInventoryDate)
+    formData.append('notes', logNotes)
+
+    startTransition(async () => {
+      const result = await addAccountInventoryHistoryEntry(formData)
+      if (result?.error) {
+        toast.error(result.error)
+        return
+      }
+
+      toast.success('Historical inventory count added')
+      setLogProductId('')
+      setLogBottles('0')
+      setLogInventoryDate(toDateInputValue(new Date()))
+      setLogNotes('')
       refreshInventoryCard()
     })
   }
@@ -510,12 +523,11 @@ export function AccountInventoryOnHandCard({
       <CardHeader className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
           <CardTitle>Total Inventory On Hand</CardTitle>
-          <p className="mt-1 text-sm text-slate-500">Update account-held inventory directly from the CRM record.</p>
+          <p className="mt-1 text-sm text-slate-500">Track account-held inventory consistently in bottles.</p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-right">
           <p className="text-xs uppercase tracking-wide text-slate-500">Tracked inventory</p>
-          <p className="mt-1 text-lg font-bold text-slate-900">{totalCases.toFixed(2)} cases</p>
-          <p className="text-sm font-medium text-slate-600">{totalBottles.toFixed(2)} bottles</p>
+          <p className="mt-1 text-lg font-bold text-slate-900">{totalBottles.toFixed(2)} bottles</p>
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -551,10 +563,6 @@ export function AccountInventoryOnHandCard({
 
             <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-slate-500">
               <div className="flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full bg-blue-600" />
-                Cases on Hand
-              </div>
-              <div className="flex items-center gap-2">
                 <span className="h-2.5 w-2.5 rounded-full bg-emerald-600" />
                 Bottles on Hand
               </div>
@@ -568,8 +576,6 @@ export function AccountInventoryOnHandCard({
               <tr className="border-b text-left text-xs uppercase tracking-wide text-slate-500">
                 <th className="pb-2 pr-3 font-medium">Product</th>
                 <th className="pb-2 pr-3 font-medium">SKU</th>
-                <th className="pb-2 pr-3 font-medium">Unit</th>
-                <th className="pb-2 pr-3 font-medium">Cases on hand</th>
                 <th className="pb-2 pr-3 font-medium">Bottles on hand</th>
                 <th className="pb-2 pr-3 font-medium">Entry date</th>
                 <th className="pb-2 pr-3 font-medium">Last updated</th>
@@ -580,7 +586,7 @@ export function AccountInventoryOnHandCard({
             <tbody>
               {inventoryItems.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-4 text-sm text-slate-500">No account inventory tracked yet.</td>
+                  <td colSpan={7} className="py-4 text-sm text-slate-500">No account inventory tracked yet.</td>
                 </tr>
               ) : (
                 inventoryItems.map((item) => (
@@ -589,24 +595,6 @@ export function AccountInventoryOnHandCard({
                       <p className="font-medium text-slate-900">{item.productName}</p>
                     </td>
                     <td className="py-3 pr-3 text-slate-600">{item.sku}</td>
-                    <td className="py-3 pr-3 text-slate-600">{item.unitType ?? 'unit'}</td>
-                    <td className="py-3 pr-3">
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={draftCounts[item.id]?.casesOnHand ?? item.casesOnHand}
-                        onChange={(event) => setDraftCounts((current) => ({
-                          ...current,
-                          [item.id]: {
-                            casesOnHand: event.target.value,
-                            bottlesOnHand: current[item.id]?.bottlesOnHand ?? item.bottlesOnHand,
-                            inventoryDate: current[item.id]?.inventoryDate ?? toDateInputValue(item.updatedAt),
-                          },
-                        }))}
-                        className="h-9 w-28 rounded-md border border-input bg-white px-3 py-1 text-sm shadow-sm"
-                      />
-                    </td>
                     <td className="py-3 pr-3">
                       <input
                         type="number"
@@ -616,7 +604,6 @@ export function AccountInventoryOnHandCard({
                         onChange={(event) => setDraftCounts((current) => ({
                           ...current,
                           [item.id]: {
-                            casesOnHand: current[item.id]?.casesOnHand ?? item.casesOnHand,
                             bottlesOnHand: event.target.value,
                             inventoryDate: current[item.id]?.inventoryDate ?? toDateInputValue(item.updatedAt),
                           },
@@ -631,7 +618,6 @@ export function AccountInventoryOnHandCard({
                         onChange={(event) => setDraftCounts((current) => ({
                           ...current,
                           [item.id]: {
-                            casesOnHand: current[item.id]?.casesOnHand ?? item.casesOnHand,
                             bottlesOnHand: current[item.id]?.bottlesOnHand ?? item.bottlesOnHand,
                             inventoryDate: event.target.value,
                           },
@@ -651,7 +637,6 @@ export function AccountInventoryOnHandCard({
                           disabled={isPending}
                           onClick={() => saveProduct(
                             item.productId,
-                            draftCounts[item.id]?.casesOnHand ?? item.casesOnHand,
                             draftCounts[item.id]?.bottlesOnHand ?? item.bottlesOnHand,
                             draftCounts[item.id]?.inventoryDate ?? toDateInputValue(item.updatedAt),
                           )}
@@ -676,7 +661,7 @@ export function AccountInventoryOnHandCard({
         </div>
 
         <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4">
-          <div className="grid gap-3 md:grid-cols-[1fr_140px_140px_160px_auto] md:items-start">
+          <div className="grid gap-3 md:grid-cols-[1fr_160px_160px_auto] md:items-start">
             <select
               value={selectedProductId}
               onChange={(event) => setSelectedProductId(event.target.value)}
@@ -689,18 +674,6 @@ export function AccountInventoryOnHandCard({
                 </option>
               ))}
             </select>
-            <div className="space-y-1">
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={newCases}
-                onChange={(event) => setNewCases(event.target.value)}
-                className="h-10 w-full rounded-md border border-input bg-white px-3 py-2 text-sm shadow-sm"
-                placeholder="Cases"
-              />
-              <p className="text-center text-xs font-medium text-slate-500">Cases on Hand</p>
-            </div>
             <div className="space-y-1">
               <input
                 type="number"
@@ -732,11 +705,67 @@ export function AccountInventoryOnHandCard({
         {showHistory ? (
           <div className="space-y-3 rounded-2xl border border-slate-200 p-4">
             <div>
-              <p className="text-sm font-semibold text-slate-900">Inventory Change Log</p>
+              <p className="text-sm font-semibold text-slate-900">Complete Inventory Log</p>
               <p className="mt-1 text-xs text-slate-500">
-                Review the exact saved inventory changes behind the chart. Admins can edit or delete individual entries.
+                Every saved count stays in this log, even when its date falls outside the chart range.
               </p>
             </div>
+
+            {canManageHistory ? (
+              <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 lg:grid-cols-[minmax(220px,1.5fr)_130px_155px_minmax(180px,1fr)_auto] lg:items-end">
+                <label className="space-y-1 text-xs font-medium text-slate-600">
+                  Product
+                  <select
+                    value={logProductId}
+                    onChange={(event) => setLogProductId(event.target.value)}
+                    className="h-10 w-full rounded-md border border-input bg-white px-3 py-2 text-sm font-normal text-slate-900 shadow-sm"
+                  >
+                    <option value="">Choose a product</option>
+                    {products.map((product) => (
+                      <option key={product.id} value={product.id}>
+                        {product.name} ({product.sku}){product.active ? '' : ' - inactive'}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="space-y-1 text-xs font-medium text-slate-600">
+                  Bottles counted
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={logBottles}
+                    onChange={(event) => setLogBottles(event.target.value)}
+                    className="h-10 w-full rounded-md border border-input bg-white px-3 py-2 text-sm font-normal text-slate-900 shadow-sm"
+                  />
+                </label>
+                <label className="space-y-1 text-xs font-medium text-slate-600">
+                  Inventory date
+                  <input
+                    type="date"
+                    value={logInventoryDate}
+                    onChange={(event) => setLogInventoryDate(event.target.value)}
+                    className="h-10 w-full rounded-md border border-input bg-white px-3 py-2 text-sm font-normal text-slate-900 shadow-sm"
+                  />
+                </label>
+                <label className="space-y-1 text-xs font-medium text-slate-600">
+                  Note
+                  <input
+                    type="text"
+                    value={logNotes}
+                    onChange={(event) => setLogNotes(event.target.value)}
+                    className="h-10 w-full rounded-md border border-input bg-white px-3 py-2 text-sm font-normal text-slate-900 shadow-sm"
+                    placeholder="Optional note"
+                  />
+                </label>
+                <Button type="button" disabled={isPending || !logProductId} onClick={addHistoryEntry}>
+                  <Plus className="mr-2 h-4 w-4" />Add Log Entry
+                </Button>
+                <p className="text-xs text-slate-500 lg:col-span-5">
+                  Historical entries are absolute bottle counts. Later counts and fulfilled-order additions are recalculated in date order.
+                </p>
+              </div>
+            ) : null}
 
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
@@ -744,8 +773,8 @@ export function AccountInventoryOnHandCard({
                   <tr className="border-b text-left text-xs uppercase tracking-wide text-slate-500">
                     <th className="pb-2 pr-3 font-medium">Date</th>
                     <th className="pb-2 pr-3 font-medium">Product</th>
-                    <th className="pb-2 pr-3 font-medium">Cases Change</th>
-                    <th className="pb-2 pr-3 font-medium">Bottles Change</th>
+                    <th className="pb-2 pr-3 font-medium">Bottles Counted / Received</th>
+                    <th className="pb-2 pr-3 font-medium">Change</th>
                     <th className="pb-2 pr-3 font-medium">Running Total</th>
                     <th className="pb-2 pr-3 font-medium">Notes</th>
                     <th className="pb-2 pr-3 font-medium">By</th>
@@ -753,12 +782,12 @@ export function AccountInventoryOnHandCard({
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleHistoryEvents.length === 0 ? (
+                  {allHistoryEvents.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-4 text-sm text-slate-500">No inventory changes in the selected range.</td>
+                      <td colSpan={8} className="py-4 text-sm text-slate-500">No inventory entries have been saved yet.</td>
                     </tr>
                   ) : (
-                    visibleHistoryEvents.map((event) => (
+                    allHistoryEvents.map((event) => (
                       <tr key={event.id} className="border-b last:border-0">
                         <td className="py-3 pr-3">
                           <input
@@ -767,8 +796,8 @@ export function AccountInventoryOnHandCard({
                             onChange={(entryEvent) => setHistoryDrafts((current) => ({
                               ...current,
                               [event.id]: {
-                                deltaCases: current[event.id]?.deltaCases ?? event.deltaCases.toFixed(2),
-                                deltaBottles: current[event.id]?.deltaBottles ?? event.deltaBottles.toFixed(2),
+                                recordedBottlesOnHand: current[event.id]?.recordedBottlesOnHand
+                                  ?? Number(event.recordedBottlesOnHand ?? event.resultingBottlesOnHand ?? 0).toFixed(2),
                                 inventoryDate: entryEvent.target.value,
                                 notes: current[event.id]?.notes ?? (event.notes ?? ''),
                               },
@@ -782,43 +811,34 @@ export function AccountInventoryOnHandCard({
                           <p className="text-xs text-slate-500">{event.title}</p>
                         </td>
                         <td className="py-3 pr-3">
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={historyDrafts[event.id]?.deltaCases ?? event.deltaCases.toFixed(2)}
-                            onChange={(entryEvent) => setHistoryDrafts((current) => ({
-                              ...current,
-                              [event.id]: {
-                                deltaCases: entryEvent.target.value,
-                                deltaBottles: current[event.id]?.deltaBottles ?? event.deltaBottles.toFixed(2),
-                                inventoryDate: current[event.id]?.inventoryDate ?? toDateInputValue(event.createdAt),
-                                notes: current[event.id]?.notes ?? (event.notes ?? ''),
-                              },
-                            }))}
-                            disabled={!canManageHistory}
-                            className="h-9 w-28 rounded-md border border-input bg-white px-3 py-1 text-sm shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
-                          />
+                          {event.recordedBottlesOnHand == null ? (
+                            <span className="whitespace-nowrap text-sm text-slate-700">
+                              +{event.deltaBottles.toFixed(2)} received
+                            </span>
+                          ) : (
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={historyDrafts[event.id]?.recordedBottlesOnHand
+                                ?? event.recordedBottlesOnHand.toFixed(2)}
+                              onChange={(entryEvent) => setHistoryDrafts((current) => ({
+                                ...current,
+                                [event.id]: {
+                                  recordedBottlesOnHand: entryEvent.target.value,
+                                  inventoryDate: current[event.id]?.inventoryDate ?? toDateInputValue(event.createdAt),
+                                  notes: current[event.id]?.notes ?? (event.notes ?? ''),
+                                },
+                              }))}
+                              disabled={!canManageHistory}
+                              className="h-9 w-28 rounded-md border border-input bg-white px-3 py-1 text-sm shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
+                            />
+                          )}
                         </td>
-                        <td className="py-3 pr-3">
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={historyDrafts[event.id]?.deltaBottles ?? event.deltaBottles.toFixed(2)}
-                            onChange={(entryEvent) => setHistoryDrafts((current) => ({
-                              ...current,
-                              [event.id]: {
-                                deltaCases: current[event.id]?.deltaCases ?? event.deltaCases.toFixed(2),
-                                deltaBottles: entryEvent.target.value,
-                                inventoryDate: current[event.id]?.inventoryDate ?? toDateInputValue(event.createdAt),
-                                notes: current[event.id]?.notes ?? (event.notes ?? ''),
-                              },
-                            }))}
-                            disabled={!canManageHistory}
-                            className="h-9 w-28 rounded-md border border-input bg-white px-3 py-1 text-sm shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
-                          />
+                        <td className="py-3 pr-3 text-sm text-slate-600">
+                          {event.deltaBottles > 0 ? '+' : ''}{event.deltaBottles.toFixed(2)}
                         </td>
                         <td className="py-3 pr-3 text-xs text-slate-500">
-                          <p>{Number(event.resultingCasesOnHand ?? 0).toFixed(2)} cases</p>
                           <p>{Number(event.resultingBottlesOnHand ?? 0).toFixed(2)} bottles</p>
                         </td>
                         <td className="py-3 pr-3">
@@ -828,8 +848,8 @@ export function AccountInventoryOnHandCard({
                             onChange={(entryEvent) => setHistoryDrafts((current) => ({
                               ...current,
                               [event.id]: {
-                                deltaCases: current[event.id]?.deltaCases ?? event.deltaCases.toFixed(2),
-                                deltaBottles: current[event.id]?.deltaBottles ?? event.deltaBottles.toFixed(2),
+                                recordedBottlesOnHand: current[event.id]?.recordedBottlesOnHand
+                                  ?? Number(event.recordedBottlesOnHand ?? event.resultingBottlesOnHand ?? 0).toFixed(2),
                                 inventoryDate: current[event.id]?.inventoryDate ?? toDateInputValue(event.createdAt),
                                 notes: entryEvent.target.value,
                               },

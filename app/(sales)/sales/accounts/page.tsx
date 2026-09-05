@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Building2, MapPin, Phone, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import { PhoneActions } from '@/components/shared/PhoneActions'
-import { getReorderFollowUps, LOW_INVENTORY_CASE_THRESHOLD, SINGLE_CASE_REORDER_DELAY_DAYS } from '@/lib/sales/reorder-follow-ups'
+import { getReorderFollowUps, LOW_INVENTORY_BOTTLE_THRESHOLD, SINGLE_CASE_REORDER_DELAY_DAYS } from '@/lib/sales/reorder-follow-ups'
 
 export default async function SalesAccountsPage() {
   const session = await requireRole('sales_rep', 'sales_manager', 'admin')
@@ -56,7 +56,7 @@ export default async function SalesAccountsPage() {
               Reorder Follow-ups ({reorderSuggestions.length})
             </CardTitle>
             <p className="text-xs text-amber-700">
-              Triggered when tracked inventory falls to {LOW_INVENTORY_CASE_THRESHOLD} case left, or after {SINGLE_CASE_REORDER_DELAY_DAYS} days for a 1-case order.
+              Triggered when tracked inventory falls to {LOW_INVENTORY_BOTTLE_THRESHOLD} bottles left, or after {SINGLE_CASE_REORDER_DELAY_DAYS} days for a 1-case order.
             </p>
           </CardHeader>
           <CardContent className="pt-0">

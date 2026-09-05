@@ -525,7 +525,6 @@ export async function AccountRecordPage({
 
       {tab === 'overview' && overviewData ? (() => {
         const creditAvailable = Math.max(0, Number(account.creditLimit ?? 0) - Number(account.balance ?? 0))
-        const inventoryCasesTotal = overviewData.inventoryItems.reduce((sum, item) => sum + Number(item.casesOnHand || 0), 0)
         const inventoryBottlesTotal = overviewData.inventoryItems.reduce((sum, item) => sum + Number(item.bottlesOnHand || 0), 0)
         const accountHealthSignals = [
           Number(account.balance ?? 0) > 0 ? { label: 'Outstanding balance', ok: false } : { label: 'No outstanding balance', ok: true },
@@ -543,7 +542,7 @@ export async function AccountRecordPage({
               <Card><CardContent className="p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Credit Available</p><p className="mt-1 text-2xl font-bold">{formatCurrency(creditAvailable.toFixed(2))}</p><p className="mt-0.5 text-xs text-muted-foreground">of {formatCurrency(account.creditLimit ?? '0')} limit</p></CardContent></Card>
               <Card><CardContent className="p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Total Orders</p><p className="mt-1 text-2xl font-bold">{overviewData.orderCount.total}</p></CardContent></Card>
               <Card><CardContent className="p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Member Since</p><p className="mt-1 text-lg font-bold" suppressHydrationWarning>{formatDate(account.createdAt)}</p></CardContent></Card>
-              <Card><CardContent className="p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Inventory On Hand</p><p className="mt-1 text-2xl font-bold">{inventoryCasesTotal.toFixed(2)} cases</p><p className="mt-0.5 text-xs text-muted-foreground">{inventoryBottlesTotal.toFixed(2)} bottles across {overviewData.inventoryItems.length} items</p></CardContent></Card>
+              <Card><CardContent className="p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Inventory On Hand</p><p className="mt-1 text-2xl font-bold">{inventoryBottlesTotal.toFixed(2)} bottles</p><p className="mt-0.5 text-xs text-muted-foreground">Across {overviewData.inventoryItems.length} products</p></CardContent></Card>
             </div>
 
             <AccountSmartInsightsCard insights={overviewData.smartInsights} />
@@ -614,7 +613,6 @@ export async function AccountRecordPage({
 
                 <AccountInventorySummaryCard
                   items={overviewData.inventoryItems.slice(0, 5)}
-                  totalCases={inventoryCasesTotal}
                   totalBottles={inventoryBottlesTotal}
                   href={getTabHref(basePath, 'inventory')}
                 />

@@ -72,11 +72,15 @@ export interface AccountRow {
   orderCount?: number
   daysSinceLastOrder?: number | null
   pullThroughScore?: number | null
+  inventoryBottlesOnHand: number
+  lastInventoryCheckAt: string | Date | null
+  daysSinceLastInventoryCheck: number | null
 }
 
 const COLUMN_OPTIONS = [
   { key: 'company', label: 'Name' },
   { key: 'region', label: 'Region' },
+  { key: 'inventory', label: 'Inventory' },
   { key: 'orders', label: 'Orders' },
   { key: 'daysSinceOrder', label: 'Days Since Order' },
   { key: 'pullThrough', label: 'Pull-Through' },
@@ -108,10 +112,11 @@ type SortKey = ColumnKey
 type SortDirection = 'asc' | 'desc'
 type ActivityWindowKey = 'all' | '1d' | '3d' | '7d' | '14d' | '30d'
 
-const ADMIN_DEFAULT_COLUMNS: ColumnKey[] = ['company', 'phone', 'businessType', 'region', 'orders', 'daysSinceOrder', 'pullThrough']
+const PREVIOUS_ADMIN_DEFAULT_COLUMNS: ColumnKey[] = ['company', 'phone', 'businessType', 'region', 'orders', 'daysSinceOrder', 'pullThrough']
+const ADMIN_DEFAULT_COLUMNS: ColumnKey[] = ['company', 'phone', 'businessType', 'region', 'inventory', 'orders', 'daysSinceOrder', 'pullThrough']
 const STANDARD_DEFAULT_COLUMNS: ColumnKey[] = ['company', 'location', 'phone', 'dealStage', 'terms', 'pendingCases', 'totalPurchased', 'balance', 'health', 'hubspot']
-const NUMERIC_COLUMNS = new Set<ColumnKey>(['creditLimit', 'pendingCases', 'totalPurchased', 'balance', 'health', 'orders', 'daysSinceOrder', 'pullThrough'])
-const DEFAULT_DESCENDING_COLUMNS = new Set<SortKey>(['creditLimit', 'pendingCases', 'totalPurchased', 'balance', 'lastActivity', 'health', 'orders', 'pullThrough'])
+const NUMERIC_COLUMNS = new Set<ColumnKey>(['creditLimit', 'pendingCases', 'totalPurchased', 'balance', 'health', 'inventory', 'orders', 'daysSinceOrder', 'pullThrough'])
+const DEFAULT_DESCENDING_COLUMNS = new Set<SortKey>(['creditLimit', 'pendingCases', 'totalPurchased', 'balance', 'lastActivity', 'health', 'inventory', 'orders', 'pullThrough'])
 const ACTIVITY_WINDOW_OPTIONS: Array<{ value: ActivityWindowKey; label: string }> = [
   { value: 'all', label: 'Touched: Anytime' },
   { value: '1d', label: 'Touched: Yesterday' },
@@ -148,6 +153,7 @@ function getAccountSortValue(
     case 'contactName': return account.contactName
     case 'businessType': return account.businessType
     case 'region': return account.regionName ?? null
+    case 'inventory': return account.lastInventoryCheckAt ? account.inventoryBottlesOnHand : null
     case 'orders': return account.orderCount ?? null
     case 'daysSinceOrder': return account.daysSinceLastOrder ?? null
     case 'pullThrough': return account.pullThroughScore ?? null
@@ -201,9 +207,12 @@ function readStoredColumns(storageKey: string, defaultColumns: ColumnKey[]): Col
     const next = parsed.filter((value): value is ColumnKey =>
       COLUMN_OPTIONS.some((option) => option.key === value)
     )
-    const isPreviousDefault = defaultColumns === ADMIN_DEFAULT_COLUMNS
-      && next.length === STANDARD_DEFAULT_COLUMNS.length
-      && next.every((column, index) => column === STANDARD_DEFAULT_COLUMNS[index])
+    const isPreviousDefault = defaultColumns === ADMIN_DEFAULT_COLUMNS && (
+      (next.length === STANDARD_DEFAULT_COLUMNS.length
+        && next.every((column, index) => column === STANDARD_DEFAULT_COLUMNS[index]))
+      || (next.length === PREVIOUS_ADMIN_DEFAULT_COLUMNS.length
+        && next.every((column, index) => column === PREVIOUS_ADMIN_DEFAULT_COLUMNS[index]))
+    )
     if (isPreviousDefault) return ADMIN_DEFAULT_COLUMNS
     return next.length ? next : defaultColumns
   } catch {
@@ -417,6 +426,24 @@ function renderAccountCell({
         </td>
       )
     }
+    case 'inventory':
+      return (
+        <td key={column} className="px-4 py-3 text-right">
+          {account.lastInventoryCheckAt ? (
+            <div className="inline-flex min-w-28 flex-col items-end">
+              <p className="font-mono text-sm font-semibold text-slate-900">
+                {account.inventoryBottlesOnHand.toLocaleString(undefined, { maximumFractionDigits: 2 })} bottles
+              </p>
+              <p className="text-xs text-slate-400" suppressHydrationWarning>
+                {formatDate(account.lastInventoryCheckAt)}
+                {account.daysSinceLastInventoryCheck == null ? '' : ` · ${account.daysSinceLastInventoryCheck}d ago`}
+              </p>
+            </div>
+          ) : (
+            <span className="text-sm text-muted-foreground">—</span>
+          )}
+        </td>
+      )
     case 'orders':
       return <td key={column} className="px-4 py-3 text-right text-sm font-semibold text-slate-900">{account.orderCount || '—'}</td>
     case 'daysSinceOrder':

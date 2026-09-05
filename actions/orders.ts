@@ -16,6 +16,7 @@ import { formatPaymentTerms } from '@/lib/orders/payment-terms'
 import { buildPricedLineItems, computeDeliveryFee, type CheckoutOrderType, type PurchaseUnit } from '@/lib/orders/checkout'
 import type { OrderPaymentMethod, OrderPaymentStatus } from '@/db/schema'
 import { formatDate } from '@/lib/utils'
+import { syncOrderAccountInventory } from '@/lib/orders/account-inventory'
 
 function uniqueEmails(...values: Array<string | null | undefined>) {
   return Array.from(new Set(values.map((value) => value?.trim()).filter(Boolean) as string[]))
@@ -548,7 +549,11 @@ export async function applyWebhookOrderPaymentUpdate(
     .where(eq(orders.stripePaymentIntentId, paymentIntentId))
     .limit(1)
 
-  if (!order || order.paymentStatus === nextPaymentStatus) return
+  if (!order) return
+  if (order.paymentStatus === nextPaymentStatus) {
+    if (nextPaymentStatus === 'paid') await syncOrderAccountInventory(order.id, actorUserId)
+    return
+  }
 
   await db
     .update(orders)
@@ -577,6 +582,8 @@ export async function applyWebhookOrderPaymentUpdate(
     body: activityBody,
     metadata: { paymentIntentId, paymentStatus: nextPaymentStatus },
   })
+
+  await syncOrderAccountInventory(order.id, actorUserId)
 
   revalidatePath('/customer/orders')
   revalidatePath(`/customer/orders/${order.id}`)
@@ -630,6 +637,8 @@ export async function updateOrderPaymentType(formData: FormData) {
     paidAt: nextStatus === 'paid' ? new Date() : null,
   }).where(eq(orders.id, order.id))
 
+  await syncOrderAccountInventory(order.id, session.user.id)
+
   await logActivityEvent({
     entityType: 'order',
     entityId: order.id,
@@ -656,6 +665,7 @@ export async function updateOrderStatus(orderId: string, status: 'pending' | 'co
     throw new Error('Unauthorized')
   }
   await db.update(orders).set({ status }).where(eq(orders.id, orderId))
+  await syncOrderAccountInventory(orderId, session.user.id)
   await logActivityEvent({
     entityType: 'order',
     entityId: orderId,
@@ -714,6 +724,7 @@ export async function bulkUpdateOrderStatus(input: {
     .where(inArray(orders.id, orderIds))
 
   for (const orderId of orderIds) {
+    await syncOrderAccountInventory(orderId, session.user.id)
     await logActivityEvent({
       entityType: 'order',
       entityId: orderId,

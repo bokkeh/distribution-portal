@@ -745,12 +745,14 @@ export async function loadAccountTimeline(
         productName: accountInventoryAdjustments.productName,
         resultingCases: accountInventoryAdjustments.resultingCasesOnHand,
         resultingBottles: accountInventoryAdjustments.resultingBottlesOnHand,
+        bottlesPerCase: products.bottlesPerCase,
         notes: accountInventoryAdjustments.notes,
         actorName: users.name,
         actorRole: users.role,
       })
       .from(accountInventoryAdjustments)
       .leftJoin(users, eq(users.id, accountInventoryAdjustments.createdByUserId))
+      .innerJoin(products, eq(products.id, accountInventoryAdjustments.productId))
       .where(eq(accountInventoryAdjustments.accountId, accountId))
       .orderBy(desc(accountInventoryAdjustments.effectiveAt))
       .limit(100),
@@ -806,7 +808,9 @@ export async function loadAccountTimeline(
       kind: 'inventory_check',
       at: new Date(row.effectiveAt),
       title: 'Inventory check',
-      detail: `${row.productName}: ${toNumber(row.resultingCases).toFixed(0)} cases / ${toNumber(row.resultingBottles).toFixed(0)} bottles remaining${row.notes ? ` — ${row.notes}` : ''}`,
+      detail: `${row.productName}: ${(
+        toNumber(row.resultingBottles) + toNumber(row.resultingCases) * row.bottlesPerCase
+      ).toFixed(0)} bottles remaining${row.notes ? ` — ${row.notes}` : ''}`,
       actorName: row.actorName,
       actorRole: row.actorRole,
       href: `${basePath}?tab=inventory`,

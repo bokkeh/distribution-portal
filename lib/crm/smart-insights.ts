@@ -103,7 +103,6 @@ function buildRuleInsights(input: SmartInsightsInput) {
   const latestDelivery = recentDeliveries[0]?.completedAt ?? null
   const completedTastings = recentTastings.filter((tasting) => tasting.status === 'completed')
   const latestInventoryUpdate = inventoryItems[0]?.updatedAt ?? null
-  const inventoryCases = inventoryItems.reduce((sum, item) => sum + Number(item.casesOnHand || 0), 0)
   const inventoryBottles = inventoryItems.reduce((sum, item) => sum + Number(item.bottlesOnHand || 0), 0)
   const positiveBalance = Number(account.balance ?? 0) > 0
   const daysSinceLastOrder = getDaysSince(latestOrder)
@@ -217,7 +216,7 @@ function buildRuleInsights(input: SmartInsightsInput) {
     })
   }
 
-  if (inventoryItems.length > 0 && inventoryCases <= 3 && inventoryBottles <= 12 && !latestDelivery) {
+  if (inventoryItems.length > 0 && inventoryBottles <= 12 && !latestDelivery) {
     pushInsight(recommendations, {
       id: 'inventory-low-no-delivery',
       title: 'Inventory may need restock follow-up',
@@ -226,7 +225,7 @@ function buildRuleInsights(input: SmartInsightsInput) {
       priority: 'medium',
       actionLabel: mode === 'admin' ? 'Add Delivery' : 'Create Order',
       actionHref: mode === 'admin' ? '/admin/deliveries/new' : mode === 'sales' ? `/sales/orders/new?customer=${account.id}` : `/${mode}/orders/new?customer=${account.id}`,
-      reasoning: [`Inventory on hand is ${inventoryCases.toFixed(2)} cases and ${inventoryBottles.toFixed(2)} bottles`, 'No completed delivery was found in recent account activity'],
+      reasoning: [`Inventory on hand is ${inventoryBottles.toFixed(2)} bottles`, 'No completed delivery was found in recent account activity'],
     })
   }
 

@@ -1,8 +1,8 @@
 import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { db } from '@/db'
-import { accountInventoryOnHand, orderItems, orders } from '@/db/schema'
+import { accountInventoryOnHand, orderItems, orders, products } from '@/db/schema'
 
-export const LOW_INVENTORY_CASE_THRESHOLD = 1
+export const LOW_INVENTORY_BOTTLE_THRESHOLD = 6
 export const SINGLE_CASE_REORDER_DELAY_DAYS = 60
 
 type AccountInput = {
@@ -17,7 +17,7 @@ export type ReorderFollowUp = {
   lastOrderAt: Date | null
   latestOrderCaseQuantity: number | null
   lowInventoryProductCount: number
-  lowestCasesOnHand: number | null
+  lowestBottlesOnHand: number | null
   reason: string
 }
 
@@ -76,12 +76,19 @@ export async function getReorderFollowUps(accounts: AccountInput[]): Promise<Reo
     .select({
       accountId: accountInventoryOnHand.accountId,
       lowInventoryProductCount: sql<number>`count(*)::int`.as('low_inventory_product_count'),
-      lowestCasesOnHand: sql<number>`min(${accountInventoryOnHand.casesOnHand}::numeric)::float`.as('lowest_cases_on_hand'),
+      lowestBottlesOnHand: sql<number>`min(
+        ${accountInventoryOnHand.bottlesOnHand}::numeric
+        + (${accountInventoryOnHand.casesOnHand}::numeric * ${products.bottlesPerCase})
+      )::float`.as('lowest_bottles_on_hand'),
     })
     .from(accountInventoryOnHand)
+    .innerJoin(products, eq(accountInventoryOnHand.productId, products.id))
     .where(and(
       inArray(accountInventoryOnHand.accountId, accountIds),
-      sql`${accountInventoryOnHand.casesOnHand} <= ${LOW_INVENTORY_CASE_THRESHOLD}`,
+      sql`(
+        ${accountInventoryOnHand.bottlesOnHand}::numeric
+        + (${accountInventoryOnHand.casesOnHand}::numeric * ${products.bottlesPerCase})
+      ) <= ${LOW_INVENTORY_BOTTLE_THRESHOLD}`,
     ))
     .groupBy(accountInventoryOnHand.accountId)
 
@@ -89,7 +96,7 @@ export async function getReorderFollowUps(accounts: AccountInput[]): Promise<Reo
     row.accountId,
     {
       lowInventoryProductCount: Number(row.lowInventoryProductCount ?? 0),
-      lowestCasesOnHand: row.lowestCasesOnHand == null ? null : Number(row.lowestCasesOnHand),
+      lowestBottlesOnHand: row.lowestBottlesOnHand == null ? null : Number(row.lowestBottlesOnHand),
     },
   ]))
 
@@ -111,11 +118,11 @@ export async function getReorderFollowUps(accounts: AccountInput[]): Promise<Reo
         return null
       }
 
-      let reason = `${lowInventory?.lowInventoryProductCount ?? 0} product${(lowInventory?.lowInventoryProductCount ?? 0) === 1 ? '' : 's'} at or below ${LOW_INVENTORY_CASE_THRESHOLD} case left`
+      let reason = `${lowInventory?.lowInventoryProductCount ?? 0} product${(lowInventory?.lowInventoryProductCount ?? 0) === 1 ? '' : 's'} at or below ${LOW_INVENTORY_BOTTLE_THRESHOLD} bottles left`
       if (!hasLowInventory) {
         reason = `Latest ${latestOrderCaseQuantity}-case order is ${SINGLE_CASE_REORDER_DELAY_DAYS}+ days old`
       } else if (isSingleCaseOrder) {
-        reason = `1 case left and the latest 1-case order is ${daysSinceLastOrder} days old`
+        reason = `${lowInventory?.lowestBottlesOnHand ?? 0} bottles left and the latest 1-case order is ${daysSinceLastOrder} days old`
       }
 
       return {
@@ -125,7 +132,7 @@ export async function getReorderFollowUps(accounts: AccountInput[]): Promise<Reo
         lastOrderAt: latestOrder?.createdAt ?? null,
         latestOrderCaseQuantity,
         lowInventoryProductCount: lowInventory?.lowInventoryProductCount ?? 0,
-        lowestCasesOnHand: lowInventory?.lowestCasesOnHand ?? null,
+        lowestBottlesOnHand: lowInventory?.lowestBottlesOnHand ?? null,
         reason,
       } satisfies ReorderFollowUp
     })
