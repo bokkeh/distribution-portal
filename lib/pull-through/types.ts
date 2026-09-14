@@ -194,6 +194,29 @@ export type PullThroughScore = {
   reason: string
 }
 
+/**
+ * How likely the account is to place its next commercial order soon, read off its own
+ * ordering rhythm and stock position. Answers "who should I call today?" directly.
+ */
+export type ReorderLikelihoodLevel = 'very_likely' | 'likely' | 'possible' | 'unlikely' | 'unknown'
+
+export type ReorderCyclePosition = 'early' | 'approaching' | 'due' | 'overdue' | 'broken'
+
+export type ReorderLikelihood = {
+  level: ReorderLikelihoodLevel
+  /** 0..100, or null when there is no reorder pattern to read from. */
+  score: number | null
+  /** Where the account sits in its own reorder cycle. null without a cadence. */
+  cyclePosition: ReorderCyclePosition | null
+  /** Expected reorder window inferred from cadence (mirrors OrderMetrics.predictedNextOrder*). */
+  expectedFrom: Date | null
+  expectedTo: Date | null
+  /** Plain-English summary, e.g. "Due now — day 28 of a 30-day cycle". */
+  headline: string
+  /** The facts that produced the level, in priority order. */
+  why: string[]
+}
+
 export type RecommendedActionKey =
   | 'call_for_reorder'
   | 'follow_up_after_tasting'
@@ -264,6 +287,7 @@ export type PullThroughAccountRow = {
   tastings: TastingMetrics
   temperature: AccountTemperature
   temperatureWhy: string[]
+  reorderLikelihood: ReorderLikelihood
   pullThrough: PullThroughScore
   recommendation: RecommendedAction
   dataQuality: DataQualityFlag[]

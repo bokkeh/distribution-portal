@@ -35,6 +35,7 @@ import {
   computeInventoryPosition,
   computeOrderMetrics,
   computePullThroughScore,
+  computeReorderLikelihood,
   computeTastingMetrics,
   daysBetween,
   deriveTemperature,
@@ -528,6 +529,7 @@ export async function loadPullThroughDataset(scope: PullThroughScope): Promise<P
     )
 
     const { temperature, why: temperatureWhy } = deriveTemperature(orderMetrics, inventory, tastingMetrics)
+    const reorderLikelihood = computeReorderLikelihood(orderMetrics, inventory)
 
     const ninetyDaysAgo = new Date(now.getTime() - 90 * 86_400_000)
     const oneEightyDaysAgo = new Date(now.getTime() - 180 * 86_400_000)
@@ -596,6 +598,7 @@ export async function loadPullThroughDataset(scope: PullThroughScope): Promise<P
       tastings: tastingMetrics,
       temperature,
       temperatureWhy,
+      reorderLikelihood,
       pullThrough,
       recommendation,
       dataQuality,

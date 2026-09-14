@@ -5,8 +5,10 @@ import Link from 'next/link'
 import { ArrowUpDown, Info } from 'lucide-react'
 import {
   INVENTORY_META,
+  LIKELIHOOD_META,
   NOT_ENOUGH_DATA,
   TEMPERATURE_META,
+  fmtDateRange,
   fmtShortDate,
   orDash,
   scoreTone,
@@ -16,6 +18,8 @@ import type { PullThroughAccountRow } from '@/lib/pull-through/types'
 
 type SortKey =
   | 'account'
+  | 'likelihood'
+  | 'expected'
   | 'inventory'
   | 'lastOrder'
   | 'lastTasting'
@@ -26,12 +30,16 @@ type SortKey =
   | 'score'
   | 'temperature'
 
-const NUMERIC_DESC_DEFAULT: SortKey[] = ['reorders', 'score', 'daysSince', 'inventory']
+const NUMERIC_DESC_DEFAULT: SortKey[] = ['likelihood', 'reorders', 'score', 'daysSince', 'inventory']
 
 function sortValue(row: PullThroughAccountRow, key: SortKey): number | string | null {
   switch (key) {
     case 'account':
       return row.accountName.toLowerCase()
+    case 'likelihood':
+      return row.reorderLikelihood.score
+    case 'expected':
+      return row.reorderLikelihood.expectedFrom ? new Date(row.reorderLikelihood.expectedFrom).getTime() : null
     case 'inventory':
       return row.inventory.bottles
     case 'lastOrder':
@@ -61,16 +69,20 @@ function SortHeader({
   align = 'left',
   activeKey,
   onSort,
+  sticky = false,
 }: {
   label: string
   sortAs?: SortKey
   align?: 'left' | 'right'
   activeKey: SortKey
   onSort: (key: SortKey) => void
+  sticky?: boolean
 }) {
   const classes = `whitespace-nowrap px-3 py-2.5 ${
     align === 'right' ? 'text-right' : 'text-left'
-  } text-[11px] font-semibold uppercase tracking-wide text-muted-foreground`
+  } text-[11px] font-semibold uppercase tracking-wide text-muted-foreground ${
+    sticky ? 'sticky left-0 z-10 bg-slate-50 shadow-[inset_-1px_0_0_theme(colors.slate.200)]' : ''
+  }`
 
   if (!sortAs) return <th className={classes}>{label}</th>
 
@@ -89,9 +101,10 @@ function SortHeader({
 }
 
 export function PullThroughTable({ rows }: { rows: PullThroughAccountRow[] }) {
-  const [sortKey, setSortKey] = useState<SortKey>('temperature')
-  const [descending, setDescending] = useState(false)
+  const [sortKey, setSortKey] = useState<SortKey>('likelihood')
+  const [descending, setDescending] = useState(true)
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [likelihoodExpanded, setLikelihoodExpanded] = useState<string | null>(null)
 
   const sorted = useMemo(() => {
     const copy = [...rows]
@@ -133,7 +146,13 @@ export function PullThroughTable({ rows }: { rows: PullThroughAccountRow[] }) {
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-slate-100 bg-slate-50">
-            <SortHeader label="Account" sortAs="account" activeKey={sortKey} onSort={toggleSort} />
+            <SortHeader label="Account" sortAs="account" activeKey={sortKey} onSort={toggleSort} sticky />
+            <SortHeader label="Reorder Likelihood" sortAs="likelihood" activeKey={sortKey} onSort={toggleSort} />
+            <SortHeader label="Expected Reorder" sortAs="expected" activeKey={sortKey} onSort={toggleSort} />
+            <SortHeader label="Recommended Action" activeKey={sortKey} onSort={toggleSort} />
+            <SortHeader label="Temperature" sortAs="temperature" activeKey={sortKey} onSort={toggleSort} />
+            <SortHeader label="Days Since Order" sortAs="daysSince" align="right" activeKey={sortKey} onSort={toggleSort} />
+            <SortHeader label="Avg Days Between" sortAs="cadence" align="right" activeKey={sortKey} onSort={toggleSort} />
             <SortHeader label="City" activeKey={sortKey} onSort={toggleSort} />
             <SortHeader label="Market" activeKey={sortKey} onSort={toggleSort} />
             <SortHeader label="Sales Rep" activeKey={sortKey} onSort={toggleSort} />
@@ -147,23 +166,22 @@ export function PullThroughTable({ rows }: { rows: PullThroughAccountRow[] }) {
             <SortHeader label="Next Order After Tasting" activeKey={sortKey} onSort={toggleSort} />
             <SortHeader label="Tasting → Reorder" align="right" activeKey={sortKey} onSort={toggleSort} />
             <SortHeader label="Reorders" sortAs="reorders" align="right" activeKey={sortKey} onSort={toggleSort} />
-            <SortHeader label="Avg Days Between" sortAs="cadence" align="right" activeKey={sortKey} onSort={toggleSort} />
-            <SortHeader label="Days Since Order" sortAs="daysSince" align="right" activeKey={sortKey} onSort={toggleSort} />
             <SortHeader label="Est. Days of Inv." sortAs="daysOfInventory" align="right" activeKey={sortKey} onSort={toggleSort} />
             <SortHeader label="Pull-Through" sortAs="score" align="right" activeKey={sortKey} onSort={toggleSort} />
-            <SortHeader label="Temperature" sortAs="temperature" activeKey={sortKey} onSort={toggleSort} />
-            <SortHeader label="Recommended Action" activeKey={sortKey} onSort={toggleSort} />
           </tr>
         </thead>
         <tbody>
           {sorted.map((row) => {
             const temp = TEMPERATURE_META[row.temperature]
             const inv = INVENTORY_META[row.inventory.confidence]
+            const likelihood = row.reorderLikelihood
+            const likelihoodMeta = LIKELIHOOD_META[likelihood.level]
             const isOpen = expanded === row.accountId
+            const isLikelihoodOpen = likelihoodExpanded === row.accountId
 
             return (
-              <tr key={row.accountId} className="border-b border-slate-50 align-top last:border-0 hover:bg-slate-50/50">
-                <td className="px-3 py-3">
+              <tr key={row.accountId} className="group border-b border-slate-50 align-top last:border-0 hover:bg-slate-50/50">
+                <td className="sticky left-0 z-10 bg-white px-3 py-3 shadow-[inset_-1px_0_0_theme(colors.slate.100)] group-hover:bg-slate-50">
                   {/* Links to the existing account record — never a second copy of the customer. */}
                   <Link href={row.accountHref} className="font-medium text-slate-900 hover:text-blue-600 hover:underline">
                     {row.accountName}
@@ -174,6 +192,124 @@ export function PullThroughTable({ rows }: { rows: PullThroughAccountRow[] }) {
                     </p>
                   )}
                 </td>
+
+                <td className="px-3 py-3">
+                  <button
+                    type="button"
+                    onClick={() => setLikelihoodExpanded(isLikelihoodOpen ? null : row.accountId)}
+                    className="block min-w-[170px] text-left"
+                    title="Show how this was calculated"
+                  >
+                    <span className="flex items-center justify-between gap-2">
+                      <span className={`inline-flex rounded-md border px-1.5 py-px text-[10px] font-semibold ${likelihoodMeta.chip}`}>
+                        {likelihoodMeta.label}
+                      </span>
+                      {likelihood.score != null && (
+                        <span className={`text-xs font-bold tabular-nums ${likelihoodMeta.text}`}>{likelihood.score}</span>
+                      )}
+                    </span>
+                    <span className="mt-1.5 block h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                      <span
+                        className={`block h-full rounded-full ${likelihoodMeta.bar}`}
+                        style={{ width: `${likelihood.score ?? 0}%` }}
+                      />
+                    </span>
+                    <span className="mt-1 block text-[11px] leading-snug text-slate-600">{likelihood.headline}</span>
+                  </button>
+                  {isLikelihoodOpen && (
+                    <div className="mt-2 max-w-[280px] rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm">
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                        How this was calculated
+                      </p>
+                      <ul className="space-y-1">
+                        {likelihood.why.map((reason) => (
+                          <li key={reason} className="text-[11px] leading-snug text-slate-600">
+                            • {reason}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </td>
+
+                <td className="whitespace-nowrap px-3 py-3 text-slate-700">
+                  {likelihood.expectedFrom && likelihood.expectedTo ? (
+                    <>
+                      <span className={likelihood.cyclePosition === 'due' ? 'font-semibold text-emerald-700' : ''}>
+                        {fmtDateRange(likelihood.expectedFrom, likelihood.expectedTo)}
+                      </span>
+                      {likelihood.cyclePosition === 'overdue' || likelihood.cyclePosition === 'broken' ? (
+                        <span className="block text-[11px] text-rose-600">missed</span>
+                      ) : null}
+                    </>
+                  ) : (
+                    <span className="text-slate-400">—</span>
+                  )}
+                </td>
+
+                <td className="px-3 py-3">
+                  <button
+                    type="button"
+                    onClick={() => setExpanded(isOpen ? null : row.accountId)}
+                    className={`inline-flex max-w-[240px] items-start gap-1 rounded-md border px-2 py-1 text-left text-[11px] font-semibold ${urgencyChip(row.recommendation.urgency)}`}
+                  >
+                    <span>{row.recommendation.label}</span>
+                    <Info className="mt-px h-3 w-3 shrink-0 opacity-60" />
+                  </button>
+                  {isOpen && (
+                    <div className="mt-2 max-w-[280px] rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm">
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Why</p>
+                      <ul className="space-y-1">
+                        {row.recommendation.why.map((reason) => (
+                          <li key={reason} className="text-[11px] leading-snug text-slate-600">
+                            • {reason}
+                          </li>
+                        ))}
+                      </ul>
+                      {row.dataQuality.length > 0 && (
+                        <>
+                          <p className="mt-2 mb-1 text-[10px] font-semibold uppercase tracking-wide text-amber-600">
+                            Data gaps
+                          </p>
+                          <ul className="space-y-1">
+                            {row.dataQuality.map((flag) => (
+                              <li key={flag.key} className="text-[11px] leading-snug">
+                                {flag.href ? (
+                                  <Link href={flag.href} className="text-blue-600 hover:underline">
+                                    {flag.label}
+                                  </Link>
+                                ) : (
+                                  <span className="text-slate-600">{flag.label}</span>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        </>
+                      )}
+                      <Link
+                        href={`${row.accountHref}?tab=sales-intelligence`}
+                        className="mt-2 inline-block text-[11px] font-medium text-blue-600 hover:underline"
+                      >
+                        Open Sales Intelligence →
+                      </Link>
+                    </div>
+                  )}
+                </td>
+
+                <td className="whitespace-nowrap px-3 py-3">
+                  <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold ${temp.chip}`}>
+                    <span aria-hidden>{temp.emoji}</span>
+                    {temp.label}
+                  </span>
+                </td>
+
+                <td className="px-3 py-3 text-right text-slate-700">
+                  {row.orders.daysSinceLastOrder ?? '—'}
+                </td>
+                <td className="px-3 py-3 text-right text-slate-700">
+                  {row.orders.avgDaysBetweenOrders == null ? '—' : Math.round(row.orders.avgDaysBetweenOrders)}
+                </td>
+
                 <td className="whitespace-nowrap px-3 py-3 text-slate-600">{orDash(row.city)}</td>
                 <td className="whitespace-nowrap px-3 py-3 text-slate-600">{orDash(row.market)}</td>
                 <td className="whitespace-nowrap px-3 py-3 text-slate-600">
@@ -257,12 +393,6 @@ export function PullThroughTable({ rows }: { rows: PullThroughAccountRow[] }) {
 
                 <td className="px-3 py-3 text-right font-semibold text-slate-900">{row.orders.reorderCount}</td>
                 <td className="px-3 py-3 text-right text-slate-700">
-                  {row.orders.avgDaysBetweenOrders == null ? '—' : Math.round(row.orders.avgDaysBetweenOrders)}
-                </td>
-                <td className="px-3 py-3 text-right text-slate-700">
-                  {row.orders.daysSinceLastOrder ?? '—'}
-                </td>
-                <td className="px-3 py-3 text-right text-slate-700">
                   {row.inventory.estimatedDaysOfInventory == null
                     ? '—'
                     : Math.round(row.inventory.estimatedDaysOfInventory)}
@@ -277,62 +407,6 @@ export function PullThroughTable({ rows }: { rows: PullThroughAccountRow[] }) {
                     </span>
                   )}
                 </td>
-
-                <td className="whitespace-nowrap px-3 py-3">
-                  <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold ${temp.chip}`}>
-                    <span aria-hidden>{temp.emoji}</span>
-                    {temp.label}
-                  </span>
-                </td>
-
-                <td className="px-3 py-3">
-                  <button
-                    type="button"
-                    onClick={() => setExpanded(isOpen ? null : row.accountId)}
-                    className={`inline-flex max-w-[240px] items-start gap-1 rounded-md border px-2 py-1 text-left text-[11px] font-semibold ${urgencyChip(row.recommendation.urgency)}`}
-                  >
-                    <span>{row.recommendation.label}</span>
-                    <Info className="mt-px h-3 w-3 shrink-0 opacity-60" />
-                  </button>
-                  {isOpen && (
-                    <div className="mt-2 max-w-[280px] rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm">
-                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Why</p>
-                      <ul className="space-y-1">
-                        {row.recommendation.why.map((reason) => (
-                          <li key={reason} className="text-[11px] leading-snug text-slate-600">
-                            • {reason}
-                          </li>
-                        ))}
-                      </ul>
-                      {row.dataQuality.length > 0 && (
-                        <>
-                          <p className="mt-2 mb-1 text-[10px] font-semibold uppercase tracking-wide text-amber-600">
-                            Data gaps
-                          </p>
-                          <ul className="space-y-1">
-                            {row.dataQuality.map((flag) => (
-                              <li key={flag.key} className="text-[11px] leading-snug">
-                                {flag.href ? (
-                                  <Link href={flag.href} className="text-blue-600 hover:underline">
-                                    {flag.label}
-                                  </Link>
-                                ) : (
-                                  <span className="text-slate-600">{flag.label}</span>
-                                )}
-                              </li>
-                            ))}
-                          </ul>
-                        </>
-                      )}
-                      <Link
-                        href={`${row.accountHref}?tab=sales-intelligence`}
-                        className="mt-2 inline-block text-[11px] font-medium text-blue-600 hover:underline"
-                      >
-                        Open Sales Intelligence →
-                      </Link>
-                    </div>
-                  )}
-                </td>
               </tr>
             )
           })}
@@ -340,6 +414,7 @@ export function PullThroughTable({ rows }: { rows: PullThroughAccountRow[] }) {
       </table>
       <div className="border-t border-slate-100 px-3 py-2 text-[11px] text-muted-foreground">
         Showing {sorted.length} account{sorted.length === 1 ? '' : 's'}.
+        Reorder likelihood reads each account against its own average interval between paid orders, then adjusts for stock on hand.
         Reorder cadence is derived from non-cancelled paid orders; sample drops are tracked separately.
         Badge counts are unavailable rather than estimated when the underlying record is missing.
       </div>

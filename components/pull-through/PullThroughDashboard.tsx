@@ -4,8 +4,25 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { KpiStrip } from '@/components/pull-through/KpiStrip'
 import { PullThroughFilterBar } from '@/components/pull-through/PullThroughFilterBar'
 import { PullThroughTable } from '@/components/pull-through/PullThroughTable'
+import { ReorderLikelihoodBoard } from '@/components/pull-through/ReorderLikelihoodBoard'
 import { loadPullThroughDataset, pullThroughBasePath, type PullThroughScope } from '@/lib/pull-through/data'
-import { applyFilters, collectFilterOptions, computeKpis, parseFilters } from '@/lib/pull-through/filters'
+import { LIKELIHOOD_META } from '@/lib/pull-through/display'
+import {
+  applyFilters,
+  buildFilterQuery,
+  collectFilterOptions,
+  computeKpis,
+  parseFilters,
+} from '@/lib/pull-through/filters'
+import type { ReorderLikelihoodLevel } from '@/lib/pull-through/types'
+
+const LIKELIHOOD_LEGEND: Record<ReorderLikelihoodLevel, string> = {
+  very_likely: 'inside their usual reorder window',
+  likely: 'coming up, or a little overdue',
+  possible: 'early in the cycle or sitting on stock',
+  unlikely: 'well past their pattern',
+  unknown: 'fewer than two orders to read from',
+}
 
 /**
  * Account Pull-Through dashboard.
@@ -80,6 +97,11 @@ export async function PullThroughDashboard({
         </Card>
       ) : (
         <>
+          <ReorderLikelihoodBoard
+            rows={dataset.rows}
+            viewAllHref={`${basePath}${buildFilterQuery({ likelihood: 'very_likely' })}`}
+          />
+
           <KpiStrip kpis={kpis} />
 
           <PullThroughFilterBar options={{ ...options, tasters }} basePath={basePath} />
@@ -98,9 +120,19 @@ export async function PullThroughDashboard({
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Accounts</CardTitle>
               <p className="text-xs text-muted-foreground">
-                Click an account name to open its existing CRM record. Every figure below links back to the record it
-                came from.
+                Sorted with the most likely reorders first. Click an account name to open its existing CRM record.
+                Every figure below links back to the record it came from.
               </p>
+              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-500">
+                <span className="font-semibold uppercase tracking-wide text-slate-400">Reorder likelihood</span>
+                {(['very_likely', 'likely', 'possible', 'unlikely', 'unknown'] as const).map((level) => (
+                  <span key={level} className="inline-flex items-center gap-1.5">
+                    <span className={`inline-block h-2 w-2 rounded-full ${LIKELIHOOD_META[level].bar}`} />
+                    {LIKELIHOOD_META[level].label}
+                    <span className="text-slate-400">— {LIKELIHOOD_LEGEND[level]}</span>
+                  </span>
+                ))}
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               <PullThroughTable rows={filtered} />

@@ -8,7 +8,7 @@
  */
 
 import { INVENTORY_STALE_DAYS } from './metrics'
-import type { AccountTemperature, PullThroughAccountRow } from './types'
+import type { AccountTemperature, PullThroughAccountRow, ReorderLikelihoodLevel } from './types'
 
 export type PullThroughFilters = {
   q: string | null
@@ -20,6 +20,7 @@ export type PullThroughFilters = {
   taster: string | null
   accountType: string | null
   temperature: AccountTemperature | null
+  likelihood: ReorderLikelihoodLevel | null
   inventoryStatus: 'confirmed' | 'estimated' | 'unknown' | 'stale' | 'low' | null
   reordered: 'yes' | 'no' | null
   tasted: 'yes' | 'no' | null
@@ -39,6 +40,7 @@ export const EMPTY_FILTERS: PullThroughFilters = {
   taster: null,
   accountType: null,
   temperature: null,
+  likelihood: null,
   inventoryStatus: null,
   reordered: null,
   tasted: null,
@@ -67,6 +69,7 @@ export function parseFilters(params: Record<string, string | string[] | undefine
     taster: str(params.taster),
     accountType: str(params.accountType),
     temperature: (str(params.temperature) as AccountTemperature | null) ?? null,
+    likelihood: (str(params.likelihood) as ReorderLikelihoodLevel | null) ?? null,
     inventoryStatus: (str(params.inventory) as PullThroughFilters['inventoryStatus']) ?? null,
     reordered: (str(params.reordered) as 'yes' | 'no' | null) ?? null,
     tasted: (str(params.tasted) as 'yes' | 'no' | null) ?? null,
@@ -92,6 +95,7 @@ export function buildFilterQuery(filters: Partial<PullThroughFilters>) {
     taster: filters.taster,
     accountType: filters.accountType,
     temperature: filters.temperature,
+    likelihood: filters.likelihood,
     inventory: filters.inventoryStatus,
     reordered: filters.reordered,
     tasted: filters.tasted,
@@ -139,6 +143,7 @@ export function applyFilters(
     }
 
     if (filters.temperature && row.temperature !== filters.temperature) return false
+    if (filters.likelihood && row.reorderLikelihood.level !== filters.likelihood) return false
 
     if (filters.inventoryStatus) {
       const { confidence, daysSinceConfirmed, estimatedDaysOfInventory, bottles } = row.inventory
@@ -208,6 +213,7 @@ export function computeKpis(rows: PullThroughAccountRow[], basePath: string): Pu
   const link = (filters: Partial<PullThroughFilters>) => `${basePath}${buildFilterQuery(filters)}`
 
   const active = rows.filter((row) => row.orders.totalOrders > 0)
+  const veryLikely = rows.filter((row) => row.reorderLikelihood.level === 'very_likely')
   const hot = rows.filter((row) => row.temperature === 'hot')
   const atRisk = rows.filter((row) => row.temperature === 'at_risk')
 
@@ -271,6 +277,14 @@ export function computeKpis(rows: PullThroughAccountRow[], basePath: string): Pu
       hint: `${rows.length} accounts in view, ${active.length} with order history`,
       href: link({ minDaysSinceOrder: 0 }),
       tone: 'neutral',
+    },
+    {
+      key: 'very_likely',
+      label: 'Likely to Reorder Soon',
+      value: String(veryLikely.length),
+      hint: 'Inside their expected reorder window right now',
+      href: link({ likelihood: 'very_likely' }),
+      tone: 'good',
     },
     {
       key: 'hot',

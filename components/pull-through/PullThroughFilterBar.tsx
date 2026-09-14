@@ -66,6 +66,17 @@ export function PullThroughFilterBar({ options, basePath }: { options: FilterOpt
       options: options.accountTypes.map((v) => ({ value: v, label: v.replace(/_/g, ' ') })),
     },
     {
+      param: 'likelihood',
+      label: 'Reorder Likelihood',
+      options: [
+        { value: 'very_likely', label: 'Very likely' },
+        { value: 'likely', label: 'Likely' },
+        { value: 'possible', label: 'Possible' },
+        { value: 'unlikely', label: 'Unlikely' },
+        { value: 'unknown', label: 'No pattern yet' },
+      ],
+    },
+    {
       param: 'temperature',
       label: 'Temperature',
       options: [

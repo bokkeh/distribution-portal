@@ -15,6 +15,7 @@ import type {
   PullThroughScore,
   PullThroughTasting,
   RecommendedAction,
+  ReorderLikelihood,
   ScoreComponent,
   SourceRef,
   TastingMetrics,
@@ -432,6 +433,135 @@ export function deriveTemperature(
   why.push(cadence)
   why.push(`${daysSinceLastOrder} days since last order — past the expected reorder window`)
   return { temperature: 'cold', why }
+}
+
+/* ------------------------------------------------------- reorder likelihood */
+
+/**
+ * Likelihood that the account places its next commercial order soon.
+ *
+ * The dominant signal is where today falls in the account's own reorder cycle
+ * (days since last order ÷ average days between orders). Stock on hand and how
+ * consistent the pattern has been nudge the number up or down. Accounts without two
+ * dated orders have no cycle to read, so they are reported as unknown rather than
+ * guessed at.
+ */
+export function computeReorderLikelihood(orders: OrderMetrics, inventory: InventoryPosition): ReorderLikelihood {
+  const why: string[] = []
+  const { totalOrders, avgDaysBetweenOrders, daysSinceLastOrder, reorderCount, orderGapStdDevDays } = orders
+
+  const unknown = (headline: string): ReorderLikelihood => ({
+    level: 'unknown',
+    score: null,
+    cyclePosition: null,
+    expectedFrom: null,
+    expectedTo: null,
+    headline,
+    why,
+  })
+
+  if (totalOrders === 0) {
+    why.push('No commercial orders on record yet')
+    return unknown('No orders yet')
+  }
+
+  if (totalOrders < 2 || avgDaysBetweenOrders == null || avgDaysBetweenOrders <= 0 || daysSinceLastOrder == null) {
+    why.push(
+      totalOrders < 2
+        ? 'Only one order on record — a second order will establish the reorder rhythm'
+        : 'All orders recorded on the same day — no interval to measure',
+    )
+    if (daysSinceLastOrder != null) why.push(`${daysSinceLastOrder} days since that order`)
+    return unknown('No reorder pattern yet')
+  }
+
+  const avg = Math.round(avgDaysBetweenOrders)
+  const ratio = daysSinceLastOrder / avgDaysBetweenOrders
+  const daysUntilDue = avg - daysSinceLastOrder
+
+  let cyclePosition: ReorderLikelihood['cyclePosition']
+  let score: number
+  let headline: string
+
+  if (ratio < 0.6) {
+    cyclePosition = 'early'
+    score = 20
+    headline = `Early in cycle — about ${daysUntilDue} days until due`
+    why.push(`Day ${daysSinceLastOrder} of a ${avg}-day reorder cycle`)
+  } else if (ratio < 0.85) {
+    cyclePosition = 'approaching'
+    score = 55
+    headline = `Coming up — about ${Math.max(daysUntilDue, 1)} days until due`
+    why.push(`Day ${daysSinceLastOrder} of a ${avg}-day reorder cycle`)
+  } else if (ratio <= 1.25) {
+    cyclePosition = 'due'
+    score = 88
+    headline =
+      daysUntilDue > 0
+        ? `Due now — ${daysUntilDue} day${daysUntilDue === 1 ? '' : 's'} until expected reorder`
+        : daysUntilDue === 0
+          ? 'Due today'
+          : `Due now — ${-daysUntilDue} day${daysUntilDue === -1 ? '' : 's'} past expected`
+    why.push(`Day ${daysSinceLastOrder} of a ${avg}-day reorder cycle — inside the expected window`)
+  } else if (ratio < 2) {
+    cyclePosition = 'overdue'
+    score = 60
+    headline = `Overdue by ${-daysUntilDue} days`
+    why.push(`Day ${daysSinceLastOrder} of a ${avg}-day cycle — ${ratio.toFixed(1)}× the normal interval`)
+  } else {
+    cyclePosition = 'broken'
+    score = 22
+    headline = `Pattern broken — ${-daysUntilDue} days overdue`
+    why.push(`Day ${daysSinceLastOrder} of a ${avg}-day cycle — ${ratio.toFixed(1)}× the normal interval`)
+    why.push('Established accounts that go this quiet usually need a win-back visit, not a routine call')
+  }
+
+  // Stock position: running low makes a reorder more likely; sitting on a lot of
+  // stock makes it less likely regardless of the calendar.
+  if (inventory.bottles != null) {
+    const daysOfStock = inventory.estimatedDaysOfInventory
+    if ((daysOfStock != null && daysOfStock <= LOW_DAYS_OF_INVENTORY) || inventory.bottles <= 6) {
+      score += 10
+      why.push(
+        daysOfStock != null
+          ? `Roughly ${Math.round(daysOfStock)} days of stock left (${Math.round(inventory.bottles)} btl ${inventory.confidence})`
+          : `Only ${Math.round(inventory.bottles)} bottles on hand (${inventory.confidence})`,
+      )
+    } else if (daysOfStock != null && daysOfStock > avgDaysBetweenOrders * 1.5) {
+      score -= 15
+      why.push(`About ${Math.round(daysOfStock)} days of stock on hand — more than a full cycle`)
+    }
+  } else {
+    why.push('Inventory unknown — an inventory check would sharpen this estimate')
+  }
+
+  // Pattern strength: more reorders and a tighter interval make the cycle trustworthy —
+  // unless the pattern has already broken, in which case history is not a forecast.
+  if (cyclePosition !== 'broken') {
+    if (reorderCount >= 3) {
+      score += 5
+      why.push(`${reorderCount} reorders on record — well-established pattern`)
+    }
+    if (orderGapStdDevDays != null && orderGapStdDevDays <= avgDaysBetweenOrders * 0.25) {
+      score += 5
+      why.push('Reorders land on a consistent interval')
+    }
+  }
+
+  score = Math.round(clamp(score, 0, 100))
+
+  const level: ReorderLikelihood['level'] =
+    score >= 75 ? 'very_likely' : score >= 50 ? 'likely' : score >= 30 ? 'possible' : 'unlikely'
+
+  return {
+    level,
+    score,
+    cyclePosition,
+    expectedFrom: orders.predictedNextOrderFrom,
+    expectedTo: orders.predictedNextOrderTo,
+    headline,
+    why,
+  }
 }
 
 /* ------------------------------------------------------------------- score */

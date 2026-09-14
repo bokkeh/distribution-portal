@@ -1,6 +1,6 @@
 /** Presentation helpers shared by server and client components. No DB imports. */
 
-import type { AccountTemperature, InventoryConfidence, RecommendedAction } from './types'
+import type { AccountTemperature, InventoryConfidence, RecommendedAction, ReorderLikelihoodLevel } from './types'
 
 export const TEMPERATURE_META: Record<
   AccountTemperature,
@@ -11,6 +11,47 @@ export const TEMPERATURE_META: Record<
   cold: { label: 'COLD', emoji: '❄️', chip: 'bg-sky-50 text-sky-700 border-sky-200', dot: 'bg-sky-500', order: 2 },
   at_risk: { label: 'AT RISK', emoji: '⚠️', chip: 'bg-rose-100 text-rose-800 border-rose-300', dot: 'bg-rose-600', order: 3 },
   new: { label: 'NEW', emoji: '🆕', chip: 'bg-slate-100 text-slate-700 border-slate-200', dot: 'bg-slate-400', order: 4 },
+}
+
+export const LIKELIHOOD_META: Record<
+  ReorderLikelihoodLevel,
+  { label: string; chip: string; bar: string; text: string; order: number }
+> = {
+  very_likely: {
+    label: 'Very likely',
+    chip: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    bar: 'bg-emerald-500',
+    text: 'text-emerald-700',
+    order: 0,
+  },
+  likely: {
+    label: 'Likely',
+    chip: 'bg-lime-50 text-lime-700 border-lime-200',
+    bar: 'bg-lime-500',
+    text: 'text-lime-700',
+    order: 1,
+  },
+  possible: {
+    label: 'Possible',
+    chip: 'bg-amber-50 text-amber-700 border-amber-200',
+    bar: 'bg-amber-400',
+    text: 'text-amber-700',
+    order: 2,
+  },
+  unlikely: {
+    label: 'Unlikely',
+    chip: 'bg-slate-100 text-slate-600 border-slate-200',
+    bar: 'bg-slate-300',
+    text: 'text-slate-600',
+    order: 3,
+  },
+  unknown: {
+    label: 'No pattern yet',
+    chip: 'bg-slate-50 text-slate-500 border-dashed border-slate-300',
+    bar: 'bg-slate-200',
+    text: 'text-slate-500',
+    order: 4,
+  },
 }
 
 export const INVENTORY_META: Record<InventoryConfidence, { label: string; chip: string }> = {
