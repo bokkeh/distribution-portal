@@ -7,6 +7,7 @@
  */
 
 import { INVENTORY_STALE_DAYS } from './metrics'
+import { retailTastings, tasterSustainedResults } from './tasting-dashboard'
 import type { PullThroughAccountRow, PullThroughTasting } from './types'
 
 export type TasterPerformanceRow = {
@@ -23,6 +24,15 @@ export type TasterPerformanceRow = {
   avgDaysToReorder: number | null
   avgPullThroughScore: number | null
   accountIds: string[]
+  /** Economics: retail tastings only, using each tasting's resolved cost. */
+  tastingSpend: number
+  reordersGenerated: number
+  attributedCases: number
+  avgCasesDepleted: number | null
+  costPerCaseMoved: number | null
+  costPerReorder: number | null
+  avgRoi: number | null
+  sustained: ReturnType<typeof tasterSustainedResults>
 }
 
 function average(values: number[]) {
@@ -33,6 +43,7 @@ function average(values: number[]) {
 export function computeTasterPerformance(
   tastingsByAccount: Map<string, PullThroughTasting[]>,
   rows: PullThroughAccountRow[],
+  now: Date = new Date(),
 ): TasterPerformanceRow[] {
   const scoreByAccount = new Map(rows.map((row) => [row.accountId, row.pullThrough.score]))
 
@@ -74,7 +85,22 @@ export function computeTasterPerformance(
         .map((accountId) => scoreByAccount.get(accountId) ?? null)
         .filter((value): value is number => value != null)
 
+      const retail = retailTastings(bucket.tastings)
+      const tastingSpend = retail.reduce((sum, tasting) => sum + tasting.cost, 0)
+      const attributedCases = retail.reduce((sum, tasting) => sum + (tasting.economics?.attributedCases ?? 0), 0)
+      const reordersGenerated = retail.filter((tasting) => tasting.economics?.attributedOrderId != null).length
+      const rois = retail.map((tasting) => tasting.economics?.roiPercent).filter((value): value is number => value != null)
+      const casesMoved = retail.map((tasting) => (tasting.bottlesSold ?? 0) / 12 + (tasting.economics?.attributedCases ?? 0))
+
       return {
+        tastingSpend: Math.round(tastingSpend * 100) / 100,
+        reordersGenerated,
+        attributedCases: Math.round(attributedCases * 10) / 10,
+        avgCasesDepleted: casesMoved.length > 0 ? Math.round((average(casesMoved) ?? 0) * 100) / 100 : null,
+        costPerCaseMoved: attributedCases > 0 ? Math.round(tastingSpend / attributedCases) : null,
+        costPerReorder: reordersGenerated > 0 ? Math.round(tastingSpend / reordersGenerated) : null,
+        avgRoi: rois.length > 0 ? Math.round(average(rois) ?? 0) : null,
+        sustained: tasterSustainedResults(bucket.tastings, now),
         tasterUserId: bucket.tasterUserId,
         tasterName: bucket.tasterName,
         tastingsCompleted: bucket.tastings.filter((tasting) => tasting.status === 'completed').length,
@@ -90,7 +116,9 @@ export function computeTasterPerformance(
         accountIds: Array.from(bucket.accountIds),
       } satisfies TasterPerformanceRow
     })
-    .sort((a, b) => b.totalBottlesSold - a.totalBottlesSold)
+    // Rank on sustained 60-day net, not bottles poured: the spec favours tasters whose
+    // events lead to repeat orders over those who sell the most at the table.
+    .sort((a, b) => (b.sustained.d60.net ?? -Infinity) - (a.sustained.d60.net ?? -Infinity) || b.totalBottlesSold - a.totalBottlesSold)
 }
 
 export type RepPerformanceRow = {

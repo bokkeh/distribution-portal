@@ -11,7 +11,7 @@ import {
   tastingDetailPath,
 } from '@/lib/pull-through/data'
 import { computeTasterPerformance } from '@/lib/pull-through/performance'
-import { NOT_ENOUGH_DATA, fmtShortDate } from '@/lib/pull-through/display'
+import { NOT_ENOUGH_DATA, fmtMoney, fmtPercent, fmtShortDate, moneyTone } from '@/lib/pull-through/display'
 import { buildFilterQuery } from '@/lib/pull-through/filters'
 
 export default async function TasterPerformancePage({
@@ -52,7 +52,8 @@ export default async function TasterPerformancePage({
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Taster Performance</h1>
           <p className="mt-1 text-muted-foreground">
-            Built from tasting records and their reports. Reorder columns count tastings followed by an order — an
+            Built from tasting records, their reports and taster invoices. Ranked on sustained 60-day net contribution,
+            not bottles poured — a tasting that seeds repeat orders beats one that only sells at the table. Reorder columns count tastings followed by an order — an
             association, not a proven cause.
           </p>
         </div>
@@ -82,6 +83,14 @@ export default async function TasterPerformancePage({
                       'Order ≤30d',
                       'Avg Days to Order',
                       'Avg Pull-Through',
+                      'Spend',
+                      'Reorders Generated',
+                      'Cost / Case',
+                      'Cost / Reorder',
+                      'Avg ROI',
+                      '30d Net',
+                      '60d Net',
+                      '90d Net',
                     ].map((label, index) => (
                       <th
                         key={label}
@@ -125,6 +134,23 @@ export default async function TasterPerformancePage({
                           row.avgPullThroughScore.toFixed(0)
                         )}
                       </td>
+                      <td className="px-3 py-3 text-right text-slate-700">{fmtMoney(row.tastingSpend)}</td>
+                      <td className="px-3 py-3 text-right font-semibold text-slate-900">{row.reordersGenerated}</td>
+                      <td className="px-3 py-3 text-right text-slate-700">{row.costPerCaseMoved == null ? '—' : fmtMoney(row.costPerCaseMoved)}</td>
+                      <td className="px-3 py-3 text-right text-slate-700">{row.costPerReorder == null ? '—' : fmtMoney(row.costPerReorder)}</td>
+                      <td className={`px-3 py-3 text-right ${moneyTone(row.avgRoi)}`}>{row.avgRoi == null ? '—' : fmtPercent(row.avgRoi)}</td>
+                      {([row.sustained.d30, row.sustained.d60, row.sustained.d90] as const).map((window, index) => (
+                        <td key={index} className={`px-3 py-3 text-right ${moneyTone(window.net)}`}>
+                          {window.net == null ? (
+                            <span className="text-[11px] text-slate-400">Not matured</span>
+                          ) : (
+                            <>
+                              {fmtMoney(window.net)}
+                              <span className="block text-[10px] text-slate-400">{window.tastings} tasting{window.tastings === 1 ? '' : 's'}</span>
+                            </>
+                          )}
+                        </td>
+                      ))}
                     </tr>
                   ))}
                 </tbody>

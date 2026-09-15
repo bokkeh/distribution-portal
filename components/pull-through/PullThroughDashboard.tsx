@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { AlertTriangle, TrendingUp, Users, Wine } from 'lucide-react'
+import { AlertTriangle, Scale, TrendingUp, Users, Wine } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { KpiStrip } from '@/components/pull-through/KpiStrip'
 import { PullThroughFilterBar } from '@/components/pull-through/PullThroughFilterBar'
@@ -67,6 +67,13 @@ export async function PullThroughDashboard({
         </div>
         {showTeamLinks && (
           <div className="flex flex-wrap gap-2">
+            <Link
+              href={`${basePath}/tastings`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-medium text-violet-800 hover:bg-violet-100"
+            >
+              <Scale className="h-4 w-4" />
+              Tasting Economics
+            </Link>
             <Link
               href={`${basePath}/tasters`}
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"

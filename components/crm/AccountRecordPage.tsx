@@ -38,6 +38,8 @@ import { generateAccountSmartInsights } from '@/lib/crm/smart-insights'
 import { getTasksForView } from '@/lib/tasks/read'
 import { TaskList } from '@/components/tasks/TaskList'
 import { SalesIntelligenceSection } from '@/components/pull-through/SalesIntelligenceSection'
+import { AccountEconomicsSection } from '@/components/pull-through/AccountEconomicsSection'
+import { HEALTH_META } from '@/lib/pull-through/display'
 import { loadAccountIntelligence, type AccountIntelligence, type PullThroughScope } from '@/lib/pull-through/data'
 import { coercePipelineStages } from '@/lib/deal-stages'
 import { ArrowLeft, CalendarDays, FileText, MessageSquare, Plus, Receipt, RefreshCcw, RefreshCw, Truck } from 'lucide-react'
@@ -45,6 +47,7 @@ import { ArrowLeft, CalendarDays, FileText, MessageSquare, Plus, Receipt, Refres
 const ACCOUNT_TABS = [
   { id: 'overview', label: 'Overview' },
   { id: 'sales-intelligence', label: 'Sales Intelligence' },
+  { id: 'economics', label: 'Economics' },
   { id: 'orders', label: 'Orders' },
   { id: 'contacts', label: 'Contacts' },
   { id: 'inventory', label: 'Inventory' },
@@ -431,20 +434,18 @@ export async function AccountRecordPage({
     contactsData = { accountContacts, recentTexts }
   }
 
-  // Sales Intelligence reads the same connected records the other tabs read; access is
-  // already gated by whoever rendered this account record.
-  let salesIntelligence: AccountIntelligence | null = null
-  if (tab === 'sales-intelligence') {
-    const scope: PullThroughScope = {
-      mode,
-      accountIds: [accountId],
-      canSeeAllAccounts: false,
-      salesMemberId: null,
-      visibleSalesMemberIds: null,
-      viewerLabel: account.companyName,
-    }
-    salesIntelligence = await loadAccountIntelligence(accountId, scope)
+  // Sales Intelligence and Economics read the same connected records the other tabs
+  // read; access is already gated by whoever rendered this account record. The row is
+  // loaded on every tab so the health / organic-velocity badge is always in the header.
+  const intelligenceScope: PullThroughScope = {
+    mode,
+    accountIds: [accountId],
+    canSeeAllAccounts: false,
+    salesMemberId: null,
+    visibleSalesMemberIds: null,
+    viewerLabel: account.companyName,
   }
+  const salesIntelligence: AccountIntelligence | null = await loadAccountIntelligence(accountId, intelligenceScope).catch(() => null)
 
   if (tab === 'inventory') {
     const [inventoryItems, inventoryHistory, productOptions] = await Promise.all([
@@ -476,6 +477,16 @@ export async function AccountRecordPage({
       : { label: 'Not synced', variant: 'outline' as const },
   ]
 
+  // Health + organic velocity travel with the account name so "is this account
+  // earning its keep?" is visible before anyone opens a tab.
+  const healthBadge = salesIntelligence
+    ? {
+        health: HEALTH_META[salesIntelligence.row.health.kind],
+        organicPercent: salesIntelligence.row.velocity.organicPercent,
+        href: getTabHref(basePath, 'economics'),
+      }
+    : null
+
   return (
     <div className="space-y-6 p-4 sm:p-8">
       <div className="space-y-4">
@@ -492,6 +503,18 @@ export async function AccountRecordPage({
                   {headerBadges.map((badge) => (
                     <Badge key={badge.label} variant={badge.variant} className="whitespace-nowrap">{badge.label}</Badge>
                   ))}
+                  {healthBadge ? (
+                    <Link
+                      href={healthBadge.href}
+                      title={healthBadge.health.description}
+                      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-bold ${healthBadge.health.chip}`}
+                    >
+                      {healthBadge.health.label}
+                      {healthBadge.organicPercent != null && (
+                        <span className="font-semibold opacity-80">· {healthBadge.organicPercent.toFixed(0)}% organic</span>
+                      )}
+                    </Link>
+                  ) : null}
                 </div>
                 {(account.city || account.state) ? (
                   <p className="mt-1 text-sm text-muted-foreground">{[account.city, account.state].filter(Boolean).join(', ')}</p>
@@ -737,6 +760,18 @@ export async function AccountRecordPage({
           </>
         )
       })() : null}
+
+      {tab === 'economics' ? (
+        salesIntelligence ? (
+          <AccountEconomicsSection intelligence={salesIntelligence} mode={mode} basePath={basePath} />
+        ) : (
+          <Card>
+            <CardContent className="py-12 text-center text-sm text-muted-foreground">
+              Account economics are unavailable for this account.
+            </CardContent>
+          </Card>
+        )
+      ) : null}
 
       {tab === 'sales-intelligence' ? (
         salesIntelligence ? (

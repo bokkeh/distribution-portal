@@ -1,6 +1,15 @@
 /** Presentation helpers shared by server and client components. No DB imports. */
 
-import type { AccountTemperature, InventoryConfidence, RecommendedAction, ReorderLikelihoodLevel } from './types'
+import type {
+  AccountHealthKind,
+  AccountTemperature,
+  DependencyStatus,
+  InventoryConfidence,
+  RecommendedAction,
+  ReorderLikelihoodLevel,
+  TastingDecisionKind,
+  TastingObjective,
+} from './types'
 
 export const TEMPERATURE_META: Record<
   AccountTemperature,
@@ -52,6 +61,84 @@ export const LIKELIHOOD_META: Record<
     text: 'text-slate-500',
     order: 4,
   },
+}
+
+export const DEPENDENCY_META: Record<DependencyStatus, { label: string; chip: string; bar: string }> = {
+  healthy: { label: 'Healthy', chip: 'bg-emerald-50 text-emerald-700 border-emerald-200', bar: 'bg-emerald-500' },
+  supported: { label: 'Supported', chip: 'bg-lime-50 text-lime-700 border-lime-200', bar: 'bg-lime-500' },
+  tasting_dependent: { label: 'Tasting dependent', chip: 'bg-amber-50 text-amber-700 border-amber-200', bar: 'bg-amber-500' },
+  unprofitable_cycle: { label: 'Unprofitable support cycle', chip: 'bg-rose-50 text-rose-700 border-rose-300', bar: 'bg-rose-500' },
+  no_tastings: { label: 'No tastings', chip: 'bg-slate-100 text-slate-600 border-slate-200', bar: 'bg-slate-400' },
+  unknown: { label: 'No history', chip: 'bg-slate-50 text-slate-500 border-dashed border-slate-300', bar: 'bg-slate-300' },
+}
+
+export const HEALTH_META: Record<AccountHealthKind, { label: string; chip: string; description: string }> = {
+  growth: {
+    label: 'Growth',
+    chip: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    description: 'Strong organic velocity and improving order frequency',
+  },
+  healthy: {
+    label: 'Healthy',
+    chip: 'bg-lime-50 text-lime-700 border-lime-200',
+    description: 'Reliable repeat orders with limited tasting support',
+  },
+  developing: {
+    label: 'Developing',
+    chip: 'bg-sky-50 text-sky-700 border-sky-200',
+    description: 'Early account that still needs activation support',
+  },
+  tasting_dependent: {
+    label: 'Tasting dependent',
+    chip: 'bg-amber-50 text-amber-700 border-amber-200',
+    description: 'Needs repeated paid tastings to generate sell-through',
+  },
+  stalled: {
+    label: 'Stalled',
+    chip: 'bg-orange-50 text-orange-700 border-orange-200',
+    description: 'Inventory moves slowly even with tasting support',
+  },
+  unprofitable: {
+    label: 'Unprofitable',
+    chip: 'bg-rose-50 text-rose-700 border-rose-300',
+    description: 'Tasting spend exceeds the contribution the account generates',
+  },
+}
+
+export const DECISION_META: Record<TastingDecisionKind, { label: string; chip: string; panel: string }> = {
+  recommended: { label: 'Recommended', chip: 'bg-emerald-50 text-emerald-700 border-emerald-200', panel: 'border-emerald-200 bg-emerald-50/60' },
+  consider: { label: 'Consider', chip: 'bg-amber-50 text-amber-700 border-amber-200', panel: 'border-amber-200 bg-amber-50/60' },
+  not_recommended: { label: 'Not recommended', chip: 'bg-rose-50 text-rose-700 border-rose-300', panel: 'border-rose-300 bg-rose-50/70' },
+}
+
+export const OBJECTIVE_META: Record<TastingObjective, { label: string; short: string; purpose: string }> = {
+  sell_through: { label: 'Sell-Through Tasting', short: 'Sell-through', purpose: 'Move inventory already sitting at the account' },
+  reorder: { label: 'Reorder Tasting', short: 'Reorder', purpose: 'Deplete enough stock to trigger the next order' },
+  account_opening: { label: 'Account-Opening Tasting', short: 'Opening', purpose: 'Establish demand at a newly opened account' },
+  strategic: { label: 'Strategic Tasting', short: 'Strategic', purpose: 'Brand-building where bottle sales are not the primary goal' },
+}
+
+export const ATTRIBUTION_META = {
+  organic: { label: 'Organic', chip: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  assisted: { label: 'Tasting-assisted', chip: 'bg-violet-50 text-violet-700 border-violet-200' },
+} as const
+
+export function fmtMoney(value: number | null | undefined, digits = 0) {
+  if (value == null || Number.isNaN(value)) return NOT_ENOUGH_DATA
+  const sign = value < 0 ? '-' : ''
+  return `${sign}$${Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })}`
+}
+
+export function fmtPercent(value: number | null | undefined, digits = 0) {
+  if (value == null || Number.isNaN(value)) return NOT_ENOUGH_DATA
+  return `${value.toFixed(digits)}%`
+}
+
+export function moneyTone(value: number | null | undefined) {
+  if (value == null) return 'text-slate-400'
+  if (value > 0) return 'text-emerald-700'
+  if (value < 0) return 'text-rose-700'
+  return 'text-slate-900'
 }
 
 export const INVENTORY_META: Record<InventoryConfidence, { label: string; chip: string }> = {
