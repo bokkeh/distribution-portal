@@ -24,6 +24,7 @@ import {
   salesRegions,
   salesRouteStops,
   salesRoutes,
+  tasterInvoices,
   tastingReports,
   tastings,
   users,
@@ -42,11 +43,22 @@ import {
   recommendAction,
   type ConfirmedInventoryInput,
 } from './metrics'
+import {
+  DEFAULT_ECONOMICS_SETTINGS,
+  classifyAccountHealth,
+  classifyOrderAttribution,
+  computeAccountEconomics,
+  computeAccountVelocity,
+  computeTastingDependency,
+  computeTastingEconomics,
+  resolveTastingCost,
+} from './economics'
 import type {
   PullThroughAccountRow,
   PullThroughOrder,
   PullThroughTasting,
   SourceRef,
+  TastingEconomicsSettings,
   TimelineEvent,
   ViewerMode,
 } from './types'
@@ -224,6 +236,7 @@ async function loadOrders(accountIds: string[]) {
       bottles: toNumber(row.bottles),
       total: toNumber(row.total),
       sequenceIndex: 0,
+      attribution: null,
       isReorder: false,
     })
     byAccount.set(row.accountId, list)
@@ -242,7 +255,11 @@ async function loadOrders(accountIds: string[]) {
   return byAccount
 }
 
-export async function loadTastings(accountIds: string[], mode: ViewerMode) {
+export async function loadTastings(
+  accountIds: string[],
+  mode: ViewerMode,
+  settings: TastingEconomicsSettings = DEFAULT_ECONOMICS_SETTINGS,
+) {
   if (accountIds.length === 0) return new Map<string, PullThroughTasting[]>()
 
   const reportSubmitter = alias(users, 'report_submitter')
@@ -274,11 +291,13 @@ export async function loadTastings(accountIds: string[], mode: ViewerMode) {
       setupPhotoUrl: tastingReports.setupPhotoUrl,
       shelfPhotoUrls: tastingReports.shelfPhotoUrls,
       submittedByName: reportSubmitter.name,
+      invoiceTotal: tasterInvoices.totalAmount,
     })
     .from(tastings)
     .leftJoin(users, eq(users.id, tastings.assignedUserId))
     .leftJoin(tastingReports, eq(tastingReports.tastingId, tastings.id))
     .leftJoin(reportSubmitter, eq(reportSubmitter.id, tastingReports.submittedByUserId))
+    .leftJoin(tasterInvoices, eq(tasterInvoices.tastingId, tastings.id))
     .where(inArray(tastings.customerId, accountIds))
     .orderBy(asc(tastings.scheduledAt))
 
@@ -326,6 +345,18 @@ export async function loadTastings(accountIds: string[], mode: ViewerMode) {
       within7: false,
       within14: false,
       within30: false,
+      // Objective/targets arrive with the tasting-objective migration; until then
+      // every tasting is treated as an unclassified retail tasting.
+      objective: null,
+      primaryGoal: null,
+      targetBottlesSold: null,
+      targetCasesDepleted: null,
+      targetReorderQuantity: null,
+      ...resolveTastingCost(
+        { invoiceTotal: row.invoiceTotal == null ? null : toNumber(row.invoiceTotal), estimatedCost: null },
+        settings,
+      ),
+      economics: null,
     })
     byAccount.set(row.accountId, list)
   }
@@ -446,6 +477,11 @@ export type PullThroughDataset = {
   generatedAt: Date
   /** Every taster who has worked each account — drives the taster filter. */
   tasterNamesByAccount: Map<string, string[]>
+  /** Commercial orders with organic/assisted attribution, plus sample drops, per account. */
+  ordersByAccount: Map<string, PullThroughOrder[]>
+  /** Tastings with following-order attribution and economics attached, per account. */
+  tastingsByAccount: Map<string, PullThroughTasting[]>
+  settings: TastingEconomicsSettings
 }
 
 /**
@@ -453,6 +489,7 @@ export type PullThroughDataset = {
  */
 export async function loadPullThroughDataset(scope: PullThroughScope): Promise<PullThroughDataset> {
   const now = new Date()
+  const settings = DEFAULT_ECONOMICS_SETTINGS
 
   const accountRows = await db
     .select({
@@ -495,10 +532,13 @@ export async function loadPullThroughDataset(scope: PullThroughScope): Promise<P
 
   const [ordersByAccount, tastingsByAccount, inventoryByAccount, contactsByAccount] = await Promise.all([
     loadOrders(accountIds),
-    loadTastings(accountIds, scope.mode),
+    loadTastings(accountIds, scope.mode, settings),
     loadInventory(accountIds, scope.mode),
     loadContactSummary(accountIds),
   ])
+
+  const classifiedOrdersByAccount = new Map<string, PullThroughOrder[]>()
+  const enrichedTastingsByAccount = new Map<string, PullThroughTasting[]>()
 
   const rows: PullThroughAccountRow[] = accountRows.map((account) => {
     const basePath = accountBasePath(scope.mode, account.id)
@@ -509,8 +549,16 @@ export async function loadPullThroughDataset(scope: PullThroughScope): Promise<P
     const orderMetrics = computeOrderMetrics(commercialOrders, sampleOrders.length, now)
 
     const rawTastings = tastingsByAccount.get(account.id) ?? []
-    const attributedTastings = attachTastingOrderAttribution(rawTastings, commercialOrders)
-    const tastingMetrics = computeTastingMetrics(attributedTastings, commercialOrders)
+    // Organic vs tasting-assisted is decided per order first; every economic figure
+    // below reads that classification rather than re-deriving it.
+    const classifiedOrders = classifyOrderAttribution(commercialOrders, rawTastings, settings)
+    const attributedTastings = attachTastingOrderAttribution(rawTastings, classifiedOrders).map((tasting) => ({
+      ...tasting,
+      economics: computeTastingEconomics(tasting, classifiedOrders, settings),
+    }))
+    const tastingMetrics = computeTastingMetrics(attributedTastings, classifiedOrders)
+    classifiedOrdersByAccount.set(account.id, [...classifiedOrders, ...sampleOrders])
+    enrichedTastingsByAccount.set(account.id, attributedTastings)
 
     const snapshot = inventoryByAccount.get(account.id) ?? null
     const bottlesReceivedSinceCheck =
@@ -551,6 +599,19 @@ export async function loadPullThroughDataset(scope: PullThroughScope): Promise<P
     )
 
     const recommendation = recommendAction(orderMetrics, inventory, tastingMetrics, temperature, now)
+
+    const velocity = computeAccountVelocity(orderMetrics, classifiedOrders, attributedTastings, settings)
+    const economics = computeAccountEconomics(classifiedOrders, attributedTastings, velocity, settings, now)
+    const dependency = computeTastingDependency(classifiedOrders, attributedTastings, velocity, economics)
+    const health = classifyAccountHealth(
+      orderMetrics,
+      velocity,
+      dependency,
+      economics,
+      inventory,
+      tastingMetrics,
+      daysBetween(new Date(account.createdAt), now),
+    )
 
     const contactSummary = contactsByAccount.get(account.id) ?? { count: 0, primaryName: null }
     const primaryContactName = contactSummary.primaryName ?? account.pocName ?? account.contactName ?? null
@@ -599,6 +660,10 @@ export async function loadPullThroughDataset(scope: PullThroughScope): Promise<P
       temperature,
       temperatureWhy,
       reorderLikelihood,
+      velocity,
+      dependency,
+      economics,
+      health,
       pullThrough,
       recommendation,
       dataQuality,
@@ -636,26 +701,24 @@ export async function loadPullThroughDataset(scope: PullThroughScope): Promise<P
     if (names.length > 0) tasterNamesByAccount.set(accountId, names)
   }
 
-  return { rows, scope, generatedAt: now, tasterNamesByAccount }
+  return {
+    rows,
+    scope,
+    generatedAt: now,
+    tasterNamesByAccount,
+    ordersByAccount: classifiedOrdersByAccount,
+    tastingsByAccount: enrichedTastingsByAccount,
+    settings,
+  }
 }
 
 /**
- * Tastings for a set of accounts with their following order already attached.
- * Used by the taster performance rollup so attribution is computed one way only.
+ * Tastings for the accounts in a dataset with their following order and economics
+ * attached. The taster performance rollup reads these so attribution is computed one
+ * way only.
  */
-export async function loadAttributedTastings(accountIds: string[], mode: ViewerMode) {
-  const [tastingsByAccount, ordersByAccount] = await Promise.all([
-    loadTastings(accountIds, mode),
-    loadOrders(accountIds),
-  ])
-
-  const result = new Map<string, PullThroughTasting[]>()
-  for (const [accountId, list] of tastingsByAccount.entries()) {
-    const commercialOrders = (ordersByAccount.get(accountId) ?? []).filter((order) => order.orderType === 'paid')
-    result.set(accountId, attachTastingOrderAttribution(list, commercialOrders))
-  }
-
-  return result
+export function attributedTastingsFromDataset(dataset: PullThroughDataset) {
+  return dataset.tastingsByAccount
 }
 
 /* ------------------------------------------------------- single account API */
@@ -665,6 +728,7 @@ export type AccountIntelligence = {
   tastings: PullThroughTasting[]
   orders: PullThroughOrder[]
   timeline: TimelineEvent[]
+  settings: TastingEconomicsSettings
 }
 
 export async function loadAccountIntelligence(
@@ -676,18 +740,12 @@ export async function loadAccountIntelligence(
   const row = dataset.rows[0]
   if (!row) return null
 
-  const [ordersByAccount, tastingsByAccount] = await Promise.all([
-    loadOrders([accountId]),
-    loadTastings([accountId], scope.mode),
-  ])
-
-  const allOrders = ordersByAccount.get(accountId) ?? []
-  const commercialOrders = allOrders.filter((order) => order.orderType === 'paid')
-  const tastingList = attachTastingOrderAttribution(tastingsByAccount.get(accountId) ?? [], commercialOrders)
+  const allOrders = dataset.ordersByAccount.get(accountId) ?? []
+  const tastingList = dataset.tastingsByAccount.get(accountId) ?? []
 
   const timeline = await loadAccountTimeline(accountId, scope.mode, allOrders, tastingList)
 
-  return { row, tastings: tastingList, orders: allOrders, timeline }
+  return { row, tastings: tastingList, orders: allOrders, timeline, settings: dataset.settings }
 }
 
 /**

@@ -4,7 +4,7 @@ import { requireFeature } from '@/lib/auth/session'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
-  loadAttributedTastings,
+  attributedTastingsFromDataset,
   loadPullThroughDataset,
   pullThroughBasePath,
   resolvePullThroughScope,
@@ -25,11 +25,10 @@ export default async function TasterPerformancePage({
 
   const basePath = pullThroughBasePath(scope.mode)
   const dataset = await loadPullThroughDataset(scope)
-  const accountIds = dataset.rows.map((row) => row.accountId)
 
   // Tastings come straight from the tasting records; the taster is the assigned user.
   // Attribution to the following order is computed by the shared loader.
-  const attributed = await loadAttributedTastings(accountIds, scope.mode)
+  const attributed = attributedTastingsFromDataset(dataset)
   const ordersByAccountName = new Map(dataset.rows.map((row) => [row.accountId, row.accountName]))
 
   const performance = computeTasterPerformance(attributed, dataset.rows)

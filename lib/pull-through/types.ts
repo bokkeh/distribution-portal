@@ -54,6 +54,32 @@ export type PullThroughOrder = {
   /** 0 = initial order, 1 = first reorder, 2+ = subsequent reorders. */
   sequenceIndex: number
   isReorder: boolean
+  /** Organic vs tasting-assisted classification; null for sample drops. */
+  attribution: OrderAttribution | null
+}
+
+/* ------------------------------------------------------------ attribution */
+
+export type OrderAttributionKind = 'organic' | 'assisted'
+
+/**
+ * Whether a commercial order was earned by organic consumer demand or pulled through
+ * by a paid tasting. Classified automatically from timing and tasting sales; an admin
+ * override (stored on the order) always wins.
+ */
+export type OrderAttribution = {
+  kind: OrderAttributionKind
+  source: 'auto' | 'override'
+  /** The tasting this order is attributed to, when assisted. */
+  tastingId: string | null
+  tastingAt: Date | null
+  daysSinceTasting: number | null
+  /** Bottles sold at that tasting, from its report. */
+  bottlesSoldAtTasting: number | null
+  /** Bottles from the previous order that moved outside the tasting itself. */
+  bottlesMovedOutsideTasting: number | null
+  why: string
+  overrideReason: string | null
 }
 
 export type OrderMetrics = {
@@ -148,6 +174,168 @@ export type PullThroughTasting = {
   within7: boolean
   within14: boolean
   within30: boolean
+
+  /** Why the tasting was booked; null for tastings scheduled before objectives existed. */
+  objective: TastingObjective | null
+  primaryGoal: string | null
+  targetBottlesSold: number | null
+  targetCasesDepleted: number | null
+  targetReorderQuantity: number | null
+  /** What the tasting actually cost: approved invoice → estimate → global default. */
+  cost: number
+  costSource: 'invoice' | 'estimate' | 'default'
+  /** Filled in once orders are attributed. */
+  economics: TastingEconomics | null
+}
+
+export type TastingObjective = 'sell_through' | 'reorder' | 'account_opening' | 'strategic'
+
+/* --------------------------------------------------------------- economics */
+
+/** Global assumptions; editable by admins, overridable per tasting. */
+export type TastingEconomicsSettings = {
+  contributionPerCase: number
+  defaultTastingCost: number
+  /** A reorder inside this many days of a tasting is presumed tasting-assisted. */
+  attributionWindowDays: number
+  /** Beyond the window, a reorder is still assisted when the tasting sold at least this share of the prior order. */
+  assistedSalesShare: number
+  bottlesPerCase: number
+}
+
+export type ContributionWindow = {
+  days: 30 | 60 | 90
+  cases: number
+  /** Cases ordered in the window that were classified organic (i.e. beyond the attributed reorder). */
+  organicCases: number
+  contribution: number
+  net: number
+  roiPercent: number | null
+}
+
+export type TastingEconomics = {
+  cost: number
+  costSource: 'invoice' | 'estimate' | 'default'
+  /** Cases from the reorder attributed to this tasting, if any. */
+  attributedCases: number
+  attributedOrderId: string | null
+  contribution: number
+  net: number
+  /** (net ÷ cost) × 100; null when cost is zero. */
+  roiPercent: number | null
+  windows: ContributionWindow[]
+  /** Strategic tastings are excluded from retail ROI roll-ups. */
+  excludedFromRetailRollup: boolean
+}
+
+export type AccountVelocity = {
+  totalOrders: number
+  totalCases: number
+  totalBottles: number
+  organicCases: number
+  assistedCases: number
+  organicBottles: number
+  assistedBottles: number
+  /** Bottles the reports say were sold during tastings themselves. */
+  bottlesSoldAtTastings: number
+  /** Share of cases earned organically, 0..100. null without commercial orders. */
+  organicPercent: number | null
+  assistedPercent: number | null
+  /** Bottles per week, split by channel. null when the span is too short to measure. */
+  bottlesPerWeek: number | null
+  organicBottlesPerWeek: number | null
+  assistedBottlesPerWeek: number | null
+  casesPerMonth: number | null
+  daysToSellOneCase: number | null
+  /** Days from first to last order, plus one cycle. */
+  spanDays: number | null
+}
+
+export type DependencyStatus = 'healthy' | 'supported' | 'tasting_dependent' | 'unprofitable_cycle' | 'no_tastings' | 'unknown'
+
+export type DependencyFlag = {
+  key:
+    | 'tasting_before_reorders'
+    | 'spend_near_contribution'
+    | 'low_organic_velocity'
+    | 'no_organic_after_tastings'
+    | 'tasting_requested_after_purchase'
+  label: string
+  detail: string
+}
+
+export type TastingDependency = {
+  /** Assisted cases ÷ total cases, 0..100. */
+  percent: number | null
+  status: DependencyStatus
+  headline: string
+  flags: DependencyFlag[]
+  /** How many of the most recent reorders were preceded by a tasting. */
+  recentReordersAssisted: number
+  recentReordersConsidered: number
+  /** Pattern warning for the timeline, when one applies. */
+  patternWarning: string | null
+}
+
+export type AccountEconomics = {
+  revenue: number
+  casesPurchased: number
+  contribution: number
+  tastingCount: number
+  /** Tastings whose cost counts against the account (strategic ones excluded). */
+  retailTastingCount: number
+  tastingSpend: number
+  strategicSpend: number
+  netContribution: number
+  profitPerTasting: number | null
+  netPerCase: number | null
+  lifetimeValue: number
+  annualizedValue: number | null
+  /** Contribution generated per dollar of tasting spend; null without tastings. */
+  contributionPerTastingDollar: number | null
+}
+
+export type AccountHealthKind =
+  | 'growth'
+  | 'healthy'
+  | 'developing'
+  | 'tasting_dependent'
+  | 'stalled'
+  | 'unprofitable'
+
+export type AccountHealth = {
+  kind: AccountHealthKind
+  source: 'auto' | 'override'
+  overrideReason: string | null
+  /** What the automatic rule would say, kept visible under an override. */
+  autoKind: AccountHealthKind
+  why: string[]
+}
+
+export type TastingDecisionKind = 'recommended' | 'consider' | 'not_recommended'
+
+export type TastingDecision = {
+  kind: TastingDecisionKind
+  headline: string
+  detail: string[]
+  /** Must be acknowledged before scheduling when true. */
+  requiresAcknowledgement: boolean
+  facts: {
+    currentInventoryBottles: number | null
+    lastOrderAt: Date | null
+    lastOrderCases: number | null
+    lastTastingAt: Date | null
+    lastTastingCost: number | null
+    tastingsLast90Days: number
+    organicPercent: number | null
+    assistedPercent: number | null
+    dependencyPercent: number | null
+    lifetimeContribution: number
+    lifetimeTastingSpend: number
+    netContribution: number
+    organicBottlesPerWeek: number | null
+    assistedBottlesPerWeek: number | null
+  }
 }
 
 export type TastingMetrics = {
@@ -288,6 +476,10 @@ export type PullThroughAccountRow = {
   temperature: AccountTemperature
   temperatureWhy: string[]
   reorderLikelihood: ReorderLikelihood
+  velocity: AccountVelocity
+  dependency: TastingDependency
+  economics: AccountEconomics
+  health: AccountHealth
   pullThrough: PullThroughScore
   recommendation: RecommendedAction
   dataQuality: DataQualityFlag[]

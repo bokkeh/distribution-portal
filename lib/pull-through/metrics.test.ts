@@ -17,6 +17,7 @@ function order(daysAgo: number, index: number, bottles = 12): PullThroughOrder {
     total: bottles * 20,
     sequenceIndex: index,
     isReorder: index > 0,
+    attribution: null,
   }
 }
 
