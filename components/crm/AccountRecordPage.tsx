@@ -1,5 +1,5 @@
 ﻿import Link from 'next/link'
-import { and, asc, count, desc, eq, inArray, or } from 'drizzle-orm'
+import { and, asc, count, desc, eq, inArray, isNull, or } from 'drizzle-orm'
 import { db } from '@/db'
 import { contacts, crmPipelineStages, deliveries, deliveryStops, eventParticipants, events, invoices, orders, salesMembers, salesRegions, smsMessages, tastingReports, tastings, users } from '@/db/schema'
 import { syncToHubSpot } from '@/actions/crm'
@@ -211,7 +211,7 @@ export async function AccountRecordPage({
         recentDeliveries: Array<{ deliveryId: string; status: string; weekStartDate: string; stopStatus: string; completedAt: Date | null; proofOfDeliveryUrl: string | null; shelfPhotoUrl: string | null }>
         recentTexts: Array<{ id: string; direction: string; body: string; createdAt: Date; phoneNumber: string }>
         recentTastings: Array<{ id: string; eventName: string; status: string; scheduledAt: Date; endAt: Date | null; reportSubmittedAt: Date | null }>
-        recentEvents: Array<{ id: string; title: string; status: string; startAt: Date; attendeeCount: number }>
+        recentEvents: Array<{ id: string; title: string; status: string; startAt: Date | null; attendeeCount: number }>
         notes: Awaited<ReturnType<typeof getAccountNotes>>
         inventoryItems: Awaited<ReturnType<typeof getAccountInventoryOnHand>>
         activityItems: Awaited<ReturnType<typeof getAccountActivityFeed>>
@@ -346,7 +346,7 @@ export async function AccountRecordPage({
       mediaItems: mediaItems.status === 'fulfilled' ? mediaItems.value : [],
     }
 
-    const recentEvents = await db.select({ id: events.id, title: events.title, status: events.status, startAt: events.startAt, attendeeCount: count(eventParticipants.id) }).from(events).leftJoin(eventParticipants, eq(eventParticipants.eventId, events.id)).where(eq(events.accountId, accountId)).groupBy(events.id).orderBy(desc(events.startAt)).limit(6)
+    const recentEvents = await db.select({ id: events.id, title: events.title, status: events.status, startAt: events.startAt, attendeeCount: count(eventParticipants.id) }).from(events).leftJoin(eventParticipants, eq(eventParticipants.eventId, events.id)).where(and(eq(events.accountId, accountId), isNull(events.archivedAt))).groupBy(events.id).orderBy(desc(events.startAt)).limit(6)
 
     const smartInsights = await generateAccountSmartInsights({
       account,
@@ -480,16 +480,17 @@ export async function AccountRecordPage({
     <div className="space-y-6 p-4 sm:p-8">
       <div className="space-y-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          {/* Both halves get flex-1 so the action bar wraps instead of squeezing the title to a sliver. */}
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-3">
-              <Link href={getAccountIndexPath(mode)}>
+            <div className="flex items-start gap-3">
+              <Link href={getAccountIndexPath(mode)} className="shrink-0">
                 <Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
               </Link>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="truncate text-2xl font-bold text-slate-900">{account.companyName}</h1>
+                  <h1 className="min-w-0 break-words text-2xl font-bold leading-tight text-slate-900">{account.companyName}</h1>
                   {headerBadges.map((badge) => (
-                    <Badge key={badge.label} variant={badge.variant}>{badge.label}</Badge>
+                    <Badge key={badge.label} variant={badge.variant} className="whitespace-nowrap">{badge.label}</Badge>
                   ))}
                 </div>
                 {(account.city || account.state) ? (
@@ -499,7 +500,7 @@ export async function AccountRecordPage({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 lg:flex-1 lg:justify-end">
             {showViewAs ? <ViewAsAccountButton accountId={account.id} companyName={account.companyName} /> : null}
             {showSyncAction ? (
               <form action={syncToHubSpot.bind(null, account.id)}>
@@ -682,7 +683,7 @@ export async function AccountRecordPage({
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-3"><CardTitle className="flex items-center gap-2"><CalendarDays className="h-4 w-4" />Events Hosted</CardTitle>{mode !== 'sales' ? <Link href={`/${mode}/events?accountId=${account.id}`} className="text-xs font-medium text-blue-600 hover:underline">View events</Link> : null}</CardHeader>
                   <CardContent>
-                    {overviewData.recentEvents.length === 0 ? <p className="text-sm text-slate-500">No events associated with this account yet.</p> : <div className="space-y-2">{overviewData.recentEvents.map((hostedEvent) => <Link key={hostedEvent.id} href={`/${mode}/events/${hostedEvent.id}`} className="block rounded-xl border border-slate-100 px-3 py-3 transition-colors hover:border-[#ff5a00]"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-medium text-slate-900">{hostedEvent.title}</p><p className="text-xs text-muted-foreground">{formatDate(hostedEvent.startAt)} · {hostedEvent.attendeeCount} RSVP{hostedEvent.attendeeCount === 1 ? '' : 's'}</p></div><Badge variant="secondary" className="text-xs">{hostedEvent.status}</Badge></div></Link>)}</div>}
+                    {overviewData.recentEvents.length === 0 ? <p className="text-sm text-slate-500">No events associated with this account yet.</p> : <div className="space-y-2">{overviewData.recentEvents.map((hostedEvent) => <Link key={hostedEvent.id} href={`/${mode}/events/${hostedEvent.id}`} className="block rounded-xl border border-slate-100 px-3 py-3 transition-colors hover:border-[#ff5a00]"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-medium text-slate-900">{hostedEvent.title}</p><p className="text-xs text-muted-foreground">{hostedEvent.startAt ? formatDate(hostedEvent.startAt) : 'Date not entered'} · {hostedEvent.attendeeCount} RSVP{hostedEvent.attendeeCount === 1 ? '' : 's'}</p></div><Badge variant="secondary" className="text-xs">{hostedEvent.status}</Badge></div></Link>)}</div>}
                   </CardContent>
                 </Card>
 
