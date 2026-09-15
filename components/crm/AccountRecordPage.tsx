@@ -1,5 +1,5 @@
 ﻿import Link from 'next/link'
-import { and, asc, count, desc, eq, inArray, isNull, or } from 'drizzle-orm'
+import { and, asc, count, desc, eq, inArray, or } from 'drizzle-orm'
 import { db } from '@/db'
 import { contacts, crmPipelineStages, deliveries, deliveryStops, eventParticipants, events, invoices, orders, salesMembers, salesRegions, smsMessages, tastingReports, tastings, users } from '@/db/schema'
 import { syncToHubSpot } from '@/actions/crm'
@@ -346,7 +346,7 @@ export async function AccountRecordPage({
       mediaItems: mediaItems.status === 'fulfilled' ? mediaItems.value : [],
     }
 
-    const recentEvents = await db.select({ id: events.id, title: events.title, status: events.status, startAt: events.startAt, attendeeCount: count(eventParticipants.id) }).from(events).leftJoin(eventParticipants, eq(eventParticipants.eventId, events.id)).where(and(eq(events.accountId, accountId), isNull(events.archivedAt))).groupBy(events.id).orderBy(desc(events.startAt)).limit(6)
+    const recentEvents = await db.select({ id: events.id, title: events.title, status: events.status, startAt: events.startAt, attendeeCount: count(eventParticipants.id) }).from(events).leftJoin(eventParticipants, eq(eventParticipants.eventId, events.id)).where(eq(events.accountId, accountId)).groupBy(events.id).orderBy(desc(events.startAt)).limit(6)
 
     const smartInsights = await generateAccountSmartInsights({
       account,
