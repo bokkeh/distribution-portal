@@ -76,6 +76,16 @@ const HISTORY_RANGE_OPTIONS: Array<{ value: HistoryRangeKey; label: string }> = 
   { value: 'yearly', label: 'Yearly' },
 ]
 
+/**
+ * Newest first by effective date. Date-only counts all land at the same instant, so
+ * counts saved on the same day fall back to the order they were actually entered.
+ */
+function compareHistoryNewestFirst(a: AccountInventoryHistoryEvent, b: AccountInventoryHistoryEvent) {
+  const byDate = b.createdAt.getTime() - a.createdAt.getTime()
+  if (byDate !== 0) return byDate
+  return b.recordedAt.getTime() - a.recordedAt.getTime()
+}
+
 function roundInventoryValue(value: number) {
   return Math.round(value * 100) / 100
 }
@@ -223,7 +233,7 @@ function buildInventoryHistorySeries(
 ) {
   const now = new Date()
   const buckets = buildHistoryBuckets(range, now)
-  const eventsAsc = [...events].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+  const eventsAsc = [...events].sort((a, b) => compareHistoryNewestFirst(b, a))
   const allDeltaBottles = eventsAsc.reduce((sum, event) => sum + event.deltaBottles, 0)
 
   let runningBottles = roundInventoryValue(totalBottles - allDeltaBottles)
@@ -263,7 +273,7 @@ function buildVisibleHistoryEvents(events: AccountInventoryHistoryEvent[], range
 
   return events
     .filter((event) => event.createdAt >= firstBucket.start && event.createdAt <= lastBucket.end)
-    .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
+    .sort(compareHistoryNewestFirst)
 }
 
 function InventoryHistoryChart({
@@ -398,7 +408,7 @@ export function AccountInventoryOnHandCard({
     [historyRange, inventoryHistory]
   )
   const allHistoryEvents = useMemo(
-    () => [...inventoryHistory].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),
+    () => [...inventoryHistory].sort(compareHistoryNewestFirst),
     [inventoryHistory]
   )
   const totalAdjustmentsInView = visibleHistoryEvents.length

@@ -55,7 +55,10 @@ export type AccountInventoryHistoryEvent = {
   id: string
   kind: string
   title: string
+  /** Effective date of the count (what the log shows and sorts by). */
   createdAt: Date
+  /** When the row was actually written; breaks ties between counts on the same day. */
+  recordedAt: Date
   productId: string | null
   productName: string | null
   deltaCases: number
@@ -363,6 +366,7 @@ export async function getAccountInventoryHistory(accountId: string) {
         id: accountInventoryAdjustments.id,
         changeType: accountInventoryAdjustments.changeType,
         effectiveAt: accountInventoryAdjustments.effectiveAt,
+        recordedAt: accountInventoryAdjustments.createdAt,
         productId: accountInventoryAdjustments.productId,
         productName: accountInventoryAdjustments.productName,
         deltaCases: accountInventoryAdjustments.deltaCases,
@@ -393,6 +397,7 @@ export async function getAccountInventoryHistory(accountId: string) {
             ? 'Inventory item removed'
             : 'Inventory count recorded',
       createdAt: row.effectiveAt,
+      recordedAt: row.recordedAt,
       productId: row.productId,
       productName: row.productName,
       deltaCases: 0,
@@ -460,6 +465,7 @@ export async function getAccountInventoryHistory(accountId: string) {
             kind: row.kind,
             title: row.title,
             createdAt: row.createdAt,
+            recordedAt: row.createdAt,
             productId,
             productName,
             deltaCases,
