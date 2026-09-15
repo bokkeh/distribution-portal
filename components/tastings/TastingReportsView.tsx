@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { DeliveryPhotoGallery, type DeliveryGalleryPhoto } from '@/components/deliveries/DeliveryPhotoGallery'
 import { formatEasternDateTime } from '@/lib/tastings/time'
 import { formatCurrency } from '@/lib/utils'
+import { ApplyReportInventoryButton } from './ApplyReportInventoryButton'
 import { TastingInsightsCard } from './TastingInsightsCard'
 import type { SerializedTastingAnalysis } from './TastingInsightsCard'
 import { signedPhotoUrl } from '@/lib/gcs/photo-url'
@@ -186,6 +187,11 @@ export function TastingReportsView({
                       <div className="space-y-0.5">
                         <p className="text-xs uppercase tracking-wide text-muted-foreground">Stock After Tasting</p>
                         <p className="text-lg font-semibold text-slate-900">{row.bottlesInStockAfter ?? '-'}</p>
+                        {row.bottlesInStockAfter != null ? (
+                          <div className="pt-1">
+                            <ApplyReportInventoryButton tastingId={row.tastingId} />
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                     {row.actualStartTime || row.actualEndTime ? (

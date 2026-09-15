@@ -18,6 +18,7 @@ import {
   sendTastingSmsFromTemplate,
 } from '@/lib/tastings/sms-series'
 import { getTastingById, getTastingsForViewWithFallback } from '@/lib/tastings/read'
+import { syncTastingReportInventory } from '@/lib/tastings/account-inventory'
 import { formatEasternDateTime, parseDateTimeInTimeZone } from '@/lib/tastings/time'
 import { logActivityEvent } from '@/lib/activity/log'
 import { getStaffEmailsForNotification } from '@/lib/notifications/recipients'
@@ -1091,6 +1092,7 @@ export async function submitTastingReport(formData: FormData) {
     .select({
       id: tastings.id,
       assignedUserId: tastings.assignedUserId,
+      customerId: tastings.customerId,
     })
     .from(tastings)
     .where(eq(tastings.id, tastingId))
@@ -1198,6 +1200,21 @@ export async function submitTastingReport(formData: FormData) {
     body: 'A tasting report was submitted for review.',
   })
 
+  // The after-tasting shelf count is a real inventory check — carry it onto the
+  // account so inventory on hand and pull-through reflect it without re-entry.
+  let inventorySyncNote: string | null = null
+  try {
+    const inventorySync = await syncTastingReportInventory({ tastingId, actorUserId: session.user.id })
+    if (inventorySync.applied) {
+      inventorySyncNote = `Account inventory set to ${inventorySync.bottles} bottles of ${inventorySync.productName}.`
+    } else {
+      inventorySyncNote = `Inventory was not updated: ${inventorySync.reason}`
+    }
+  } catch (error) {
+    console.error('Failed to sync tasting report inventory', error)
+    inventorySyncNote = 'Inventory could not be updated automatically — record the count on the account.'
+  }
+
   await clearUserNotifications({
     userId: tasting.assignedUserId,
     href: `/taster/tastings/${tastingId}`,
@@ -1262,11 +1279,52 @@ export async function submitTastingReport(formData: FormData) {
   revalidatePath('/admin/tastings')
   revalidatePath('/staff/tastings')
   revalidatePath('/taster/tastings')
+  revalidatePath(`/admin/crm/${tasting.customerId}`)
+  revalidatePath(`/staff/crm/${tasting.customerId}`)
+  revalidatePath(`/sales/accounts/${tasting.customerId}`)
 
+  const successMessage = ['Tasting report submitted.', inventorySyncNote].filter(Boolean).join(' ')
   if (redirectTo?.startsWith('/')) {
-    redirect(`${redirectTo}?success=${encodeURIComponent('Tasting report submitted.')}`)
+    redirect(`${redirectTo}?success=${encodeURIComponent(successMessage)}`)
   }
-  redirect(`/taster/tastings/${tastingId}?success=${encodeURIComponent('Tasting report submitted.')}`)
+  redirect(`/taster/tastings/${tastingId}?success=${encodeURIComponent(successMessage)}`)
+}
+
+/**
+ * Re-applies a submitted report's after-tasting count to the account's inventory.
+ * Used for reports submitted before counts were carried over automatically, or when
+ * the product could not be resolved at submission time and has since been fixed.
+ */
+export async function applyTastingReportInventory(tastingId: string) {
+  const session = await requireFeature('tastings', 'admin', 'staff')
+
+  const [tasting] = await db
+    .select({ id: tastings.id, customerId: tastings.customerId })
+    .from(tastings)
+    .where(eq(tastings.id, tastingId))
+    .limit(1)
+  if (!tasting) return { error: 'Tasting not found.' }
+
+  try {
+    const result = await syncTastingReportInventory({ tastingId, actorUserId: session.user.id })
+    if (!result.applied) return { error: result.reason }
+
+    revalidatePath('/admin/tastings/reports')
+    revalidatePath('/staff/tastings/reports')
+    revalidatePath(`/admin/crm/${tasting.customerId}`)
+    revalidatePath(`/staff/crm/${tasting.customerId}`)
+    revalidatePath(`/sales/accounts/${tasting.customerId}`)
+
+    return {
+      success: true as const,
+      message: result.updated
+        ? `${result.productName} count corrected to ${result.bottles} bottles.`
+        : `${result.productName} set to ${result.bottles} bottles on the account.`,
+    }
+  } catch (error) {
+    console.error('Failed to apply tasting report inventory', error)
+    return { error: 'Inventory could not be updated. Try again or record the count on the account.' }
+  }
 }
 
 export async function submitTasterInvoice(formData: FormData) {
