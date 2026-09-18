@@ -1,3 +1,5 @@
+import { OrderOperations } from '@/components/orders/OrderOperations'
+import { requireFeature } from '@/lib/auth/session'
 import { db } from '@/db'
 import { orders, orderItems, products, customerAccounts } from '@/db/schema'
 import { eq } from 'drizzle-orm'
@@ -21,6 +23,7 @@ import { ArrowLeft, Download } from 'lucide-react'
 const shippingStatuses = ['not_scheduled', 'scheduled', 'out_for_delivery', 'delivered', 'issue'] as const
 
 export default async function OrderDetailPage({ params }: { params: Promise<{ orderId: string }> }) {
+  await requireFeature('orders', 'admin', 'staff')
   const { orderId } = await params
 
   let order:
@@ -129,6 +132,8 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
           </a>
         </div>
       </div>
+
+      <OrderOperations orderId={order.id} paymentTerms={order.paymentTerms} orderDate={order.createdAt} />
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
         <Card className="md:col-span-2">

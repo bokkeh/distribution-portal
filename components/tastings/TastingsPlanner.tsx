@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useId, useMemo, useState } from 'react'
 import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameDay, isSameMonth, startOfMonth, startOfWeek } from 'date-fns'
 import { CalendarDays, Clock3, MapPin, Phone, Store } from 'lucide-react'
 import { createTasting, deleteTasting, reassignTasting, updateTastingStatus } from '@/actions/tastings'
@@ -12,7 +12,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { formatEasternTimeRange } from '@/lib/tastings/time'
+import { getAccountTastingLocations } from '@/lib/tastings/locations'
+import { formatEasternDate, getEasternDateKey, formatEasternTimeRange } from '@/lib/tastings/time'
 import { cn } from '@/lib/utils'
 import { TastingScheduleAssistant } from './TastingScheduleAssistant'
 import { CustomerRecordLink } from '@/components/crm/CustomerRecordLink'
@@ -20,6 +21,7 @@ import { CustomerRecordLink } from '@/components/crm/CustomerRecordLink'
 type TastingRow = {
   id: string
   customerId: string
+  accountName?: string | null
   assignedUserId: string
   createdByUserId: string
   eventName: string
@@ -35,6 +37,8 @@ type TastingRow = {
   createdAt: Date
   tasterName: string
   tasterPhone: string | null
+  reportBottlesSold?: number | null
+  reportSamplesServed?: number | null
   reportSubmittedAt?: Date | null
   invoiceSubmittedAt?: Date | null
   invoiceStatus?: string | null
@@ -43,11 +47,14 @@ type TastingRow = {
 interface Props {
   mode: 'admin' | 'staff' | 'taster'
   tastings: TastingRow[]
-  accounts: Array<{ id: string; companyName: string; address: string | null; city: string | null; state: string | null; zip: string | null }>
+  accounts: Array<{ id: string; companyName: string; address: string | null; city: string | null; state: string | null; zip: string | null; additionalLocations?: string | null }>
   tasters: Array<{ id: string; name: string; phone: string | null; avatarUrl?: string | null }>
   success?: string
   error?: string
   initialAccountId?: string
+  initialTasterId?: string
+  formOnly?: boolean
+  fromAvailability?: boolean
   initialDate?: string
 }
 
@@ -157,7 +164,11 @@ export function TastingScheduleBoard({
   error,
   initialAccountId,
   initialDate,
+  initialTasterId,
+  formOnly = false,
+  fromAvailability = false,
 }: Props) {
+  const formId = useId()
   const initialSelectedDate = useMemo(() => {
     if (!initialDate) return new Date()
     const parsed = new Date(`${initialDate}T12:00:00`)
@@ -168,6 +179,9 @@ export function TastingScheduleBoard({
   const [selectedAccountId, setSelectedAccountId] = useState(() =>
     initialAccountId && accounts.some((account) => account.id === initialAccountId) ? initialAccountId : ''
   )
+  const [locationIndex, setLocationIndex] = useState('0')
+  const selectedAccount = accounts.find(account => account.id === selectedAccountId)
+  const locations = selectedAccount ? getAccountTastingLocations(selectedAccount) : []
   const [dateInput, setDateInput] = useState(() =>
     initialDate && !Number.isNaN(new Date(`${initialDate}T12:00:00`).getTime())
       ? initialDate
@@ -199,8 +213,8 @@ export function TastingScheduleBoard({
       {success ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</div> : null}
       {error ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
 
-      <div className="grid gap-6 xl:grid-cols-[1.35fr_0.95fr]">
-        <Card>
+      <div className={formOnly ? "space-y-4" : "grid gap-6 xl:grid-cols-[1.35fr_0.95fr]"}>
+        {!formOnly && <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
             <div>
               <CardTitle className="flex items-center gap-2">
@@ -254,7 +268,7 @@ export function TastingScheduleBoard({
               })}
             </div>
           </CardContent>
-        </Card>
+        </Card>}
 
         <Card>
           <CardHeader>
@@ -264,14 +278,15 @@ export function TastingScheduleBoard({
             {mode === 'taster' ? null : (
               <form action={createTasting} className="space-y-4">
                 <input type="hidden" name="mode" value={mode} />
+                {fromAvailability ? <input type="hidden" name="fromAvailability" value="true" /> : null}
                 <div className="space-y-2">
-                  <Label htmlFor="customerId">Store Account</Label>
+                  <Label htmlFor={`${formId}-customerId`}>Store Account</Label>
                   <select
-                    id="customerId"
+                    id={`${formId}-customerId`}
                     name="customerId"
                     className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm"
                     required
-                    onChange={e => setSelectedAccountId(e.target.value)}
+                    onChange={e => { setSelectedAccountId(e.target.value); setLocationIndex('0') }}
                     value={selectedAccountId}
                   >
                     <option value="">Select store</option>
@@ -283,6 +298,13 @@ export function TastingScheduleBoard({
                   </select>
                 </div>
 
+                {selectedAccount ? <div className="space-y-2">
+                  <Label htmlFor={`${formId}-tasting-location`}>Location</Label>
+                  <select id={`${formId}-tasting-location`} name="locationIndex" value={locationIndex} onChange={event => setLocationIndex(event.target.value)} className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm">
+                    {locations.map((location, index) => <option key={index} value={index}>{[location.address, location.city, location.state, location.zip].filter(Boolean).join(', ') || 'Account location (address not provided)'}</option>)}
+                  </select>
+                </div> : null}
+
                 {selectedAccountId && (
                   <TastingScheduleAssistant
                     accountId={selectedAccountId}
@@ -292,8 +314,8 @@ export function TastingScheduleBoard({
                 )}
 
                 <div className="space-y-2">
-                  <Label htmlFor="assignedUserId">Assign Taster</Label>
-                  <select id="assignedUserId" name="assignedUserId" className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm" required>
+                  <Label htmlFor={`${formId}-assignedUserId`}>Assign Taster</Label>
+                  <select id={`${formId}-assignedUserId`} name="assignedUserId" defaultValue={initialTasterId ?? ""} className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm" required>
                     <option value="">Select taster</option>
                     {tasters.map(taster => (
                       <option key={taster.id} value={taster.id}>
@@ -305,18 +327,18 @@ export function TastingScheduleBoard({
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="date">Date</Label>
-                    <Input id="date" name="date" type="date" value={dateInput} onChange={e => applySelectedDate(e.target.value)} required />
+                    <Label htmlFor={`${formId}-date`}>Date</Label>
+                    <Input id={`${formId}-date`} name="date" type="date" value={dateInput} onChange={e => applySelectedDate(e.target.value)} required />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="time">Start Time (ET)</Label>
-                    <Input id="time" name="time" type="time" defaultValue="17:00" required />
+                    <Label htmlFor={`${formId}-time`}>Start Time (ET)</Label>
+                    <Input id={`${formId}-time`} name="time" type="time" defaultValue="16:00" required />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="endTime">End Time (ET)</Label>
-                  <Input id="endTime" name="endTime" type="time" defaultValue="19:00" />
+                  <Label htmlFor={`${formId}-endTime`}>End Time (ET)</Label>
+                  <Input id={`${formId}-endTime`} name="endTime" type="time" defaultValue="19:00" />
                 </div>
 
                 <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
@@ -328,9 +350,9 @@ export function TastingScheduleBoard({
                 </label>
 
                 <div className="space-y-2">
-                  <Label htmlFor="notes">Notes</Label>
+                  <Label htmlFor={`${formId}-notes`}>Notes</Label>
                   <textarea
-                    id="notes"
+                    id={`${formId}-notes`}
                     name="notes"
                     className="min-h-28 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     placeholder="Sampling notes, promo setup, timing, or store instructions."
@@ -341,7 +363,7 @@ export function TastingScheduleBoard({
               </form>
             )}
 
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            {!formOnly && <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-slate-900">{format(selectedDate, 'EEEE, MMM d')} (ET schedule)</p>
@@ -356,7 +378,7 @@ export function TastingScheduleBoard({
                       <div>
                         <p className="text-base font-semibold text-slate-900">
                           {mode === 'taster' ? tasting.eventName : (
-                            <CustomerRecordLink accountId={tasting.customerId} name={tasting.eventName} portal={mode} />
+                            <CustomerRecordLink accountId={tasting.customerId} name={tasting.accountName ?? tasting.eventName} portal={mode} />
                           )}
                         </p>
                         <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-slate-500">
@@ -437,7 +459,7 @@ export function TastingScheduleBoard({
                   <p className="text-sm text-slate-500">No tastings on this date yet.</p>
                 )}
               </div>
-            </div>
+            </div>}
           </CardContent>
         </Card>
       </div>
@@ -448,6 +470,15 @@ export function TastingScheduleBoard({
 export function UpcomingTastingsList({ mode, tastings, tasters }: { mode: Props['mode']; tastings: TastingRow[]; tasters?: Props['tasters'] }) {
   const [now] = useState(() => Date.now())
   const [activeTab, setActiveTab] = useState<'upcoming' | 'previous'>('upcoming')
+  const [accountSearch, setAccountSearch] = useState('')
+  const lastTastings = useMemo(() => {
+    const latest = new Map<string, Date>()
+    for (const tasting of tastings) {
+      const date = new Date(tasting.scheduledAt)
+      if (date.getTime() < now && ['scheduled', 'confirmed', 'completed'].includes(tasting.status) && (!latest.has(tasting.customerId) || date > latest.get(tasting.customerId)!)) latest.set(tasting.customerId, date)
+    }
+    return latest
+  }, [tastings, now])
   const [previousFrom, setPreviousFrom] = useState('')
   const [previousTo, setPreviousTo] = useState('')
   const [selectedTasterId, setSelectedTasterId] = useState('')
@@ -479,19 +510,12 @@ export function UpcomingTastingsList({ mode, tastings, tasters }: { mode: Props[
     [tastings, now, selectedTasterId],
   )
   const filteredPreviousTastings = useMemo(() => {
-    return previousTastings.filter((tasting) => {
-      const tastingDate = new Date(tasting.scheduledAt)
-      if (previousFrom) {
-        const from = new Date(`${previousFrom}T00:00:00`)
-        if (tastingDate < from) return false
-      }
-      if (previousTo) {
-        const to = new Date(`${previousTo}T23:59:59.999`)
-        if (tastingDate > to) return false
-      }
-      return true
+    return previousTastings.filter(tasting => {
+      if (!`${tasting.accountName ?? ''} ${tasting.eventName}`.toLowerCase().includes(accountSearch.trim().toLowerCase())) return false
+      const date = getEasternDateKey(tasting.scheduledAt)
+      return (!previousFrom || date >= previousFrom) && (!previousTo || date <= previousTo)
     })
-  }, [previousFrom, previousTo, previousTastings])
+  }, [previousFrom, previousTo, previousTastings, accountSearch])
   const displayedTastings = activeTab === 'upcoming' ? upcomingTastings : filteredPreviousTastings
 
   return (
@@ -545,6 +569,7 @@ export function UpcomingTastingsList({ mode, tastings, tasters }: { mode: Props[
           aria-labelledby={`${mode}-${activeTab}-tastings-tab`}
           className="space-y-4 px-5 pb-6 sm:px-7 sm:pb-7"
         >
+          {activeTab === 'previous' ? <div className="space-y-2"><Label htmlFor={`${mode}-past-search`}>Search past tastings by account</Label><Input id={`${mode}-past-search`} type="search" placeholder="Account name..." value={accountSearch} onChange={event => setAccountSearch(event.target.value)} /></div> : null}
           {canFilterByTaster || activeTab === 'previous' ? (
             <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
               {canFilterByTaster ? (
@@ -590,7 +615,7 @@ export function UpcomingTastingsList({ mode, tastings, tasters }: { mode: Props[
                   </div>
                 </>
               ) : null}
-              {(selectedTasterId || previousFrom || previousTo) ? (
+              {(selectedTasterId || previousFrom || previousTo || accountSearch) ? (
                 <Button
                   type="button"
                   variant="ghost"
@@ -599,6 +624,7 @@ export function UpcomingTastingsList({ mode, tastings, tasters }: { mode: Props[
                     setSelectedTasterId('')
                     setPreviousFrom('')
                     setPreviousTo('')
+                    setAccountSearch('')
                   }}
                 >
                   Clear
@@ -623,7 +649,7 @@ export function UpcomingTastingsList({ mode, tastings, tasters }: { mode: Props[
                     <div className="flex flex-wrap items-center gap-2.5">
                       <p className="text-lg font-bold text-[#181615] sm:text-xl">
                         {mode === 'taster' ? tasting.eventName : (
-                          <CustomerRecordLink accountId={tasting.customerId} name={tasting.eventName} portal={mode} />
+                          <CustomerRecordLink accountId={tasting.customerId} name={tasting.accountName ?? tasting.eventName} portal={mode} />
                         )}
                       </p>
                       <PlannerStatusBadge status={tasting.status} />
@@ -642,6 +668,8 @@ export function UpcomingTastingsList({ mode, tastings, tasters }: { mode: Props[
                     </div>
                   </div>
                   <div className="flex flex-col items-start gap-4 md:min-w-[260px] md:items-end">
+                    {activeTab === 'previous' && lastTastings.has(tasting.customerId) ? <p className="text-sm font-semibold text-slate-700">Last tasting: {formatEasternDate(lastTastings.get(tasting.customerId)!)}</p> : null}
+                    {tasting.reportBottlesSold != null ? <p className="text-sm text-slate-600">Results: {tasting.reportBottlesSold} bottles sold{tasting.reportSamplesServed != null ? `  -  ${tasting.reportSamplesServed} samples served` : ''}</p> : null}
                     {tasting.storePhone ? (
                       <a href={`tel:${tasting.storePhone}`} className="inline-flex items-center gap-2 text-sm text-stone-500 transition-colors hover:text-[#181615]">
                         <Phone className="h-4 w-4 text-stone-700" aria-hidden="true" />

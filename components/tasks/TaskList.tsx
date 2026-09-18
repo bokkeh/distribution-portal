@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Check, Clock3, Pencil, Trash2 } from 'lucide-react'
 import { deleteTask, updateTaskDetails, updateTaskStatus } from '@/actions/tasks'
 import type { TaskListItem } from '@/lib/tasks/read'
+import { sortTasks } from '@/lib/tasks/sort'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 
@@ -20,12 +21,21 @@ export function TaskList({ items, mode, compact = false, nowIso, assigneeOptions
   assigneeOptions?: Array<{ id: string; name: string }>
   canReassign?: boolean
 }) {
-  const [tasks, setTasks] = useState(items)
+  const [localTasks, setLocalTasks] = useState<{ source: TaskListItem[]; items: TaskListItem[] }>({ source: items, items })
+  const tasks = localTasks.source === items ? localTasks.items : items
+  function setTasks(update: (current: TaskListItem[]) => TaskListItem[]) {
+    setLocalTasks(current => ({ source: items, items: update(current.source === items ? current.items : items) }))
+  }
+  const [showCompleted, setShowCompleted] = useState(false)
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [detailsId, setDetailsId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [, startTransition] = useTransition()
-  const visible = useMemo(() => compact ? tasks.filter((task) => !['completed', 'cancelled'].includes(task.status)).slice(0, 8) : tasks, [compact, tasks])
+  const visible = useMemo(() => {
+    const sorted = sortTasks(tasks)
+    return compact ? sorted.filter(task => !['completed', 'cancelled'].includes(task.status)).slice(0, 8) : sorted.filter(task => showCompleted || task.status !== 'completed')
+  }, [compact, tasks, showCompleted])
 
   function changeStatus(task: TaskListItem, status: TaskListItem['status']) {
     setPendingId(task.id)
@@ -70,31 +80,33 @@ export function TaskList({ items, mode, compact = false, nowIso, assigneeOptions
     })
   }
 
-  if (!visible.length) return <p className="text-sm text-slate-500">No tasks in this view.</p>
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-0">
+      {!compact ? <div className="mb-3 flex items-center justify-between gap-3"><p className="text-sm text-slate-500">{tasks.filter(task => task.status === 'completed').length} completed</p><Button type="button" size="sm" variant="outline" aria-pressed={showCompleted} onClick={() => setShowCompleted(value => !value)}>{showCompleted ? 'Hide Completed' : 'Show Completed'}</Button></div> : null}
+      {!visible.length ? <p className="py-3 text-sm text-slate-500">No tasks in this view.</p> : null}
       {error ? <p role="alert" className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
-      {visible.map((task) => {
+      {visible.map((task, index) => {
         const due = new Date(task.dueAt)
         const overdue = !['completed', 'cancelled'].includes(task.status) && due.getTime() < new Date(nowIso).getTime()
         return (
-          <article key={task.id} id={`task-${task.id}`} className={`rounded-2xl border p-4 ${overdue ? 'border-red-200 bg-red-50/50' : 'border-slate-200 bg-white'}`}>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="min-w-0">
+          <article key={task.id} id={`task-${task.id}`} className={`border-b px-3 py-2 ${overdue ? 'border-red-200 bg-red-50/50' : 'border-slate-200 bg-white'}`}>
+            <>{task.status === 'completed' && visible[index - 1]?.status !== 'completed' ? <p className="border-b py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Completed tasks</p> : null}</>
+            <div className="flex flex-wrap items-center justify-between gap-2 lg:flex-nowrap">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-1 lg:flex-nowrap">
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-semibold text-slate-900">{task.title}</p>
+                  <p className="truncate font-semibold text-slate-900" title={task.title}>{task.title}</p>
                   <Badge variant={task.priority === 'urgent' ? 'destructive' : task.priority === 'high' ? 'warning' : 'outline'} className="capitalize">{task.priority}</Badge>
                   <Badge variant={task.status === 'completed' ? 'success' : overdue ? 'destructive' : 'secondary'} className="capitalize">{task.status.replace('_', ' ')}</Badge>
                 </div>
-                {task.description && !compact ? <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">{task.description}</p> : null}
-                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
                   <span className="inline-flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" />{due.toLocaleString()}</span>
                   {task.accountId && task.accountName ? <Link href={accountHref(mode, task.accountId)} className="font-medium text-blue-600 hover:underline">{task.accountName}</Link> : null}
                   <span>Assigned to {task.assigneeName}</span>
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-2">
+                {!compact ? <Button type="button" size="sm" variant="ghost" aria-expanded={detailsId === task.id} onClick={() => setDetailsId(current => current === task.id ? null : task.id)}>Details</Button> : null}
                 {!compact ? <Button type="button" size="sm" variant="outline" onClick={() => setEditingId((current) => current === task.id ? null : task.id)}><Pencil className="mr-1 h-4 w-4" />Edit</Button> : null}
                 {!compact ? (
                   <Button
@@ -130,6 +142,7 @@ export function TaskList({ items, mode, compact = false, nowIso, assigneeOptions
                 ) : null}
               </div>
             </div>
+            {!compact && detailsId === task.id ? <div className="space-y-1 py-2 text-sm text-slate-600">{task.description ? <p className="whitespace-pre-wrap">{task.description}</p> : null}<p>Created by {task.createdByName}{task.contactName ? ` · Contact: ${task.contactName}` : ''}</p>{task.completedAt ? <p>Completed: {new Date(task.completedAt).toLocaleString()}</p> : null}</div> : null}
             {editingId === task.id ? (
               <form action={(formData) => saveDetails(task, formData)} className="mt-4 grid gap-3 border-t border-slate-200 pt-4 sm:grid-cols-2">
                 <input name="title" defaultValue={task.title} required className="h-10 rounded-lg border border-slate-200 px-3 text-sm" />

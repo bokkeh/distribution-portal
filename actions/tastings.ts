@@ -18,6 +18,8 @@ import {
   sendTastingSmsFromTemplate,
 } from '@/lib/tastings/sms-series'
 import { getTastingById, getTastingsForViewWithFallback } from '@/lib/tastings/read'
+import { getTastingAvailabilityMonthRange, tastingWindowsOverlap } from '@/lib/tastings/windows'
+import { getAccountTastingLocations } from '@/lib/tastings/locations'
 import { syncTastingReportInventory } from '@/lib/tastings/account-inventory'
 import { formatEasternDateTime, parseDateTimeInTimeZone } from '@/lib/tastings/time'
 import { logActivityEvent } from '@/lib/activity/log'
@@ -45,10 +47,6 @@ const ALLOWED_TASTING_TRANSITIONS: Record<TastingStatus, TastingStatus[]> = {
 
 function getTastingEndTime(start: Date, end: Date | null) {
   return end ?? new Date(start.getTime() + DEFAULT_TASTING_DURATION_MS)
-}
-
-function rangesOverlap(startA: Date, endA: Date, startB: Date, endB: Date) {
-  return startA < endB && startB < endA
 }
 
 function getEasternDateKey(value: Date) {
@@ -238,8 +236,7 @@ async function validateTastingWindow({
   excludeTastingId?: string
 }) {
   const requestedDateKey = getEasternDateKey(scheduledAt)
-  const monthStart = `${requestedDateKey.slice(0, 7)}-01`
-  const monthEnd = `${requestedDateKey.slice(0, 7)}-31`
+  const { monthStart, monthEnd } = getTastingAvailabilityMonthRange(requestedDateKey)
   const requestedEnd = getTastingEndTime(scheduledAt, endAt)
 
   const [availabilityRows, assignedTastings, accountTastings] = await Promise.all([
@@ -315,7 +312,7 @@ async function validateTastingWindow({
     if (getEasternDateKey(existingStart) !== requestedDateKey) continue
 
     const existingEnd = getTastingEndTime(existingStart, tasting.endAt ? new Date(tasting.endAt) : null)
-    if (rangesOverlap(scheduledAt, requestedEnd, existingStart, existingEnd)) {
+    if (tastingWindowsOverlap(scheduledAt, requestedEnd, existingStart, existingEnd)) {
       return 'That taster is already booked during the selected time window.'
     }
   }
@@ -340,28 +337,31 @@ async function validateTastingWindow({
 export async function createTasting(formData: FormData) {
   const session = await requireFeature('tastings', 'admin', 'staff')
   const mode = (formData.get('mode') as string) || 'admin'
+  const fromAvailability = formData.get('fromAvailability') === 'true'
   const customerId = formData.get('customerId') as string
   const assignedUserId = formData.get('assignedUserId') as string
   const date = formData.get('date') as string
-  const time = ((formData.get('time') as string) || '17:00').trim()
+  const time = ((formData.get('time') as string) || '16:00').trim()
   const endTime = ((formData.get('endTime') as string) || '').trim()
   const trainingDay = formData.get('trainingDay') === 'on'
   const notes = ((formData.get('notes') as string) || '').trim() || null
 
+  const redirectBase = `${tastingRedirectPath(mode)}?${fromAvailability ? `tab=team&teamView=availability&bookingTaster=${encodeURIComponent(assignedUserId ?? '')}&date=${encodeURIComponent(date ?? '')}&` : 'tab=schedule&'}`
+
   if (!customerId || !assignedUserId || !date) {
-    redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('Store, taster, and date are required.')}`)
+    redirect(`${redirectBase}error=${encodeURIComponent('Store, taster, and date are required.')}`)
   }
 
   const scheduledAt = parseDateTimeInTimeZone(date, time)
   if (Number.isNaN(scheduledAt.getTime())) {
-    redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('Choose a valid tasting date and time.')}`)
+    redirect(`${redirectBase}error=${encodeURIComponent('Choose a valid tasting date and time.')}`)
   }
   const endAt = endTime ? parseDateTimeInTimeZone(date, endTime) : null
   if (endAt && Number.isNaN(endAt.getTime())) {
-    redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('Choose a valid tasting end time.')}`)
+    redirect(`${redirectBase}error=${encodeURIComponent('Choose a valid tasting end time.')}`)
   }
   if (endAt && endAt <= scheduledAt) {
-    redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('End time must be after the start time.')}`)
+    redirect(`${redirectBase}error=${encodeURIComponent('End time must be after the start time.')}`)
   }
 
   const [account] = await db
@@ -371,8 +371,12 @@ export async function createTasting(formData: FormData) {
     .limit(1)
 
   if (!account) {
-    redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('Store account not found.')}`)
+    redirect(`${redirectBase}error=${encodeURIComponent('Store account not found.')}`)
   }
+
+  const locationIndex = Number(formData.get('locationIndex') ?? 0)
+  const location = Number.isInteger(locationIndex) ? getAccountTastingLocations(account)[locationIndex] : undefined
+  if (!location) redirect(`${redirectBase}error=${encodeURIComponent('Choose a valid account location.')}`)
 
   const [assignedUser] = await db
     .select({ id: users.id, name: users.name, phone: users.phone, email: users.email, roles: users.roles, active: users.active })
@@ -381,7 +385,7 @@ export async function createTasting(formData: FormData) {
     .limit(1)
 
   if (!assignedUser || !assignedUser.active || !(assignedUser.roles ?? []).includes('taster')) {
-    redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('Choose a valid taster account.')}`)
+    redirect(`${redirectBase}error=${encodeURIComponent('Choose a valid taster account.')}`)
   }
 
   const schedulingError = await validateTastingWindow({
@@ -392,7 +396,7 @@ export async function createTasting(formData: FormData) {
     trainingDay,
   })
   if (schedulingError) {
-    redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent(schedulingError)}`)
+    redirect(`${redirectBase}error=${encodeURIComponent(schedulingError)}`)
   }
   const assignedUserPrefs = await getUserPreferences(assignedUser.id).catch(() => null)
 
@@ -403,16 +407,16 @@ export async function createTasting(formData: FormData) {
     eventName: account.companyName,
     scheduledAt,
     endAt,
-    storeAddress: account.address,
-    storeCity: account.city,
-    storeState: account.state,
-    storeZip: account.zip,
+    storeAddress: location.address,
+    storeCity: location.city,
+    storeState: location.state,
+    storeZip: location.zip,
     storePhone: account.phone,
     trainingDay,
     notes,
   })
 
-  const storeAddress = [account.address, account.city, account.state, account.zip].filter(Boolean).join(', ') || 'Store address not provided'
+  const storeAddress = [location.address, location.city, location.state, location.zip].filter(Boolean).join(', ') || 'Store address not provided'
 
   if (assignedUser.phone && (assignedUserPrefs?.smsNotificationsEnabled ?? true)) {
     try {
@@ -461,7 +465,7 @@ export async function createTasting(formData: FormData) {
     body: `${account.companyName} was assigned to ${assignedUser.name}.`,
   })
   redirect(
-    `${tastingRedirectPath(mode)}?success=${encodeURIComponent('Tasting assigned.')}&account=${encodeURIComponent(account.id)}&date=${encodeURIComponent(date)}`,
+    `${tastingRedirectPath(mode)}?${fromAvailability ? 'tab=team&teamView=availability&' : 'tab=schedule&'}success=${encodeURIComponent('Tasting assigned.')}&account=${encodeURIComponent(account.id)}&date=${encodeURIComponent(date)}`,
   )
 }
 
@@ -469,7 +473,7 @@ export async function createTasterBackupTasting(formData: FormData) {
   const session = await requireFeature('tastings', 'taster', 'admin')
   const customerId = ((formData.get('customerId') as string) || '').trim()
   const date = ((formData.get('date') as string) || '').trim()
-  const time = ((formData.get('time') as string) || '17:00').trim()
+  const time = ((formData.get('time') as string) || '16:00').trim()
   const endTime = ((formData.get('endTime') as string) || '').trim()
   const notes = ((formData.get('notes') as string) || '').trim()
   const redirectBase = '/taster/tastings/log-missing'
