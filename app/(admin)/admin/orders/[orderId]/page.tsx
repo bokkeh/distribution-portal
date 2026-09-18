@@ -1,3 +1,5 @@
+import { OrderOperations } from '@/components/orders/OrderOperations'
+import { requireFeature } from '@/lib/auth/session'
 import { db } from '@/db'
 import { orders, orderItems, products, customerAccounts, invoices } from '@/db/schema'
 import { eq } from 'drizzle-orm'
@@ -23,6 +25,7 @@ import { getActivityTimeline } from '@/lib/activity/read'
 const shippingStatuses = ['not_scheduled', 'scheduled', 'out_for_delivery', 'delivered', 'issue'] as const
 
 export default async function AdminOrderDetailPage({ params }: { params: Promise<{ orderId: string }> | { orderId: string } }) {
+  await requireFeature('orders', 'admin')
   const resolvedParams = await Promise.resolve(params)
 
   let order:
@@ -153,6 +156,8 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
           </a>
         </div>
       </div>
+
+      <OrderOperations orderId={order.id} paymentTerms={order.paymentTerms} orderDate={order.createdAt} />
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
         <Card className="md:col-span-2">

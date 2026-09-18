@@ -29,7 +29,7 @@ function isMissingTastingsTable(error: unknown) {
 export default async function AdminTastingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ success?: string; error?: string; account?: string; date?: string; tab?: string; from?: string; to?: string }>
+  searchParams: Promise<{ success?: string; error?: string; teamView?: string; bookingTaster?: string; account?: string; date?: string; tab?: string; from?: string; to?: string }>
 }) {
   await requireFeature('tastings', 'admin')
   const params = await searchParams
@@ -37,7 +37,7 @@ export default async function AdminTastingsPage({
   const defaultTab = validTabs.includes(params.tab ?? '') ? params.tab! : 'team'
   let data:
     | {
-        accounts: Array<{ id: string; companyName: string; address: string | null; city: string | null; state: string | null; zip: string | null }>
+        accounts: Array<{ id: string; companyName: string; address: string | null; city: string | null; state: string | null; zip: string | null; additionalLocations?: string | null }>
         activeTasters: Array<{ id: string; name: string; phone: string | null; avatarUrl?: string | null }>
         tastings: Awaited<ReturnType<typeof getTastingsForView>>
         availability: Awaited<ReturnType<typeof getAvailabilityForUsers>>
@@ -53,6 +53,7 @@ export default async function AdminTastingsPage({
         city: customerAccounts.city,
         state: customerAccounts.state,
         zip: customerAccounts.zip,
+        additionalLocations: customerAccounts.additionalLocations,
       }).from(customerAccounts).orderBy(customerAccounts.companyName),
       db.select({
         id: users.id,
@@ -120,10 +121,18 @@ export default async function AdminTastingsPage({
       >
       <div className="pt-6">
         <TasterTeamPanel
+          key={`${params.success ?? ""}:${params.error ?? ""}:${params.bookingTaster ?? ""}:${params.account ?? ""}:${params.date ?? ""}`}
           mode="admin"
           tastings={data.tastings}
           tasters={data.activeTasters}
           availability={data.availability}
+          accounts={data.accounts}
+          initialView={params.teamView}
+          initialBooking={params.bookingTaster && params.date ? { tasterId: params.bookingTaster, date: params.date } : undefined}
+          error={params.error}
+          success={params.success}
+          initialAccountId={params.account}
+          initialDate={params.date}
         />
       </div>
       <div className="pt-6">

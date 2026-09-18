@@ -1,6 +1,6 @@
 import { desc, eq } from 'drizzle-orm'
 import { db } from '@/db'
-import { tastings, tastingReports, tasterInvoices, users } from '@/db/schema'
+import { customerAccounts, tastings, tastingReports, tasterInvoices, users } from '@/db/schema'
 
 function isMissingTastingColumn(error: unknown) {
   const code = (error as { code?: string; cause?: { code?: string } } | null)?.code
@@ -89,6 +89,7 @@ export async function getTastingsForViewWithFallback({ assignedUserId }: { assig
     .select({
       id: tastings.id,
       customerId: tastings.customerId,
+      accountName: customerAccounts.companyName,
       assignedUserId: tastings.assignedUserId,
       createdByUserId: tastings.createdByUserId,
       eventName: tastings.eventName,
@@ -106,10 +107,13 @@ export async function getTastingsForViewWithFallback({ assignedUserId }: { assig
       tasterName: users.name,
       tasterPhone: users.phone,
       reportSubmittedAt: tastingReports.submittedAt,
+      reportBottlesSold: tastingReports.bottlesSold,
+      reportSamplesServed: tastingReports.samplesServed,
       invoiceSubmittedAt: tasterInvoices.submittedAt,
       invoiceStatus: tasterInvoices.status,
     })
     .from(tastings)
+    .leftJoin(customerAccounts, eq(tastings.customerId, customerAccounts.id))
     .innerJoin(users, eq(tastings.assignedUserId, users.id))
     .leftJoin(tastingReports, eq(tastingReports.tastingId, tastings.id))
     .leftJoin(tasterInvoices, eq(tasterInvoices.tastingId, tastings.id))
@@ -130,6 +134,7 @@ export async function getTastingsForViewWithFallback({ assignedUserId }: { assig
       .select({
         id: tastings.id,
         customerId: tastings.customerId,
+        accountName: customerAccounts.companyName,
         assignedUserId: tastings.assignedUserId,
         createdByUserId: tastings.createdByUserId,
         eventName: tastings.eventName,
@@ -145,10 +150,13 @@ export async function getTastingsForViewWithFallback({ assignedUserId }: { assig
         tasterName: users.name,
         tasterPhone: users.phone,
         reportSubmittedAt: tastingReports.submittedAt,
+        reportBottlesSold: tastingReports.bottlesSold,
+        reportSamplesServed: tastingReports.samplesServed,
         invoiceSubmittedAt: tasterInvoices.submittedAt,
         invoiceStatus: tasterInvoices.status,
       })
       .from(tastings)
+      .leftJoin(customerAccounts, eq(tastings.customerId, customerAccounts.id))
       .innerJoin(users, eq(tastings.assignedUserId, users.id))
       .leftJoin(tastingReports, eq(tastingReports.tastingId, tastings.id))
       .leftJoin(tasterInvoices, eq(tasterInvoices.tastingId, tastings.id))

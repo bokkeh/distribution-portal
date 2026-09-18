@@ -52,6 +52,7 @@ export async function quickCreateAccount(input: {
   address?: string
   city?: string
   state?: string
+  zip?: string
   phone?: string
   website?: string
   assignedSalesMemberId?: string
@@ -75,6 +76,7 @@ export async function quickCreateAccount(input: {
       address: optionalText(input.address),
       city: optionalText(input.city),
       state: optionalText(input.state),
+      zip: optionalText(input.zip),
       phone: optionalText(input.phone),
       website: optionalText(input.website),
       assignedSalesRepId,

@@ -82,7 +82,7 @@ export default async function LogMissingTastingPage({
               </div>
               <div className="space-y-2">
                 <Label htmlFor="time">Start Time</Label>
-                <Input id="time" name="time" type="time" defaultValue="17:00" required />
+                <Input id="time" name="time" type="time" defaultValue="16:00" required />
               </div>
             </div>
 

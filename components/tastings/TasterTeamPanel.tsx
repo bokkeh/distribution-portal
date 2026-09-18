@@ -1,16 +1,18 @@
 'use client'
 
+import * as Dialog from '@radix-ui/react-dialog'
+import { TastingScheduleBoard } from './TastingsPlanner'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { addMonths, eachDayOfInterval, endOfMonth, format, getDay, isSameDay, startOfMonth } from 'date-fns'
+import { addMonths, eachDayOfInterval, endOfMonth, format, getDay, startOfMonth } from 'date-fns'
 import { addAvailabilityForUser } from '@/actions/taster-availability'
 import { ViewAsButton } from '@/components/admin/ViewAsButton'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { formatEasternTimeRange } from '@/lib/tastings/time'
+import { getEasternDateKey, formatEasternTimeRange } from '@/lib/tastings/time'
 import { toDisplayAvatarUrl } from '@/lib/users/avatar'
 import { toast } from 'sonner'
 
@@ -83,15 +85,35 @@ export function TasterTeamPanel({
   tasters,
   tastings,
   availability,
+  accounts,
+  initialView,
+  initialBooking,
+  error,
+  success,
+  initialAccountId,
+  initialDate,
 }: {
+  accounts: Array<{ id: string; companyName: string; address: string | null; city: string | null; state: string | null; zip: string | null; additionalLocations?: string | null }>
+  initialView?: string
+  initialBooking?: { tasterId: string; date: string }
+  error?: string
+  success?: string
+  initialAccountId?: string
+  initialDate?: string
   mode: 'admin' | 'staff'
   tasters: TeamTaster[]
   tastings: TastingRow[]
   availability: AvailabilityRow[]
 }) {
   const router = useRouter()
-  const [view, setView] = useState<'roster' | 'availability'>('roster')
-  const [monthOffset, setMonthOffset] = useState(0)
+  const [view, setView] = useState<'roster' | 'availability'>(initialView === 'availability' ? 'availability' : 'roster')
+  const [booking, setBooking] = useState(initialBooking ?? null)
+  const [monthOffset, setMonthOffset] = useState(() => {
+    const dateValue = initialBooking?.date ?? initialDate
+    const date = dateValue ? new Date(`${dateValue}T12:00:00`) : new Date()
+    const now = new Date()
+    return Math.max(0, Math.min(AVAILABILITY_MONTH_COUNT - 1, (date.getFullYear() - now.getFullYear()) * 12 + date.getMonth() - now.getMonth()))
+  })
   const [selectedTasterId, setSelectedTasterId] = useState<string>('')
   const [selectedDate, setSelectedDate] = useState<string>('')
   const [isPending, startTransition] = useTransition()
@@ -122,8 +144,8 @@ export function TasterTeamPanel({
   const rosterRows = useMemo(() => {
     return tasters.map((taster) => {
       const assigned = bookedTastings.filter((tasting) => tasting.assignedUserId === taster.id)
-      const bookedThisMonth = assigned.filter((tasting) => format(new Date(tasting.scheduledAt), 'yyyy-MM') === format(selectedMonth, 'yyyy-MM'))
-      const bookedDayKeys = new Set(bookedThisMonth.map((tasting) => format(new Date(tasting.scheduledAt), 'yyyy-MM-dd')))
+      const bookedThisMonth = assigned.filter((tasting) => getEasternDateKey(tasting.scheduledAt).slice(0, 7) === format(selectedMonth, 'yyyy-MM'))
+      const bookedDayKeys = new Set(bookedThisMonth.map((tasting) => getEasternDateKey(tasting.scheduledAt)))
       const availableDayCount = tastingDays.filter((day) => availabilitySet.has(`${taster.id}:${format(day, 'yyyy-MM-dd')}`)).length
       const nextTasting = assigned
         .map((tasting) => new Date(tasting.scheduledAt))
@@ -142,7 +164,7 @@ export function TasterTeamPanel({
 
   const availabilityRows = useMemo(() => {
     return tastingDays.map((day) => {
-      const dayBookings = bookedTastings.filter((tasting) => isSameDay(new Date(tasting.scheduledAt), day))
+      const dayBookings = bookedTastings.filter((tasting) => getEasternDateKey(tasting.scheduledAt) === format(day, 'yyyy-MM-dd'))
       const bookedIds = new Set(dayBookings.map((tasting) => tasting.assignedUserId))
 
       return {
@@ -185,6 +207,13 @@ export function TasterTeamPanel({
 
   return (
     <Card>
+      <Dialog.Root open={!!booking} onOpenChange={open => { if (!open) setBooking(null) }}>
+        <Dialog.Portal><Dialog.Overlay className="fixed inset-0 z-[80] bg-slate-950/40" /><Dialog.Content className="fixed inset-y-0 right-0 z-[81] w-full overflow-y-auto bg-slate-50 p-4 shadow-xl sm:max-w-xl">
+          <div className="mb-4 flex items-center justify-between"><Dialog.Title className="text-xl font-semibold">Book a tasting</Dialog.Title><Dialog.Close asChild><Button variant="outline">Close</Button></Dialog.Close></div>
+          <Dialog.Description className="mb-4 text-sm text-slate-600">Confirm the account, location and time for the selected taster. Times are Eastern.</Dialog.Description>
+          {booking ? <TastingScheduleBoard key={`${booking.tasterId}:${booking.date}`} mode={mode} accounts={accounts} tasters={tasters} tastings={[]} initialAccountId={initialAccountId} initialDate={booking.date} initialTasterId={booking.tasterId} formOnly fromAvailability error={error} /> : null}
+        </Dialog.Content></Dialog.Portal>
+      </Dialog.Root>
       <CardHeader className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -225,6 +254,7 @@ export function TasterTeamPanel({
         </div>
       </CardHeader>
       <CardContent>
+        {success ? <p role="status" className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700">{success}</p> : null}
         {view === 'roster' ? (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px]">
@@ -358,12 +388,15 @@ export function TasterTeamPanel({
                         </div>
                         <div className="flex flex-wrap gap-2">
                           {row.open.length ? row.open.map((entry) => (
-                            <span
+                            <button
+                              type="button"
+                              onClick={() => setBooking({ tasterId: entry.id, date: format(row.day, 'yyyy-MM-dd') })}
+                              aria-label={`Book ${entry.name} on ${format(row.day, 'MMM d')}`}
                               key={`open-${row.day.toISOString()}-${entry.id}`}
                               className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700"
                             >
                               {entry.name}
-                            </span>
+                            </button>
                           )) : (
                             <span className="text-sm italic text-slate-400">No one free</span>
                           )}

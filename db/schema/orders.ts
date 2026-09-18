@@ -1,4 +1,4 @@
-import { boolean, index, pgTable, uuid, text, numeric, timestamp } from 'drizzle-orm/pg-core'
+import { date, boolean, index, pgTable, uuid, text, numeric, timestamp } from 'drizzle-orm/pg-core'
 import { customerAccounts } from './customers'
 import { users } from './users'
 import { products } from './products'
@@ -17,6 +17,7 @@ export const orders = pgTable('orders', {
   createdBy: uuid('created_by').notNull().references(() => users.id),
   orderType: text('order_type', { enum: ['paid', 'sample'] }).notNull(),
   paymentTerms: text('payment_terms').default('NET30'),
+  deliveryDate: date('delivery_date'),
   stripePaymentIntentId: text('stripe_payment_intent_id'),
   paymentStatus: text('payment_status', { enum: ORDER_PAYMENT_STATUSES }).notNull().default('unpaid'),
   paymentMethod: text('payment_method', { enum: ORDER_PAYMENT_METHODS }),
@@ -60,3 +61,14 @@ export type Order = typeof orders.$inferSelect
 export type NewOrder = typeof orders.$inferInsert
 export type OrderItem = typeof orderItems.$inferSelect
 export type NewOrderItem = typeof orderItems.$inferInsert
+
+// PO metadata uses the existing GCS storage; documents are served only through an authorized route.
+export const orderDocuments = pgTable('order_documents', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  orderId: uuid('order_id').notNull().references(() => orders.id, { onDelete: 'cascade' }),
+  fileName: text('file_name').notNull(),
+  storagePath: text('storage_path').notNull(),
+  contentType: text('content_type').notNull(),
+  uploadedByUserId: uuid('uploaded_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  uploadedAt: timestamp('uploaded_at', { withTimezone: true }).notNull().defaultNow(),
+}, table => [index('order_documents_order_idx').on(table.orderId)])

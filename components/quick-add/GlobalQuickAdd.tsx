@@ -1,5 +1,6 @@
 'use client'
 
+import { parseDateTimeInTimeZone } from '@/lib/tastings/time'
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import {
@@ -173,7 +174,7 @@ export function GlobalQuickAdd({ compact = false, dark = false }: { compact?: bo
       if (action === 'account') {
         result = await quickCreateAccount({
           companyName: String(form.get('companyName') ?? ''), businessType: String(form.get('businessType') ?? ''),
-          address: String(form.get('address') ?? ''), city: String(form.get('city') ?? ''), state: String(form.get('state') ?? ''),
+          address: String(form.get('address') ?? ''), city: String(form.get('city') ?? ''), state: String(form.get('state') ?? ''), zip: String(form.get('zip') ?? ''),
           phone: String(form.get('phone') ?? ''), website: String(form.get('website') ?? ''),
           assignedSalesMemberId: String(form.get('assignedSalesMemberId') ?? ''), dealStage: String(form.get('dealStage') ?? ''),
         })
@@ -219,12 +220,12 @@ export function GlobalQuickAdd({ compact = false, dark = false }: { compact?: bo
           items: items.filter((item) => item.productId).map((item) => ({ productId: item.productId, quantity: item.quantity, unit: item.unit })),
         })
       } else {
-        const scheduledAt = new Date(`${String(form.get('tastingDate'))}T${String(form.get('startTime') || '17:00')}`)
+        const scheduledAt = parseDateTimeInTimeZone(String(form.get('tastingDate')), String(form.get('startTime') || '16:00'))
         const endTime = String(form.get('endTime') || '')
         const createFollowUp = form.get('createFollowUp') === 'on'
         result = await quickCreateTasting({
           accountId: account!.id, assignedUserId: String(form.get('assignedUserId') || bootstrap?.currentUser.id || ''),
-          scheduledAt: scheduledAt.toISOString(), endAt: endTime ? new Date(`${String(form.get('tastingDate'))}T${endTime}`).toISOString() : null,
+          scheduledAt: scheduledAt.toISOString(), endAt: endTime ? parseDateTimeInTimeZone(String(form.get('tastingDate')), endTime).toISOString() : null,
           status: String(form.get('status') || 'scheduled') as 'requested' | 'scheduled' | 'confirmed' | 'completed' | 'cancelled',
           location: String(form.get('location') || ''), notes: String(form.get('notes') || ''),
           products: items.filter((item) => item.productId).map((item) => ({ productId: item.productId, plannedQuantity: item.quantity, unitsSold: item.unitsSold, revenueGenerated: item.revenueGenerated })),
@@ -277,6 +278,7 @@ export function GlobalQuickAdd({ compact = false, dark = false }: { compact?: bo
                 {action === 'account' ? <>
                   <div><Label>Account / business name</Label><input name="companyName" className={inputClass} required autoFocus /></div>
                   <div className="grid gap-4 sm:grid-cols-2"><div><Label>Business type</Label><input name="businessType" className={inputClass} placeholder="Restaurant, retail…" /></div><div><Label>Status</Label><select name="dealStage" className={inputClass}><option value="new_lead">New lead</option><option value="qualified">Qualified</option><option value="active_account">Active account</option></select></div></div>
+                  <div><label htmlFor="quick-account-zip" className="text-sm font-medium">ZIP Code</label><input id="quick-account-zip" name="zip" autoComplete="postal-code" className={inputClass} /></div>
                   <div><Label>Address</Label><input name="address" className={inputClass} /></div>
                   <div className="grid grid-cols-[1fr_6rem] gap-3"><div><Label>City</Label><input name="city" className={inputClass} /></div><div><Label>State</Label><input name="state" maxLength={2} className={inputClass} /></div></div>
                   <div className="grid gap-4 sm:grid-cols-2"><div><Label>Phone</Label><input name="phone" type="tel" className={inputClass} /></div><div><Label>Website</Label><input name="website" type="url" className={inputClass} /></div></div>
@@ -337,7 +339,7 @@ export function GlobalQuickAdd({ compact = false, dark = false }: { compact?: bo
 
                 {action === 'tasting' ? <>
                   <div className="grid gap-4 sm:grid-cols-2"><div><Label>Tasting date</Label><input name="tastingDate" type="date" defaultValue={localDate()} className={inputClass} required /></div><div><Label>Status</Label><select name="status" className={inputClass}><option value="scheduled">Scheduled</option><option value="confirmed">Confirmed</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></div></div>
-                  <div className="grid gap-4 sm:grid-cols-2"><div><Label>Start time</Label><input name="startTime" type="time" defaultValue="17:00" className={inputClass} /></div><div><Label>End time</Label><input name="endTime" type="time" defaultValue="19:00" className={inputClass} /></div></div>
+                  <div className="grid gap-4 sm:grid-cols-2"><div><Label>Start time (ET)</Label><input name="startTime" type="time" defaultValue="16:00" className={inputClass} /></div><div><Label>End time (ET)</Label><input name="endTime" type="time" defaultValue="19:00" className={inputClass} /></div></div>
                   <div><Label>Taster / assigned rep</Label><select name="assignedUserId" defaultValue={bootstrap?.currentUser.id} className={inputClass}>{bootstrap?.users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select></div>
                   <div><Label>Location</Label><input name="location" className={inputClass} placeholder="Defaults to account address" /></div>
                   <ProductLines items={items} onChange={setItems} products={bootstrap?.products ?? []} tasting />
