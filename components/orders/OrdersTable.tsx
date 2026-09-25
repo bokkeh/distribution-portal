@@ -169,7 +169,7 @@ function renderCell(order: OrderRow, column: ColumnKey, portal: 'admin' | 'staff
     case 'quantity':
       return <td key={column} className="px-6 py-4 text-right text-sm">{order.quantity}</td>
     case 'type':
-      return <td key={column} className="px-6 py-4"><Badge variant="outline">{formatOrderTypeLabel(order.orderType)}</Badge></td>
+      return <td key={column} className="px-6 py-4"><Badge variant="outline" className="min-h-6 whitespace-nowrap rounded-[4px] border-slate-300 bg-slate-50 px-2 py-1 font-mono text-[10px] font-bold uppercase leading-none tracking-[0.04em] text-slate-600 shadow-none">{formatOrderTypeLabel(order.orderType)}</Badge></td>
     case 'payment':
       return <td key={column} className="px-6 py-4"><div className="flex flex-col items-start gap-1"><OrderStatusBadge kind="payment" status={order.paymentStatus} />{order.paymentMethod ? <span className="text-xs text-slate-500">{formatOrderPaymentMethodLabel(order.paymentMethod)}</span> : null}</div></td>
     case 'shipping':
