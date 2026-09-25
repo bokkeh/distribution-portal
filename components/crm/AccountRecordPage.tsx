@@ -211,6 +211,7 @@ export async function AccountRecordPage({
         recentOrders: Array<{ id: string; status: string; total: string; createdAt: Date; isAssisted: boolean }>
         recentInvoices: Array<{ id: string; invoiceNumber: string; dueDate: string | null; total: string; status: string }>
         orderCount: { total: number }
+        firstOrderDate: Date | null
         recentDeliveries: Array<{ deliveryId: string; status: string; weekStartDate: string; stopStatus: string; completedAt: Date | null; proofOfDeliveryUrl: string | null; shelfPhotoUrl: string | null }>
         recentTexts: Array<{ id: string; direction: string; body: string; createdAt: Date; phoneNumber: string }>
         recentTastings: Array<{ id: string; eventName: string; status: string; scheduledAt: Date; endAt: Date | null; reportSubmittedAt: Date | null }>
@@ -263,6 +264,7 @@ export async function AccountRecordPage({
       recentOrdersResult,
       recentInvoicesResult,
       orderCountResult,
+      firstOrderResult,
       recentDeliveriesResult,
       recentTextsResult,
       recentTastingsResult,
@@ -303,6 +305,8 @@ export async function AccountRecordPage({
             eq(orders.paymentStatus, 'paid'),
           ),
         )),
+      db.select({ createdAt: orders.createdAt })
+        .from(orders).where(eq(orders.customerId, accountId)).orderBy(asc(orders.createdAt)).limit(1),
       db.select({
         deliveryId: deliveries.id,
         status: deliveries.status,
@@ -340,6 +344,7 @@ export async function AccountRecordPage({
       recentOrders: recentOrdersResult.status === 'fulfilled' ? recentOrdersResult.value : [],
       recentInvoices: recentInvoicesResult.status === 'fulfilled' ? recentInvoicesResult.value : [],
       orderCount: orderCountResult.status === 'fulfilled' ? orderCountResult.value[0] : { total: 0 },
+      firstOrderDate: firstOrderResult.status === 'fulfilled' ? firstOrderResult.value[0]?.createdAt ?? null : null,
       recentDeliveries: recentDeliveriesResult.status === 'fulfilled' ? recentDeliveriesResult.value : [],
       recentTexts: recentTextsResult.status === 'fulfilled' ? recentTextsResult.value : [],
       recentTastings: recentTastingsResult.status === 'fulfilled' ? recentTastingsResult.value : [],
@@ -550,6 +555,8 @@ export async function AccountRecordPage({
       {tab === 'overview' && overviewData ? (() => {
         const creditAvailable = Math.max(0, Number(account.creditLimit ?? 0) - Number(account.balance ?? 0))
         const inventoryBottlesTotal = overviewData.inventoryItems.reduce((sum, item) => sum + Number(item.bottlesOnHand || 0), 0)
+        const latestInventoryUpdate = overviewData.inventoryItems[0]?.updatedAt ?? null
+        const memberSince = overviewData.firstOrderDate ?? account.createdAt
         const accountHealthSignals = [
           Number(account.balance ?? 0) > 0 ? { label: 'Outstanding balance', ok: false } : { label: 'No outstanding balance', ok: true },
           overviewData.recentTexts.some((message) => message.direction === 'inbound') ? { label: 'Open text activity', ok: false } : { label: 'No open text activity', ok: true },
@@ -565,8 +572,8 @@ export async function AccountRecordPage({
               <Card><CardContent className="p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Balance Due</p><p className="mt-1 text-2xl font-bold text-red-600">{formatCurrency(account.balance ?? '0')}</p></CardContent></Card>
               <Card><CardContent className="p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Credit Available</p><p className="mt-1 text-2xl font-bold">{formatCurrency(creditAvailable.toFixed(2))}</p><p className="mt-0.5 text-xs text-muted-foreground">of {formatCurrency(account.creditLimit ?? '0')} limit</p></CardContent></Card>
               <Card><CardContent className="p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Total Orders</p><p className="mt-1 text-2xl font-bold">{overviewData.orderCount.total}</p></CardContent></Card>
-              <Card><CardContent className="p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Member Since</p><p className="mt-1 text-lg font-bold" suppressHydrationWarning>{formatDate(account.createdAt)}</p></CardContent></Card>
-              <Card><CardContent className="p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Inventory On Hand</p><p className="mt-1 text-2xl font-bold">{inventoryBottlesTotal.toFixed(2)} bottles</p><p className="mt-0.5 text-xs text-muted-foreground">Across {overviewData.inventoryItems.length} products</p></CardContent></Card>
+              <Card><CardContent className="p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Member Since</p><p className="mt-1 text-lg font-bold" suppressHydrationWarning>{formatDate(memberSince)}</p></CardContent></Card>
+              <Card><CardContent className="p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Inventory On Hand</p><p className="mt-1 text-2xl font-bold">{inventoryBottlesTotal.toFixed(2)} bottles</p><p className="mt-0.5 text-xs text-muted-foreground">Across {overviewData.inventoryItems.length} products</p>{latestInventoryUpdate ? <p className="mt-0.5 text-xs text-muted-foreground" suppressHydrationWarning>Last checked {formatDate(latestInventoryUpdate)}</p> : null}</CardContent></Card>
             </div>
 
             <AccountSmartInsightsCard insights={overviewData.smartInsights} />

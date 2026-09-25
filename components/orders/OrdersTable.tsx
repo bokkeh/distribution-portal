@@ -16,7 +16,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { ArrowDown, ArrowUp, ArrowUpDown, FileText, GripVertical, Settings2, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, ArrowUpDown, FileText, GripVertical, Search, Settings2, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { OrderStatusBadge } from '@/components/orders/OrderStatusBadge'
@@ -37,6 +37,7 @@ export type OrderRow = {
   createdAt: Date | string
   customerId: string
   companyName: string | null
+  notes?: string | null
 }
 
 const COLUMN_OPTIONS = [
@@ -155,14 +156,14 @@ function renderHeaderCell({ column, sortBy, sortDirection, onSort }: { column: C
   )
 }
 
-function renderCell(order: OrderRow, column: ColumnKey) {
+function renderCell(order: OrderRow, column: ColumnKey, portal: 'admin' | 'staff') {
   switch (column) {
     case 'orderId':
       return <td key={column} className="px-6 py-4 text-sm font-mono">#{order.id.slice(-8).toUpperCase()}</td>
     case 'date':
       return <td key={column} className="px-6 py-4 text-sm text-muted-foreground">{formatDate(order.createdAt)}</td>
     case 'customer':
-      return <td key={column} className="px-6 py-4 text-sm font-medium"><CustomerRecordLink accountId={order.customerId} name={order.companyName ?? 'Unknown customer'} /></td>
+      return <td key={column} className="px-6 py-4 text-sm font-medium"><CustomerRecordLink accountId={order.customerId} name={order.companyName ?? 'Unknown customer'} portal={portal} /></td>
     case 'status':
       return <td key={column} className="px-6 py-4"><OrderStatusBadge kind="order" status={order.status} /></td>
     case 'quantity':
@@ -180,11 +181,12 @@ function renderCell(order: OrderRow, column: ColumnKey) {
   }
 }
 
-export function OrdersTable({ orders }: { orders: OrderRow[] }) {
+export function OrdersTable({ orders, portal = 'admin' }: { orders: OrderRow[]; portal?: 'admin' | 'staff' }) {
   const [selectedColumns, setSelectedColumns] = useState<ColumnKey[]>(DEFAULT_COLUMNS)
   const [sortBy, setSortBy] = useState<ColumnKey>('date')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [showColumnPicker, setShowColumnPicker] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const [ready, setReady] = useState(false)
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
 
@@ -239,9 +241,25 @@ export function OrdersTable({ orders }: { orders: OrderRow[] }) {
     })
   }
 
+  const filteredOrders = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase()
+    if (!normalizedQuery) return orders
+    return orders.filter((order) => [
+      order.companyName,
+      order.id,
+      order.id.slice(-8),
+      order.status,
+      order.orderType,
+      order.paymentStatus,
+      order.paymentMethod,
+      order.shippingStatus,
+      order.notes,
+    ].some((value) => String(value ?? '').toLowerCase().includes(normalizedQuery)))
+  }, [orders, searchQuery])
+
   const sortedOrders = useMemo(() => {
-    return [...orders].sort((left, right) => compareValues(getSortValue(left, sortBy), getSortValue(right, sortBy), sortDirection))
-  }, [orders, sortBy, sortDirection])
+    return [...filteredOrders].sort((left, right) => compareValues(getSortValue(left, sortBy), getSortValue(right, sortBy), sortDirection))
+  }, [filteredOrders, sortBy, sortDirection])
 
   const visibleColumnOptions = selectedColumns
     .map((key) => COLUMN_OPTIONS.find((option) => option.key === key))
@@ -249,7 +267,18 @@ export function OrdersTable({ orders }: { orders: OrderRow[] }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="relative w-full sm:max-w-xs">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search orders…"
+            aria-label="Search orders"
+            className="h-9 w-full rounded-md border border-input bg-white pl-9 pr-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+          />
+        </div>
         <div className="relative">
           <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => setShowColumnPicker((prev) => !prev)}>
             <Settings2 className="h-4 w-4" />
@@ -303,11 +332,17 @@ export function OrdersTable({ orders }: { orders: OrderRow[] }) {
           </thead>
           <tbody className="divide-y">
             {sortedOrders.length === 0 ? (
-              <tr><td colSpan={selectedColumns.length + 1}><EmptyState icon={FileText} title="No orders yet" description="New orders will appear here." /></td></tr>
+              <tr><td colSpan={selectedColumns.length + 1}>
+                {searchQuery.trim() ? (
+                  <EmptyState icon={Search} title="No matching orders" description="Try a different search term." />
+                ) : (
+                  <EmptyState icon={FileText} title="No orders yet" description="New orders will appear here." />
+                )}
+              </td></tr>
             ) : sortedOrders.map((order) => (
               <tr key={order.id} className="hover:bg-slate-50">
-                {selectedColumns.map((column) => renderCell(order, column))}
-                <td className="px-6 py-4"><Link href={`/admin/orders/${order.id}`}><Button variant="ghost" size="sm">View</Button></Link></td>
+                {selectedColumns.map((column) => renderCell(order, column, portal))}
+                <td className="px-6 py-4"><Link href={`/${portal}/orders/${order.id}`}><Button variant="ghost" size="sm">View</Button></Link></td>
               </tr>
             ))}
           </tbody>

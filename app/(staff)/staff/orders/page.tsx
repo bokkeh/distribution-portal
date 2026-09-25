@@ -3,15 +3,11 @@ import { orders, customerAccounts, orderItems } from '@/db/schema'
 import { eq, desc, inArray, sql } from 'drizzle-orm'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { OrderStatusBadge } from '@/components/orders/OrderStatusBadge'
-import { CustomerRecordLink } from '@/components/crm/CustomerRecordLink'
-import { formatCurrency, formatDate } from '@/lib/utils'
 import { isMissingShippingStatusColumn } from '@/lib/orders/shipping-fallback'
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import { BulkOrderStatusForm } from '@/components/orders/BulkOrderStatusForm'
-import { formatOrderPaymentMethodLabel, formatOrderTypeLabel } from '@/lib/orders/status'
+import { OrdersTable } from '@/components/orders/OrdersTable'
 
 export default async function StaffOrdersPage() {
   let allOrders: Array<{
@@ -102,42 +98,9 @@ export default async function StaffOrdersPage() {
           label: `#${order.id.slice(-8).toUpperCase()} ${order.companyName ?? 'Unknown customer'}`,
         }))}
       />
-      <Card>
-        <CardContent className="p-0 overflow-x-auto">
-          <table className="w-full min-w-[940px]">
-            <thead className="border-b bg-slate-50">
-              <tr>
-                <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Order #</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Customer</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Qty</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Order Type</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Payment</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Order Status</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Shipping</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Total</th>
-                <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground uppercase">Date</th>
-                <th className="px-6 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {allOrders.map(order => (
-                <tr key={order.id} className="hover:bg-slate-50">
-                  <td className="px-6 py-4 text-sm font-mono">#{order.id.slice(-8).toUpperCase()}</td>
-                  <td className="px-6 py-4 text-sm font-medium">
-                    <CustomerRecordLink accountId={order.customerId} name={order.companyName ?? 'Unknown customer'} portal="staff" />
-                  </td>
-                  <td className="px-6 py-4 text-sm">{order.quantity}</td>
-                  <td className="px-6 py-4"><Badge variant="outline">{formatOrderTypeLabel(order.orderType)}</Badge></td>
-                  <td className="px-6 py-4"><div className="flex flex-col items-start gap-1"><OrderStatusBadge kind="payment" status={order.paymentStatus} />{order.paymentMethod ? <span className="text-xs text-slate-500">{formatOrderPaymentMethodLabel(order.paymentMethod)}</span> : null}</div></td>
-                  <td className="px-6 py-4"><OrderStatusBadge kind="order" status={order.status} /></td>
-                  <td className="px-6 py-4"><OrderStatusBadge kind="shipping" status={order.shippingStatus} /></td>
-                  <td className="px-6 py-4 text-sm font-semibold">{formatCurrency(order.total)}</td>
-                  <td className="px-6 py-4 text-sm text-muted-foreground">{formatDate(order.createdAt)}</td>
-                  <td className="px-6 py-4"><Link href={`/staff/orders/${order.id}`}><Button variant="ghost" size="sm">View</Button></Link></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <Card className="overflow-hidden">
+        <CardContent className="p-0">
+          <OrdersTable orders={allOrders} portal="staff" />
         </CardContent>
       </Card>
     </div>
