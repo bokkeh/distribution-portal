@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { GeographicPricingRuleInput } from '@/lib/pricing/geographic'
 import { resolveProductUnitPrice } from '@/lib/pricing/product-price'
+import { getDeliveryDueDate } from '@/lib/orders/delivery-date'
 
 type CustomerOption = {
   id: string
@@ -22,6 +23,8 @@ type OrderOption = {
   id: string
   total: string
   customerId: string
+  deliveryDate: string | null
+  paymentTerms: string | null
 }
 
 type ProductOption = {
@@ -88,6 +91,10 @@ export function AdminInvoiceCreateForm({
     [customerId, orders],
   )
   const selectedOrderId = availableOrders.some((order) => order.id === orderId) ? orderId : ''
+  const selectedOrder = availableOrders.find((order) => order.id === selectedOrderId) ?? null
+  const computedDueDate = selectedOrder ? getDeliveryDueDate(selectedOrder.deliveryDate, selectedOrder.paymentTerms) : null
+  const [dueDateTouched, setDueDateTouched] = useState(false)
+  const [dueDate, setDueDate] = useState('')
 
   const subtotal = useMemo(
     () => lineItems.reduce((sum, item) => sum + toAmount(item.quantity) * toAmount(item.unitPrice), 0),
@@ -376,7 +383,23 @@ export function AdminInvoiceCreateForm({
 
       <div className="space-y-2">
         <Label htmlFor="dueDate">Due Date</Label>
-        <Input type="date" name="dueDate" id="dueDate" />
+        <Input
+          type="date"
+          name="dueDate"
+          id="dueDate"
+          value={dueDateTouched ? dueDate : (computedDueDate ?? '')}
+          onChange={(event) => {
+            setDueDateTouched(true)
+            setDueDate(event.target.value)
+          }}
+        />
+        {selectedOrder && !dueDateTouched ? (
+          computedDueDate ? (
+            <p className="text-xs text-muted-foreground">Calculated from the order&apos;s delivery date and payment terms. Edit to override.</p>
+          ) : (
+            <p className="text-xs text-amber-700">Due date will calculate when delivery is confirmed on this order.</p>
+          )
+        ) : null}
       </div>
 
       <div className="flex gap-3 pt-2">

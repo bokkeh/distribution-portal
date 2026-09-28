@@ -6,6 +6,8 @@ import { requireFeature } from '@/lib/auth/session'
 import { getTastingById } from '@/lib/tastings/read'
 import { formatEasternDateTime } from '@/lib/tastings/time'
 import { updateTastingStatus, deleteTasting, reassignTasting, updateTastingAccount } from '@/actions/tastings'
+import { CancelTastingControl } from '@/components/tastings/CancelTastingControl'
+import { CANCELLATION_REASON_LABELS, tastingNeedsCoverage } from '@/lib/tastings/cancellation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ConfirmSubmitButton } from '@/components/ui/confirm-submit-button'
@@ -15,6 +17,9 @@ import Link from 'next/link'
 import { ArrowLeft, Calendar, MapPin, Phone, User, FileText, Receipt, StickyNote } from 'lucide-react'
 import { TastingReportFormCard } from '@/components/tastings/TastingReportFormCard'
 import { CustomerRecordLink } from '@/components/crm/CustomerRecordLink'
+import { TastingObjectiveCard, type TastingObjectiveValues } from '@/components/tastings/TastingObjectiveCard'
+import { loadEconomicsSettings } from '@/lib/pull-through/data'
+import type { TastingObjective } from '@/lib/pull-through/types'
 
 const STATUS_COLORS: Record<string, string> = {
   requested: 'text-violet-700 border-violet-200 bg-violet-50',
@@ -55,6 +60,28 @@ export default async function AdminTastingDetailPage({
   const error = sp.error
   const tasting = await getTastingById(tastingId)
   if (!tasting) notFound()
+  const economicsSettings = await loadEconomicsSettings()
+  // getTastingById falls back to a narrower row on databases that predate the
+  // objective columns, so read them defensively.
+  const objectiveSource = tasting as Partial<Record<keyof TastingObjectiveValues, unknown>>
+  const asNumber = (value: unknown) => (value == null || value === '' ? null : Number(value))
+  const asText = (value: unknown) => (typeof value === 'string' && value.trim() ? value : null)
+  const objectiveValues: TastingObjectiveValues = {
+    objective: (asText(objectiveSource.objective) as TastingObjective | null) ?? null,
+    primaryGoal: asText(objectiveSource.primaryGoal),
+    targetBottlesSold: asNumber(objectiveSource.targetBottlesSold),
+    targetCasesDepleted: asNumber(objectiveSource.targetCasesDepleted),
+    targetReorderQuantity: asNumber(objectiveSource.targetReorderQuantity),
+    estimatedCost: asNumber(objectiveSource.estimatedCost),
+    tasterPay: asNumber(objectiveSource.tasterPay),
+    expectedRoi: asText(objectiveSource.expectedRoi),
+    strategicReason: asText(objectiveSource.strategicReason),
+    expectedOutcome: asText(objectiveSource.expectedOutcome),
+    estimatedValue: asNumber(objectiveSource.estimatedValue),
+    followUpAction: asText(objectiveSource.followUpAction),
+    resultAfterEvent: asText(objectiveSource.resultAfterEvent),
+    decisionAtScheduling: asText(objectiveSource.decisionAtScheduling),
+  }
 
   let account: {
     id: string
@@ -191,10 +218,21 @@ export default async function AdminTastingDetailPage({
               </p>
             ) : null}
           </div>
-          <Badge variant="outline" className={`capitalize text-sm px-2.5 py-1 ${STATUS_COLORS[tasting.status] ?? ''}`}>
-            {tasting.status}
-          </Badge>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className={`capitalize text-sm px-2.5 py-1 ${STATUS_COLORS[tasting.status] ?? ''}`}>
+              {tasting.status}
+            </Badge>
+            {tastingNeedsCoverage(tasting.status, tasting.cancellationReason) ? (
+              <Badge variant="destructive" className="text-sm px-2.5 py-1">Needs Coverage</Badge>
+            ) : null}
+          </div>
         </div>
+        {tasting.status === 'cancelled' && tasting.cancellationReason ? (
+          <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            <p className="font-medium">Cancellation Reason: {CANCELLATION_REASON_LABELS[tasting.cancellationReason] ?? tasting.cancellationReason}</p>
+            {tasting.cancellationNote ? <p className="mt-1 text-red-700">{tasting.cancellationNote}</p> : null}
+          </div>
+        ) : null}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -205,6 +243,8 @@ export default async function AdminTastingDetailPage({
               The tasting report and invoice tables are not in this database yet. Run `npm run db:push` before using the submission workflow in production.
             </div>
           ) : null}
+          <TastingObjectiveCard tastingId={tasting.id} values={objectiveValues} defaultTastingCost={economicsSettings.defaultTastingCost} />
+
           {/* Details card */}
           <Card>
             <CardHeader className="pb-3">
@@ -491,13 +531,13 @@ export default async function AdminTastingDetailPage({
                     <Button type="submit" className="w-full" size="sm">Mark Completed</Button>
                   </form>
                 )}
-                <form action={updateTastingStatus}>
-                  <input type="hidden" name="tastingId" value={tastingId} />
-                  <input type="hidden" name="status" value="cancelled" />
-                  <input type="hidden" name="mode" value="admin" />
-                  <input type="hidden" name="redirectTo" value={`/admin/tastings/${tastingId}`} />
-                  <ConfirmSubmitButton variant="destructive" className="w-full" size="sm" title="Cancel this tasting?" description="The assigned taster will be notified." confirmLabel="Cancel Tasting">Cancel Tasting</ConfirmSubmitButton>
-                </form>
+                <CancelTastingControl
+                  tastingId={tastingId}
+                  mode="admin"
+                  redirectTo={`/admin/tastings/${tastingId}`}
+                  triggerLabel="Cancel Tasting"
+                  triggerClassName="w-full !text-white !bg-red-600 hover:!bg-red-700"
+                />
                 <form action={deleteTasting}>
                   <input type="hidden" name="tastingId" value={tastingId} />
                   <input type="hidden" name="mode" value="admin" />

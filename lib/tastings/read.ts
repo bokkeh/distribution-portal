@@ -1,6 +1,6 @@
 import { desc, eq } from 'drizzle-orm'
 import { db } from '@/db'
-import { tastings, tastingReports, tasterInvoices, users } from '@/db/schema'
+import { customerAccounts, tastings, tastingReports, tasterInvoices, users } from '@/db/schema'
 
 function isMissingTastingColumn(error: unknown) {
   const code = (error as { code?: string; cause?: { code?: string } } | null)?.code
@@ -74,6 +74,8 @@ export async function getTastingById(tastingId: string) {
         storeZip: tastings.storeZip,
         storePhone: tastings.storePhone,
         notes: tastings.notes,
+        cancellationReason: tastings.cancellationReason,
+        cancellationNote: tastings.cancellationNote,
         createdAt: tastings.createdAt,
       })
       .from(tastings)
@@ -89,6 +91,7 @@ export async function getTastingsForViewWithFallback({ assignedUserId }: { assig
     .select({
       id: tastings.id,
       customerId: tastings.customerId,
+      accountName: customerAccounts.companyName,
       assignedUserId: tastings.assignedUserId,
       createdByUserId: tastings.createdByUserId,
       eventName: tastings.eventName,
@@ -102,14 +105,18 @@ export async function getTastingsForViewWithFallback({ assignedUserId }: { assig
       storeZip: tastings.storeZip,
       storePhone: tastings.storePhone,
       notes: tastings.notes,
+      cancellationReason: tastings.cancellationReason,
       createdAt: tastings.createdAt,
       tasterName: users.name,
       tasterPhone: users.phone,
       reportSubmittedAt: tastingReports.submittedAt,
+      reportBottlesSold: tastingReports.bottlesSold,
+      reportSamplesServed: tastingReports.samplesServed,
       invoiceSubmittedAt: tasterInvoices.submittedAt,
       invoiceStatus: tasterInvoices.status,
     })
     .from(tastings)
+    .leftJoin(customerAccounts, eq(tastings.customerId, customerAccounts.id))
     .innerJoin(users, eq(tastings.assignedUserId, users.id))
     .leftJoin(tastingReports, eq(tastingReports.tastingId, tastings.id))
     .leftJoin(tasterInvoices, eq(tasterInvoices.tastingId, tastings.id))
@@ -130,6 +137,7 @@ export async function getTastingsForViewWithFallback({ assignedUserId }: { assig
       .select({
         id: tastings.id,
         customerId: tastings.customerId,
+        accountName: customerAccounts.companyName,
         assignedUserId: tastings.assignedUserId,
         createdByUserId: tastings.createdByUserId,
         eventName: tastings.eventName,
@@ -145,10 +153,13 @@ export async function getTastingsForViewWithFallback({ assignedUserId }: { assig
         tasterName: users.name,
         tasterPhone: users.phone,
         reportSubmittedAt: tastingReports.submittedAt,
+        reportBottlesSold: tastingReports.bottlesSold,
+        reportSamplesServed: tastingReports.samplesServed,
         invoiceSubmittedAt: tasterInvoices.submittedAt,
         invoiceStatus: tasterInvoices.status,
       })
       .from(tastings)
+      .leftJoin(customerAccounts, eq(tastings.customerId, customerAccounts.id))
       .innerJoin(users, eq(tastings.assignedUserId, users.id))
       .leftJoin(tastingReports, eq(tastingReports.tastingId, tastings.id))
       .leftJoin(tasterInvoices, eq(tasterInvoices.tastingId, tastings.id))
@@ -161,5 +172,54 @@ export async function getTastingsForViewWithFallback({ assignedUserId }: { assig
       .map(row => sanitizeTastingRecord({ ...row, endAt: null, trainingDay: false }))
       .filter((row): row is NonNullable<typeof row> => Boolean(row))
     return assignedUserId ? hydratedRows.filter((row) => row.status !== 'requested') : hydratedRows
+  }
+}
+
+export type AccountTastingSummary = {
+  nextTasting: { id: string; scheduledAt: Date; status: string } | null
+  associatedTaster: { userId: string; name: string; tastingId: string; scheduledAt: Date; status: string } | null
+}
+
+/**
+ * "Next Tasting" and "Associated Taster" for a CRM account overview, derived from tasting
+ * records rather than a stored relationship (no permanent taster<->account link exists).
+ */
+export async function getAccountTastingSummary(accountId: string): Promise<AccountTastingSummary> {
+  const rows = await db
+    .select({
+      id: tastings.id,
+      status: tastings.status,
+      scheduledAt: tastings.scheduledAt,
+      assignedUserId: tastings.assignedUserId,
+      tasterName: users.name,
+    })
+    .from(tastings)
+    .innerJoin(users, eq(tastings.assignedUserId, users.id))
+    .where(eq(tastings.customerId, accountId))
+    .orderBy(desc(tastings.scheduledAt))
+
+  const now = Date.now()
+
+  const upcoming = rows
+    .filter((row) => row.scheduledAt.getTime() >= now && !['cancelled', 'declined'].includes(row.status))
+    .sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime())[0] ?? null
+
+  const mostRecentPast = rows.find(
+    (row) => row.scheduledAt.getTime() < now && !['cancelled', 'declined', 'requested'].includes(row.status),
+  ) ?? null
+
+  const relevant = upcoming ?? mostRecentPast
+
+  return {
+    nextTasting: upcoming ? { id: upcoming.id, scheduledAt: upcoming.scheduledAt, status: upcoming.status } : null,
+    associatedTaster: relevant
+      ? {
+          userId: relevant.assignedUserId,
+          name: relevant.tasterName,
+          tastingId: relevant.id,
+          scheduledAt: relevant.scheduledAt,
+          status: relevant.status,
+        }
+      : null,
   }
 }

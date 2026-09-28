@@ -10,6 +10,7 @@ import { DialpadButton, DialpadSidebar } from '@/components/admin/DialpadSidebar
 import { NotificationBell } from '@/components/notifications/NotificationBell'
 import { GlobalQuickAdd } from '@/components/quick-add/GlobalQuickAdd'
 import { PortalProfileMenu } from '@/components/layout/PortalProfileMenu'
+import { CommandPalette } from '@/components/ui/command-palette'
 
 const navItems = [
   { href: '/sales/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -88,6 +89,7 @@ export default function SalesNav({ userName, userAvatarUrl, canSwitchViews = fal
 
             {/* Right actions */}
             <div className="flex items-center gap-1">
+              <CommandPalette navItems={navItems} />
               <GlobalQuickAdd compact />
               <DialpadButton onClick={() => setDialpadOpen(true)} />
               <NotificationBell items={notifications} unreadCount={unreadCount} />

@@ -11,6 +11,7 @@ import type { FeatureKey } from '@/lib/users/features'
 import { hasFeature } from '@/lib/users/features'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
 import { PortalProfileMenu } from '@/components/layout/PortalProfileMenu'
+import { CommandPalette } from '@/components/ui/command-palette'
 
 const navItems = [
   { href: '/customer/dashboard', label: 'Dashboard', icon: LayoutDashboard, feature: 'dashboard' },
@@ -104,6 +105,7 @@ export default function CustomerNav({
           </nav>
 
           <div className="flex items-center gap-2">
+            <CommandPalette navItems={visibleNavItems} />
             <NotificationBell items={notifications} unreadCount={unreadCount} />
             {canUseCart ? <CartButton count={cartCount} /> : null}
             <PortalProfileMenu

@@ -14,6 +14,10 @@ export const accountInventoryAdjustments = pgTable('account_inventory_adjustment
   sku: text('sku').notNull(),
   productName: text('product_name').notNull(),
   changeType: text('change_type', { enum: ['manual_add', 'manual_update', 'manual_remove', 'manual_edit', 'order_fulfillment'] }).notNull(),
+  // Primary classification shown to users; distinct from changeType (the low-level mechanism).
+  activityType: text('activity_type', {
+    enum: ['order_delivered', 'call_inventory_check', 'stop_in_inventory_check', 'tasting_inventory_update', 'manual_adjustment'],
+  }).notNull().default('manual_adjustment'),
   // Legacy compatibility columns; bottle-only history keeps both case values at zero.
   deltaCases: numeric('delta_cases', { precision: 10, scale: 2 }).notNull().default('0'),
   deltaBottles: numeric('delta_bottles', { precision: 10, scale: 2 }).notNull().default('0'),

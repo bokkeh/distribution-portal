@@ -8,6 +8,7 @@ import { LayoutDashboard, Truck, Map, Menu, X } from 'lucide-react'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
 import { cn } from '@/lib/utils'
 import { PortalProfileMenu } from '@/components/layout/PortalProfileMenu'
+import { CommandPalette } from '@/components/ui/command-palette'
 
 type NotificationItem = {
   id: string
@@ -116,6 +117,7 @@ export function DriverNav({
           </Link>
 
           <div className="hidden items-center gap-1 sm:flex">
+            <CommandPalette navItems={navItems} />
             <NotificationBell items={notifications} unreadCount={unreadCount} dark />
             <DriverNavLinks items={navItems} pathname={pathname} />
             <PortalProfileMenu

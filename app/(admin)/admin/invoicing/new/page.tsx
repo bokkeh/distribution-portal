@@ -40,7 +40,13 @@ export default async function NewInvoicePage({
   const pricingRules = await getPricingRulesForProducts(productRows.map((product) => product.id))
 
   const fulfilledOrders = await db
-    .select({ id: orders.id, total: orders.total, customerId: orders.customerId })
+    .select({
+      id: orders.id,
+      total: orders.total,
+      customerId: orders.customerId,
+      deliveryDate: orders.deliveryDate,
+      paymentTerms: orders.paymentTerms,
+    })
     .from(orders)
     .where(eq(orders.status, 'fulfilled'))
 

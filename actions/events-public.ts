@@ -1,6 +1,6 @@
 'use server'
 
-import { and, eq } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
 import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
@@ -29,8 +29,8 @@ export async function submitEventRsvp(
     const ip = requestHeaders.get('x-forwarded-for')?.split(',')[0]?.trim() ?? requestHeaders.get('x-real-ip') ?? 'unknown'
     if (await isEventRsvpRateLimited(`${slug}:${ip}`)) return { error: 'Too many RSVP attempts. Please try again later.' }
 
-    const [event] = await db.select().from(events).where(eq(events.slug, slug)).limit(1)
-    if (!event || !['public', 'link_only'].includes(event.visibility) || event.status !== 'scheduled') return { error: 'RSVPs are not currently open for this event.' }
+    const [event] = await db.select().from(events).where(and(eq(events.slug, slug), isNull(events.archivedAt))).limit(1)
+    if (!event || !event.startAt || !event.endAt || !['public', 'link_only'].includes(event.visibility) || event.status !== 'scheduled') return { error: 'RSVPs are not currently open for this event.' }
 
     const parsed = z.object({
       firstName: z.string().trim().min(1, 'First name is required.').max(80),
@@ -73,7 +73,7 @@ export async function submitEventRsvp(
       },
     }).returning()
 
-    const sent = await sendEventConfirmation({ event, participant, contact })
+    const sent = await sendEventConfirmation({ event: { ...event, startAt: event.startAt }, participant, contact })
     await db.insert(eventCommunications).values({
       eventId: event.id,
       channel: 'email',
@@ -115,8 +115,8 @@ export async function updatePublicEventRsvp(
     const token = String(formData.get('token') ?? '')
     const status = z.enum(['confirmed', 'maybe', 'declined']).safeParse(formData.get('rsvpStatus'))
     if (!status.success) return { error: 'Choose a valid RSVP response.' }
-    const [row] = await db.select({ participant: eventParticipants, event: events }).from(eventParticipants).innerJoin(events, eq(eventParticipants.eventId, events.id)).where(and(eq(events.slug, slug), eq(eventParticipants.managementToken, token))).limit(1)
-    if (!row) return { error: 'This RSVP management link is invalid.' }
+    const [row] = await db.select({ participant: eventParticipants, event: events }).from(eventParticipants).innerJoin(events, eq(eventParticipants.eventId, events.id)).where(and(eq(events.slug, slug), eq(eventParticipants.managementToken, token), isNull(events.archivedAt))).limit(1)
+    if (!row || row.event.visibility === 'draft') return { error: 'This RSVP management link is invalid.' }
     await db.update(eventParticipants).set({ rsvpStatus: status.data, updatedAt: new Date() }).where(eq(eventParticipants.id, row.participant.id))
     await Promise.all([
       logActivityEvent({ entityType: 'event', entityId: row.event.id, kind: 'event_rsvp_updated', title: 'RSVP updated', body: `Status changed to ${status.data}.`, metadata: { participantId: row.participant.id } }),

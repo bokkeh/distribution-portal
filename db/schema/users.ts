@@ -17,6 +17,8 @@ export const users = pgTable('users', {
   stripeConnectAccountId: text('stripe_connect_account_id'),
   tasterHourlyRate: numeric('taster_hourly_rate', { precision: 10, scale: 2 }),
   active: boolean('active').notNull().default(true),
+  accountStatus: text('account_status', { enum: ['invited', 'active', 'disabled'] }).notNull().default('active'),
+  affiliatedCompanyName: text('affiliated_company_name'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

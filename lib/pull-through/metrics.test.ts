@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { addDays, computeInventoryPosition, computeOrderMetrics, computeReorderLikelihood } from './metrics'
+import { addDays, computeInventoryPosition, computeOrderMetrics, computeReorderLikelihood, deriveTemperature } from './metrics'
 import type { PullThroughOrder } from './types'
 
 const NOW = new Date('2026-09-14T12:00:00Z')
@@ -18,6 +18,7 @@ function order(daysAgo: number, index: number, bottles = 12): PullThroughOrder {
     sequenceIndex: index,
     isReorder: index > 0,
     attribution: null,
+    attributionOverride: null,
   }
 }
 
@@ -88,4 +89,69 @@ test('low stock raises likelihood; a shelf full of stock lowers it', () => {
 
   assert.ok((computeReorderLikelihood(orders, lowStock).score ?? 0) > (baseline.score ?? 0))
   assert.ok((computeReorderLikelihood(orders, fullShelf).score ?? 0) < (baseline.score ?? 0))
+})
+
+test('a fresh count showing more than a cycle of stock caps likelihood even when "due" on the calendar', () => {
+  const orders = metricsFor(30, 29)
+  const dueOnCalendar = computeReorderLikelihood(orders, unknownInventory)
+  assert.equal(dueOnCalendar.level, 'very_likely')
+
+  const wellStocked = computeInventoryPosition(
+    { bottles: 60, cases: 5, productCount: 1, lastConfirmedAt: addDays(NOW, -2), lastConfirmedByName: null, lastConfirmedByRole: null, source: null },
+    0,
+    orders.bottlesPerDay,
+    12,
+    NOW,
+  )
+  const result = computeReorderLikelihood(orders, wellStocked)
+  assert.ok(result.level === 'possible' || result.level === 'unlikely')
+  assert.ok((result.score ?? 100) <= 45)
+})
+
+const noTastings = {
+  tastingCount: 0,
+  completedCount: 0,
+  reportedCount: 0,
+  lastTastingAt: null,
+  lastTastingId: null,
+  lastTasterName: null,
+  lastTastingBottlesSold: null,
+  lastTastingNextOrderAt: null,
+  lastTastingDaysToReorder: null,
+  totalBottlesSoldAtTastings: 0,
+  avgBottlesSoldPerTasting: null,
+  followedBy7: 0,
+  followedBy14: 0,
+  followedBy30: 0,
+  avgDaysToFollowingOrder: null,
+  hasEverHadTasting: false,
+  cadenceBeforeFirstTasting: null,
+  cadenceAfterFirstTasting: null,
+}
+
+test('a quiet account holding a fresh full cycle of stock is cold, not at-risk', () => {
+  const orders = metricsFor(30, 90)
+
+  const goneQuiet = deriveTemperature(orders, unknownInventory, noTastings)
+  assert.equal(goneQuiet.temperature, 'at_risk')
+
+  const wellStocked = computeInventoryPosition(
+    { bottles: 60, cases: 5, productCount: 1, lastConfirmedAt: addDays(NOW, -2), lastConfirmedByName: null, lastConfirmedByRole: null, source: null },
+    0,
+    orders.bottlesPerDay,
+    12,
+    NOW,
+  )
+  const stillStocked = deriveTemperature(orders, wellStocked, noTastings)
+  assert.equal(stillStocked.temperature, 'cold')
+
+  const staleCount = computeInventoryPosition(
+    { bottles: 60, cases: 5, productCount: 1, lastConfirmedAt: addDays(NOW, -60), lastConfirmedByName: null, lastConfirmedByRole: null, source: null },
+    0,
+    orders.bottlesPerDay,
+    12,
+    NOW,
+  )
+  const staleButStocked = deriveTemperature(orders, staleCount, noTastings)
+  assert.equal(staleButStocked.temperature, 'at_risk')
 })

@@ -863,6 +863,12 @@ export async function updateOrderShippingStatus(orderId: string, formData: FormD
     body: `Shipping changed to ${shippingStatus.replace(/_/g, ' ')}.`,
   })
 
+  if (shippingStatus === 'delivered') {
+    // Idempotent: guarded by the (source_order_id, product_id) unique index, so re-saving
+    // "delivered" (or saving it after the order was already fulfilled+paid) never double-credits.
+    await syncOrderAccountInventory(orderId, session.user.id)
+  }
+
   const [order] = await db
     .select({
       customerUserId: customerAccounts.userId,

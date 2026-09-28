@@ -2,6 +2,7 @@ import {
   createNotificationsForRoles,
   createUserNotification,
 } from '@/lib/notifications/in-app'
+import { CANCELLATION_REASON_LABELS } from '@/lib/tastings/cancellation'
 import type { NotificationEvent, NotificationEventPayloads } from '../events'
 
 export async function handleInAppChannel<E extends NotificationEvent>(
@@ -166,6 +167,19 @@ export async function handleInAppChannel<E extends NotificationEvent>(
         title: 'Tasting declined',
         body: `${p.declinedByName} declined ${p.eventName}.`,
         href: '/admin/tastings',
+      })
+      break
+    }
+
+    case 'tasting.cancelled': {
+      const p = payload as NotificationEventPayloads['tasting.cancelled']
+      const reasonLabel = CANCELLATION_REASON_LABELS[p.cancellationReason] ?? p.cancellationReason
+      await createNotificationsForRoles({
+        roles: ['admin', 'staff'],
+        kind: 'tasting_cancelled',
+        title: `Tasting cancelled — ${p.eventName}`,
+        body: `${p.cancelledByName} cancelled it. Reason: ${reasonLabel}.${p.needsCoverage ? ' Needs coverage.' : ''}`,
+        href: `/admin/tastings/${p.tastingId}`,
       })
       break
     }

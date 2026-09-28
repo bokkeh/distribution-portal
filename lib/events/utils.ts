@@ -21,6 +21,77 @@ export const RSVP_OPTIONAL_FIELDS = [
   ['sms_consent', 'SMS consent'],
 ] as const
 
+export type EventLifecycleBucket = 'upcoming' | 'past' | 'draft' | 'cancelled'
+
+type EventMinimumFields = {
+  title?: string | null
+  startAt?: Date | null
+  endAt?: Date | null
+  accountId?: string | null
+  venueName?: string | null
+  addressLine1?: string | null
+  city?: string | null
+}
+
+export function getEventDraftReasons(event: EventMinimumFields) {
+  const reasons: string[] = []
+  if (!event.title?.trim()) reasons.push('event name')
+  if (!event.startAt) reasons.push('event date and start time')
+  if (!event.endAt) reasons.push('end time')
+  if (event.startAt && event.endAt && event.endAt <= event.startAt) reasons.push('an end time after the start')
+  if (!event.accountId && !event.venueName?.trim() && !event.addressLine1?.trim() && !event.city?.trim()) reasons.push('location')
+  return reasons
+}
+
+export function hasEventMinimumDetails(event: EventMinimumFields) {
+  return getEventDraftReasons(event).length === 0
+}
+
+export function getEventLifecycleBucket(
+  event: EventMinimumFields & { status: string },
+  now = new Date(),
+): EventLifecycleBucket {
+  if (event.status === 'cancelled') return 'cancelled'
+  if (event.status === 'completed') return 'past'
+  if (event.status === 'draft' || !hasEventMinimumDetails(event)) return 'draft'
+  return event.endAt && event.endAt < now ? 'past' : 'upcoming'
+}
+
+export function getEventPlanningCompletion(event: {
+  organizerUserId?: string | null
+  teamArrivalAt?: Date | null
+  setupAt?: Date | null
+  breakdownAt?: Date | null
+  planningPocName?: string | null
+  planningPocContactId?: string | null
+  dayOfPocName?: string | null
+  dayOfPocContactId?: string | null
+  expectedAttendees?: number | null
+  estimatedPeopleServed?: number | null
+  cocktailsServed?: string[] | null
+  productIds?: string[] | null
+  estimatedProductRequired?: string | null
+  wisherProvides?: string[] | null
+  partnerProvides?: string[] | null
+  assignedTeamMemberIds?: string[] | null
+}) {
+  const checks = [
+    Boolean(event.organizerUserId),
+    Boolean(event.teamArrivalAt && event.setupAt && event.breakdownAt),
+    Boolean(event.planningPocContactId || event.planningPocName),
+    Boolean(event.dayOfPocContactId || event.dayOfPocName),
+    event.expectedAttendees != null || event.estimatedPeopleServed != null,
+    Boolean(event.cocktailsServed?.length || event.productIds?.length || event.estimatedProductRequired?.trim()),
+    Boolean(event.wisherProvides?.length && event.partnerProvides?.length),
+    Boolean(event.assignedTeamMemberIds?.length),
+  ]
+  return Math.round((checks.filter(Boolean).length / checks.length) * 100)
+}
+
+export function parseEventList(value: string) {
+  return [...new Set(value.split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean))].slice(0, 100)
+}
+
 export function slugifyEventTitle(value: string) {
   return value
     .normalize('NFKD')

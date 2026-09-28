@@ -15,6 +15,7 @@ import {
   sendWholesaleRequestNotification,
 } from '@/lib/resend/client'
 import { checkEmailEnabled, getStaffEmailsForNotification } from '@/lib/notifications/recipients'
+import { CANCELLATION_REASON_LABELS } from '@/lib/tastings/cancellation'
 import type { NotificationEvent, NotificationEventPayloads } from '../events'
 
 export async function handleEmailChannel<E extends NotificationEvent>(
@@ -221,6 +222,21 @@ export async function handleEmailChannel<E extends NotificationEvent>(
         title: 'Tasting declined',
         body: `${p.declinedByName} declined ${p.eventName} scheduled for ${p.scheduledAt.toLocaleString('en-US', { timeZone: 'America/New_York' })}.`,
         href: '/admin/tastings',
+      })
+      break
+    }
+
+    case 'tasting.cancelled': {
+      const teamEmails = await getStaffEmailsForNotification(['admin', 'staff'])
+      if (!teamEmails.length) break
+      const p = payload as NotificationEventPayloads['tasting.cancelled']
+      const reasonLabel = CANCELLATION_REASON_LABELS[p.cancellationReason] ?? p.cancellationReason
+      await sendInternalAlertEmail({
+        to: teamEmails,
+        subject: `Tasting cancelled — ${p.eventName}`,
+        title: 'Tasting cancelled',
+        body: `${p.cancelledByName} cancelled the tasting at ${p.eventName}, scheduled for ${p.scheduledAt.toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' })}. Reason: ${reasonLabel}.${p.cancellationNote ? ` Note: ${p.cancellationNote}.` : ''} ${p.needsCoverage ? 'This tasting needs coverage — reassign a taster.' : 'The event itself was cancelled, so no reassignment is needed.'}`,
+        href: `/admin/tastings/${p.tastingId}`,
       })
       break
     }

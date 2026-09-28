@@ -15,6 +15,7 @@ import { getPricingRulesForProducts, normalizeAccountGeography } from '@/lib/pri
 import { resolveProductUnitPrice } from '@/lib/pricing/product-price'
 import { getCustomerPaymentBreakdown, type CustomerPaymentMethod } from '@/lib/stripe/fees'
 import { syncOrderAccountInventory } from '@/lib/orders/account-inventory'
+import { getDeliveryDueDate } from '@/lib/orders/delivery-date'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? 'sk_test_missing_configuration', { apiVersion: '2026-02-25.clover' })
 
@@ -236,6 +237,8 @@ export async function createInvoice(formData: FormData) {
     redirect('/admin/invoicing/new?error=' + encodeURIComponent('Enter a valid customer, amount, and tax.'))
   }
 
+  let computedDueDate: string | null = null
+
   if (orderId) {
     const [order] = await db
       .select({
@@ -245,6 +248,8 @@ export async function createInvoice(formData: FormData) {
         subtotal: orders.subtotal,
         tax: orders.tax,
         total: orders.total,
+        deliveryDate: orders.deliveryDate,
+        paymentTerms: orders.paymentTerms,
       })
       .from(orders)
       .where(eq(orders.id, orderId))
@@ -274,6 +279,7 @@ export async function createInvoice(formData: FormData) {
 
     amount = Number(order.subtotal)
     tax = Number(order.tax)
+    computedDueDate = getDeliveryDueDate(order.deliveryDate, order.paymentTerms)
   } else {
     if (!Number.isFinite(tax) || tax < 0) {
       redirect('/admin/invoicing/new?error=' + encodeURIComponent('Enter valid direct invoice products and tax.'))
@@ -368,7 +374,7 @@ export async function createInvoice(formData: FormData) {
     tax: tax.toFixed(2),
     total: total.toFixed(2),
     status: 'draft',
-    dueDate,
+    dueDate: dueDate || computedDueDate,
   }).returning()
 
   if (!orderId && manualLineItems.length > 0) {

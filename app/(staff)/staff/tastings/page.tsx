@@ -3,6 +3,7 @@ import { db } from '@/db'
 import { TastingsPlanner } from '@/components/tastings/TastingsPlanner'
 import { TasterTeamPanel } from '@/components/tastings/TasterTeamPanel'
 import { requireFeature } from '@/lib/auth/session'
+import { loadEconomicsSettings } from '@/lib/pull-through/data'
 import { getTastingsForView } from '@/actions/tastings'
 import { getAvailabilityForUsers } from '@/actions/taster-availability'
 import Link from 'next/link'
@@ -27,13 +28,14 @@ function isMissingTastingsTable(error: unknown) {
 export default async function StaffTastingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ success?: string; error?: string; account?: string; date?: string }>
+  searchParams: Promise<{ success?: string; error?: string; teamView?: string; bookingTaster?: string; account?: string; date?: string }>
 }) {
   await requireFeature('tastings', 'admin', 'staff')
+  const economicsSettings = await loadEconomicsSettings()
   const params = await searchParams
   let data:
     | {
-        accounts: Array<{ id: string; companyName: string; address: string | null; city: string | null; state: string | null; zip: string | null }>
+        accounts: Array<{ id: string; companyName: string; address: string | null; city: string | null; state: string | null; zip: string | null; additionalLocations?: string | null }>
         activeTasters: Array<{ id: string; name: string; phone: string | null; avatarUrl?: string | null }>
         tastings: Awaited<ReturnType<typeof getTastingsForView>>
         availability: Awaited<ReturnType<typeof getAvailabilityForUsers>>
@@ -49,6 +51,7 @@ export default async function StaffTastingsPage({
         city: customerAccounts.city,
         state: customerAccounts.state,
         zip: customerAccounts.zip,
+        additionalLocations: customerAccounts.additionalLocations,
       }).from(customerAccounts).orderBy(customerAccounts.companyName),
       db.select({
         id: users.id,
@@ -100,10 +103,19 @@ export default async function StaffTastingsPage({
         </Link>
       </div>
       <TasterTeamPanel
+        key={`${params.success ?? ""}:${params.error ?? ""}:${params.bookingTaster ?? ""}:${params.account ?? ""}:${params.date ?? ""}`}
         mode="staff"
         tastings={data.tastings}
         tasters={data.activeTasters}
         availability={data.availability}
+        accounts={data.accounts}
+        defaultTastingCost={economicsSettings.defaultTastingCost}
+        initialView={params.teamView}
+        initialBooking={params.bookingTaster && params.date ? { tasterId: params.bookingTaster, date: params.date } : undefined}
+        error={params.error}
+        success={params.success}
+        initialAccountId={params.account}
+        initialDate={params.date}
       />
       <TastingsPlanner
         mode="staff"
@@ -114,6 +126,7 @@ export default async function StaffTastingsPage({
         error={params.error}
         initialAccountId={params.account}
         initialDate={params.date}
+        defaultTastingCost={economicsSettings.defaultTastingCost}
       />
     </div>
   )

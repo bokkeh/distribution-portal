@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm'
+import { and, eq, isNull, sql } from 'drizzle-orm'
 import { NextRequest, NextResponse } from 'next/server'
 import { v4 as uuidv4 } from 'uuid'
 import { db } from '@/db'
@@ -22,8 +22,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? request.headers.get('x-real-ip') ?? 'unknown'
     if (await isEventUploadRateLimited(`${slug}:${ip}`)) return rateLimitResponse()
 
-    const [event] = await db.select().from(events).where(eq(events.slug, slug)).limit(1)
-    if (!event || event.visibility === 'draft' || event.status === 'cancelled' || event.attendeeUploadPolicy === 'disabled') {
+    const [event] = await db.select().from(events).where(and(eq(events.slug, slug), isNull(events.archivedAt))).limit(1)
+    if (!event || !event.startAt || !event.endAt || event.visibility === 'draft' || event.status === 'cancelled' || event.attendeeUploadPolicy === 'disabled') {
       return NextResponse.json({ error: 'Photo uploads are not open for this event.' }, { status: 403 })
     }
 

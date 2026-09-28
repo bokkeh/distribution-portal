@@ -405,6 +405,14 @@ export function deriveTemperature(
   const cadence = `Averages a reorder every ${Math.round(avgDaysBetweenOrders)} days`
 
   if (ratio != null && ratio >= 2) {
+    const recentlyConfirmed =
+      inventory.daysSinceConfirmed == null || inventory.daysSinceConfirmed <= INVENTORY_STALE_DAYS
+    if (inventory.estimatedDaysOfInventory != null && inventory.estimatedDaysOfInventory > avgDaysBetweenOrders && recentlyConfirmed) {
+      why.push(cadence)
+      why.push(`${daysSinceLastOrder} days since last order, but ${Math.round(inventory.estimatedDaysOfInventory)} days of confirmed stock still on hand`)
+      why.push('Quiet on the calendar, not actually running low — this is a check-in, not a win-back')
+      return { temperature: 'cold', why }
+    }
     why.push(cadence)
     why.push(`${daysSinceLastOrder} days since last order — ${ratio.toFixed(1)}× the normal interval`)
     why.push(`${reorderCount} prior reorder${reorderCount === 1 ? '' : 's'}, so this is a break in an established pattern`)
@@ -517,15 +525,28 @@ export function computeReorderLikelihood(orders: OrderMetrics, inventory: Invent
   }
 
   // Stock position: running low makes a reorder more likely; sitting on a lot of
-  // stock makes it less likely regardless of the calendar.
+  // stock makes it less likely regardless of the calendar. A recent physical count
+  // is stronger evidence than the calendar pattern — an account holding a full
+  // reorder cycle's worth of *freshly confirmed* stock is not "due" no matter what
+  // the date-based cycle position says, so that caps the score instead of just
+  // nudging it.
+  let stockCap: number | null = null
   if (inventory.bottles != null) {
     const daysOfStock = inventory.estimatedDaysOfInventory
+    const recentlyConfirmed =
+      inventory.daysSinceConfirmed == null || inventory.daysSinceConfirmed <= INVENTORY_STALE_DAYS
     if ((daysOfStock != null && daysOfStock <= LOW_DAYS_OF_INVENTORY) || inventory.bottles <= 6) {
       score += 10
       why.push(
         daysOfStock != null
           ? `Roughly ${Math.round(daysOfStock)} days of stock left (${Math.round(inventory.bottles)} btl ${inventory.confidence})`
           : `Only ${Math.round(inventory.bottles)} bottles on hand (${inventory.confidence})`,
+      )
+    } else if (daysOfStock != null && daysOfStock > avgDaysBetweenOrders && recentlyConfirmed) {
+      score -= 20
+      stockCap = 45
+      why.push(
+        `${Math.round(daysOfStock)} days of stock on hand, confirmed ${inventory.daysSinceConfirmed ?? 0} day${inventory.daysSinceConfirmed === 1 ? '' : 's'} ago — more than a full reorder cycle still on the shelf`,
       )
     } else if (daysOfStock != null && daysOfStock > avgDaysBetweenOrders * 1.5) {
       score -= 15
@@ -549,6 +570,7 @@ export function computeReorderLikelihood(orders: OrderMetrics, inventory: Invent
   }
 
   score = Math.round(clamp(score, 0, 100))
+  if (stockCap != null) score = Math.min(score, stockCap)
 
   const level: ReorderLikelihood['level'] =
     score >= 75 ? 'very_likely' : score >= 50 ? 'likely' : score >= 30 ? 'possible' : 'unlikely'

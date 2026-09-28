@@ -17,6 +17,8 @@ import { ViewAsButton } from '@/components/admin/ViewAsButton'
 import { auth } from '@/lib/auth/config'
 import { getUserPreferences } from '@/lib/preferences/read'
 import { CustomerRecordLink } from '@/components/crm/CustomerRecordLink'
+import { TasterInviteStatusCard } from '@/components/admin/TasterInviteStatusCard'
+import { getLatestTasterInvite } from '@/actions/taster-invites'
 
 function isMissingUserFeatureTable(error: unknown) {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
@@ -38,16 +40,19 @@ export default async function UserDetailPage({ params }: { params: Promise<{ use
     roles: users.roles,
     avatarUrl: users.avatarUrl,
     active: users.active,
+    accountStatus: users.accountStatus,
+    affiliatedCompanyName: users.affiliatedCompanyName,
     tasterHourlyRate: users.tasterHourlyRate,
   }).from(users).where(eq(users.id, userId))
   if (!user) notFound()
 
   const [account] = await db.select().from(customerAccounts).where(eq(customerAccounts.userId, user.id))
   const [driver] = await db.select().from(drivers).where(eq(drivers.userId, user.id))
-  const [accessSummaryMap, accessEvents, prefs] = await Promise.all([
+  const [accessSummaryMap, accessEvents, prefs, tasterInvite] = await Promise.all([
     getUserAccessSummaryMap(),
     getRecentUserAccessEvents(user.id),
     getUserPreferences(user.id),
+    user.roles.includes('taster') ? getLatestTasterInvite(user.id) : Promise.resolve(null),
   ])
   const accessSummary = accessSummaryMap.get(user.id)
   let featureSettings: { features: string[] } | undefined
@@ -200,6 +205,20 @@ export default async function UserDetailPage({ params }: { params: Promise<{ use
             </CardContent>
           </Card>
         ) : null}
+
+        {user.roles.includes('taster') && (
+          <TasterInviteStatusCard userId={user.id} accountStatus={user.accountStatus} invite={tasterInvite} />
+        )}
+
+        {user.roles.includes('taster') && user.affiliatedCompanyName && (
+          <Card>
+            <CardHeader><CardTitle>Employment / Organization</CardTitle></CardHeader>
+            <CardContent className="text-sm">
+              <p className="text-muted-foreground">Affiliated Company</p>
+              <p className="font-medium">{user.affiliatedCompanyName}</p>
+            </CardContent>
+          </Card>
+        )}
 
         {user.roles.includes('taster') && (
           <TasterRateCard userId={user.id} currentRate={user.tasterHourlyRate} />

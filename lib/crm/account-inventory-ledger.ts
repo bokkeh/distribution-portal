@@ -5,6 +5,7 @@ import { db } from '@/db'
 import { accountInventoryAdjustments, accountInventoryOnHand, products } from '@/db/schema'
 
 export type AccountInventoryChangeType = 'manual_add' | 'manual_update' | 'manual_remove' | 'manual_edit' | 'order_fulfillment'
+export type AccountInventoryActivityType = 'order_delivered' | 'call_inventory_check' | 'stop_in_inventory_check' | 'tasting_inventory_update' | 'manual_adjustment'
 
 export function roundInventoryValue(value: number) {
   return Math.round(value * 100) / 100
@@ -147,6 +148,7 @@ export async function insertAccountInventoryAdjustment(input: {
   sku: string
   productName: string
   changeType: AccountInventoryChangeType
+  activityType?: AccountInventoryActivityType
   deltaBottles: number
   recordedBottlesOnHand?: number | null
   effectiveAt: Date
@@ -161,6 +163,7 @@ export async function insertAccountInventoryAdjustment(input: {
     sku: input.sku,
     productName: input.productName,
     changeType: input.changeType,
+    activityType: input.activityType ?? 'manual_adjustment',
     deltaCases: '0.00',
     deltaBottles: toInventoryFixed(input.deltaBottles),
     recordedBottlesOnHand: input.recordedBottlesOnHand == null

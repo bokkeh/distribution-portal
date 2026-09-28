@@ -69,6 +69,15 @@ export type AccountInventoryHistoryEvent = {
   actorName?: string | null
   actorRole?: string | null
   notes?: string | null
+  activityType?: string | null
+}
+
+export const INVENTORY_ACTIVITY_TYPE_LABELS: Record<string, string> = {
+  order_delivered: 'Order Delivered',
+  call_inventory_check: 'Call Inventory Check',
+  stop_in_inventory_check: 'Stop-In Inventory Check',
+  tasting_inventory_update: 'Tasting Inventory Update',
+  manual_adjustment: 'Manual Adjustment',
 }
 
 export type AccountActivityItem = {
@@ -365,6 +374,7 @@ export async function getAccountInventoryHistory(accountId: string) {
       .select({
         id: accountInventoryAdjustments.id,
         changeType: accountInventoryAdjustments.changeType,
+        activityType: accountInventoryAdjustments.activityType,
         effectiveAt: accountInventoryAdjustments.effectiveAt,
         recordedAt: accountInventoryAdjustments.createdAt,
         productId: accountInventoryAdjustments.productId,
@@ -388,14 +398,9 @@ export async function getAccountInventoryHistory(accountId: string) {
     return adjustmentRows.map((row) => ({
       id: row.id,
       kind: row.changeType,
-      title:
-        row.changeType === 'order_fulfillment'
-          ? 'Paid order added to inventory'
-          : row.changeType === 'manual_add'
-          ? 'Inventory count recorded'
-          : row.changeType === 'manual_remove'
-            ? 'Inventory item removed'
-            : 'Inventory count recorded',
+      title: INVENTORY_ACTIVITY_TYPE_LABELS[row.activityType ?? 'manual_adjustment']
+        ?? (row.changeType === 'manual_remove' ? 'Inventory item removed' : 'Inventory count recorded'),
+      activityType: row.activityType,
       createdAt: row.effectiveAt,
       recordedAt: row.recordedAt,
       productId: row.productId,

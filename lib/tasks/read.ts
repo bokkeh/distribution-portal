@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, or } from 'drizzle-orm'
+import { sql, and, asc, desc, eq, or } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/pg-core'
 import { db } from '@/db'
 import { contacts, crmTasks, customerAccounts, users } from '@/db/schema'
@@ -57,7 +57,7 @@ export async function getTasksForView(input: {
     .innerJoin(creator, eq(creator.id, crmTasks.createdByUserId))
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(
-      asc(crmTasks.status),
+      sql`case when ${crmTasks.status} in ('open', 'in_progress') then 0 when ${crmTasks.status} = 'cancelled' then 1 else 2 end`,
       asc(crmTasks.dueAt),
       desc(crmTasks.createdAt),
     )

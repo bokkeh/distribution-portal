@@ -8,6 +8,7 @@ import { CalendarDays, CalendarCheck, ChevronRight, Compass, FileText, LayoutDas
 import { cn } from '@/lib/utils'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
 import { PortalProfileMenu } from '@/components/layout/PortalProfileMenu'
+import { CommandPalette } from '@/components/ui/command-palette'
 
 type NotificationItem = {
   id: string
@@ -124,6 +125,7 @@ export function TasterSidebar({
 
           {/* Right: bell + profile + sign out */}
           <div className="flex shrink-0 items-center gap-3">
+            <CommandPalette navItems={navItems.map((item) => ({ ...item }))} />
             <NotificationBell items={notifications} unreadCount={unreadCount} dark />
             <PortalProfileMenu
               userName={userName}

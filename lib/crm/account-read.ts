@@ -48,6 +48,7 @@ export type CRMAccountDetail = {
   assignedRegionId: string | null
   lat: number | null
   lng: number | null
+  memberSince: string | null
   createdAt: Date
 }
 

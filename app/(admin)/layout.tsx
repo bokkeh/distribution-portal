@@ -5,6 +5,7 @@ import { PortalTopBar } from '@/components/layout/PortalTopBar'
 import { db } from '@/db'
 import { wholesaleAccountRequests, activityEvents } from '@/db/schema'
 import { desc, eq, inArray, and } from 'drizzle-orm'
+import { getPinnedNavKeys } from '@/actions/nav-preferences'
 
 const TERMINAL_STATUSES = ['approved', 'rejected', 'resolved']
 
@@ -12,6 +13,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const session = await requireAdmin()
   const canSwitchViews = (session.user.roles ?? [session.user.role]).includes('admin')
   const { notifications, unreadCount } = await getBellNotificationsForUser(session.user.id)
+  const pinnedNavKeys = await getPinnedNavKeys(session.user.id)
 
   let wholesalerRequestCount = 0
   try {
@@ -52,6 +54,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         userName={session.user.name}
         userAvatarUrl={session.user.image}
         canSwitchViews={canSwitchViews}
+        pinnedNavKeys={pinnedNavKeys}
       />
       <main className="flex-1 overflow-auto pt-14 md:pt-0">
         <PortalTopBar

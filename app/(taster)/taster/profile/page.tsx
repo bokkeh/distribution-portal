@@ -9,6 +9,9 @@ import { Button } from '@/components/ui/button'
 import Stripe from 'stripe'
 import { createTasterStripeOnboardingLink } from '@/actions/profile'
 import { getUserPreferences } from '@/lib/preferences/read'
+import { getUserAccessSummaryMap } from '@/lib/auth/activity'
+import { getLatestTasterInvite } from '@/actions/taster-invites'
+import { Badge } from '@/components/ui/badge'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? 'sk_test_missing_configuration', { apiVersion: '2026-02-25.clover' })
 
@@ -37,6 +40,7 @@ export default async function TasterProfilePage({
     state: string | null
     zip: string | null
     stripeConnectAccountId: string | null
+    accountStatus: 'invited' | 'active' | 'disabled'
   } | undefined
 
   try {
@@ -52,6 +56,7 @@ export default async function TasterProfilePage({
         state: users.state,
         zip: users.zip,
         stripeConnectAccountId: users.stripeConnectAccountId,
+        accountStatus: users.accountStatus,
       })
       .from(users)
       .where(eq(users.id, session.user.id))
@@ -69,6 +74,7 @@ export default async function TasterProfilePage({
         city: users.city,
         state: users.state,
         zip: users.zip,
+        accountStatus: users.accountStatus,
       })
       .from(users)
       .where(eq(users.id, session.user.id))
@@ -76,6 +82,12 @@ export default async function TasterProfilePage({
   }
 
   if (!user) notFound()
+
+  const [accessSummaryMap, tasterInvite] = await Promise.all([
+    getUserAccessSummaryMap(),
+    getLatestTasterInvite(user.id),
+  ])
+  const accessSummary = accessSummaryMap.get(user.id)
 
   let payoutStatusLabel = 'Not connected'
   let payoutStatusTone = 'text-amber-700'
@@ -110,6 +122,29 @@ export default async function TasterProfilePage({
         <p className="text-muted-foreground mt-1">Keep your phone number and mailing address current so assignments, travel records, and payout follow-up stay accurate.</p>
       </div>
       <SimpleProfileForm user={user} preferences={preferences} />
+      <Card className="max-w-lg">
+        <CardHeader><CardTitle>Account Status</CardTitle></CardHeader>
+        <CardContent className="grid grid-cols-2 gap-4 text-sm">
+          <div>
+            <p className="text-muted-foreground">Status</p>
+            <Badge variant={user.accountStatus === 'active' ? 'success' : user.accountStatus === 'disabled' ? 'destructive' : 'secondary'} className="capitalize mt-1">
+              {user.accountStatus}
+            </Badge>
+          </div>
+          <div>
+            <p className="text-muted-foreground">Last Login</p>
+            <p className="font-medium mt-1">{accessSummary?.lastLoginAt ? new Date(accessSummary.lastLoginAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : 'No login recorded'}</p>
+          </div>
+          <div>
+            <p className="text-muted-foreground">Invitation Sent</p>
+            <p className="font-medium mt-1">{tasterInvite ? new Date(tasterInvite.createdAt).toLocaleDateString('en-US', { dateStyle: 'medium' }) : '-'}</p>
+          </div>
+          <div>
+            <p className="text-muted-foreground">Password Setup Completed</p>
+            <p className="font-medium mt-1">{tasterInvite?.acceptedAt ? new Date(tasterInvite.acceptedAt).toLocaleDateString('en-US', { dateStyle: 'medium' }) : '-'}</p>
+          </div>
+        </CardContent>
+      </Card>
       <Card className="max-w-lg">
         <CardHeader>
           <CardTitle>Stripe Payouts</CardTitle>

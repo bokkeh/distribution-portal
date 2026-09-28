@@ -3,6 +3,7 @@ import { AlertTriangle, ArrowRight, Scale, TrendingUp, Wine } from 'lucide-react
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AccountTimeline } from '@/components/pull-through/AccountTimeline'
 import { TastingDecisionPanel } from '@/components/pull-through/TastingDecisionPanel'
+import { AccountHealthOverride, OrderAttributionOverride } from '@/components/pull-through/EconomicsOverrides'
 import { buildTastingDecision } from '@/lib/pull-through/economics'
 import {
   ATTRIBUTION_META,
@@ -60,10 +61,13 @@ export function AccountEconomicsSection({
   intelligence,
   mode,
   basePath,
+  canOverride = false,
 }: {
   intelligence: AccountIntelligence
   mode: ViewerMode
   basePath: string
+  /** Admins can override classifications; everyone else sees them read-only. */
+  canOverride?: boolean
 }) {
   const { row, tastings, orders, timeline, settings } = intelligence
   const { velocity, dependency, economics, health } = row
@@ -111,6 +115,11 @@ export function AccountEconomicsSection({
             {healthMeta.description}. {health.why.join(' · ')}
             {health.source === 'override' && health.overrideReason ? ` — override reason: ${health.overrideReason}` : ''}
           </p>
+          {canOverride && (
+            <div className="pt-1">
+              <AccountHealthOverride accountId={row.accountId} current={health.kind} source={health.source} autoKind={health.autoKind} />
+            </div>
+          )}
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
@@ -291,6 +300,11 @@ export function AccountEconomicsSection({
                               {attribution?.source === 'override' && <span className="ml-1 font-normal opacity-70">(manual)</span>}
                             </span>
                           ) : '—'}
+                          {canOverride && attribution && (
+                            <div className="mt-1">
+                              <OrderAttributionOverride orderId={order.id} current={attribution.kind} source={attribution.source} />
+                            </div>
+                          )}
                         </td>
                         <td className="whitespace-nowrap px-4 py-2.5 text-slate-700">{attribution?.tastingAt ? formatDate(attribution.tastingAt) : '—'}</td>
                         <td className="px-4 py-2.5 text-right text-slate-700">{attribution?.daysSinceTasting ?? '—'}</td>

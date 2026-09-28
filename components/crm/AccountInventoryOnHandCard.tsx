@@ -29,8 +29,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import type { AccountInventoryHistoryEvent, AccountInventoryItem } from '@/lib/crm/account-detail-data'
+import { INVENTORY_ACTIVITY_TYPE_LABELS, type AccountInventoryHistoryEvent, type AccountInventoryItem } from '@/lib/crm/account-detail-data'
 import { formatDate } from '@/lib/utils'
+import { Badge } from '@/components/ui/badge'
+
+const MANUAL_ACTIVITY_TYPE_OPTIONS: Array<{ value: 'call_inventory_check' | 'stop_in_inventory_check'; label: string }> = [
+  { value: 'call_inventory_check', label: 'Call Inventory Check' },
+  { value: 'stop_in_inventory_check', label: 'Stop-In Inventory Check' },
+]
 
 type ProductOption = {
   id: string
@@ -350,6 +356,7 @@ export function AccountInventoryOnHandCard({
   const [logBottles, setLogBottles] = useState('0')
   const [logInventoryDate, setLogInventoryDate] = useState(toDateInputValue(new Date()))
   const [logNotes, setLogNotes] = useState('')
+  const [logActivityType, setLogActivityType] = useState<'call_inventory_check' | 'stop_in_inventory_check'>('call_inventory_check')
   const [historyRange, setHistoryRange] = useState<HistoryRangeKey>('30d')
 
   useEffect(() => {
@@ -495,6 +502,7 @@ export function AccountInventoryOnHandCard({
     formData.append('productId', logProductId)
     formData.append('bottlesOnHand', logBottles)
     formData.append('inventoryDate', logInventoryDate)
+    formData.append('activityType', logActivityType)
     formData.append('notes', logNotes)
 
     startTransition(async () => {
@@ -504,10 +512,11 @@ export function AccountInventoryOnHandCard({
         return
       }
 
-      toast.success('Historical inventory count added')
+      toast.success('Inventory check saved')
       setLogProductId('')
       setLogBottles('0')
       setLogInventoryDate(toDateInputValue(new Date()))
+      setLogActivityType('call_inventory_check')
       setLogNotes('')
       refreshInventoryCard()
     })
@@ -722,7 +731,19 @@ export function AccountInventoryOnHandCard({
             </div>
 
             {canManageHistory ? (
-              <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 lg:grid-cols-[minmax(220px,1.5fr)_130px_155px_minmax(180px,1fr)_auto] lg:items-end">
+              <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 lg:grid-cols-[200px_minmax(220px,1.5fr)_130px_155px_minmax(180px,1fr)_auto] lg:items-end">
+                <label className="space-y-1 text-xs font-medium text-slate-600">
+                  Activity Type
+                  <select
+                    value={logActivityType}
+                    onChange={(event) => setLogActivityType(event.target.value as typeof logActivityType)}
+                    className="h-10 w-full rounded-md border border-input bg-white px-3 py-2 text-sm font-normal text-slate-900 shadow-sm"
+                  >
+                    {MANUAL_ACTIVITY_TYPE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
                 <label className="space-y-1 text-xs font-medium text-slate-600">
                   Product
                   <select
@@ -759,7 +780,7 @@ export function AccountInventoryOnHandCard({
                   />
                 </label>
                 <label className="space-y-1 text-xs font-medium text-slate-600">
-                  Note
+                  Notes (optional)
                   <input
                     type="text"
                     value={logNotes}
@@ -769,9 +790,9 @@ export function AccountInventoryOnHandCard({
                   />
                 </label>
                 <Button type="button" disabled={isPending || !logProductId} onClick={addHistoryEntry}>
-                  <Plus className="mr-2 h-4 w-4" />Add Log Entry
+                  <Plus className="mr-2 h-4 w-4" />Save Inventory Check
                 </Button>
-                <p className="text-xs text-slate-500 lg:col-span-5">
+                <p className="text-xs text-slate-500 lg:col-span-6">
                   Historical entries are absolute bottle counts. Later counts and fulfilled-order additions are recalculated in date order.
                 </p>
               </div>
@@ -818,7 +839,9 @@ export function AccountInventoryOnHandCard({
                         </td>
                         <td className="py-3 pr-3">
                           <p className="font-medium text-slate-900">{event.productName ?? 'Unknown product'}</p>
-                          <p className="text-xs text-slate-500">{event.title}</p>
+                          <Badge variant="outline" className="mt-1 text-[10px]">
+                            {INVENTORY_ACTIVITY_TYPE_LABELS[event.activityType ?? ''] ?? event.title}
+                          </Badge>
                         </td>
                         <td className="py-3 pr-3">
                           {event.recordedBottlesOnHand == null ? (

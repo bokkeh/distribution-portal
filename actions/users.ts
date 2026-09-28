@@ -10,6 +10,7 @@ import { customerAccounts, drivers, userFeatureSettings, userPreferences, users 
 import { requireAdmin } from '@/lib/auth/session'
 import { notify } from '@/lib/notifications/dispatch'
 import { sendWelcomeEmail } from '@/lib/resend/client'
+import { createTasterInvite } from '@/actions/taster-invites'
 
 const ALL_ROLES = ['admin', 'staff', 'driver', 'customer', 'taster', 'sales_rep', 'sales_manager'] as const
 type UserRole = typeof ALL_ROLES[number]
@@ -40,10 +41,10 @@ function isMissingUserFeatureTable(error: unknown) {
 }
 
 export async function createUser(
-  _prev: { error?: string; success?: boolean; userId?: string; name?: string; email?: string; password?: string; roleLabel?: string } | null,
+  _prev: { error?: string; success?: boolean; userId?: string; name?: string; email?: string; password?: string; roleLabel?: string; tasterInvite?: boolean; inviteUrl?: string } | null,
   formData: FormData
-): Promise<{ error?: string; success?: boolean; userId?: string; name?: string; email?: string; password?: string; roleLabel?: string }> {
-  await requireAdmin()
+): Promise<{ error?: string; success?: boolean; userId?: string; name?: string; email?: string; password?: string; roleLabel?: string; tasterInvite?: boolean; inviteUrl?: string }> {
+  const session = await requireAdmin()
 
   const name = formData.get('name') as string
   const email = formData.get('email') as string
@@ -54,6 +55,7 @@ export async function createUser(
   const features = parseFeatures(formData)
   const existingCustomerAccountId = String(formData.get('existingCustomerAccountId') ?? '').trim()
   const requestedCompanyName = String(formData.get('companyName') ?? '').trim()
+  const isTaster = role === 'taster'
 
   if (roles.includes('customer') && existingCustomerAccountId) {
     const [account] = await db
@@ -68,7 +70,9 @@ export async function createUser(
     throw new Error('Select an existing CRM account or enter a company name for a customer user.')
   }
 
-  const passwordHash = await bcrypt.hash(password, 12)
+  const passwordHash = isTaster
+    ? await bcrypt.hash(randomBytes(32).toString('hex'), 12) // unusable placeholder; real password set via invite
+    : await bcrypt.hash(password, 12)
 
   const [user] = await db.insert(users).values({
     name,
@@ -77,9 +81,10 @@ export async function createUser(
     role,
     roles,
     phone: phone || null,
+    ...(isTaster ? { active: false, accountStatus: 'invited' as const, affiliatedCompanyName: requestedCompanyName || null } : {}),
   }).returning()
 
-  if (roles.includes('customer')) {
+  if (roles.includes('customer') && !isTaster) {
     const companyName = requestedCompanyName
     if (existingCustomerAccountId) {
       await db.update(customerAccounts).set({
@@ -121,6 +126,27 @@ export async function createUser(
       })
     } catch (error) {
       if (!isMissingUserFeatureTable(error)) throw error
+    }
+  }
+
+  if (isTaster) {
+    const { inviteUrl } = await createTasterInvite({
+      userId: user.id,
+      email: user.email,
+      name: user.name,
+      invitedByUserId: session.user.id,
+      invitedByName: session.user.name ?? 'AHAWC',
+    })
+
+    revalidatePath('/admin/users')
+    return {
+      success: true,
+      userId: user.id,
+      name: user.name,
+      email: user.email,
+      roleLabel: formatRoleLabel(role),
+      tasterInvite: true,
+      inviteUrl,
     }
   }
 
@@ -170,13 +196,13 @@ export async function sendUserWelcomeEmail(
 
 export async function deactivateUser(userId: string) {
   await requireAdmin()
-  await db.update(users).set({ active: false }).where(eq(users.id, userId))
+  await db.update(users).set({ active: false, accountStatus: 'disabled' }).where(eq(users.id, userId))
   revalidatePath('/admin/users')
 }
 
 export async function activateUser(userId: string) {
   await requireAdmin()
-  await db.update(users).set({ active: true }).where(eq(users.id, userId))
+  await db.update(users).set({ active: true, accountStatus: 'active' }).where(eq(users.id, userId))
   revalidatePath('/admin/users')
 }
 

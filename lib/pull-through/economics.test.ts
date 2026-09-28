@@ -31,6 +31,7 @@ function order(date: string, index: number, cases = 1): PullThroughOrder {
     sequenceIndex: index,
     isReorder: index > 0,
     attribution: null,
+    attributionOverride: null,
   }
 }
 

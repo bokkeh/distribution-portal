@@ -1,3 +1,5 @@
+import { OrderOperations } from '@/components/orders/OrderOperations'
+import { requireFeature } from '@/lib/auth/session'
 import { db } from '@/db'
 import { orders, orderItems, products, customerAccounts } from '@/db/schema'
 import { eq } from 'drizzle-orm'
@@ -13,6 +15,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { formatOrderPaymentMethodLabel, formatOrderTypeLabel, formatStatusLabel } from '@/lib/orders/status'
 import { updateOrderShippingStatus, updateOrderStatus } from '@/actions/orders'
 import { formatPaymentTerms } from '@/lib/orders/payment-terms'
+import { describeDueDateGuidance } from '@/lib/orders/delivery-date'
 import { isMissingShippingStatusColumn } from '@/lib/orders/shipping-fallback'
 import { describePricingSource } from '@/lib/pricing/geographic'
 import Link from 'next/link'
@@ -21,6 +24,7 @@ import { ArrowLeft, Download } from 'lucide-react'
 const shippingStatuses = ['not_scheduled', 'scheduled', 'out_for_delivery', 'delivered', 'issue'] as const
 
 export default async function OrderDetailPage({ params }: { params: Promise<{ orderId: string }> }) {
+  await requireFeature('orders', 'admin', 'staff')
   const { orderId } = await params
 
   let order:
@@ -36,6 +40,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
         paymentMethod: string | null
         stripePaymentIntentId: string | null
         paymentTerms: string | null
+        deliveryDate: string | null
         notes: string | null
         createdAt: Date
         customerId: string
@@ -57,6 +62,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
         paymentMethod: orders.paymentMethod,
         stripePaymentIntentId: orders.stripePaymentIntentId,
         paymentTerms: orders.paymentTerms,
+        deliveryDate: orders.deliveryDate,
         notes: orders.notes,
         createdAt: orders.createdAt,
         customerId: orders.customerId,
@@ -77,6 +83,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
         status: orders.status,
         orderType: orders.orderType,
         paymentTerms: customerAccounts.paymentTerms,
+        deliveryDate: orders.deliveryDate,
         notes: orders.notes,
         createdAt: orders.createdAt,
         customerId: orders.customerId,
@@ -130,6 +137,8 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
         </div>
       </div>
 
+      <OrderOperations orderId={order.id} paymentTerms={order.paymentTerms} orderDate={order.createdAt} />
+
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
         <Card className="md:col-span-2">
           <CardHeader><CardTitle>Order Items</CardTitle></CardHeader>
@@ -178,7 +187,10 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ or
               <div className="flex justify-between"><span className="text-muted-foreground">Payment Type</span><span className="font-medium">{formatOrderPaymentMethodLabel(order.paymentMethod)}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Order Status</span><OrderStatusBadge kind="order" status={order.status} /></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Shipping</span><OrderStatusBadge kind="shipping" status={order.shippingStatus} /></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Order Date</span><span className="font-medium">{formatDate(order.createdAt)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Delivery Date</span><span className="font-medium">{order.deliveryDate ?? 'Not set'}</span></div>
               <div className="flex justify-between gap-3"><span className="text-muted-foreground">Payment Terms</span><span className="text-right font-medium">{formatPaymentTerms(order.paymentTerms)}</span></div>
+              <div className="flex flex-col gap-1"><span className="text-muted-foreground">Payment Due Date</span><span className="text-xs font-medium text-slate-700">{describeDueDateGuidance(order.deliveryDate, order.paymentTerms)}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Total</span><span className="font-bold">{formatCurrency(order.total)}</span></div>
             </div>
             <OrderPaymentTypeForm orderId={order.id} paymentStatus={order.paymentStatus} paymentMethod={order.paymentMethod} stripeManaged={Boolean(order.stripePaymentIntentId)} />

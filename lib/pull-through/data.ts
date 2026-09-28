@@ -25,6 +25,7 @@ import {
   salesRouteStops,
   salesRoutes,
   tasterInvoices,
+  tastingEconomicsSettings,
   tastingReports,
   tastings,
   users,
@@ -54,6 +55,7 @@ import {
   resolveTastingCost,
 } from './economics'
 import type {
+  AccountHealthKind,
   PullThroughAccountRow,
   PullThroughOrder,
   PullThroughTasting,
@@ -207,6 +209,8 @@ async function loadOrders(accountIds: string[]) {
       orderType: orders.orderType,
       status: orders.status,
       total: orders.total,
+      attributionOverride: orders.tastingAttributionOverride,
+      attributionOverrideReason: orders.tastingAttributionOverrideReason,
       cases: sql<number>`coalesce(sum(case when ${orderItems.unit} = 'case' then ${orderItems.quantity}::numeric else 0 end), 0)::float`,
       bottles: sql<number>`coalesce(sum(
         case when ${orderItems.unit} = 'case'
@@ -219,7 +223,16 @@ async function loadOrders(accountIds: string[]) {
     .leftJoin(orderItems, eq(orderItems.orderId, orders.id))
     .leftJoin(products, eq(products.id, orderItems.productId))
     .where(and(inArray(orders.customerId, accountIds), ne(orders.status, 'cancelled')))
-    .groupBy(orders.id, orders.customerId, orders.createdAt, orders.orderType, orders.status, orders.total)
+    .groupBy(
+      orders.id,
+      orders.customerId,
+      orders.createdAt,
+      orders.orderType,
+      orders.status,
+      orders.total,
+      orders.tastingAttributionOverride,
+      orders.tastingAttributionOverrideReason,
+    )
     .orderBy(asc(orders.createdAt))
 
   const byAccount = new Map<string, PullThroughOrder[]>()
@@ -237,6 +250,9 @@ async function loadOrders(accountIds: string[]) {
       total: toNumber(row.total),
       sequenceIndex: 0,
       attribution: null,
+      attributionOverride: row.attributionOverride
+        ? { kind: row.attributionOverride as 'organic' | 'assisted', reason: row.attributionOverrideReason ?? null }
+        : null,
       isReorder: false,
     })
     byAccount.set(row.accountId, list)
@@ -292,6 +308,13 @@ export async function loadTastings(
       shelfPhotoUrls: tastingReports.shelfPhotoUrls,
       submittedByName: reportSubmitter.name,
       invoiceTotal: tasterInvoices.totalAmount,
+      objective: tastings.objective,
+      primaryGoal: tastings.primaryGoal,
+      targetBottlesSold: tastings.targetBottlesSold,
+      targetCasesDepleted: tastings.targetCasesDepleted,
+      targetReorderQuantity: tastings.targetReorderQuantity,
+      estimatedCost: tastings.estimatedCost,
+      tasterPay: tastings.tasterPay,
     })
     .from(tastings)
     .leftJoin(users, eq(users.id, tastings.assignedUserId))
@@ -345,15 +368,19 @@ export async function loadTastings(
       within7: false,
       within14: false,
       within30: false,
-      // Objective/targets arrive with the tasting-objective migration; until then
-      // every tasting is treated as an unclassified retail tasting.
-      objective: null,
-      primaryGoal: null,
-      targetBottlesSold: null,
-      targetCasesDepleted: null,
-      targetReorderQuantity: null,
+
+
+      objective: row.objective ?? null,
+      primaryGoal: row.primaryGoal ?? null,
+      targetBottlesSold: row.targetBottlesSold ?? null,
+      targetCasesDepleted: row.targetCasesDepleted == null ? null : toNumber(row.targetCasesDepleted),
+      targetReorderQuantity: row.targetReorderQuantity ?? null,
       ...resolveTastingCost(
-        { invoiceTotal: row.invoiceTotal == null ? null : toNumber(row.invoiceTotal), estimatedCost: null },
+        {
+          invoiceTotal: row.invoiceTotal == null ? null : toNumber(row.invoiceTotal),
+          // Taster pay entered at scheduling is the estimate until the invoice lands.
+          estimatedCost: row.estimatedCost != null ? toNumber(row.estimatedCost) : row.tasterPay != null ? toNumber(row.tasterPay) : null,
+        },
         settings,
       ),
       economics: null,
@@ -489,7 +516,7 @@ export type PullThroughDataset = {
  */
 export async function loadPullThroughDataset(scope: PullThroughScope): Promise<PullThroughDataset> {
   const now = new Date()
-  const settings = DEFAULT_ECONOMICS_SETTINGS
+  const settings = await loadEconomicsSettings()
 
   const accountRows = await db
     .select({
@@ -511,6 +538,8 @@ export async function loadPullThroughDataset(scope: PullThroughScope): Promise<P
       dealStage: customerAccounts.dealStage,
       customerSource: customerAccounts.customerSource,
       createdAt: customerAccounts.createdAt,
+      healthOverride: customerAccounts.healthOverride,
+      healthOverrideReason: customerAccounts.healthOverrideReason,
       salesRepId: customerAccounts.assignedSalesRepId,
       salesRepUserId: salesMembers.userId,
       salesRepName: users.name,
@@ -611,6 +640,9 @@ export async function loadPullThroughDataset(scope: PullThroughScope): Promise<P
       inventory,
       tastingMetrics,
       daysBetween(new Date(account.createdAt), now),
+      account.healthOverride
+        ? { kind: account.healthOverride as AccountHealthKind, reason: account.healthOverrideReason ?? null }
+        : null,
     )
 
     const contactSummary = contactsByAccount.get(account.id) ?? { count: 0, primaryName: null }
@@ -925,4 +957,26 @@ export async function loadAccountTimeline(
   }
 
   return events.sort((a, b) => b.at.getTime() - a.at.getTime())
+}
+
+/* ---------------------------------------------------------------- settings */
+
+/**
+ * Global economics assumptions. Falls back to the built-in defaults when the settings
+ * row has not been created yet, so the dashboards never fail on a fresh environment.
+ */
+export async function loadEconomicsSettings(): Promise<TastingEconomicsSettings> {
+  try {
+    const [row] = await db.select().from(tastingEconomicsSettings).where(eq(tastingEconomicsSettings.id, 'global')).limit(1)
+    if (!row) return DEFAULT_ECONOMICS_SETTINGS
+    return {
+      contributionPerCase: toNumber(row.contributionPerCase) || DEFAULT_ECONOMICS_SETTINGS.contributionPerCase,
+      defaultTastingCost: toNumber(row.defaultTastingCost) || DEFAULT_ECONOMICS_SETTINGS.defaultTastingCost,
+      attributionWindowDays: row.attributionWindowDays || DEFAULT_ECONOMICS_SETTINGS.attributionWindowDays,
+      assistedSalesShare: toNumber(row.assistedSalesShare) || DEFAULT_ECONOMICS_SETTINGS.assistedSalesShare,
+      bottlesPerCase: DEFAULT_BOTTLES_PER_CASE,
+    }
+  } catch {
+    return DEFAULT_ECONOMICS_SETTINGS
+  }
 }

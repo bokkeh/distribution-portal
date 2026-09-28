@@ -13,6 +13,10 @@ import type { FeatureKey } from '@/lib/users/features'
 import { hasFeature } from '@/lib/users/features'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
 import { PortalProfileMenu } from '@/components/layout/PortalProfileMenu'
+import { CommandPalette } from '@/components/ui/command-palette'
+import { FavoritesSection } from '@/components/layout/FavoritesSection'
+import { PinToggleButton } from '@/components/layout/PinToggleButton'
+import { togglePinnedNavItem } from '@/actions/nav-preferences'
 
 const navItems = [
   { href: '/staff/dashboard', label: 'Dashboard', icon: LayoutDashboard, feature: 'dashboard' },
@@ -33,32 +37,37 @@ function NavLinks({
   featureFlags,
   roles,
   onNav,
+  pinnedKeys,
+  onTogglePin,
 }: {
   pathname: string
   featureFlags: string[]
   roles: string[]
   onNav?: () => void
+  pinnedKeys: string[]
+  onTogglePin: (href: string) => void
 }) {
   return (
     <>
       {navItems.filter(item => hasFeature(item.feature as FeatureKey, roles, featureFlags)).map(({ href, label, icon: Icon }) => {
         const active = pathname === href || pathname.startsWith(href + '/')
         return (
-          <Link
+          <div
             key={href}
-            href={href}
-            onClick={onNav}
             className={cn(
-              'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+              'group flex items-center rounded-lg text-sm font-medium transition-colors',
               active
                 ? 'bg-green-600 text-white'
                 : 'text-slate-300 hover:bg-slate-800 hover:text-white'
             )}
           >
-            <Icon className="w-4 h-4 flex-shrink-0" />
-            {label}
-            {active && <ChevronRight className="w-3.5 h-3.5 ml-auto" />}
-          </Link>
+            <Link href={href} onClick={onNav} className="flex flex-1 items-center gap-3 px-3 py-2.5 min-w-0">
+              <Icon className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">{label}</span>
+              {active && <ChevronRight className="w-3.5 h-3.5 ml-auto" />}
+            </Link>
+            <PinToggleButton pinned={pinnedKeys.includes(href)} onToggle={() => onTogglePin(href)} theme="dark" />
+          </div>
         )
       })}
     </>
@@ -73,6 +82,7 @@ export default function StaffSidebar({
   userName,
   userAvatarUrl,
   canSwitchViews = false,
+  pinnedNavKeys = [],
 }: {
   featureFlags?: string[]
   roles?: string[]
@@ -81,9 +91,27 @@ export default function StaffSidebar({
   userName?: string | null
   userAvatarUrl?: string | null
   canSwitchViews?: boolean
+  pinnedNavKeys?: string[]
 }) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
+  const [pinnedKeys, setPinnedKeys] = useState(pinnedNavKeys)
+
+  const visibleItems = navItems.filter(item => hasFeature(item.feature as FeatureKey, roles, featureFlags))
+  const favoriteItems = pinnedKeys
+    .map((href) => visibleItems.find((item) => item.href === href))
+    .filter((item): item is (typeof visibleItems)[number] => Boolean(item))
+    .map((item) => ({ href: item.href, label: item.label, icon: item.icon }))
+
+  function handleTogglePin(href: string) {
+    setPinnedKeys((current) => (current.includes(href) ? current.filter((key) => key !== href) : [...current, href]))
+    togglePinnedNavItem(href).catch(() => {})
+  }
+
+  function handleUnpin(href: string) {
+    setPinnedKeys((current) => current.filter((key) => key !== href))
+    togglePinnedNavItem(href).catch(() => {})
+  }
 
   useEffect(() => {
     document.body.style.overflow = open ? 'hidden' : ''
@@ -107,8 +135,12 @@ export default function StaffSidebar({
             <NotificationBell items={notifications} unreadCount={unreadCount} dark />
           </div>
         </div>
+        <div className="px-3 py-2 border-b border-slate-800">
+          <CommandPalette navItems={visibleItems} pinnedHrefs={pinnedKeys} />
+        </div>
         <nav className="flex-1 p-4 space-y-1">
-          <NavLinks pathname={pathname} featureFlags={featureFlags} roles={roles} />
+          <FavoritesSection items={favoriteItems} pathname={pathname} onUnpin={handleUnpin} theme="dark" />
+          <NavLinks pathname={pathname} featureFlags={featureFlags} roles={roles} pinnedKeys={pinnedKeys} onTogglePin={handleTogglePin} />
         </nav>
       </aside>
 
@@ -163,7 +195,8 @@ export default function StaffSidebar({
             </div>
 
             <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-              <NavLinks pathname={pathname} featureFlags={featureFlags} roles={roles} onNav={() => setOpen(false)} />
+              <FavoritesSection items={favoriteItems} pathname={pathname} onUnpin={handleUnpin} theme="dark" onNav={() => setOpen(false)} />
+              <NavLinks pathname={pathname} featureFlags={featureFlags} roles={roles} onNav={() => setOpen(false)} pinnedKeys={pinnedKeys} onTogglePin={handleTogglePin} />
             </nav>
 
           </aside>
