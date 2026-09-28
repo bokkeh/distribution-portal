@@ -46,7 +46,7 @@ import { AccountEconomicsSection } from '@/components/pull-through/AccountEconom
 import { HEALTH_META } from '@/lib/pull-through/display'
 import { loadAccountIntelligence, type AccountIntelligence, type PullThroughScope } from '@/lib/pull-through/data'
 import { coercePipelineStages } from '@/lib/deal-stages'
-import { ArrowLeft, CalendarDays, FileText, MessageSquare, Plus, Receipt, RefreshCcw, RefreshCw, Truck } from 'lucide-react'
+import { ArrowLeft, CalendarDays, FileText, MessageSquare, Plus, Receipt, RefreshCcw, RefreshCw, Truck, UserRound } from 'lucide-react'
 
 const ACCOUNT_TABS = [
   { id: 'overview', label: 'Overview' },
@@ -565,7 +565,7 @@ export async function AccountRecordPage({
                 {(account.city || account.state) ? (
                   <p className="mt-1 text-sm text-muted-foreground">{[account.city, account.state].filter(Boolean).join(', ')}</p>
                 ) : null}
-                <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1">
+                <div className="mt-3 flex flex-wrap items-stretch gap-2">
                   <AccountMemberSinceEditor
                     accountId={account.id}
                     memberSince={account.memberSince}
@@ -573,17 +573,30 @@ export async function AccountRecordPage({
                     canEdit={mode !== 'sales'}
                   />
                   {tastingSummary.associatedTaster ? (
-                    <p className="text-xs text-slate-500">
-                      Taster:{' '}
-                      {mode === 'admin' ? (
-                        <Link href={`/admin/users/${tastingSummary.associatedTaster.userId}`} className="font-medium text-blue-600 hover:underline">
-                          {tastingSummary.associatedTaster.name}
-                        </Link>
-                      ) : (
-                        <span className="font-medium text-slate-700">{tastingSummary.associatedTaster.name}</span>
-                      )}
-                      {' '}({formatDate(tastingSummary.associatedTaster.scheduledAt)}, {tastingSummary.associatedTaster.status})
-                    </p>
+                    <div className="flex min-h-12 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
+                        <UserRound className="h-4 w-4" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Taster</p>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                          {mode === 'admin' ? (
+                            <Link href={`/admin/users/${tastingSummary.associatedTaster.userId}`} className="text-sm font-semibold text-blue-700 hover:underline">
+                              {tastingSummary.associatedTaster.name}
+                            </Link>
+                          ) : (
+                            <span className="text-sm font-semibold text-slate-900">{tastingSummary.associatedTaster.name}</span>
+                          )}
+                          <span className="text-xs text-slate-500">· {formatDate(tastingSummary.associatedTaster.scheduledAt)}</span>
+                          <Badge
+                            variant={tastingSummary.associatedTaster.status === 'completed' ? 'success' : 'outline'}
+                            className="px-1.5 py-0 text-[10px] capitalize"
+                          >
+                            {tastingSummary.associatedTaster.status.replaceAll('_', ' ')}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
                   ) : null}
                 </div>
               </div>
@@ -983,7 +996,6 @@ export async function AccountRecordPage({
     </div>
   )
 }
-
 
 
 
