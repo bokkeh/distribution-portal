@@ -239,7 +239,6 @@ export type TastingRow = {
   status: string
   scheduledAt: Date
   endAt: Date | null
-  objective: string | null
   report: {
     bottlesSold: number | null
     casesSold: number | null
@@ -308,7 +307,6 @@ export async function loadProgressionDataset(): Promise<ProgressionDataset> {
       status: row.t.status,
       scheduledAt: row.t.scheduledAt,
       endAt: row.t.endAt,
-      objective: row.t.objective,
       report: row.r ? {
         bottlesSold: row.r.bottlesSold,
         casesSold: row.r.casesSold,

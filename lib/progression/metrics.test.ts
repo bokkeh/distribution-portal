@@ -28,7 +28,6 @@ function tasting(overrides: Partial<TastingRow>): TastingRow {
     status: 'completed',
     scheduledAt: new Date('2026-01-10T18:00:00Z'),
     endAt: null,
-    objective: null,
     report: null,
     ...overrides,
   }
