@@ -255,6 +255,7 @@ export async function getMemberProfile(userId: string) {
     starterKit,
     recommendation,
     pendingReview,
+    pendingReviewOverdue: pendingReview ? pendingReview.scheduledFor.getTime() < Date.now() : false,
     permissions,
     isSelf: session.user.id === userId,
   }

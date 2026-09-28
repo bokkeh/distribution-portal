@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { recommendPromotion, decideRecommendation, scheduleReview, requestReview, recordTrainingSession, completeReview } from '@/actions/progression'
 import { formatRank } from '@/lib/progression/ranks'
+import { formatDate } from './shared'
 import type { ProgressionPromotionRecommendation, ProgressionReview } from '@/db/schema'
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -82,14 +83,13 @@ export function ScheduleReviewForm({ userId }: { userId: string }) {
   )
 }
 
-export function PendingReviewBanner({ review, canComplete }: { review: ProgressionReview; canComplete: boolean }) {
+export function PendingReviewBanner({ review, canComplete, overdue }: { review: ProgressionReview; canComplete: boolean; overdue: boolean }) {
   const [pending, startTransition] = useTransition()
   const router = useRouter()
-  const overdue = new Date(review.scheduledFor) < new Date()
 
   return (
     <div className={`rounded-lg border p-3 text-sm ${overdue ? 'border-red-200 bg-red-50 text-red-700' : 'border-blue-200 bg-blue-50 text-blue-700'}`}>
-      <p>{overdue ? 'Review overdue' : 'Review scheduled'} for {new Date(review.scheduledFor).toLocaleDateString()}{review.reason ? ` — ${review.reason}` : ''}.</p>
+      <p>{overdue ? 'Review overdue' : 'Review scheduled'} for {formatDate(review.scheduledFor)}{review.reason ? ` — ${review.reason}` : ''}.</p>
       {canComplete && (
         <Button size="sm" variant="outline" className="mt-2" disabled={pending} onClick={() => startTransition(async () => { await completeReview({ reviewId: review.id }); router.refresh() })}>Mark review complete</Button>
       )}

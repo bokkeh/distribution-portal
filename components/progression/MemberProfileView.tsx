@@ -21,7 +21,7 @@ export async function MemberProfileView({ userId, backHref }: { userId: string; 
   const profile = await getMemberProfile(userId)
   if (!profile) notFound()
 
-  const { member, rank, nextRank, level, performance, eligibility, history, starterKit, recommendation, pendingReview, permissions, daysAtCurrentLevel, isSelf } = profile
+  const { member, rank, nextRank, level, performance, eligibility, history, starterKit, recommendation, pendingReview, pendingReviewOverdue, permissions, daysAtCurrentLevel, isSelf } = profile
   const canManage = !isSelf || permissions.isAdmin
 
   return (
@@ -45,7 +45,13 @@ export async function MemberProfileView({ userId, backHref }: { userId: string; 
         )}
       </div>
 
-      {pendingReview && <PendingReviewBanner review={pendingReview} canComplete={canManage && permissions.canScheduleReview} />}
+      {pendingReview && (
+        <PendingReviewBanner
+          review={pendingReview}
+          canComplete={canManage && permissions.canScheduleReview}
+          overdue={pendingReviewOverdue}
+        />
+      )}
 
       {/* Rank summary */}
       <section className="rounded-xl border border-slate-200 bg-white p-5">

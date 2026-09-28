@@ -4,6 +4,7 @@ import { useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toggleStarterKitCompletion } from '@/actions/progression'
 import { Check } from 'lucide-react'
+import { formatDate } from './shared'
 import type { ProgressionStarterKitCompletion, ProgressionStarterKitItem } from '@/db/schema'
 
 export function StarterKitChecklist({ userId, items, canEdit }: {
@@ -45,7 +46,7 @@ export function StarterKitChecklist({ userId, items, canEdit }: {
                 <span className={complete ? 'text-slate-500 line-through' : 'text-slate-800'}>{item.label}</span>
               </label>
               {item.tracksExpiry && completion?.expiresAt && (
-                <span className="shrink-0 text-xs text-slate-400">Expires {new Date(completion.expiresAt).toLocaleDateString()}</span>
+                <span className="shrink-0 text-xs text-slate-400">Expires {formatDate(completion.expiresAt)}</span>
               )}
             </li>
           )
