@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, numeric, timestamp, boolean, integer, doublePrecision } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, numeric, timestamp, boolean, integer, doublePrecision, date } from 'drizzle-orm/pg-core'
 import { users } from './users'
 import { salesMembers } from './salesMembers'
 import { salesRegions } from './salesRegions'
@@ -57,6 +57,13 @@ export const customerAccounts = pgTable('customer_accounts', {
   // Geocoded coordinates (cached from address)
   lat: doublePrecision('lat'),
   lng: doublePrecision('lng'),
+  // Admin override of the automatic account health classification, with the reason.
+  healthOverride: text('health_override', { enum: ['growth', 'healthy', 'developing', 'tasting_dependent', 'stalled', 'unprofitable'] }),
+  healthOverrideReason: text('health_override_reason'),
+  healthOverrideByUserId: uuid('health_override_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  healthOverrideAt: timestamp('health_override_at', { withTimezone: true }),
+  // Admin-set relationship start date, shown near the account name. Falls back to createdAt/first order when unset.
+  memberSince: date('member_since'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

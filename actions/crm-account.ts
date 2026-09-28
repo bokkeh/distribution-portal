@@ -33,6 +33,31 @@ function getPrimaryRole(session: Awaited<ReturnType<typeof requireRole>>) {
   return roles.find((role) => INTERNAL_ACCOUNT_ROLES.includes(role as typeof INTERNAL_ACCOUNT_ROLES[number])) ?? session.user.role ?? 'system'
 }
 
+export async function setAccountMemberSince(accountId: string, memberSince: string | null): Promise<{ error?: string; success?: boolean }> {
+  const session = await requireRole('admin', 'staff')
+
+  if (memberSince && !/^\d{4}-\d{2}-\d{2}$/.test(memberSince)) {
+    return { error: 'Enter a valid date.' }
+  }
+
+  const [existing] = await db.select({ memberSince: customerAccounts.memberSince }).from(customerAccounts).where(eq(customerAccounts.id, accountId)).limit(1)
+  if (!existing) return { error: 'Account not found.' }
+
+  await db.update(customerAccounts).set({ memberSince }).where(eq(customerAccounts.id, accountId))
+
+  await logActivityEvent({
+    entityType: 'account',
+    entityId: accountId,
+    actorUserId: session.user.id,
+    kind: 'account_member_since_updated',
+    title: 'Member Since updated',
+    metadata: { previousValue: existing.memberSince, newValue: memberSince },
+  })
+
+  revalidateAccountPaths(accountId)
+  return { success: true }
+}
+
 function getErrorText(error: unknown) {
   return error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
 }
@@ -267,6 +292,12 @@ export async function upsertAccountInventoryItem(formData: FormData) {
   const casesInput = normalizeWhitespace(formData.get('casesOnHand')) || '0'
   const bottlesInput = normalizeWhitespace(formData.get('bottlesOnHand')) || '0'
   const inventoryDateInput = normalizeWhitespace(formData.get('inventoryDate'))
+  const notes = normalizeWhitespace(formData.get('notes')) || null
+  const MANUAL_ACTIVITY_TYPES = ['call_inventory_check', 'stop_in_inventory_check', 'manual_adjustment'] as const
+  const activityTypeInput = normalizeWhitespace(formData.get('activityType'))
+  const activityType = (MANUAL_ACTIVITY_TYPES as readonly string[]).includes(activityTypeInput)
+    ? (activityTypeInput as typeof MANUAL_ACTIVITY_TYPES[number])
+    : 'manual_adjustment'
 
   if (!accountId || !productId) return { error: 'Account and product are required.' }
 
@@ -329,9 +360,11 @@ export async function upsertAccountInventoryItem(formData: FormData) {
     sku: product.sku,
     productName: product.name,
     changeType,
+    activityType,
     deltaBottles,
     recordedBottlesOnHand: bottles,
     effectiveAt,
+    notes,
     actorUserId: session.user.id,
   })
 
@@ -373,6 +406,10 @@ export async function addAccountInventoryHistoryEntry(formData: FormData) {
   const bottlesInput = normalizeWhitespace(formData.get('bottlesOnHand')) || '0'
   const inventoryDateInput = normalizeWhitespace(formData.get('inventoryDate'))
   const notes = normalizeWhitespace(formData.get('notes')) || null
+  const historyActivityTypeInput = normalizeWhitespace(formData.get('activityType'))
+  const historyActivityType = (['call_inventory_check', 'stop_in_inventory_check', 'manual_adjustment'] as readonly string[]).includes(historyActivityTypeInput)
+    ? (historyActivityTypeInput as 'call_inventory_check' | 'stop_in_inventory_check' | 'manual_adjustment')
+    : 'manual_adjustment'
 
   if (!accountId || !productId) return { error: 'Account and product are required.' }
 
@@ -417,6 +454,7 @@ export async function addAccountInventoryHistoryEntry(formData: FormData) {
     sku: product.sku,
     productName: product.name,
     changeType: existingItem ? 'manual_update' : 'manual_add',
+    activityType: historyActivityType,
     deltaBottles: 0,
     recordedBottlesOnHand: bottles,
     effectiveAt,

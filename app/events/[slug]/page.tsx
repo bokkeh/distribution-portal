@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Image from 'next/image'
 import Link from 'next/link'
-import { and, asc, eq, inArray } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { CalendarDays, Camera, Clock, MapPin, Navigation, UserRound } from 'lucide-react'
 import { db } from '@/db'
@@ -13,9 +13,31 @@ import { PublicEventRsvpForm } from '@/components/events/PublicEventRsvpForm'
 import { formatEventDateTime, getDirectionsUrl, getEventAddress } from '@/lib/events/utils'
 
 async function getPublicEvent(slug: string) {
-  const [row] = await db.select({ event: events, organizerName: users.name }).from(events).leftJoin(users, eq(events.organizerUserId, users.id)).where(eq(events.slug, slug)).limit(1)
-  if (!row || row.event.visibility === 'draft') return null
-  return row
+  const [row] = await db.select({
+    event: {
+      id: events.id,
+      slug: events.slug,
+      title: events.title,
+      description: events.description,
+      startAt: events.startAt,
+      endAt: events.endAt,
+      timeZone: events.timeZone,
+      status: events.status,
+      visibility: events.visibility,
+      venueName: events.venueName,
+      addressLine1: events.addressLine1,
+      addressLine2: events.addressLine2,
+      city: events.city,
+      state: events.state,
+      postalCode: events.postalCode,
+      country: events.country,
+      rsvpOptionalFields: events.rsvpOptionalFields,
+      attendeeUploadPolicy: events.attendeeUploadPolicy,
+    },
+    organizerName: users.name,
+  }).from(events).leftJoin(users, eq(events.organizerUserId, users.id)).where(and(eq(events.slug, slug), isNull(events.archivedAt))).limit(1)
+  if (!row || row.event.visibility === 'draft' || !row.event.startAt || !row.event.endAt) return null
+  return { ...row, event: { ...row.event, startAt: row.event.startAt, endAt: row.event.endAt } }
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {

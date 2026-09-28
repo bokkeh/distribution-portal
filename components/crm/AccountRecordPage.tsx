@@ -1,9 +1,13 @@
 ﻿import Link from 'next/link'
-import { and, asc, count, desc, eq, inArray, or } from 'drizzle-orm'
+import { and, asc, count, desc, eq, inArray, isNull, or } from 'drizzle-orm'
 import { db } from '@/db'
-import { contacts, crmPipelineStages, deliveries, deliveryStops, eventParticipants, events, invoices, orders, salesMembers, salesRegions, smsMessages, tastingReports, tastings, users } from '@/db/schema'
+import { contacts, crmPipelineStages, deliveries, deliveryStops, eventParticipants, events, historicalOrders, invoices, orders, products, salesMembers, salesRegions, smsMessages, tastingReports, tastings, users } from '@/db/schema'
 import { syncToHubSpot } from '@/actions/crm'
 import { getCRMAccountDetail } from '@/lib/crm/account-read'
+import { getLifetimeOrderSummary } from '@/lib/crm/lifetime-summary'
+import { getAccountTastingSummary } from '@/lib/tastings/read'
+import { AccountMemberSinceEditor } from '@/components/crm/AccountMemberSinceEditor'
+import { AccountHistoricalOrdersCard } from '@/components/crm/AccountHistoricalOrdersCard'
 import {
   getAccountActivityFeed,
   getAccountInventoryHistory,
@@ -230,6 +234,8 @@ export async function AccountRecordPage({
         recentInvoices: Array<{ id: string; invoiceNumber: string; dueDate: string | null; total: string; status: string }>
         recentDeliveries: Array<{ deliveryId: string; status: string; weekStartDate: string; stopStatus: string; completedAt: Date | null; proofOfDeliveryUrl: string | null; shelfPhotoUrl: string | null }>
         recentTastings: Array<{ id: string; eventName: string; status: string; scheduledAt: Date; endAt: Date | null; reportSubmittedAt: Date | null }>
+        historicalOrders?: Array<{ id: string; orderDate: Date; productName: string | null; cases: string; bottles: string; orderValue: string | null; notes: string | null; source: string }>
+        historicalProductOptions?: Awaited<ReturnType<typeof getAvailableInventoryProducts>>
       }
     | null = null
 
@@ -354,7 +360,7 @@ export async function AccountRecordPage({
       mediaItems: mediaItems.status === 'fulfilled' ? mediaItems.value : [],
     }
 
-    const recentEvents = await db.select({ id: events.id, title: events.title, status: events.status, startAt: events.startAt, attendeeCount: count(eventParticipants.id) }).from(events).leftJoin(eventParticipants, eq(eventParticipants.eventId, events.id)).where(eq(events.accountId, accountId)).groupBy(events.id).orderBy(desc(events.startAt)).limit(6)
+    const recentEvents = await db.select({ id: events.id, title: events.title, status: events.status, startAt: events.startAt, attendeeCount: count(eventParticipants.id) }).from(events).leftJoin(eventParticipants, eq(eventParticipants.eventId, events.id)).where(and(eq(events.accountId, accountId), isNull(events.archivedAt))).groupBy(events.id).orderBy(desc(events.startAt)).limit(6)
 
     const smartInsights = await generateAccountSmartInsights({
       account,
@@ -450,7 +456,42 @@ export async function AccountRecordPage({
     visibleSalesMemberIds: null,
     viewerLabel: account.companyName,
   }
-  const salesIntelligence: AccountIntelligence | null = await loadAccountIntelligence(accountId, intelligenceScope).catch(() => null)
+  const [salesIntelligence, tastingSummary, lifetimeSummary] = await Promise.all([
+    loadAccountIntelligence(accountId, intelligenceScope).catch(() => null),
+    getAccountTastingSummary(accountId).catch(() => ({ nextTasting: null, associatedTaster: null })),
+    getLifetimeOrderSummary(accountId).catch(() => ({ lifetimeOrderCount: 0, firstOrderDate: null, lastOrderDate: null, averageOrderValue: null })),
+  ])
+
+  if (tab === 'orders') {
+    const historicalOrderRows = await db
+      .select({
+        id: historicalOrders.id,
+        orderDate: historicalOrders.orderDate,
+        productId: historicalOrders.productId,
+        productNameFreeform: historicalOrders.productNameFreeform,
+        productName: products.name,
+        cases: historicalOrders.cases,
+        bottles: historicalOrders.bottles,
+        orderValue: historicalOrders.orderValue,
+        notes: historicalOrders.notes,
+        source: historicalOrders.source,
+      })
+      .from(historicalOrders)
+      .leftJoin(products, eq(historicalOrders.productId, products.id))
+      .where(eq(historicalOrders.accountId, accountId))
+      .orderBy(desc(historicalOrders.orderDate))
+
+    const historicalProductOptions = await getAvailableInventoryProducts()
+
+    ordersData = {
+      ...(ordersData as NonNullable<typeof ordersData>),
+      historicalOrders: historicalOrderRows.map((row) => ({
+        ...row,
+        productName: row.productName ?? row.productNameFreeform,
+      })),
+      historicalProductOptions,
+    }
+  }
 
   if (tab === 'inventory') {
     const [inventoryItems, inventoryHistory, productOptions] = await Promise.all([
@@ -524,6 +565,27 @@ export async function AccountRecordPage({
                 {(account.city || account.state) ? (
                   <p className="mt-1 text-sm text-muted-foreground">{[account.city, account.state].filter(Boolean).join(', ')}</p>
                 ) : null}
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1">
+                  <AccountMemberSinceEditor
+                    accountId={account.id}
+                    memberSince={account.memberSince}
+                    suggestedDate={lifetimeSummary.firstOrderDate}
+                    canEdit={mode !== 'sales'}
+                  />
+                  {tastingSummary.associatedTaster ? (
+                    <p className="text-xs text-slate-500">
+                      Taster:{' '}
+                      {mode === 'admin' ? (
+                        <Link href={`/admin/users/${tastingSummary.associatedTaster.userId}`} className="font-medium text-blue-600 hover:underline">
+                          {tastingSummary.associatedTaster.name}
+                        </Link>
+                      ) : (
+                        <span className="font-medium text-slate-700">{tastingSummary.associatedTaster.name}</span>
+                      )}
+                      {' '}({formatDate(tastingSummary.associatedTaster.scheduledAt)}, {tastingSummary.associatedTaster.status})
+                    </p>
+                  ) : null}
+                </div>
               </div>
             </div>
           </div>
@@ -556,7 +618,6 @@ export async function AccountRecordPage({
         const creditAvailable = Math.max(0, Number(account.creditLimit ?? 0) - Number(account.balance ?? 0))
         const inventoryBottlesTotal = overviewData.inventoryItems.reduce((sum, item) => sum + Number(item.bottlesOnHand || 0), 0)
         const latestInventoryUpdate = overviewData.inventoryItems[0]?.updatedAt ?? null
-        const memberSince = overviewData.firstOrderDate ?? account.createdAt
         const accountHealthSignals = [
           Number(account.balance ?? 0) > 0 ? { label: 'Outstanding balance', ok: false } : { label: 'No outstanding balance', ok: true },
           overviewData.recentTexts.some((message) => message.direction === 'inbound') ? { label: 'Open text activity', ok: false } : { label: 'No open text activity', ok: true },
@@ -571,8 +632,20 @@ export async function AccountRecordPage({
             <div className="grid grid-cols-2 gap-4 xl:grid-cols-5">
               <Card><CardContent className="p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Balance Due</p><p className="mt-1 text-2xl font-bold text-red-600">{formatCurrency(account.balance ?? '0')}</p></CardContent></Card>
               <Card><CardContent className="p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Credit Available</p><p className="mt-1 text-2xl font-bold">{formatCurrency(creditAvailable.toFixed(2))}</p><p className="mt-0.5 text-xs text-muted-foreground">of {formatCurrency(account.creditLimit ?? '0')} limit</p></CardContent></Card>
-              <Card><CardContent className="p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Total Orders</p><p className="mt-1 text-2xl font-bold">{overviewData.orderCount.total}</p></CardContent></Card>
-              <Card><CardContent className="p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Member Since</p><p className="mt-1 text-lg font-bold" suppressHydrationWarning>{formatDate(memberSince)}</p></CardContent></Card>
+              <Card><CardContent className="p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Total Orders</p><p className="mt-1 text-2xl font-bold">{overviewData.orderCount.total}</p>{lifetimeSummary.lifetimeOrderCount > overviewData.orderCount.total ? <p className="mt-0.5 text-xs text-muted-foreground">{lifetimeSummary.lifetimeOrderCount} lifetime incl. historical</p> : null}</CardContent></Card>
+              <Card>
+                <CardContent className="p-4">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Next Tasting</p>
+                  {tastingSummary.nextTasting ? (
+                    <>
+                      <p className="mt-1 text-lg font-bold" suppressHydrationWarning>{formatDate(tastingSummary.nextTasting.scheduledAt)}</p>
+                      <Badge variant="outline" className="mt-1 text-[10px] capitalize">{tastingSummary.nextTasting.status}</Badge>
+                    </>
+                  ) : (
+                    <p className="mt-1 text-lg font-bold text-slate-400">None Scheduled</p>
+                  )}
+                </CardContent>
+              </Card>
               <Card><CardContent className="p-4"><p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Inventory On Hand</p><p className="mt-1 text-2xl font-bold">{inventoryBottlesTotal.toFixed(2)} bottles</p><p className="mt-0.5 text-xs text-muted-foreground">Across {overviewData.inventoryItems.length} products</p>{latestInventoryUpdate ? <p className="mt-0.5 text-xs text-muted-foreground" suppressHydrationWarning>Last checked {formatDate(latestInventoryUpdate)}</p> : null}</CardContent></Card>
             </div>
 
@@ -770,7 +843,7 @@ export async function AccountRecordPage({
 
       {tab === 'economics' ? (
         salesIntelligence ? (
-          <AccountEconomicsSection intelligence={salesIntelligence} mode={mode} basePath={basePath} />
+          <AccountEconomicsSection intelligence={salesIntelligence} mode={mode} basePath={basePath} canOverride={mode === 'admin'} />
         ) : (
           <Card>
             <CardContent className="py-12 text-center text-sm text-muted-foreground">
@@ -793,6 +866,7 @@ export async function AccountRecordPage({
       ) : null}
 
       {tab === 'orders' && ordersData ? (
+        <div className="space-y-6">
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
           <AccountOrderHistoryPanel
             className="xl:col-span-2"
@@ -818,6 +892,13 @@ export async function AccountRecordPage({
             <CardHeader className="pb-3"><CardTitle>Taster Reports</CardTitle></CardHeader>
             <CardContent>{ordersData.recentTastings.length === 0 ? <p className="text-sm text-slate-500">No tastings linked to this account yet.</p> : <div className="space-y-2">{ordersData.recentTastings.map((tasting) => <div key={tasting.id} className="rounded-xl border border-slate-100 px-3 py-3"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-medium text-slate-900">{tasting.eventName}</p><p className="text-xs text-muted-foreground" suppressHydrationWarning>{formatDate(tasting.scheduledAt)}</p><div className="mt-2 flex flex-wrap items-center gap-2"><Badge variant={tasting.reportSubmittedAt ? 'success' : 'warning'} className="text-xs">{tasting.reportSubmittedAt ? 'Report submitted' : 'Report pending'}</Badge><Badge variant="secondary" className="text-xs">{tasting.status}</Badge></div></div><Link href={getTastingReportPath(mode, tasting.id)} className="text-xs font-medium text-blue-600 hover:underline">{getTastingReportLinkLabel(mode, Boolean(tasting.reportSubmittedAt))}</Link></div></div>)}</div>}</CardContent>
           </Card>
+        </div>
+        <AccountHistoricalOrdersCard
+          accountId={account.id}
+          historicalOrders={ordersData.historicalOrders ?? []}
+          products={ordersData.historicalProductOptions ?? []}
+          canManage={mode === 'admin' || mode === 'staff'}
+        />
         </div>
       ) : null}
 

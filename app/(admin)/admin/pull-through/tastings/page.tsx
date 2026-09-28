@@ -33,6 +33,7 @@ export default async function TastingPerformancePage({
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const session = await requireFeature('tastings', 'admin', 'sales_manager')
+  const canEditSettings = (session.user.roles ?? [session.user.role]).includes('admin')
   const scope = await resolvePullThroughScope(session)
   const params = await searchParams
   const basePath = pullThroughBasePath(scope.mode)
@@ -70,6 +71,7 @@ export default async function TastingPerformancePage({
       basePath={basePath}
       totals={totals}
       settings={dataset.settings}
+      canEditSettings={canEditSettings}
       breakdowns={{
         taster: breakdownTastings(tastings, rowsByAccount, 'taster', (key, group) =>
           group === 'taster' ? `${basePath}/tasters?taster=${encodeURIComponent(allTastings.find((t) => (t.tasterUserId ?? 'unassigned') === key)?.tasterName ?? 'Unassigned')}` : hrefFor(key, group),

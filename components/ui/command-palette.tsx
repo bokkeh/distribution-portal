@@ -12,6 +12,8 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
+type NavIcon = React.ComponentType<{ className?: string }>
+
 type SearchResult = {
   id: string
   label: string
@@ -71,7 +73,16 @@ const typeHref: Record<SearchResult['type'], (id: string) => string> = {
   user: (id) => `/admin/users/${id}`,
 }
 
-export function CommandPalette() {
+export function CommandPalette({
+  navItems,
+  enableRecordSearch = false,
+  pinnedHrefs = [],
+}: {
+  navItems?: Array<{ href: string; label: string; icon: NavIcon }>
+  enableRecordSearch?: boolean
+  pinnedHrefs?: string[]
+} = {}) {
+  const items = navItems ?? NAV_ITEMS
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -92,12 +103,12 @@ export function CommandPalette() {
   }, [])
 
   const search = useCallback(async (q: string) => {
-    if (q.trim().length < 2) { setResults([]); return }
+    if (!enableRecordSearch || q.trim().length < 2) { setResults([]); return }
     try {
       const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`)
       if (res.ok) setResults(await res.json())
     } catch { /* ignore */ }
-  }, [])
+  }, [enableRecordSearch])
 
   useEffect(() => {
     const t = setTimeout(() => startTransition(() => { search(query) }), 200)
@@ -112,8 +123,10 @@ export function CommandPalette() {
   }
 
   const filteredNav = query.length < 1
-    ? NAV_ITEMS
-    : NAV_ITEMS.filter(item => item.label.toLowerCase().includes(query.toLowerCase()))
+    ? items
+    : items.filter(item => item.label.toLowerCase().includes(query.toLowerCase()))
+  const favoriteNav = query.length < 1 ? filteredNav.filter(item => pinnedHrefs.includes(item.href)) : []
+  const otherNav = query.length < 1 ? filteredNav.filter(item => !pinnedHrefs.includes(item.href)) : filteredNav
 
   return (
     <>
@@ -136,7 +149,7 @@ export function CommandPalette() {
                 <Search className="w-4 h-4 text-slate-400 shrink-0" />
                 <Command.Input
                   autoFocus
-                  placeholder="Search orders, accounts, tastings…"
+                  placeholder={enableRecordSearch ? 'Search orders, accounts, tastings…' : 'Search navigation…'}
                   value={query}
                   onValueChange={setQuery}
                   className="flex-1 text-sm bg-transparent outline-none placeholder:text-slate-400"
@@ -172,9 +185,32 @@ export function CommandPalette() {
                   </Command.Group>
                 )}
 
-                {filteredNav.length > 0 && (
+                {favoriteNav.length > 0 && (
+                  <Command.Group heading={<span className="text-[10px] font-semibold uppercase tracking-wider text-amber-600 px-2">Favorites</span>}>
+                    {favoriteNav.map(item => {
+                      const Icon = item.icon
+                      return (
+                        <Command.Item
+                          key={item.href}
+                          value={item.href}
+                          onSelect={() => navigate(item.href)}
+                          className={cn(
+                            'flex items-center gap-3 px-3 py-2 rounded-xl text-sm cursor-pointer',
+                            'aria-selected:bg-slate-100 hover:bg-slate-50 transition-colors'
+                          )}
+                        >
+                          <Icon className="w-4 h-4 text-slate-400 shrink-0" />
+                          <span className="flex-1 text-slate-700">{item.label}</span>
+                          <ArrowRight className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                        </Command.Item>
+                      )
+                    })}
+                  </Command.Group>
+                )}
+
+                {otherNav.length > 0 && (
                   <Command.Group heading={<span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-2">Navigation</span>}>
-                    {filteredNav.map(item => {
+                    {otherNav.map(item => {
                       const Icon = item.icon
                       return (
                         <Command.Item

@@ -5,12 +5,14 @@ import { getBellNotificationsForUser } from '@/lib/notifications/in-app'
 import { PortalTopBar } from '@/components/layout/PortalTopBar'
 import { ViewAsProvider } from '@/components/admin/ViewAsProvider'
 import { auth } from '@/lib/auth/config'
+import { getPinnedNavKeys } from '@/actions/nav-preferences'
 
 export default async function StaffLayout({ children }: { children: React.ReactNode }) {
   const session = await requireAdminOrStaff()
-  const [identitySession, { notifications, unreadCount }] = await Promise.all([
+  const [identitySession, { notifications, unreadCount }, pinnedNavKeys] = await Promise.all([
     auth(),
     getBellNotificationsForUser(session.user.id),
+    getPinnedNavKeys(session.user.id),
   ])
   const identityUser = identitySession?.user ?? session.user
   const canSwitchViews = (identityUser.roles ?? [identityUser.role]).includes('admin')
@@ -25,6 +27,7 @@ export default async function StaffLayout({ children }: { children: React.ReactN
         userName={identityUser.name}
         userAvatarUrl={identityUser.image}
         canSwitchViews={canSwitchViews}
+        pinnedNavKeys={pinnedNavKeys}
       />
       <main className="flex-1 overflow-auto pt-14 md:pt-0">
         <TestSmsBar />

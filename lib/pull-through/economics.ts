@@ -84,7 +84,7 @@ export function classifyOrderAttribution(
     const movedOutside =
       previousBottles != null ? Math.max(0, previousBottles - (soldAtTasting ?? 0)) : null
 
-    const override = overrides.get(order.id)
+    const override = overrides.get(order.id) ?? order.attributionOverride
     if (override) {
       return {
         ...order,

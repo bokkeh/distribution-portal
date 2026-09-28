@@ -33,7 +33,7 @@ export function EventCreateDrawer({ accounts, organizers }: { accounts: AccountO
           <button type="button" aria-label="Close event form" className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
           <aside role="dialog" aria-modal="true" aria-labelledby="create-event-title" className="relative h-full w-full max-w-2xl overflow-y-auto bg-[#f7f4ef] shadow-2xl">
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4">
-              <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#ff5a00]">Create → Promote → Gather</p><h2 id="create-event-title" className="font-display text-2xl font-bold uppercase">Add Event</h2></div>
+              <div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#ff5a00]">Plan internally → Publish optionally</p><h2 id="create-event-title" className="font-display text-2xl font-bold uppercase">Add Event</h2></div>
               <Button type="button" variant="ghost" size="icon" onClick={() => setOpen(false)} aria-label="Close"><X className="h-5 w-5" /></Button>
             </div>
             <form action={createEvent} className="space-y-7 p-5 sm:p-7">
@@ -44,12 +44,13 @@ export function EventCreateDrawer({ accounts, organizers }: { accounts: AccountO
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2"><Label htmlFor="new-event-type">Event type</Label><select id="new-event-type" name="eventType" defaultValue="community_event" className="w-full">{EVENT_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
                   <div className="space-y-2"><Label htmlFor="new-event-organizer">Organizer / owner</Label><select id="new-event-organizer" name="organizerUserId" defaultValue="" className="w-full"><option value="">Me</option>{organizers.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select></div>
-                  <div className="space-y-2"><Label htmlFor="new-event-start-date">Start date</Label><Input id="new-event-start-date" name="startDate" type="date" required defaultValue={dateValue(7)} /></div>
-                  <div className="space-y-2"><Label htmlFor="new-event-start-time">Start time</Label><Input id="new-event-start-time" name="startTime" type="time" required defaultValue="18:00" /></div>
-                  <div className="space-y-2"><Label htmlFor="new-event-end-date">End date</Label><Input id="new-event-end-date" name="endDate" type="date" required defaultValue={dateValue(7)} /></div>
-                  <div className="space-y-2"><Label htmlFor="new-event-end-time">End time</Label><Input id="new-event-end-time" name="endTime" type="time" required defaultValue="21:00" /></div>
+                  <div className="space-y-2"><Label htmlFor="new-event-start-date">Event date</Label><Input id="new-event-start-date" name="startDate" type="date" defaultValue={dateValue(7)} /></div>
+                  <div className="space-y-2"><Label htmlFor="new-event-start-time">Start time</Label><Input id="new-event-start-time" name="startTime" type="time" defaultValue="18:00" /></div>
+                  <div className="space-y-2"><Label htmlFor="new-event-end-date">End date</Label><Input id="new-event-end-date" name="endDate" type="date" defaultValue={dateValue(7)} /></div>
+                  <div className="space-y-2"><Label htmlFor="new-event-end-time">End time</Label><Input id="new-event-end-time" name="endTime" type="time" defaultValue="21:00" /></div>
                   <div className="space-y-2 sm:col-span-2"><Label htmlFor="new-event-time-zone">Time zone</Label><select id="new-event-time-zone" name="timeZone" defaultValue="America/New_York" className="w-full"><option value="America/New_York">Eastern</option><option value="America/Chicago">Central</option><option value="America/Denver">Mountain</option><option value="America/Los_Angeles">Pacific</option></select></div>
                 </div>
+                <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">Name, date/time, and location create an Upcoming internal event. If any are missing, the event is saved visibly under Drafts with the missing items listed.</p>
               </section>
 
               <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5">
@@ -79,7 +80,7 @@ export function EventCreateDrawer({ accounts, organizers }: { accounts: AccountO
                 <div className="grid gap-2 sm:grid-cols-2">{RSVP_OPTIONAL_FIELDS.map(([value, label]) => <label key={value} className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm"><input type="checkbox" name="rsvpOptionalFields" value={value} defaultChecked={value === 'guest_names' || value === 'marketing_consent' || value === 'sms_consent'} />{label}</label>)}</div>
                 <div className="space-y-2"><Label htmlFor="new-event-source">Source / channel</Label><Input id="new-event-source" name="sourceChannel" placeholder="Instagram, partner newsletter, QR poster…" /></div>
               </section>
-              <div className="sticky bottom-0 flex justify-end gap-3 border-t border-slate-200 bg-[#f7f4ef] py-4"><Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button type="submit" className="bg-[#ff5a00] hover:bg-[#e65000]">Create draft event</Button></div>
+              <div className="sticky bottom-0 flex justify-end gap-3 border-t border-slate-200 bg-[#f7f4ef] py-4"><Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button><Button type="submit" className="bg-[#ff5a00] hover:bg-[#e65000]">Create event</Button></div>
             </form>
           </aside>
         </div>

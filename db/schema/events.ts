@@ -1,6 +1,8 @@
-import { boolean, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
+import { boolean, index, integer, jsonb, numeric, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 import { communityContacts } from './communityContacts'
+import { contacts } from './contacts'
 import { customerAccounts } from './customers'
+import { products } from './products'
 import { users } from './users'
 
 export const events = pgTable('events', {
@@ -11,8 +13,8 @@ export const events = pgTable('events', {
   eventType: text('event_type', {
     enum: ['party', 'pop_up', 'festival', 'community_event', 'retail_activation', 'partner_event', 'dinner', 'sponsorship', 'sports_event', 'trade_event', 'other'],
   }).notNull().default('community_event'),
-  startAt: timestamp('start_at', { withTimezone: true }).notNull(),
-  endAt: timestamp('end_at', { withTimezone: true }).notNull(),
+  startAt: timestamp('start_at', { withTimezone: true }),
+  endAt: timestamp('end_at', { withTimezone: true }),
   timeZone: text('time_zone').notNull().default('America/New_York'),
   status: text('status', { enum: ['draft', 'scheduled', 'cancelled', 'completed'] }).notNull().default('draft'),
   visibility: text('visibility', { enum: ['draft', 'public', 'link_only', 'closed'] }).notNull().default('draft'),
@@ -31,8 +33,51 @@ export const events = pgTable('events', {
   venuePhone: text('venue_phone'),
   venueWebsite: text('venue_website'),
   sourceChannel: text('source_channel'),
+  teamArrivalAt: timestamp('team_arrival_at', { withTimezone: true }),
+  setupAt: timestamp('setup_at', { withTimezone: true }),
+  breakdownAt: timestamp('breakdown_at', { withTimezone: true }),
+  parkingInstructions: text('parking_instructions'),
+  unloadingInstructions: text('unloading_instructions'),
+  internalLogisticsNotes: text('internal_logistics_notes'),
+  dressCode: text('dress_code'),
+  planningPocContactId: uuid('planning_poc_contact_id').references(() => contacts.id, { onDelete: 'set null' }),
+  planningPocName: text('planning_poc_name'),
+  planningPocEmail: text('planning_poc_email'),
+  planningPocPhone: text('planning_poc_phone'),
+  dayOfPocContactId: uuid('day_of_poc_contact_id').references(() => contacts.id, { onDelete: 'set null' }),
+  dayOfPocName: text('day_of_poc_name'),
+  dayOfPocEmail: text('day_of_poc_email'),
+  dayOfPocPhone: text('day_of_poc_phone'),
+  expectedAttendees: integer('expected_attendees'),
+  estimatedPeopleServed: integer('estimated_people_served'),
+  actualPeopleServed: integer('actual_people_served'),
+  cocktailsServed: jsonb('cocktails_served').$type<string[]>().notNull().default([]),
+  productIds: jsonb('product_ids').$type<string[]>().notNull().default([]),
+  estimatedProductRequired: text('estimated_product_required'),
+  sellingProduct: boolean('selling_product').notNull().default(false),
+  samplingProduct: boolean('sampling_product').notNull().default(false),
+  wisherProvides: jsonb('wisher_provides').$type<string[]>().notNull().default([]),
+  partnerProvides: jsonb('partner_provides').$type<string[]>().notNull().default([]),
+  assignedTeamMemberIds: jsonb('assigned_team_member_ids').$type<string[]>().notNull().default([]),
+  donationEnabled: boolean('donation_enabled').notNull().default(false),
+  donationType: text('donation_type'),
+  donationValue: numeric('donation_value', { precision: 12, scale: 2 }),
+  donationProductId: uuid('donation_product_id').references(() => products.id, { onDelete: 'set null' }),
+  donationQuantity: numeric('donation_quantity', { precision: 10, scale: 2 }),
+  donationNotes: text('donation_notes'),
+  productUsed: text('product_used'),
+  bottlesUsed: numeric('bottles_used', { precision: 10, scale: 2 }),
+  casesUsed: numeric('cases_used', { precision: 10, scale: 2 }),
+  productRemaining: text('product_remaining'),
+  salesGenerated: numeric('sales_generated', { precision: 12, scale: 2 }),
+  leadsCollected: integer('leads_collected'),
+  internalRecap: text('internal_recap'),
+  whatWorked: text('what_worked'),
+  whatDidnt: text('what_didnt'),
+  followUpActions: text('follow_up_actions'),
   rsvpOptionalFields: jsonb('rsvp_optional_fields').$type<string[]>().notNull().default([]),
   attendeeUploadPolicy: text('attendee_upload_policy', { enum: ['disabled', 'immediate', 'approval', 'private'] }).notNull().default('approval'),
+  archivedAt: timestamp('archived_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
@@ -41,6 +86,7 @@ export const events = pgTable('events', {
   index('events_status_idx').on(table.status),
   index('events_account_idx').on(table.accountId),
   index('events_organizer_idx').on(table.organizerUserId),
+  index('events_archived_at_idx').on(table.archivedAt),
 ])
 
 export const eventParticipants = pgTable('event_participants', {
@@ -116,9 +162,13 @@ export const eventCommunications = pgTable('event_communications', {
 export const eventReminders = pgTable('event_reminders', {
   id: uuid('id').primaryKey().defaultRandom(),
   eventId: uuid('event_id').notNull().references(() => events.id, { onDelete: 'cascade' }),
-  reminderType: text('reminder_type', { enum: ['seven_days', 'twenty_four_hours', 'two_hours', 'thank_you'] }).notNull(),
+  reminderType: text('reminder_type', { enum: ['seven_days', 'twenty_four_hours', 'morning_of', 'two_hours', 'thank_you'] }).notNull(),
   offsetMinutes: integer('offset_minutes').notNull(),
   channels: jsonb('channels').$type<Array<'email' | 'sms'>>().notNull().default(['email']),
+  audience: text('audience', { enum: ['participants', 'internal'] }).notNull().default('participants'),
+  includeOwner: boolean('include_owner').notNull().default(false),
+  includeAssignedTeam: boolean('include_assigned_team').notNull().default(false),
+  recipientUserIds: jsonb('recipient_user_ids').$type<string[]>().notNull().default([]),
   enabled: boolean('enabled').notNull().default(false),
   lastSentAt: timestamp('last_sent_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

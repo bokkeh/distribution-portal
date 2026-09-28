@@ -4,7 +4,7 @@ import { and, eq, gte, lte } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { db } from '@/db'
-import { customerAccounts, salesMembers, tasterAvailability, tasterInvoices, tastingReportPhotoDrafts, tastingReports, tastings, users } from '@/db/schema'
+import { customerAccounts, salesMembers, tasterAvailability, tasterInvoices, tastingReportPhotoDrafts, tastingReports, tastings, users, type TastingObjectiveValue } from '@/db/schema'
 import { requireFeature, requireRole } from '@/lib/auth/session'
 import { notify } from '@/lib/notifications/dispatch'
 import { sendTasterInvoiceNotification } from '@/lib/resend/client'
@@ -19,10 +19,14 @@ import {
 } from '@/lib/tastings/sms-series'
 import { getTastingById, getTastingsForViewWithFallback } from '@/lib/tastings/read'
 import { syncTastingReportInventory } from '@/lib/tastings/account-inventory'
+import { getTastingAvailabilityMonthRange, tastingWindowsOverlap } from '@/lib/tastings/windows'
+import { getAccountTastingLocations } from '@/lib/tastings/locations'
+import { parseTastingObjectiveFields } from '@/lib/tastings/objective'
 import { formatEasternDateTime, parseDateTimeInTimeZone } from '@/lib/tastings/time'
 import { logActivityEvent } from '@/lib/activity/log'
 import { getStaffEmailsForNotification } from '@/lib/notifications/recipients'
 import { getUserPreferences } from '@/lib/preferences/read'
+import { CANCELLATION_REASON_OPTIONS, tastingNeedsCoverage, type CancellationReason } from '@/lib/tastings/cancellation'
 
 function tastingRedirectPath(mode: string) {
   return mode === 'staff' ? '/staff/tastings' : '/admin/tastings'
@@ -45,10 +49,6 @@ const ALLOWED_TASTING_TRANSITIONS: Record<TastingStatus, TastingStatus[]> = {
 
 function getTastingEndTime(start: Date, end: Date | null) {
   return end ?? new Date(start.getTime() + DEFAULT_TASTING_DURATION_MS)
-}
-
-function rangesOverlap(startA: Date, endA: Date, startB: Date, endB: Date) {
-  return startA < endB && startB < endA
 }
 
 function getEasternDateKey(value: Date) {
@@ -77,6 +77,8 @@ function isMissingTastingSchedulingColumn(error: unknown) {
     || message.includes('training_day')
     || message.includes('end_at')
     || message.includes('checked_in_at')
+    || message.includes('objective')
+    || message.includes('primary_goal')
     || message.includes('status')
 }
 
@@ -179,6 +181,20 @@ async function insertTastingWithFallback(input: {
   storePhone?: string | null
   trainingDay?: boolean
   notes?: string | null
+  objective?: TastingObjectiveValue | null
+  primaryGoal?: string | null
+  targetBottlesSold?: number | null
+  targetCasesDepleted?: number | null
+  targetReorderQuantity?: number | null
+  estimatedCost?: number | null
+  tasterPay?: number | null
+  expectedRoi?: string | null
+  strategicReason?: string | null
+  expectedOutcome?: string | null
+  estimatedValue?: number | null
+  followUpAction?: string | null
+  decisionAtScheduling?: 'recommended' | 'consider' | 'not_recommended' | null
+  decisionAcknowledgedByUserId?: string | null
 }) {
   const fullValues = {
     customerId: input.customerId,
@@ -195,6 +211,20 @@ async function insertTastingWithFallback(input: {
     storePhone: input.storePhone ?? null,
     trainingDay: input.trainingDay ?? false,
     notes: input.notes ?? null,
+    objective: input.objective ?? null,
+    primaryGoal: input.primaryGoal ?? null,
+    targetBottlesSold: input.targetBottlesSold ?? null,
+    targetCasesDepleted: input.targetCasesDepleted == null ? null : input.targetCasesDepleted.toFixed(2),
+    targetReorderQuantity: input.targetReorderQuantity ?? null,
+    estimatedCost: input.estimatedCost == null ? null : input.estimatedCost.toFixed(2),
+    tasterPay: input.tasterPay == null ? null : input.tasterPay.toFixed(2),
+    expectedRoi: input.expectedRoi ?? null,
+    strategicReason: input.strategicReason ?? null,
+    expectedOutcome: input.expectedOutcome ?? null,
+    estimatedValue: input.estimatedValue == null ? null : input.estimatedValue.toFixed(2),
+    followUpAction: input.followUpAction ?? null,
+    decisionAtScheduling: input.decisionAtScheduling ?? null,
+    decisionAcknowledgedByUserId: input.decisionAcknowledgedByUserId ?? null,
   }
 
   try {
@@ -238,8 +268,7 @@ async function validateTastingWindow({
   excludeTastingId?: string
 }) {
   const requestedDateKey = getEasternDateKey(scheduledAt)
-  const monthStart = `${requestedDateKey.slice(0, 7)}-01`
-  const monthEnd = `${requestedDateKey.slice(0, 7)}-31`
+  const { monthStart, monthEnd } = getTastingAvailabilityMonthRange(requestedDateKey)
   const requestedEnd = getTastingEndTime(scheduledAt, endAt)
 
   const [availabilityRows, assignedTastings, accountTastings] = await Promise.all([
@@ -315,7 +344,7 @@ async function validateTastingWindow({
     if (getEasternDateKey(existingStart) !== requestedDateKey) continue
 
     const existingEnd = getTastingEndTime(existingStart, tasting.endAt ? new Date(tasting.endAt) : null)
-    if (rangesOverlap(scheduledAt, requestedEnd, existingStart, existingEnd)) {
+    if (tastingWindowsOverlap(scheduledAt, requestedEnd, existingStart, existingEnd)) {
       return 'That taster is already booked during the selected time window.'
     }
   }
@@ -340,28 +369,37 @@ async function validateTastingWindow({
 export async function createTasting(formData: FormData) {
   const session = await requireFeature('tastings', 'admin', 'staff')
   const mode = (formData.get('mode') as string) || 'admin'
+  const fromAvailability = formData.get('fromAvailability') === 'true'
   const customerId = formData.get('customerId') as string
   const assignedUserId = formData.get('assignedUserId') as string
   const date = formData.get('date') as string
-  const time = ((formData.get('time') as string) || '17:00').trim()
+  const time = ((formData.get('time') as string) || '16:00').trim()
   const endTime = ((formData.get('endTime') as string) || '').trim()
   const trainingDay = formData.get('trainingDay') === 'on'
   const notes = ((formData.get('notes') as string) || '').trim() || null
 
+  const redirectBase = `${tastingRedirectPath(mode)}?${fromAvailability ? `tab=team&teamView=availability&bookingTaster=${encodeURIComponent(assignedUserId ?? '')}&date=${encodeURIComponent(date ?? '')}&` : 'tab=schedule&'}`
+
   if (!customerId || !assignedUserId || !date) {
-    redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('Store, taster, and date are required.')}`)
+    redirect(`${redirectBase}error=${encodeURIComponent('Store, taster, and date are required.')}`)
+  }
+
+  // Every tasting needs a purpose and a measurable goal before it can be booked.
+  const objectiveInput = parseTastingObjectiveFields(formData)
+  if ('error' in objectiveInput) {
+    redirect(`${redirectBase}error=${encodeURIComponent(objectiveInput.error)}&account=${encodeURIComponent(customerId)}&date=${encodeURIComponent(date)}`)
   }
 
   const scheduledAt = parseDateTimeInTimeZone(date, time)
   if (Number.isNaN(scheduledAt.getTime())) {
-    redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('Choose a valid tasting date and time.')}`)
+    redirect(`${redirectBase}error=${encodeURIComponent('Choose a valid tasting date and time.')}`)
   }
   const endAt = endTime ? parseDateTimeInTimeZone(date, endTime) : null
   if (endAt && Number.isNaN(endAt.getTime())) {
-    redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('Choose a valid tasting end time.')}`)
+    redirect(`${redirectBase}error=${encodeURIComponent('Choose a valid tasting end time.')}`)
   }
   if (endAt && endAt <= scheduledAt) {
-    redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('End time must be after the start time.')}`)
+    redirect(`${redirectBase}error=${encodeURIComponent('End time must be after the start time.')}`)
   }
 
   const [account] = await db
@@ -371,8 +409,12 @@ export async function createTasting(formData: FormData) {
     .limit(1)
 
   if (!account) {
-    redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('Store account not found.')}`)
+    redirect(`${redirectBase}error=${encodeURIComponent('Store account not found.')}`)
   }
+
+  const locationIndex = Number(formData.get('locationIndex') ?? 0)
+  const location = Number.isInteger(locationIndex) ? getAccountTastingLocations(account)[locationIndex] : undefined
+  if (!location) redirect(`${redirectBase}error=${encodeURIComponent('Choose a valid account location.')}`)
 
   const [assignedUser] = await db
     .select({ id: users.id, name: users.name, phone: users.phone, email: users.email, roles: users.roles, active: users.active })
@@ -381,7 +423,7 @@ export async function createTasting(formData: FormData) {
     .limit(1)
 
   if (!assignedUser || !assignedUser.active || !(assignedUser.roles ?? []).includes('taster')) {
-    redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('Choose a valid taster account.')}`)
+    redirect(`${redirectBase}error=${encodeURIComponent('Choose a valid taster account.')}`)
   }
 
   const schedulingError = await validateTastingWindow({
@@ -392,7 +434,7 @@ export async function createTasting(formData: FormData) {
     trainingDay,
   })
   if (schedulingError) {
-    redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent(schedulingError)}`)
+    redirect(`${redirectBase}error=${encodeURIComponent(schedulingError)}`)
   }
   const assignedUserPrefs = await getUserPreferences(assignedUser.id).catch(() => null)
 
@@ -403,16 +445,18 @@ export async function createTasting(formData: FormData) {
     eventName: account.companyName,
     scheduledAt,
     endAt,
-    storeAddress: account.address,
-    storeCity: account.city,
-    storeState: account.state,
-    storeZip: account.zip,
+    storeAddress: location.address,
+    storeCity: location.city,
+    storeState: location.state,
+    storeZip: location.zip,
     storePhone: account.phone,
     trainingDay,
     notes,
+    ...objectiveInput,
+    decisionAcknowledgedByUserId: objectiveInput.decisionAtScheduling === 'not_recommended' ? session.user.id : null,
   })
 
-  const storeAddress = [account.address, account.city, account.state, account.zip].filter(Boolean).join(', ') || 'Store address not provided'
+  const storeAddress = [location.address, location.city, location.state, location.zip].filter(Boolean).join(', ') || 'Store address not provided'
 
   if (assignedUser.phone && (assignedUserPrefs?.smsNotificationsEnabled ?? true)) {
     try {
@@ -461,7 +505,7 @@ export async function createTasting(formData: FormData) {
     body: `${account.companyName} was assigned to ${assignedUser.name}.`,
   })
   redirect(
-    `${tastingRedirectPath(mode)}?success=${encodeURIComponent('Tasting assigned.')}&account=${encodeURIComponent(account.id)}&date=${encodeURIComponent(date)}`,
+    `${tastingRedirectPath(mode)}?${fromAvailability ? 'tab=team&teamView=availability&' : 'tab=schedule&'}success=${encodeURIComponent('Tasting assigned.')}&account=${encodeURIComponent(account.id)}&date=${encodeURIComponent(date)}`,
   )
 }
 
@@ -469,7 +513,7 @@ export async function createTasterBackupTasting(formData: FormData) {
   const session = await requireFeature('tastings', 'taster', 'admin')
   const customerId = ((formData.get('customerId') as string) || '').trim()
   const date = ((formData.get('date') as string) || '').trim()
-  const time = ((formData.get('time') as string) || '17:00').trim()
+  const time = ((formData.get('time') as string) || '16:00').trim()
   const endTime = ((formData.get('endTime') as string) || '').trim()
   const notes = ((formData.get('notes') as string) || '').trim()
   const redirectBase = '/taster/tastings/log-missing'
@@ -569,6 +613,20 @@ export async function updateTastingStatus(formData: FormData) {
   const nextStatus = formData.get('status') as TastingStatus
   const mode = (formData.get('mode') as string) || 'taster'
 
+  let cancellationReason: CancellationReason | null = null
+  let cancellationNote: string | null = null
+  if (nextStatus === 'cancelled') {
+    const rawReason = (formData.get('cancellationReason') as string) || ''
+    if (!CANCELLATION_REASON_OPTIONS.some((option) => option.value === rawReason)) {
+      redirect(`/${mode}/tastings?error=${encodeURIComponent('Select a cancellation reason.')}`)
+    }
+    cancellationReason = rawReason as CancellationReason
+    cancellationNote = ((formData.get('cancellationNote') as string) || '').trim() || null
+    if (cancellationReason === 'other' && !cancellationNote) {
+      redirect(`/${mode}/tastings?error=${encodeURIComponent('Enter a short explanation for "Other".')}`)
+    }
+  }
+
   const [tasting] = await db
     .select({
       id: tastings.id,
@@ -613,7 +671,10 @@ export async function updateTastingStatus(formData: FormData) {
     }
   }
 
-  await db.update(tastings).set({ status: nextStatus }).where(eq(tastings.id, tastingId))
+  await db.update(tastings).set({
+    status: nextStatus,
+    ...(nextStatus === 'cancelled' ? { cancellationReason, cancellationNote } : {}),
+  }).where(eq(tastings.id, tastingId))
   await logActivityEvent({
     entityType: 'tasting',
     entityId: tastingId,
@@ -621,6 +682,7 @@ export async function updateTastingStatus(formData: FormData) {
     kind: 'tasting_status_changed',
     title: 'Tasting status updated',
     body: `Status changed to ${nextStatus.replace(/_/g, ' ')}.`,
+    metadata: nextStatus === 'cancelled' ? { cancellationReason, cancellationNote } : undefined,
   })
 
   if (nextStatus === 'confirmed') {
@@ -717,6 +779,38 @@ export async function updateTastingStatus(formData: FormData) {
         href: '/staff/tastings',
       }),
     ])
+  }
+
+  if (nextStatus === 'cancelled' && cancellationReason) {
+    await clearScheduledTastingSmsJobs(tastingId)
+
+    await clearUserNotifications({
+      userId: tasting.assignedUserId,
+      href: `/taster/tastings/${tastingId}`,
+      kinds: ['tasting_assigned', 'tasting_report_reminder'],
+    })
+
+    const needsCoverage = tastingNeedsCoverage(nextStatus, cancellationReason)
+
+    await notify('tasting.cancelled', {
+      tastingId,
+      eventName: tasting.eventName,
+      scheduledAt: tasting.scheduledAt,
+      cancelledByName: session.user.name || 'The assigned taster',
+      cancellationReason,
+      cancellationNote,
+      needsCoverage,
+    })
+
+    await logActivityEvent({
+      entityType: 'tasting',
+      entityId: tastingId,
+      actorUserId: session.user.id,
+      kind: 'tasting_cancelled_notified',
+      title: 'Tasting cancelled',
+      body: `${session.user.name || 'The assigned taster'} cancelled ${tasting.eventName} and the team was notified.${needsCoverage ? ' Needs coverage.' : ''}`,
+      metadata: { cancellationReason, cancellationNote, needsCoverage },
+    })
   }
 
   revalidatePath('/admin/tastings')
@@ -1288,6 +1382,60 @@ export async function submitTastingReport(formData: FormData) {
     redirect(`${redirectTo}?success=${encodeURIComponent(successMessage)}`)
   }
   redirect(`/taster/tastings/${tastingId}?success=${encodeURIComponent(successMessage)}`)
+}
+
+/**
+ * Sets or corrects a tasting's objective, goal, targets, cost and (for strategic
+ * tastings) the result. Covers tastings requested by reps and ones scheduled before
+ * objectives were required.
+ */
+export async function updateTastingObjective(formData: FormData) {
+  const session = await requireFeature('tastings', 'admin', 'staff')
+  const tastingId = ((formData.get('tastingId') as string) || '').trim()
+  const redirectTo = ((formData.get('redirectTo') as string) || '').trim()
+  const backTo = redirectTo.startsWith('/') ? redirectTo : `/admin/tastings/${tastingId}`
+
+  const [tasting] = await db.select({ id: tastings.id, customerId: tastings.customerId }).from(tastings).where(eq(tastings.id, tastingId)).limit(1)
+  if (!tasting) redirect(`/admin/tastings?error=${encodeURIComponent('Tasting not found.')}`)
+
+  const parsed = parseTastingObjectiveFields(formData)
+  if ('error' in parsed) redirect(`${backTo}?error=${encodeURIComponent(parsed.error)}`)
+
+  const resultAfterEvent = ((formData.get('resultAfterEvent') as string) || '').trim() || null
+
+  await db
+    .update(tastings)
+    .set({
+      objective: parsed.objective,
+      primaryGoal: parsed.primaryGoal,
+      targetBottlesSold: parsed.targetBottlesSold,
+      targetCasesDepleted: parsed.targetCasesDepleted == null ? null : parsed.targetCasesDepleted.toFixed(2),
+      targetReorderQuantity: parsed.targetReorderQuantity,
+      estimatedCost: parsed.estimatedCost == null ? null : parsed.estimatedCost.toFixed(2),
+      tasterPay: parsed.tasterPay == null ? null : parsed.tasterPay.toFixed(2),
+      expectedRoi: parsed.expectedRoi,
+      strategicReason: parsed.strategicReason,
+      expectedOutcome: parsed.expectedOutcome,
+      estimatedValue: parsed.estimatedValue == null ? null : parsed.estimatedValue.toFixed(2),
+      followUpAction: parsed.followUpAction,
+      resultAfterEvent: parsed.objective === 'strategic' ? resultAfterEvent : null,
+    })
+    .where(eq(tastings.id, tasting.id))
+
+  await logActivityEvent({
+    entityType: 'tasting',
+    entityId: tasting.id,
+    actorUserId: session.user.id,
+    kind: 'tasting_objective_updated',
+    title: 'Tasting objective set',
+    body: `${parsed.objective.replace('_', ' ')} — ${parsed.primaryGoal}`,
+  })
+
+  revalidatePath(`/admin/tastings/${tasting.id}`)
+  revalidatePath('/admin/tastings')
+  revalidatePath('/admin/pull-through/tastings')
+  revalidatePath(`/admin/crm/${tasting.customerId}`)
+  redirect(`${backTo}?success=${encodeURIComponent('Tasting objective saved.')}`)
 }
 
 /**

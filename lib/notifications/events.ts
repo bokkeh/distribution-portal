@@ -74,6 +74,16 @@ export interface TastingTasterDeclinedPayload {
   teamEmails: string[]
 }
 
+export interface TastingCancelledPayload {
+  tastingId: string
+  eventName: string
+  scheduledAt: Date
+  cancelledByName: string
+  cancellationReason: string
+  cancellationNote?: string | null
+  needsCoverage: boolean
+}
+
 export interface DeliveryDriverAssignedPayload {
   driverName: string
   driverEmail: string
@@ -152,6 +162,7 @@ export interface NotificationEventPayloads {
   'tasting.status_changed': TastingStatusChangedPayload
   'tasting.report_received': TastingReportReceivedPayload
   'tasting.taster_declined': TastingTasterDeclinedPayload
+  'tasting.cancelled': TastingCancelledPayload
   'user.welcomed': UserWelcomedPayload
 }
 
@@ -175,5 +186,6 @@ export const EVENT_CHANNELS: Record<NotificationEvent, NotificationChannel[]> = 
   'tasting.status_changed':        ['email', 'sms'],
   'tasting.report_received':       ['email'],
   'tasting.taster_declined':       ['email', 'sms', 'in-app'],
+  'tasting.cancelled':             ['email', 'in-app'],
   'user.welcomed':                 ['email', 'sms'],
 }

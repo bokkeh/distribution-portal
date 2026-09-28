@@ -16,6 +16,9 @@ import { NotificationBell } from '@/components/notifications/NotificationBell'
 import { DialpadButton, DialpadSidebar } from '@/components/admin/DialpadSidebar'
 import { CommandPalette } from '@/components/ui/command-palette'
 import { PortalProfileMenu } from '@/components/layout/PortalProfileMenu'
+import { FavoritesSection } from '@/components/layout/FavoritesSection'
+import { PinToggleButton } from '@/components/layout/PinToggleButton'
+import { togglePinnedNavItem } from '@/actions/nav-preferences'
 
 const SECTION_COLORS: Record<string, { border: string; label: string; dot: string }> = {
   'Overview':       { border: 'border-blue-400',   label: 'text-blue-600',   dot: 'bg-blue-400' },
@@ -110,12 +113,16 @@ function NavLinks({
   roles,
   navCounts,
   onNav,
+  pinnedKeys,
+  onTogglePin,
 }: {
   pathname: string
   featureFlags: string[]
   roles: string[]
   navCounts?: Partial<Record<string, number>>
   onNav?: () => void
+  pinnedKeys: string[]
+  onTogglePin: (href: string) => void
 }) {
   // Start all sections open; auto-collapse sections with no active item on first render
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
@@ -158,35 +165,36 @@ function NavLinks({
               const active = pathname === href || pathname.startsWith(href + '/')
               const count = navCounts?.[href] ?? 0
               return (
-                <Link
+                <div
                   key={href}
-                  href={href}
-                  onClick={onNav}
                   className={cn(
-                    'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                    'group flex items-center rounded-lg text-sm font-medium transition-colors',
                     active
                       ? 'bg-blue-50 text-blue-700'
                       : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                   )}
                 >
-                  <Icon className={cn('w-4 h-4 flex-shrink-0', active ? 'text-blue-600' : 'text-slate-400')} />
-                  {label}
-                  {(count > 0 || active) && (
-                    <span className="ml-auto flex items-center gap-2">
-                      {count > 0 && (
-                        <span
-                          className={cn(
-                            'inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] font-semibold',
-                            active ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-600'
-                          )}
-                        >
-                          {count > 99 ? '99+' : count}
-                        </span>
-                      )}
-                      {active && <ChevronRight className="w-3 h-3 text-blue-500" />}
-                    </span>
-                  )}
-                </Link>
+                  <Link href={href} onClick={onNav} className="flex flex-1 items-center gap-2.5 px-3 py-2 min-w-0">
+                    <Icon className={cn('w-4 h-4 flex-shrink-0', active ? 'text-blue-600' : 'text-slate-400')} />
+                    <span className="truncate">{label}</span>
+                    {(count > 0 || active) && (
+                      <span className="ml-auto flex items-center gap-2">
+                        {count > 0 && (
+                          <span
+                            className={cn(
+                              'inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] font-semibold',
+                              active ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-600'
+                            )}
+                          >
+                            {count > 99 ? '99+' : count}
+                          </span>
+                        )}
+                        {active && <ChevronRight className="w-3 h-3 text-blue-500" />}
+                      </span>
+                    )}
+                  </Link>
+                  <PinToggleButton pinned={pinnedKeys.includes(href)} onToggle={() => onTogglePin(href)} />
+                </div>
               )
             })}
           </div>
@@ -206,6 +214,7 @@ export default function AdminSidebar({
   userName,
   userAvatarUrl,
   canSwitchViews = false,
+  pinnedNavKeys = [],
 }: {
   featureFlags?: string[]
   roles?: string[]
@@ -215,10 +224,30 @@ export default function AdminSidebar({
   userName?: string | null
   userAvatarUrl?: string | null
   canSwitchViews?: boolean
+  pinnedNavKeys?: string[]
 }) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const [dialpadOpen, setDialpadOpen] = useState(false)
+  const [pinnedKeys, setPinnedKeys] = useState(pinnedNavKeys)
+
+  const visibleItems = navSections.flatMap((section) =>
+    section.items.filter((item) => hasFeature(item.feature as FeatureKey, roles, featureFlags)),
+  )
+  const favoriteItems = pinnedKeys
+    .map((href) => visibleItems.find((item) => item.href === href))
+    .filter((item): item is (typeof visibleItems)[number] => Boolean(item))
+    .map((item) => ({ href: item.href, label: item.label, icon: item.icon }))
+
+  function handleTogglePin(href: string) {
+    setPinnedKeys((current) => (current.includes(href) ? current.filter((key) => key !== href) : [...current, href]))
+    togglePinnedNavItem(href).catch(() => {})
+  }
+
+  function handleUnpin(href: string) {
+    setPinnedKeys((current) => current.filter((key) => key !== href))
+    togglePinnedNavItem(href).catch(() => {})
+  }
 
   useEffect(() => {
     document.body.style.overflow = open ? 'hidden' : ''
@@ -246,11 +275,12 @@ export default function AdminSidebar({
         </div>
 
         <div className="px-3 py-2 border-b border-slate-100">
-          <CommandPalette />
+          <CommandPalette navItems={visibleItems} enableRecordSearch pinnedHrefs={pinnedKeys} />
         </div>
 
         <nav className="flex-1 px-3 py-2 overflow-y-auto space-y-2">
-          <NavLinks pathname={pathname} featureFlags={featureFlags} roles={roles} navCounts={navCounts} />
+          <FavoritesSection items={favoriteItems} pathname={pathname} onUnpin={handleUnpin} />
+          <NavLinks pathname={pathname} featureFlags={featureFlags} roles={roles} navCounts={navCounts} pinnedKeys={pinnedKeys} onTogglePin={handleTogglePin} />
         </nav>
 
       </aside>
@@ -307,7 +337,8 @@ export default function AdminSidebar({
             </div>
 
             <nav className="flex-1 px-3 py-2 overflow-y-auto space-y-2">
-              <NavLinks pathname={pathname} featureFlags={featureFlags} roles={roles} navCounts={navCounts} onNav={() => setOpen(false)} />
+              <FavoritesSection items={favoriteItems} pathname={pathname} onUnpin={handleUnpin} onNav={() => setOpen(false)} />
+              <NavLinks pathname={pathname} featureFlags={featureFlags} roles={roles} navCounts={navCounts} onNav={() => setOpen(false)} pinnedKeys={pinnedKeys} onTogglePin={handleTogglePin} />
             </nav>
 
           </aside>

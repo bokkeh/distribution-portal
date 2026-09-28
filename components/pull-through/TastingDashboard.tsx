@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { DateRangeFilter } from '@/components/ui/date-range-filter'
 import { TastingDashboardFilterBar } from '@/components/pull-through/TastingDashboardFilterBar'
+import { EconomicsSettingsCard } from '@/components/pull-through/EconomicsSettingsCard'
 import { NOT_ENOUGH_DATA, OBJECTIVE_META, fmtMoney, fmtPercent, moneyTone } from '@/lib/pull-through/display'
 import type { TastingBreakdownRow, TastingDashboardTotals } from '@/lib/pull-through/tasting-dashboard'
 import type { TastingEconomicsSettings, TastingObjective } from '@/lib/pull-through/types'
@@ -103,6 +104,7 @@ export function TastingDashboard({
   settings,
   breakdowns,
   filterOptions,
+  canEditSettings,
 }: {
   basePath: string
   totals: TastingDashboardTotals
@@ -115,6 +117,7 @@ export function TastingDashboard({
     distributor: TastingBreakdownRow[]
   }
   filterOptions: { tasters: string[]; markets: string[]; distributors: string[] }
+  canEditSettings: boolean
 }) {
   const objectiveRows = breakdowns.objective.map((row) => ({
     ...row,
@@ -143,6 +146,8 @@ export function TastingDashboard({
           <DateRangeFilter />
         </Suspense>
       </div>
+
+      <EconomicsSettingsCard settings={settings} canEdit={canEditSettings} />
 
       <TastingDashboardFilterBar options={filterOptions} basePath={`${basePath}/tastings`} />
 

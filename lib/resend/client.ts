@@ -908,6 +908,44 @@ export async function sendSalesRepInviteEmail({
   })
 }
 
+export async function sendTasterInviteEmail({
+  to,
+  invitedName,
+  senderName,
+  inviteUrl,
+  expiresAt,
+}: {
+  to: string
+  invitedName?: string | null
+  senderName: string
+  inviteUrl: string
+  expiresAt: Date
+}): Promise<void> {
+  const expiresLabel = expiresAt.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+
+  await sendEmail({
+    to,
+    recipientName: invitedName ?? to,
+    subject: 'Activate your AHAWC taster account',
+    html: renderEmailCard({
+      eyebrow: 'Taster Invite',
+      title: `You're invited to join AHAWC as a taster`,
+      intro: `${escapeHtml(senderName)} created your AHAWC taster account. Set your password to finish activating it.`,
+      body: `
+        <p style="margin: 0 0 14px;">Use the button below to set your password. You'll then sign in with your email address.</p>
+        <p style="margin: 0 0 10px;"><strong>Email:</strong> ${escapeHtml(to)}</p>
+        <p style="margin: 0;"><strong>Invite expires:</strong> ${escapeHtml(expiresLabel)}</p>
+      `,
+      ctaLabel: 'Set Your Password',
+      ctaHref: inviteUrl,
+    }),
+  })
+}
+
 export async function sendTasterInvoiceNotification({
   to,
   payeeName,

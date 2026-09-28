@@ -21,14 +21,14 @@ async function applyOrderInventoryCredit(input: {
   const result = await db.execute(sql`
     WITH inserted_adjustment AS (
       INSERT INTO account_inventory_adjustments (
-        account_id, product_id, source_order_id, sku, product_name, change_type,
+        account_id, product_id, source_order_id, sku, product_name, change_type, activity_type,
         delta_cases, delta_bottles, resulting_cases_on_hand, resulting_bottles_on_hand,
         effective_at, notes, created_by_user_id, updated_by_user_id, updated_at
       )
       VALUES (
-        ${input.accountId}, ${input.productId}, ${input.orderId}, ${input.sku}, ${input.productName}, 'order_fulfillment',
+        ${input.accountId}, ${input.productId}, ${input.orderId}, ${input.sku}, ${input.productName}, 'order_fulfillment', 'order_delivered',
         '0.00', ${toInventoryFixed(input.bottles)}, '0.00', '0.00',
-        ${input.effectiveAt}, ${`Added automatically from paid and fulfilled order ${orderReference}.`},
+        ${input.effectiveAt}, ${`Added automatically from order ${orderReference}.`},
         ${input.actorUserId}, ${input.actorUserId}, now()
       )
       ON CONFLICT (source_order_id, product_id) DO NOTHING
@@ -80,12 +80,18 @@ export async function syncOrderAccountInventory(orderId: string, actorUserId: st
       customerId: orders.customerId,
       status: orders.status,
       paymentStatus: orders.paymentStatus,
+      shippingStatus: orders.shippingStatus,
     })
     .from(orders)
     .where(eq(orders.id, orderId))
     .limit(1)
 
-  if (!order || order.status !== 'fulfilled' || order.paymentStatus !== 'paid') {
+  const eligible = Boolean(order) && (
+    (order!.status === 'fulfilled' && order!.paymentStatus === 'paid')
+    || order!.shippingStatus === 'delivered'
+  )
+
+  if (!eligible) {
     return { credited: false, customerId: order?.customerId ?? null }
   }
 

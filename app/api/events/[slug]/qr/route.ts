@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
 import { NextRequest, NextResponse } from 'next/server'
 import QRCode from 'qrcode'
 import { db } from '@/db'
@@ -7,8 +7,8 @@ import { getEventPublicUrl } from '@/lib/events/utils'
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
-  const [event] = await db.select({ slug: events.slug, visibility: events.visibility }).from(events).where(eq(events.slug, slug)).limit(1)
-  if (!event || event.visibility === 'draft') return new NextResponse('Not found', { status: 404 })
+  const [event] = await db.select({ slug: events.slug, visibility: events.visibility, startAt: events.startAt, endAt: events.endAt }).from(events).where(and(eq(events.slug, slug), isNull(events.archivedAt))).limit(1)
+  if (!event || !event.startAt || !event.endAt || event.visibility === 'draft') return new NextResponse('Not found', { status: 404 })
   const type = request.nextUrl.searchParams.get('type') === 'upload' ? 'upload' : 'rsvp'
   const target = `${getEventPublicUrl(event.slug)}${type === 'upload' ? '/upload' : ''}`
   const format = request.nextUrl.searchParams.get('format')

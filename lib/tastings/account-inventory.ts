@@ -180,6 +180,7 @@ export async function syncTastingReportInventory(input: {
       sku: product.sku,
       productName: product.name,
       changeType: existingItem ? 'manual_update' : 'manual_add',
+      activityType: 'tasting_inventory_update',
       deltaBottles: previousBottles == null ? bottles : roundInventoryValue(bottles - previousBottles),
       recordedBottlesOnHand: bottles,
       effectiveAt,

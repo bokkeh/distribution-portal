@@ -54,6 +54,8 @@ export type PullThroughOrder = {
   /** 0 = initial order, 1 = first reorder, 2+ = subsequent reorders. */
   sequenceIndex: number
   isReorder: boolean
+  /** Admin override stored on the order row, applied by classifyOrderAttribution. */
+  attributionOverride: { kind: OrderAttributionKind; reason: string | null } | null
   /** Organic vs tasting-assisted classification; null for sample drops. */
   attribution: OrderAttribution | null
 }
