@@ -3,7 +3,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Building2, Map, DollarSign, Wine, TrendingUp, Menu, X, Star, ShoppingCart, Gauge, ClipboardCheck } from 'lucide-react'
+import { LayoutDashboard, Building2, Map, DollarSign, Wine, TrendingUp, Menu, X, Star, ShoppingCart, Gauge, ClipboardCheck, Compass } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useState, useEffect } from 'react'
 import { DialpadButton, DialpadSidebar } from '@/components/admin/DialpadSidebar'
@@ -19,6 +19,7 @@ const navItems = [
   { href: '/sales/orders/assisted', label: 'Orders', icon: ShoppingCart },
   { href: '/sales/routes', label: 'Routes', icon: Map },
   { href: '/sales/tastings', label: 'Tastings', icon: Wine },
+  { href: '/sales/progression', label: 'My Rank', icon: Compass },
   { href: '/sales/promotion-catalog', label: 'Promotion Catalog', icon: Star },
   { href: '/sales/forecast', label: 'Forecast', icon: TrendingUp },
   { href: '/sales/commissions', label: 'Commissions', icon: DollarSign },

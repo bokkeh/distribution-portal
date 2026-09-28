@@ -7,7 +7,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard, FileText, BookOpen, Users, Package,
   Truck, Building2, ChevronRight, Menu, X, CalendarDays, MessageSquare, HeartPulse, ClipboardList, Workflow, BarChart3, TrendingUp, UserCheck, DollarSign, Globe, Receipt, ShoppingCart, Star, Cpu, Activity,
-  Newspaper, Gauge,
+  Newspaper, Gauge, Compass, ListChecks, History, Trophy,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { FeatureKey } from '@/lib/users/features'
@@ -24,6 +24,7 @@ const SECTION_COLORS: Record<string, { border: string; label: string; dot: strin
   'Customers':      { border: 'border-violet-400',  label: 'text-violet-600', dot: 'bg-violet-400' },
   'Finance':        { border: 'border-rose-400',    label: 'text-rose-600',   dot: 'bg-rose-400' },
   'Sales Team':     { border: 'border-cyan-400',    label: 'text-cyan-600',   dot: 'bg-cyan-400' },
+  'Team Progression': { border: 'border-indigo-400', label: 'text-indigo-600', dot: 'bg-indigo-400' },
   'Admin':          { border: 'border-slate-400',   label: 'text-slate-500',  dot: 'bg-slate-400' },
 }
 
@@ -80,6 +81,16 @@ const navSections = [
       { href: '/admin/sales/regions', label: 'Regions', icon: Globe, feature: 'dashboard' },
       { href: '/admin/sales/commissions', label: 'Commissions', icon: DollarSign, feature: 'dashboard' },
       { href: '/admin/sales/promotion-catalog', label: 'Promotion Catalog', icon: Star, feature: 'promotions' },
+    ],
+  },
+  {
+    title: 'Team Progression',
+    items: [
+      { href: '/admin/team-progression', label: 'Dashboard', icon: Compass, feature: 'dashboard' },
+      { href: '/admin/team-progression/roster', label: 'Team Roster', icon: Users, feature: 'dashboard' },
+      { href: '/admin/team-progression/requirements', label: 'Rank Requirements', icon: ListChecks, feature: 'dashboard' },
+      { href: '/admin/team-progression/history', label: 'Promotion History', icon: History, feature: 'dashboard' },
+      { href: '/admin/team-progression/leaderboard', label: 'Leaderboard', icon: Trophy, feature: 'dashboard' },
     ],
   },
   {
