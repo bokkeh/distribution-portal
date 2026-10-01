@@ -23,11 +23,13 @@ export function PortalTopBar({
 }) {
   if (operational) {
     return (
-      <header className="sticky top-14 z-30 border-b border-slate-300 bg-[hsl(var(--background))] px-4 py-3 text-slate-950 md:top-0 md:px-6">
-        <div className="absolute right-4 top-2.5 md:hidden"><GlobalQuickAdd compact /></div>
+      <header className="relative z-30 border-b border-slate-300 bg-[hsl(var(--background))] px-4 py-3 text-slate-950 md:sticky md:top-0 md:px-6">
         <div className="grid items-center gap-3 md:grid-cols-[minmax(15rem,1.2fr)_minmax(18rem,2fr)_auto] md:gap-5">
-          <div className="min-w-0 overflow-hidden">
-            <PortalBreadcrumbs operational />
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <div className="min-w-0 overflow-hidden">
+              <PortalBreadcrumbs operational />
+            </div>
+            <div className="shrink-0 md:hidden"><GlobalQuickAdd compact /></div>
           </div>
           <PortalSearch operational />
           <div className="hidden items-center justify-end gap-3 md:flex">
