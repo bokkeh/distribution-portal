@@ -34,12 +34,23 @@ test('computes event windows and two hour fallback consistently', () => {
 test('tomorrow stays accurate across daylight saving transitions', () => {
   const springStart = new Date('2026-03-09T04:30:00Z')
   const schedule = getTastingSmsSchedule(springStart, null)
-  assert.equal(schedule.day_before_reminder.toISOString(), '2026-03-08T05:30:00.000Z')
+  assert.equal(schedule.day_before_reminder.toISOString(), '2026-03-08T12:00:00.000Z')
   assert.equal(getTastingSmsDisposition('day_before_reminder', springStart, null, new Date('2026-03-08T04:45:00Z')), 'reschedule')
-  assert.equal(getTastingSmsDisposition('day_before_reminder', springStart, null, new Date('2026-03-08T06:00:00Z')), 'send')
+  assert.equal(getTastingSmsDisposition('day_before_reminder', springStart, null, new Date('2026-03-08T13:00:00Z')), 'send')
 })
 
 test('short events do not receive check-in prompts after ending', () => {
   const shortEnd = new Date('2026-10-03T20:15:00Z')
   assert.equal(getTastingSmsDisposition('checkin_prompt', start, shortEnd, new Date('2026-10-03T20:20:00Z')), 'cancel')
+})
+
+test('daily production cron can send tomorrow and today messages in both seasons', () => {
+  for (const date of ['2026-10-03', '2026-12-03']) {
+    const eventStart = new Date(`${date}T21:00:00Z`)
+    const morning = new Date(`${date}T13:30:00Z`)
+    const previousMorning = new Date(morning.getTime() - 24 * 3600000)
+    assert.equal(getTastingSmsDisposition('day_before_reminder', eventStart, null, previousMorning), 'send')
+    assert.equal(getTastingSmsDisposition('day_of_reminder', eventStart, null, morning), 'send')
+    assert.equal(getTastingSmsDisposition('day_before_reminder', eventStart, null, morning), 'cancel')
+  }
 })

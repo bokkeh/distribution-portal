@@ -45,7 +45,7 @@ Please arrive 15 minutes early for setup.`,
   {
     key: 'day_before_reminder',
     label: 'Day Before Reminder',
-    description: 'Sent the previous Eastern calendar day at the tasting start time.',
+    description: 'Sent the morning before the tasting (Eastern time).',
     linkPath: '/taster/tastings',
     bodyTemplate: `AHAWC Distribution reminder: You have a tasting tomorrow.
 

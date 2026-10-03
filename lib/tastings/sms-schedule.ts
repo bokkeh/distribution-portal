@@ -1,4 +1,4 @@
-import { formatEasternTimeInput, getEasternDateKey, parseDateTimeInTimeZone } from './time'
+import { getEasternDateKey, parseDateTimeInTimeZone } from './time'
 
 export const SCHEDULED_TASTING_SMS_KEYS = ['day_before_reminder', 'day_of_reminder', 'checkin_prompt', 'mid_event_check', 'end_of_tasting'] as const
 export type ScheduledTastingSmsKey = typeof SCHEDULED_TASTING_SMS_KEYS[number]
@@ -8,8 +8,10 @@ export function getTastingSmsSchedule(start: Date, end: Date | null) {
   const previousDay = new Date(`${getEasternDateKey(start)}T12:00:00Z`)
   previousDay.setUTCDate(previousDay.getUTCDate() - 1)
   return {
-    day_before_reminder: parseDateTimeInTimeZone(previousDay.toISOString().slice(0, 10), formatEasternTimeInput(start)),
-    day_of_reminder: new Date(Math.max(parseDateTimeInTimeZone(getEasternDateKey(start), '09:00').getTime(), start.getTime() - 2 * 3600000)),
+    // The production plan runs cron once daily at 13:00 UTC (8/9 AM Eastern).
+    // Queue morning reminders before that run rather than after it.
+    day_before_reminder: parseDateTimeInTimeZone(previousDay.toISOString().slice(0, 10), '08:00'),
+    day_of_reminder: new Date(Math.min(parseDateTimeInTimeZone(getEasternDateKey(start), '08:00').getTime(), start.getTime() - 2 * 3600000)),
     checkin_prompt: start,
     mid_event_check: new Date(start.getTime() + Math.max(30, Math.round((finish.getTime() - start.getTime()) / 120000)) * 60000),
     end_of_tasting: finish,
