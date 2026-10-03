@@ -1,10 +1,10 @@
 'use server'
 
-import { and, eq, gte, lte } from 'drizzle-orm'
+import { and, eq, gte, lte, sql } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { db } from '@/db'
-import { customerAccounts, salesMembers, tasterAvailability, tasterInvoices, tastingReportPhotoDrafts, tastingReports, tastings, users, type TastingObjectiveValue } from '@/db/schema'
+import { customerAccounts, salesMembers, scheduledSmsJobs, tasterAvailability, tasterInvoices, tastingReportPhotoDrafts, tastingReports, tastings, users, type TastingObjectiveValue } from '@/db/schema'
 import { requireFeature, requireRole } from '@/lib/auth/session'
 import { notify } from '@/lib/notifications/dispatch'
 import { sendTasterInvoiceNotification } from '@/lib/resend/client'
@@ -890,7 +890,7 @@ export async function deleteTasting(formData: FormData) {
 }
 
 export async function updateTastingAccount(formData: FormData) {
-  await requireFeature('tastings', 'admin', 'staff')
+  const session = await requireFeature('tastings', 'admin', 'staff')
   const tastingId = formData.get('tastingId') as string
   const customerId = formData.get('customerId') as string
 
@@ -926,12 +926,21 @@ export async function updateTastingAccount(formData: FormData) {
     storePhone: account.phone,
   }).where(eq(tastings.id, tastingId))
 
+  const smsLocation = {
+    store_name: account.companyName,
+    store_address: [account.address, account.city, account.state, account.zip].filter(Boolean).join(', ') || 'Store address not provided',
+  }
+  await db.update(scheduledSmsJobs).set({
+    payload: sql`${scheduledSmsJobs.payload} || ${JSON.stringify(smsLocation)}::jsonb`,
+  }).where(and(eq(scheduledSmsJobs.tastingId, tastingId), eq(scheduledSmsJobs.status, 'pending')))
+
   await logActivityEvent({
     entityType: 'tasting',
     entityId: tastingId,
     kind: 'tasting_status_changed',
     title: 'Tasting account updated',
     body: `Account changed to ${account.companyName}.`,
+    actorUserId: session.user.id,
   })
 
   revalidatePath('/admin/tastings')

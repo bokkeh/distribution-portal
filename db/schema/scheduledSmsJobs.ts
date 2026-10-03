@@ -11,7 +11,7 @@ export const scheduledSmsJobs = pgTable('scheduled_sms_jobs', {
   payload: jsonb('payload').notNull().default({}),
   sendAt: timestamp('send_at', { withTimezone: true }).notNull(),
   sentAt: timestamp('sent_at', { withTimezone: true }),
-  status: text('status', { enum: ['pending', 'sent', 'failed', 'cancelled'] }).notNull().default('pending'),
+  status: text('status', { enum: ['pending', 'sending', 'sent', 'failed', 'cancelled'] }).notNull().default('pending'),
   lastError: text('last_error'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })

@@ -2,12 +2,11 @@ import { and, desc, eq } from 'drizzle-orm'
 import { db } from '@/db'
 import { notificationsLog, scheduledSmsJobs, tastingSmsTemplates } from '@/db/schema'
 import { sendSms } from '@/lib/telnyx/client'
+import { getTastingSmsSchedule } from './sms-schedule'
 import {
   formatEasternDate,
   formatEasternTime,
   formatEasternTimeRange,
-  getEasternDateKey,
-  parseDateTimeInTimeZone,
 } from '@/lib/tastings/time'
 
 export const TASTING_SMS_SEQUENCE = [
@@ -46,7 +45,7 @@ Please arrive 15 minutes early for setup.`,
   {
     key: 'day_before_reminder',
     label: 'Day Before Reminder',
-    description: 'Sent 24 hours before the tasting start.',
+    description: 'Sent the previous Eastern calendar day at the tasting start time.',
     linkPath: '/taster/tastings',
     bodyTemplate: `AHAWC Distribution reminder: You have a tasting tomorrow.
 
@@ -246,19 +245,8 @@ export async function clearScheduledTastingSmsJobs(tastingId: string) {
 
 export async function queueScheduledTastingSmsJobs(payload: SmsPayload & { scheduledAt: Date; endAt: Date | null }) {
   const startAt = new Date(payload.scheduledAt)
-  const endAt = payload.endAt ? new Date(payload.endAt) : new Date(startAt.getTime() + 2 * 60 * 60 * 1000)
-  const midpoint = new Date(startAt.getTime() + Math.max(30, Math.round((endAt.getTime() - startAt.getTime()) / 2 / 60000)) * 60000)
-  const dayBefore = new Date(startAt.getTime() - 24 * 60 * 60 * 1000)
-  const easternReminderStart = parseDateTimeInTimeZone(getEasternDateKey(startAt), '09:00')
-  const dayOfReminder = new Date(Math.max(easternReminderStart.getTime(), startAt.getTime() - 2 * 60 * 60 * 1000))
-
-  const jobs: Array<{ templateKey: TemplateKey; sendAt: Date }> = [
-    { templateKey: 'day_before_reminder', sendAt: dayBefore },
-    { templateKey: 'day_of_reminder', sendAt: dayOfReminder },
-    { templateKey: 'checkin_prompt', sendAt: startAt },
-    { templateKey: 'mid_event_check', sendAt: midpoint },
-    { templateKey: 'end_of_tasting', sendAt: endAt },
-  ]
+  const jobs = Object.entries(getTastingSmsSchedule(startAt, payload.endAt ? new Date(payload.endAt) : null))
+    .map(([templateKey, sendAt]) => ({ templateKey, sendAt }))
 
   const now = Date.now()
   for (const job of jobs) {
