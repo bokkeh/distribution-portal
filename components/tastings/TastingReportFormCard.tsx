@@ -12,6 +12,7 @@ import { useFormDraftAutosave } from '@/hooks/useFormDraftAutosave'
 import { formatEasternTimeInput } from '@/lib/tastings/time'
 import { Camera, Loader2, LayoutGrid } from 'lucide-react'
 import { signedPhotoUrl } from '@/lib/gcs/photo-url'
+import { uploadTastingPhoto } from '@/lib/tastings/upload-photo'
 
 type ReportRecord = {
   actualStartTime: string | null
@@ -85,28 +86,6 @@ export function TastingReportFormCard({
   useEffect(() => {
     if (success === 'Tasting report submitted.') reportDraft.clearDraft()
   }, [reportDraft, success])
-
-  async function uploadTastingPhoto(file: File, filename: string) {
-    const contentType = file.type || 'image/jpeg'
-    const signedUrlResponse = await fetch('/api/upload', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filename, contentType, folder: 'tastings' }),
-    })
-    const signedUrlPayload = await signedUrlResponse.json().catch(() => null)
-    if (!signedUrlResponse.ok || !signedUrlPayload?.uploadUrl || !signedUrlPayload?.publicUrl) {
-      throw new Error(signedUrlPayload?.error || 'Could not prepare the upload.')
-    }
-
-    const uploadResponse = await fetch(signedUrlPayload.uploadUrl, {
-      method: 'PUT',
-      headers: { 'Content-Type': contentType },
-      body: file,
-    })
-    if (!uploadResponse.ok) throw new Error('Cloud upload failed. Please try again.')
-
-    return String(signedUrlPayload.publicUrl)
-  }
 
   async function persistPhotoDraft(nextSetupPhotoUrl: string, nextShelfPhotoUrls: string[]) {
     await saveTastingReportPhotoDraft({
