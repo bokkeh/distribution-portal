@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { format, isBefore } from 'date-fns'
+import { format } from 'date-fns'
+import { isActiveTasterTasting, needsTastingReport } from '@/lib/tastings/report-workflow'
 import { Fragment, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -96,7 +97,7 @@ function getReportActionLabel(tasting: Pick<TastingRow, 'status' | 'reportSubmit
 }
 
 function TastingCard({ tasting }: { tasting: TastingRow }) {
-  const missingReport = tasting.status === 'completed' && !tasting.reportSubmittedAt
+  const missingReport = needsTastingReport(tasting)
   const invoiceEligible = Boolean(tasting.reportSubmittedAt) || tasting.status === 'completed'
   const missingInvoice = invoiceEligible && !tasting.invoiceSubmittedAt
 
@@ -170,12 +171,12 @@ export function TasterTastingsHub({
   error?: string
 }) {
   const now = new Date()
-  const upcoming = tastings.filter(tasting => !isBefore(new Date(tasting.scheduledAt), now))
-  const past = tastings.filter(tasting => isBefore(new Date(tasting.scheduledAt), now))
+  const upcoming = tastings.filter(tasting => isActiveTasterTasting(tasting, now))
+  const past = tastings.filter(tasting => !isActiveTasterTasting(tasting, now))
   const [activeTab, setActiveTab] = useState<'upcoming' | 'previous'>('upcoming')
   const [previousFrom, setPreviousFrom] = useState('')
   const [previousTo, setPreviousTo] = useState('')
-  const missingReportCount = tastings.filter(tasting => tasting.status === 'completed' && !tasting.reportSubmittedAt).length
+  const missingReportCount = tastings.filter(tasting => needsTastingReport(tasting)).length
   const missingInvoiceCount = tastings.filter(tasting => (Boolean(tasting.reportSubmittedAt) || tasting.status === 'completed') && !tasting.invoiceSubmittedAt).length
   const filteredPast = past.filter(tasting => {
     const tastingDate = new Date(tasting.scheduledAt)
@@ -198,7 +199,7 @@ export function TasterTastingsHub({
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm text-slate-500">Upcoming Tastings</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-slate-500">Upcoming & Open Tastings</CardTitle></CardHeader>
           <CardContent><p className="text-3xl font-bold text-slate-900">{upcoming.length}</p></CardContent>
         </Card>
         <Card>
@@ -215,7 +216,7 @@ export function TasterTastingsHub({
         <CardHeader className="px-5 pb-4 pt-6 sm:px-7 sm:pt-7">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <CardTitle className="font-display text-2xl uppercase tracking-[-0.02em] text-[#181615]">
-              {activeTab === 'upcoming' ? 'Upcoming Tastings' : 'Previous Tastings'}
+              {activeTab === 'upcoming' ? 'Upcoming & Open Tastings' : 'Previous Tastings'}
             </CardTitle>
             <div className="inline-flex gap-2" role="tablist" aria-label="Tasting history">
               <button
@@ -232,7 +233,7 @@ export function TasterTastingsHub({
                     : 'border-slate-200 bg-white text-stone-500 hover:border-stone-400 hover:text-[#181615]'
                 )}
               >
-                Upcoming <span className="ml-1">{upcoming.length}</span>
+                Upcoming & Open <span className="ml-1">{upcoming.length}</span>
               </button>
               <button
                 id="taster-previous-tastings-tab"
@@ -305,7 +306,7 @@ export function TasterTastingsHub({
             )
           }) : (
             <p className="text-sm text-slate-500">
-              {activeTab === 'upcoming' ? 'No upcoming tastings assigned right now.' : 'No past tastings match this date range.'}
+              {activeTab === 'upcoming' ? 'No upcoming or unfinished tastings assigned right now.' : 'No past tastings match this date range.'}
             </p>
           )}
         </CardContent>

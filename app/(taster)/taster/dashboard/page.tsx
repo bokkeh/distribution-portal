@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { isActiveTasterTasting, needsTastingReport } from '@/lib/tastings/report-workflow'
 import { eq } from 'drizzle-orm'
 import { CalendarDays, CheckCircle2, Clock3, DollarSign, FileText, Mail, Phone, Sparkles, Wallet } from 'lucide-react'
 import { requireFeature } from '@/lib/auth/session'
@@ -56,9 +57,10 @@ export default async function TasterDashboardPage({
         .then(rows => rows[0] ?? null),
     ])
 
-    const reportsNeeded = tastingRows.filter(tasting => tasting.status === 'completed' && !tasting.reportSubmittedAt)
+    const now = new Date()
+    const reportsNeeded = tastingRows.filter(tasting => needsTastingReport(tasting, now))
     const invoicesNeeded = tastingRows.filter(tasting => (Boolean(tasting.reportSubmittedAt) || tasting.status === 'completed') && !tasting.invoiceSubmittedAt)
-    const upcoming = tastingRows.filter(tasting => new Date(tasting.scheduledAt) >= new Date())
+    const upcoming = tastingRows.filter(tasting => isActiveTasterTasting(tasting, now))
     const confirmedUpcoming = upcoming.filter(tasting => tasting.status === 'confirmed')
     const nextTasting = upcoming[0] ?? null
     const featuredTasting = reportsNeeded[0] ?? nextTasting ?? null
@@ -168,7 +170,7 @@ export default async function TasterDashboardPage({
                     <div>
                       <p className="font-medium text-slate-900">Report backlog</p>
                       <p className="mt-1 text-xs text-slate-500">
-                        {reportsNeeded.length > 0 ? `${reportsNeeded.length} completed tasting${reportsNeeded.length === 1 ? '' : 's'} still need reports.` : 'All completed tastings have reports submitted.'}
+                        {reportsNeeded.length > 0 ? `${reportsNeeded.length} tasting${reportsNeeded.length === 1 ? '' : 's'} still need reports.` : 'All started tastings have reports submitted.'}
                       </p>
                     </div>
                     <Badge variant={reportsNeeded.length > 0 ? 'warning' : 'success'}>{reportsNeeded.length}</Badge>
