@@ -1,5 +1,6 @@
 import { isSmsBlocked, normalizePhone } from '@/lib/telnyx/compliance'
 import { logSmsMessage } from '@/lib/telnyx/logging'
+import { requireTasterConsentForPhone } from '@/lib/telnyx/taster-consent'
 
 export class SmsSubmissionUnconfirmedError extends Error {}
 
@@ -29,6 +30,7 @@ export async function sendSmsWithReceipt({
 
   if (!bypassOptOut) {
     for (const recipient of recipients) {
+      await requireTasterConsentForPhone(recipient)
       if (await isSmsBlocked(recipient)) {
         throw new Error('Recipient has opted out of SMS')
       }

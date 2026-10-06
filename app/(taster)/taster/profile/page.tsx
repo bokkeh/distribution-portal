@@ -12,6 +12,8 @@ import { getUserPreferences } from '@/lib/preferences/read'
 import { getUserAccessSummaryMap } from '@/lib/auth/activity'
 import { getLatestTasterInvite } from '@/actions/taster-invites'
 import { Badge } from '@/components/ui/badge'
+import { TasterSmsConsent } from '@/components/profile/TasterSmsConsent'
+import { hasTasterSmsConsent, TASTER_SMS_CONSENT_COPY } from '@/lib/telnyx/taster-consent'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? 'sk_test_missing_configuration', { apiVersion: '2026-02-25.clover' })
 
@@ -82,6 +84,7 @@ export default async function TasterProfilePage({
   }
 
   if (!user) notFound()
+  const smsConsentEnabled = user.phone ? await hasTasterSmsConsent(user.id, user.phone).catch(() => false) : false
 
   const [accessSummaryMap, tasterInvite] = await Promise.all([
     getUserAccessSummaryMap(),
@@ -122,6 +125,7 @@ export default async function TasterProfilePage({
         <p className="text-muted-foreground mt-1">Keep your phone number and mailing address current so assignments, travel records, and payout follow-up stay accurate.</p>
       </div>
       <SimpleProfileForm user={user} preferences={preferences} />
+      <TasterSmsConsent enabled={smsConsentEnabled} phone={user.phone} consentCopy={TASTER_SMS_CONSENT_COPY} />
       <Card className="max-w-lg">
         <CardHeader><CardTitle>Account Status</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-2 gap-4 text-sm">
