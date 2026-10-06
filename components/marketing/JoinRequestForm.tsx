@@ -6,6 +6,7 @@ import { CheckCircle2 } from 'lucide-react'
 import { submitWholesaleAccountRequest } from '@/actions/marketing'
 import { BUSINESS_TYPE_OPTIONS } from '@/lib/customers/business-types'
 import { SMS_CONSENT_COPY } from '@/lib/telnyx/messages'
+import { BirthDateGate } from '@/components/profile/BirthDateGate'
 
 const initialState = null
 
@@ -118,6 +119,7 @@ export function JoinRequestForm() {
           />
         </div>
 
+        <BirthDateGate disabled={pending} />
         <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3.5 text-sm text-slate-600">
           <input
             name="smsOptIn"

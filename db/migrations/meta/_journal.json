@@ -407,6 +407,13 @@
       "when": 1791244800001,
       "tag": "0072_taster_sms_consent",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1791324800000,
+      "tag": "0073_birthdate_sms_age_gate",
+      "breakpoints": true
     }
   ]
 }

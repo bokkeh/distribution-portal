@@ -9,6 +9,7 @@ import { normalizePhone, setSmsSubscription, SMS_CONFIRMATION_MESSAGE, SMS_CONSE
 import { sendSms } from '@/lib/telnyx/client'
 import { createNotificationsForRoles } from '@/lib/notifications/in-app'
 import { normalizeBusinessType } from '@/lib/customers/business-types'
+import { AGE_GATE_VERSION, requireAdultBirthDate } from '@/lib/telnyx/age-gate'
 
 const requestSchema = z.object({
   businessName: z.string().trim().min(2, 'Business name is required'),
@@ -70,6 +71,7 @@ export async function submitWholesaleAccountRequest(
   formData: FormData
 ): Promise<{ error?: string; success?: boolean }> {
   try {
+    requireAdultBirthDate(formData.get('birthDate'))
     const parsed = requestSchema.parse({
       businessName: formData.get('businessName'),
       businessEmail: formData.get('businessEmail'),
@@ -93,6 +95,8 @@ export async function submitWholesaleAccountRequest(
       smsOptIn: parsed.smsOptIn,
       smsOptInAt: parsed.smsOptIn ? new Date() : null,
       smsConsentLanguage: parsed.smsOptIn ? SMS_CONSENT_COPY : null,
+      ageGateVersion: AGE_GATE_VERSION,
+      ageVerifiedAt: new Date(),
       source: parsed.source,
       submissionPage: parsed.submissionPage ?? null,
       ipAddress: requestHeaders.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null,
@@ -127,13 +131,15 @@ export async function submitWholesaleAccountRequest(
         throw error
       }
 
-      const requiredColumns = ['business_name', 'business_email', 'sms_opt_in', 'source']
+      const requiredColumns = ['business_name', 'business_email', 'sms_opt_in', 'source', 'age_gate_version', 'age_verified_at']
       const hasRequiredColumns = requiredColumns.every(column => availableColumns.has(column))
       if (!hasRequiredColumns) {
         throw error
       }
 
       const retryValues: Partial<NewWholesaleAccountRequest> = {}
+      retryValues.ageGateVersion = AGE_GATE_VERSION
+      retryValues.ageVerifiedAt = new Date()
 
       if (availableColumns.has('business_name')) retryValues.businessName = fallbackInsertValues.businessName
       if (availableColumns.has('business_email')) retryValues.businessEmail = fallbackInsertValues.businessEmail

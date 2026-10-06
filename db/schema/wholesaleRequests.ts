@@ -10,6 +10,8 @@ export const wholesaleAccountRequests = pgTable('wholesale_account_requests', {
   smsOptIn: boolean('sms_opt_in').notNull().default(false),
   smsOptInAt: timestamp('sms_opt_in_at', { withTimezone: true }),
   smsConsentLanguage: text('sms_consent_language'),
+  ageGateVersion: text('age_gate_version'),
+  ageVerifiedAt: timestamp('age_verified_at', { withTimezone: true }),
   source: text('source').notNull().default('marketing_contact_form'),
   submissionPage: text('submission_page'),
   ipAddress: text('ip_address'),
