@@ -4,6 +4,10 @@ import { db } from '@/db'
 import { scheduledSmsJobs, tastings, users, userPreferences } from '@/db/schema'
 import { formatTastingSmsPayload, sendTastingSmsFromTemplate } from '@/lib/tastings/sms-series'
 import { getTastingSmsDisposition, getTastingSmsSchedule, SCHEDULED_TASTING_SMS_KEYS, type ScheduledTastingSmsKey } from '@/lib/tastings/sms-schedule'
+import { reconcileSmsDeliveryStatuses } from '@/lib/telnyx/delivery'
+import { SmsSubmissionUnconfirmedError } from '@/lib/telnyx/client'
+
+export const maxDuration = 60
 
 function isAuthorized(request: NextRequest) {
   const secret = process.env.CRON_SECRET
@@ -22,12 +26,16 @@ export async function GET(request: NextRequest) {
     .limit(50)
 
   let processed = 0
+  const processingDeadline = Date.now() + 25000
 
   for (const job of jobs) {
+    if (Date.now() >= processingDeadline) break
     // Claim before sending: overlapping cron runs must not both deliver this job.
     const [claimed] = await db.update(scheduledSmsJobs).set({ status: 'sending' })
       .where(and(eq(scheduledSmsJobs.id, job.id), eq(scheduledSmsJobs.status, 'pending'))).returning({ id: scheduledSmsJobs.id })
     if (!claimed) continue
+    let accepted = false
+    let acceptedId: string | null = null
     try {
       const [current] = job.tastingId ? await db.select({ tasting: tastings, user: users, smsEnabled: userPreferences.smsNotificationsEnabled })
         .from(tastings).innerJoin(users, eq(users.id, tastings.assignedUserId))
@@ -58,24 +66,30 @@ export async function GET(request: NextRequest) {
         }).where(eq(scheduledSmsJobs.id, job.id))
         continue
       }
-      await sendTastingSmsFromTemplate({
+      const providerMessageId = await sendTastingSmsFromTemplate({
         templateKey: key,
         payload,
       })
+      accepted = true
+      acceptedId = providerMessageId
       await db.update(scheduledSmsJobs).set({
-        status: 'sent',
+        status: providerMessageId ? 'submitted' : 'delivery_unconfirmed',
+        providerMessageId,
         sentAt: new Date(),
-        lastError: null,
+        lastError: providerMessageId ? null : 'Provider accepted submission without a message id; delivery cannot be confirmed.',
         payload, phoneNumber: user.phone!,
       }).where(eq(scheduledSmsJobs.id, job.id))
       processed += 1
     } catch (error) {
       await db.update(scheduledSmsJobs).set({
-        status: 'failed',
+        status: accepted || error instanceof SmsSubmissionUnconfirmedError ? 'delivery_unconfirmed' : 'failed',
+        providerMessageId: acceptedId,
+        sentAt: accepted ? new Date() : null,
         lastError: error instanceof Error ? error.message : String(error),
       }).where(eq(scheduledSmsJobs.id, job.id))
     }
   }
 
-  return NextResponse.json({ processed, total: jobs.length })
+  const delivery = await reconcileSmsDeliveryStatuses()
+  return NextResponse.json({ processed, total: jobs.length, delivery })
 }

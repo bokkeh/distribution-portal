@@ -63,10 +63,10 @@ export function JobsOverview({
   return (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-4">
-        {['pending', 'sent', 'failed', 'retrying'].map((status) => (
+        {['pending', 'submitted', 'delivered', 'failed'].map((status) => (
           <div key={status} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <p className="text-xs uppercase tracking-wide text-slate-400">{status}</p>
-            <p className="mt-2 text-3xl font-bold text-slate-950">{counts[status] ?? 0}</p>
+            <p className="mt-2 text-3xl font-bold text-slate-950">{status === 'submitted' ? (counts.submitted ?? 0) + (counts.queued ?? 0) + (counts.sent ?? 0) : counts[status] ?? 0}</p>
           </div>
         ))}
       </div>

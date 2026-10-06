@@ -8,8 +8,8 @@ export function getTastingSmsSchedule(start: Date, end: Date | null) {
   const previousDay = new Date(`${getEasternDateKey(start)}T12:00:00Z`)
   previousDay.setUTCDate(previousDay.getUTCDate() - 1)
   return {
-    // The production plan runs cron once daily at 13:00 UTC (8/9 AM Eastern).
-    // Queue morning reminders before that run rather than after it.
+    // Morning reminders are compatible with the daily Vercel fallback.
+    // GitHub Actions also processes event-time prompts every 15 minutes.
     day_before_reminder: parseDateTimeInTimeZone(previousDay.toISOString().slice(0, 10), '08:00'),
     day_of_reminder: new Date(Math.min(parseDateTimeInTimeZone(getEasternDateKey(start), '08:00').getTime(), start.getTime() - 2 * 3600000)),
     checkin_prompt: start,

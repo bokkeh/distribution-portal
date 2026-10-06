@@ -8,7 +8,8 @@ export const notificationsLog = pgTable('notifications_log', {
   recipientName: text('recipient_name'),
   type: text('type', { enum: ['sms', 'email', 'chat'] }).notNull(),
   message: text('message').notNull(),
-  status: text('status', { enum: ['sent', 'failed'] }).notNull().default('sent'),
+  status: text('status', { enum: ['queued', 'sent', 'delivered', 'failed', 'delivery_unconfirmed'] }).notNull().default('sent'),
+  providerMessageId: text('provider_message_id'),
   sentAt: timestamp('sent_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

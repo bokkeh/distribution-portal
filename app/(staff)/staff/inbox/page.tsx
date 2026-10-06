@@ -141,6 +141,7 @@ export default async function StaffInboxPage({
             direction: message.direction,
             body: String(message.body ?? ''),
             mediaUrls: Array.isArray(message.mediaUrls) ? message.mediaUrls.filter((url): url is string => typeof url === 'string') : [],
+            deliveryError: message.deliveryError,
             status: String(message.status ?? ''),
             createdAt: toSafeIsoString(message.createdAt),
           }))}

@@ -17,6 +17,7 @@ export async function logSmsMessage({
   mediaUrls,
   status,
   providerMessageId,
+  deliveryError,
   groupParticipants,
 }: {
   userId?: string | null
@@ -25,8 +26,9 @@ export async function logSmsMessage({
   contactName?: string | null
   body: string
   mediaUrls?: string[] | null
-  status: 'received' | 'sent' | 'failed'
+  status: 'received' | 'queued' | 'sent' | 'delivered' | 'failed' | 'delivery_unconfirmed'
   providerMessageId?: string | null
+  deliveryError?: string | null
   groupParticipants?: string[]
 }) {
   try {
@@ -47,6 +49,7 @@ export async function logSmsMessage({
       mediaUrls: mediaUrls?.length ? mediaUrls : null,
       status,
       providerMessageId: providerMessageId ?? null,
+      deliveryError: deliveryError ?? null,
     })
 
     await logActivityEvent({

@@ -1,7 +1,7 @@
 import { and, desc, eq } from 'drizzle-orm'
 import { db } from '@/db'
 import { notificationsLog, scheduledSmsJobs, tastingSmsTemplates } from '@/db/schema'
-import { sendSms } from '@/lib/telnyx/client'
+import { sendSmsWithReceipt } from '@/lib/telnyx/client'
 import { getTastingSmsSchedule } from './sms-schedule'
 import {
   formatEasternDate,
@@ -209,15 +209,17 @@ export async function sendTastingSmsFromTemplate({
     portal_link: portalLink,
   })
 
-  await sendSms({ to: payload.phoneNumber, body })
+  const providerMessageId = await sendSmsWithReceipt({ to: payload.phoneNumber, body, userId: payload.userId, contactName: payload.store_name })
   await db.insert(notificationsLog).values({
     userId: payload.userId,
     recipientPhone: payload.phoneNumber,
     recipientName: payload.store_name,
     type: 'sms',
     message: body,
-    status: 'sent',
-  })
+    status: 'queued',
+    providerMessageId,
+  }).catch(error => console.error('Tasting SMS accepted but notification log failed:', error))
+  return providerMessageId
 }
 
 export async function upsertDefaultTastingSmsTemplates() {

@@ -1,0 +1,29 @@
+name: Tasting SMS reminders
+
+on:
+  schedule:
+    # Avoid the busy top of the hour. GitHub can still delay scheduled runs.
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: tasting-sms-production
+  cancel-in-progress: false
+
+jobs:
+  reminders:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Process due reminders and reconcile delivery receipts
+        env:
+          TASTING_SMS_CRON_SECRET: ${{ secrets.TASTING_SMS_CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$TASTING_SMS_CRON_SECRET"
+          curl --fail-with-body --silent --show-error \
+            --connect-timeout 15 --max-time 90 \
+            --header "Authorization: Bearer $TASTING_SMS_CRON_SECRET" \
+            https://ahawc.com/api/cron/tasting-sms

@@ -48,6 +48,7 @@ type Message = {
   body: string
   mediaUrls?: string[]
   status: string
+  deliveryError?: string | null
   createdAt: string | Date
 }
 
@@ -248,11 +249,11 @@ export function SmsInboxHub({
           direction: 'outbound',
           body: body || '[Image attachment]',
           mediaUrls,
-          status: 'sent',
+          status: 'queued',
           createdAt: new Date(),
         },
       ])
-      toast.success('Reply sent')
+      toast.success('Reply submitted')
       formRef.current?.reset()
       setAttachments([])
       pendingReplyAttachmentsRef.current = []
@@ -271,7 +272,7 @@ export function SmsInboxHub({
     }
 
     if (composeState?.success && composeState.phone) {
-      toast.success('Text sent')
+      toast.success('Text submitted')
       composeFormRef.current?.reset()
       setComposeOpen(false)
       setComposeMode('account')
@@ -383,7 +384,7 @@ export function SmsInboxHub({
       }
 
       const results: GiphyResult[] = (payload?.data ?? [])
-        .map((item: any) => {
+        .map((item: { id: string; title?: string; images?: { fixed_height_small?: { url?: string; size?: string; webp?: string } } }) => {
           const image = item?.images?.fixed_height_small
           if (!image?.url) return null
 
@@ -791,9 +792,14 @@ export function SmsInboxHub({
                     ) : null}
                     {message.body && message.body !== '[Image attachment]' ? <p>{message.body}</p> : null}
                     <div className={cn('mt-2 flex items-center justify-between gap-3 text-[11px]', message.direction === 'outbound' ? 'text-blue-100' : 'text-slate-400')}>
-                      <span>{message.direction === 'outbound' ? 'Outgoing' : 'Incoming'}</span>
+                      <span>{message.direction === 'outbound'
+                        ? ({ queued: 'Awaiting carrier', sent: 'Sent to carrier', delivered: 'Delivered', failed: 'Delivery failed', delivery_unconfirmed: 'Delivery unconfirmed' } as Record<string, string>)[message.status] ?? 'Outgoing'
+                        : 'Incoming'}</span>
                       <span suppressHydrationWarning>{formatDate(message.createdAt)}</span>
                     </div>
+                    {message.direction === 'outbound' && message.deliveryError ? (
+                      <p className="mt-2 text-xs font-medium">{message.deliveryError}</p>
+                    ) : null}
                   </div>
                 ))}
               </div>

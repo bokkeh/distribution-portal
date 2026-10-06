@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm'
 import { db } from '@/db'
 import { notificationsLog, smsThreads } from '@/db/schema'
 import { requireAdminOrStaff } from '@/lib/auth/session'
-import { sendSms } from '@/lib/telnyx/client'
+import { sendSms, sendSmsWithReceipt } from '@/lib/telnyx/client'
 import { Resend } from 'resend'
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
@@ -48,14 +48,15 @@ export async function sendDirectSms(to: string, recipientName: string, body: str
   const normalized = to.replace(/[\s\-().]/g, '').replace(/^(\d{10})$/, '+1$1').replace(/^1(\d{10})$/, '+1$1')
 
   try {
-    await sendSms({ to: normalized, body, userId: session.user.id, contactName: recipientName || null })
+    const providerMessageId = await sendSmsWithReceipt({ to: normalized, body, userId: session.user.id, contactName: recipientName || null })
     await db.insert(notificationsLog).values({
       userId: session.user.id,
       recipientPhone: normalized,
       recipientName: recipientName || null,
       type: 'sms',
       message: body,
-      status: 'sent',
+      status: 'queued',
+      providerMessageId,
     })
     return { success: true }
   } catch (err) {

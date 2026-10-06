@@ -28,6 +28,7 @@ export async function getInboxMessageRows() {
         body: smsMessages.body,
         mediaUrls: smsMessages.mediaUrls,
         status: smsMessages.status,
+        deliveryError: smsMessages.deliveryError,
         providerMessageId: smsMessages.providerMessageId,
         createdAt: smsMessages.createdAt,
       })
@@ -46,6 +47,7 @@ export async function getInboxMessageRows() {
         contactName: smsMessages.contactName,
         body: smsMessages.body,
         status: smsMessages.status,
+        deliveryError: smsMessages.deliveryError,
         providerMessageId: smsMessages.providerMessageId,
         createdAt: smsMessages.createdAt,
       })

@@ -1,6 +1,6 @@
 'use server'
 
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { db } from '@/db'
 import { scheduledSmsJobs } from '@/db/schema'
@@ -18,16 +18,20 @@ export async function retryScheduledSmsJob(jobId: string) {
   if (!job) {
     throw new Error('Job not found')
   }
+  if (job.status !== 'failed') throw new Error('Only failed SMS jobs can be retried. Delivery may already be in progress or complete.')
 
-  await db
+  const [retried] = await db
     .update(scheduledSmsJobs)
     .set({
       status: 'pending',
       sendAt: new Date(),
       lastError: null,
       sentAt: null,
+      providerMessageId: null,
     })
-    .where(eq(scheduledSmsJobs.id, jobId))
+    .where(and(eq(scheduledSmsJobs.id, jobId), eq(scheduledSmsJobs.status, 'failed')))
+    .returning({ id: scheduledSmsJobs.id })
+  if (!retried) throw new Error('This job has already been retried.')
 
   if (job.tastingId) {
     await logActivityEvent({

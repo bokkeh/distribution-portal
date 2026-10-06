@@ -12,6 +12,7 @@ import {
 } from '@/lib/telnyx/compliance'
 import { createNotificationsForRoles } from '@/lib/notifications/in-app'
 import { isTelnyxWebhookVerificationConfigured, verifyTelnyxWebhookSignature } from '@/lib/telnyx/webhook'
+import { applySmsDeliveryReceipt } from '@/lib/telnyx/delivery'
 
 type TelnyxWebhookPayload = {
   id?: string
@@ -30,6 +31,10 @@ type TelnyxWebhookPayload = {
   media?: Array<{ url?: string }>
 }
 
+type TelnyxWebhookEnvelope = TelnyxWebhookPayload & {
+  data?: TelnyxWebhookPayload & { payload?: TelnyxWebhookPayload }
+}
+
 function getInboundText(payload: TelnyxWebhookPayload) {
   return payload?.text ?? payload?.body ?? payload?.payload?.text ?? ''
 }
@@ -44,7 +49,7 @@ function getProviderMessageId(payload: TelnyxWebhookPayload) {
   return payload?.id ?? payload?.payload?.id ?? null
 }
 
-function getGroupParticipants(body: any, payload: TelnyxWebhookPayload, fromPhone: string): string[] {
+function getGroupParticipants(body: TelnyxWebhookEnvelope, payload: TelnyxWebhookPayload, fromPhone: string): string[] {
   const ownNumber = (process.env.TELNYX_FROM_NUMBER ?? '').replace(/\D/g, '')
   const toField = body?.data?.payload?.to ?? body?.data?.to ?? payload?.to ?? payload?.payload?.to
   if (!toField) return []
@@ -58,7 +63,7 @@ function getGroupParticipants(body: any, payload: TelnyxWebhookPayload, fromPhon
     })
 }
 
-function getInboundMediaUrls(body: any, payload: TelnyxWebhookPayload) {
+function getInboundMediaUrls(body: TelnyxWebhookEnvelope, payload: TelnyxWebhookPayload) {
   const media = body?.data?.payload?.media ?? body?.data?.media ?? payload?.media ?? []
   if (!Array.isArray(media)) return []
   return media
@@ -66,7 +71,7 @@ function getInboundMediaUrls(body: any, payload: TelnyxWebhookPayload) {
     .filter((url: string | undefined): url is string => Boolean(url))
 }
 
-function getEventType(body: any, payload: TelnyxWebhookPayload) {
+function getEventType(body: TelnyxWebhookEnvelope, payload: TelnyxWebhookPayload) {
   return body?.data?.event_type ?? body?.event_type ?? payload?.event_type ?? payload?.payload?.event_type ?? ''
 }
 
@@ -93,7 +98,7 @@ export async function POST(req: NextRequest) {
 
   const body = await (async () => {
     try {
-      return JSON.parse(rawBody) as Record<string, any>
+      return JSON.parse(rawBody) as TelnyxWebhookEnvelope
     } catch {
       return null
     }
@@ -104,11 +109,17 @@ export async function POST(req: NextRequest) {
 
   const payload = (body?.data?.payload ?? body?.data ?? body) as TelnyxWebhookPayload
   const eventType = getEventType(body, payload)
+  if (eventType === 'message.sent' || eventType === 'message.finalized') {
+    const providerMessageId = getProviderMessageId(payload)
+    if (!providerMessageId) return NextResponse.json({ error: 'Missing message id' }, { status: 400 })
+    await applySmsDeliveryReceipt(providerMessageId, payload)
+    return NextResponse.json({ received: true })
+  }
   const text = getInboundText(payload)
   const from = getInboundFrom(payload)
   const mediaUrls = getInboundMediaUrls(body, payload)
 
-  // Ignore outbound delivery/status events. The inbox only tracks actual inbound replies.
+  // Ignore other event types without creating inbound messages or reply alerts.
   if (eventType && eventType !== 'message.received') {
     return NextResponse.json({ received: true, ignored: eventType })
   }
