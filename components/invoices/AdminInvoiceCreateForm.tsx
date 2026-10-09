@@ -81,6 +81,7 @@ export function AdminInvoiceCreateForm({
 }) {
   const [customerId, setCustomerId] = useState(initialCustomerId)
   const [orderId, setOrderId] = useState(initialOrderId)
+  const [orderSearch, setOrderSearch] = useState('')
   const [tax, setTax] = useState('0')
   const [lineItems, setLineItems] = useState<LineItemFormRow[]>([createEmptyRow()])
 
@@ -91,6 +92,15 @@ export function AdminInvoiceCreateForm({
     [customerId, orders],
   )
   const selectedOrderId = availableOrders.some((order) => order.id === orderId) ? orderId : ''
+  const customerNames = useMemo(
+    () => new Map(customers.map((customer) => [customer.id, customer.companyName])),
+    [customers],
+  )
+  const matchingOrders = availableOrders.filter((order) => {
+    const search = orderSearch.trim().replace(/^#/, '').toLowerCase()
+    return order.id === selectedOrderId || !search
+      || `${customerNames.get(order.customerId) ?? ''} ${order.id}`.toLowerCase().includes(search)
+  })
   const selectedOrder = availableOrders.find((order) => order.id === selectedOrderId) ?? null
   const computedDueDate = selectedOrder ? getDeliveryDueDate(selectedOrder.deliveryDate, selectedOrder.paymentTerms) : null
   const [dueDateTouched, setDueDateTouched] = useState(false)
@@ -201,6 +211,13 @@ export function AdminInvoiceCreateForm({
 
       <div className="space-y-2">
         <Label htmlFor="orderId">Linked Order (optional)</Label>
+        <Label htmlFor="orderSearch" className="sr-only">Search linked orders by customer or order number</Label>
+        <Input
+          id="orderSearch"
+          value={orderSearch}
+          onChange={(event) => setOrderSearch(event.target.value)}
+          placeholder="Search by customer or order number..."
+        />
         <select
           name="orderId"
           id="orderId"
@@ -209,12 +226,15 @@ export function AdminInvoiceCreateForm({
           className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         >
           <option value="">No linked order</option>
-          {availableOrders.map((order) => (
+          {matchingOrders.map((order) => (
             <option key={order.id} value={order.id}>
-              Order #{order.id.slice(-8).toUpperCase()} - ${order.total}
+              {customerNames.get(order.customerId) ?? 'Unknown customer'} — Order #{order.id.slice(-8).toUpperCase()} - ${order.total}
             </option>
           ))}
         </select>
+        {matchingOrders.length === 0 ? (
+          <p className="text-xs text-muted-foreground">No eligible orders match your search.</p>
+        ) : null}
         <p className="text-xs text-muted-foreground">Only fulfilled orders without an existing invoice are listed.</p>
       </div>
 
