@@ -15,6 +15,7 @@ import { FieldPhotos } from './FieldPhotos'
 import { FieldContacts } from './FieldContacts'
 import { FieldAccountTastings } from './FieldAccountTastings'
 import { FieldAccountForm } from './FieldAccountForm'
+import { FieldTasterAvatar } from './FieldTasterAvatar'
 import { fieldAvailabilityRows, type FieldAvailability } from '@/lib/field/availability'
 import { formatEasternDate, getEasternDateKey } from '@/lib/tastings/time'
 import { formatCurrency } from '@/lib/utils'
@@ -49,7 +50,7 @@ function FieldTasting({ account, members, initialAvailability }: { account: Acco
       <p className="text-sm text-muted-foreground">Reported available dates for <strong>4–7 p.m. Eastern</strong>, with existing bookings checked. Final availability is checked again when saving.</p>
       {error ? <p role="alert" className="text-red-700">{error}</p> : null}
       <div className="space-y-2">{visible.map(row => <button type="button" key={`${row.userId}-${row.date}`} onClick={() => setChoice({ date: row.date, memberId: row.userId })} className={`min-h-20 w-full rounded-xl border p-3 text-left ${choice.date === row.date && choice.memberId === row.userId ? 'border-orange-500 bg-orange-50' : 'border-stone-200'}`}>
-        <span className="block font-semibold">{formatEasternDate(`${row.date}T12:00:00Z`)} · {row.name}</span><span className={`mt-1 block text-sm ${row.free ? 'text-emerald-700' : 'text-amber-700'}`}>{row.free ? '4–7 p.m. free · Tap to book' : `Booked ${row.bookedLabel} · Choose another time below`}</span>
+        <span className="flex items-center gap-3"><FieldTasterAvatar key={`${row.userId}:${row.avatarUrl ?? ''}`} name={row.name} avatarUrl={row.avatarUrl} /><span className="min-w-0 flex-1"><span className="block font-semibold">{formatEasternDate(`${row.date}T12:00:00Z`)} · {row.name}</span><span className={`mt-1 block text-sm ${row.free ? 'text-emerald-700' : 'text-amber-700'}`}>{row.free ? '4–7 p.m. free · Tap to book' : `Booked ${row.bookedLabel} · Choose another time below`}</span></span></span>
       </button>)}</div>
       {!visible.length ? <p className="rounded-xl bg-stone-50 p-3 text-sm">No reported open dates for this time window. Refresh, choose another time below, or schedule Unassigned.</p> : null}
       <div className="flex flex-wrap gap-2"><Button variant="outline" className="h-11" onClick={() => setShowCount(count => count + 12)}>More dates</Button><Button variant="ghost" className="h-11" onClick={() => setShowBooked(value => !value)}>{showBooked ? 'Show only open 4–7 dates' : 'Include booked dates'}</Button></div>

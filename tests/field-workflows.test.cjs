@@ -252,3 +252,13 @@ test('quick field contact creation is minimal, linked, retry-safe and preserves 
  assert.ok((await h.api.createFieldContact({...minimal,requestId:randomUUID(),email:'bad email'})).error)
  assert.ok(h.runtime.paths.includes('/admin/crm/'+accountId+'/contacts'))
 })
+
+test('field availability carries each active taster photo through to its booking card', async () => {
+ const avatarUrl='https://storage.googleapis.com/test-bucket/avatars/rachel.jpg'
+ await h.runtime.db.update(h.api.schema.users).set({avatarUrl}).where(eq(h.api.schema.users.id,h.rachelId))
+ const data=await h.api.getFieldAvailability()
+ assert.equal(data.tasters.find(taster=>taster.id===h.rachelId).avatarUrl,avatarUrl)
+ const rows=h.api.fieldAvailabilityRows({...data,dates:[{userId:h.rachelId,date:'2030-11-06'}]})
+ assert.equal(rows[0].avatarUrl,avatarUrl);assert.equal(rows[0].name,'Rachel')
+ assert.equal(h.api.fieldAvailabilityRows({tasters:[{id:h.rachelId,name:'Rachel'}],dates:[{userId:h.rachelId,date:'2030-11-07'}],bookings:[]})[0].avatarUrl,null)
+})

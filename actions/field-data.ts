@@ -115,7 +115,7 @@ export async function getFieldBootstrap() {
 
 export async function getFieldAvailability() {
   await fieldContext()
-  const team = await db.select({ id: users.id, name: users.name, roles: users.roles }).from(users).where(eq(users.active, true))
+  const team = await db.select({ id: users.id, name: users.name, roles: users.roles, avatarUrl: users.avatarUrl }).from(users).where(eq(users.active, true))
   const tasters = team.filter(user => user.roles.includes('taster'))
   const ids = tasters.map(user => user.id)
   if (!ids.length) return { tasters: [], dates: [], bookings: [] }
@@ -124,7 +124,7 @@ export async function getFieldAvailability() {
     db.select({ userId: tasterAvailability.userId, date: tasterAvailability.availableDate }).from(tasterAvailability).where(and(inArray(tasterAvailability.userId, ids), gte(tasterAvailability.availableDate, today))).orderBy(asc(tasterAvailability.availableDate)),
     db.select({ userId: tastings.assignedUserId, start: tastings.scheduledAt, end: tastings.endAt, timeZone: tastings.timeZone }).from(tastings).where(and(inArray(tastings.assignedUserId, ids), upcomingTastingFilter())).orderBy(asc(tastings.scheduledAt)),
   ])
-  return { tasters: tasters.map(user => ({ id: user.id, name: user.name })), dates, bookings: bookings.map(row => ({ ...row, start: row.start.toISOString(), end: row.end?.toISOString() ?? null })) }
+  return { tasters: tasters.map(user => ({ id: user.id, name: user.name, avatarUrl: user.avatarUrl })), dates, bookings: bookings.map(row => ({ ...row, start: row.start.toISOString(), end: row.end?.toISOString() ?? null })) }
 }
 
 function refreshFieldAccount(accountId: string) {

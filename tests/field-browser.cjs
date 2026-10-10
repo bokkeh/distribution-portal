@@ -21,6 +21,8 @@ async function main() {
     {customerId:h.accountId,name:'Jamie Manager',title:'Store manager',email:'manager@example.test'},
     {customerId:null,name:'Standalone private contact',email:'private@example.test'},
   ])
+  await h.runtime.db.update(h.api.schema.users).set({avatarUrl:'https://storage.googleapis.com/test-bucket/avatars/rachel.png'}).where(require('drizzle-orm').eq(h.api.schema.users.id,h.rachelId))
+  let avatarBroken=false
   const rpc = names => `const call = async (name,args) => { const r = await fetch('/action/'+name,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(args)}); const data=await r.json(); if(!r.ok) throw new Error(data.error); return data }; ${names.map(name => `export const ${name} = (...args) => call('${name}',args);`).join('\n')}`
   const stubs = {
     '@/actions/field-data': rpc(['createFieldAccount','createFieldContact','getFieldAccount','getFieldAccountTastings','searchFieldAccounts','saveFieldNote','saveFieldPhoto','getFieldAvailability']),
@@ -46,6 +48,7 @@ async function main() {
       if(req.url==='/styles.css'){res.setHeader('content-type','text/css');return res.end(css)}
       if(req.url==='/brand/logo-badge.png'){res.setHeader('content-type','image/png');return res.end(await fs.readFile('public/brand/logo-badge.png'))}
       if(req.url==='/field-state')return res.end(JSON.stringify({bootstrap:await h.api.getFieldBootstrap(),availability:await h.api.getFieldAvailability()}))
+      if(req.url.startsWith('/api/image?path=avatars%2Frachel')){if(avatarBroken){res.statusCode=404;return res.end()}res.setHeader('content-type','image/png');return res.end(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a9X8AAAAASUVORK5CYII=','base64'))}
       if(req.url==='/api/upload'){ for await(const chunk of req){ void chunk }; uploads++; await new Promise(resolve=>setTimeout(resolve,100)); return res.end(JSON.stringify({publicUrl:`/api/image?path=account-media%2Fphoto-${uploads}.jpg`})) }
       if(req.url.startsWith('/action/')){
         const name=req.url.slice('/action/'.length);calls[name]=(calls[name]??0)+1
@@ -177,6 +180,20 @@ async function main() {
       await page.getByRole('button',{name:'Schedule tasting Open dates & team assignment'}).click()
       await page.getByText('Previous shelf tasting',{exact:true}).waitFor()
       if(width===1280) await page.getByRole('button',{name:'Include booked dates'}).click()
+      const photo=page.getByRole('img',{name:'Rachel profile photo',exact:true}).first()
+      await photo.waitFor()
+      assert.equal(await photo.getAttribute('src'),'/api/image?path=avatars%2Frachel.png')
+      await page.waitForFunction(()=>Array.from(document.querySelectorAll('img')).some(img=>img.alt==='Rachel profile photo' && img.complete && img.naturalWidth>0))
+      avatarBroken=true
+      await h.runtime.db.update(h.api.schema.users).set({avatarUrl:'https://storage.googleapis.com/test-bucket/avatars/rachel-missing-'+width+'.png'}).where(require('drizzle-orm').eq(h.api.schema.users.id,h.rachelId))
+      await page.getByRole('button',{name:'Back to field tasks'}).click()
+      await page.getByRole('button',{name:'Schedule tasting Open dates & team assignment'}).click()
+      if(width===1280) await page.getByRole('button',{name:'Include booked dates'}).click()
+      await page.getByRole('button',{name:'Refresh',exact:true}).click()
+      await page.getByRole('button',{name:/Nov.*6.*Rachel/}).getByText('R',{exact:true}).waitFor()
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false)
+      avatarBroken=false
+      await h.runtime.db.update(h.api.schema.users).set({avatarUrl:'https://storage.googleapis.com/test-bucket/avatars/rachel.png'}).where(require('drizzle-orm').eq(h.api.schema.users.id,h.rachelId))
       await page.getByRole('button',{name:/Nov.*6.*Rachel/}).click()
       assert.equal(await page.getByLabel('Assigned team member').inputValue(),h.rachelId)
       assert.equal(await page.getByLabel('Date',{exact:true}).inputValue(),'2030-11-06')
