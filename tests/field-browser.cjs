@@ -20,6 +20,7 @@ async function main() {
     {customerId:h.accountId,name:'Alex Client',title:'Buyer',isPrimary:true,phone:'(410) 555-0111',email:'alexclient@example.test',preferredContact:'call'},
     {customerId:h.accountId,name:'Jamie Manager',title:'Store manager',email:'manager@example.test'},
     {customerId:null,name:'Standalone private contact',email:'private@example.test'},
+    ...Array.from({length:8},(_,i)=>({customerId:h.accountId,name:'ZZ Field contact '+i,title:'Manager'})),
   ])
   await h.runtime.db.update(h.api.schema.users).set({avatarUrl:'https://storage.googleapis.com/test-bucket/avatars/rachel.png'}).where(require('drizzle-orm').eq(h.api.schema.users.id,h.rachelId))
   let avatarBroken=false
@@ -123,6 +124,26 @@ async function main() {
       await page.getByRole('alert').filter({hasText:'Could not refresh contacts'}).waitFor({state:'hidden'})
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false)
       await page.screenshot({path:`tmp/operator-tests/field-contacts-${width}.png`,fullPage:true})
+      // A lower card must bring the editor into view without opening the phone keyboard.
+      await page.getByRole('button',{name:'Edit ZZ Field contact 7',exact:true}).click()
+      const editHeading=page.getByRole('heading',{name:'Edit contact',exact:true})
+      await editHeading.waitFor()
+      assert.equal(await editHeading.evaluate(node=>node===document.activeElement),true)
+      const headingBounds=await editHeading.boundingBox()
+      assert.ok(headingBounds.y>=0 && headingBounds.y<844)
+      assert.equal(await page.getByLabel('Contact name',{exact:true}).inputValue(),'ZZ Field contact 7')
+      assert.equal(await page.getByLabel('Job title / role',{exact:true}).inputValue(),'Manager')
+      await page.getByRole('button',{name:'Cancel editing contact',exact:true}).click()
+      await page.getByRole('button',{name:'Edit account point of contact',exact:true}).click()
+      const pocHeading=page.getByRole('heading',{name:'Edit account point of contact',exact:true})
+      assert.equal(await pocHeading.evaluate(node=>node===document.activeElement),true)
+      assert.equal(await page.getByLabel('Contact name',{exact:true}).inputValue(),'Alex Client')
+      await page.getByRole('button',{name:'Cancel editing contact',exact:true}).click()
+      await page.getByRole('button',{name:'Edit Business contact',exact:true}).click()
+      const businessHeading=page.getByRole('heading',{name:'Edit business contact',exact:true})
+      assert.equal(await businessHeading.evaluate(node=>node===document.activeElement),true)
+      assert.equal(await page.getByLabel('Contact phone (optional)',{exact:true}).inputValue(),'410-555-0120')
+      await page.getByRole('button',{name:'Cancel editing contact',exact:true}).click()
       const contactName='New buyer '+width, contactCalls=calls.createFieldContact??0
       const contactRowsBefore=(await h.runtime.db.select().from(h.api.schema.contacts)).length
       await page.getByRole('button',{name:'Add contact',exact:true}).click()
@@ -142,6 +163,7 @@ async function main() {
       await page.getByText('Connection lost after contact save. Retry to confirm.',{exact:true}).waitFor()
       await page.getByRole('button',{name:'Save contact',exact:true}).evaluate(button=>{button.click();button.click()})
       await page.getByText(contactName+' saved to this account.',{exact:true}).waitFor()
+      assert.equal(await page.getByRole('status').filter({hasText:contactName+' saved to this account.'}).evaluate(node=>node===document.activeElement),true)
       await page.getByRole('heading',{name:contactName,exact:true}).waitFor()
       assert.equal(calls.createFieldContact,contactCalls+3)
       assert.equal((await h.runtime.db.select().from(h.api.schema.contacts)).length,contactRowsBefore+1)

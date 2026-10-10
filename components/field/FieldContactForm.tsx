@@ -1,12 +1,17 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createFieldContact, updateFieldContact, type getFieldAccount } from '@/actions/field-data'
 import { Button } from '@/components/ui/button'
 
 export function FieldContactForm({ accountId, contact, onCancel, onSaved }: { accountId: string; contact?: Awaited<ReturnType<typeof getFieldAccount>>["contacts"][number]; onCancel: () => void; onSaved: (account: Awaited<ReturnType<typeof getFieldAccount>>, name: string) => void }) {
   const locked = useRef(false), requestId = useRef<string | null>(null)
   const [pending, setPending] = useState(false), [error, setError] = useState('')
+  const heading = useRef<HTMLHeadingElement>(null)
+  useEffect(() => {
+    heading.current?.focus({ preventScroll: true })
+    heading.current?.scrollIntoView({ block: 'start', behavior: 'instant' })
+  }, [])
   const inputClass = 'mt-2 h-14 w-full rounded-xl border bg-white px-4 text-base'
   return <form className="space-y-4 rounded-2xl border bg-white p-4" onSubmit={async event => {
     event.preventDefault(); if (locked.current) return
@@ -20,7 +25,7 @@ export function FieldContactForm({ accountId, contact, onCancel, onSaved }: { ac
     } catch { setError('Could not confirm contact save. Your details are kept; retry the same entry.') }
     finally { locked.current = false; setPending(false) }
   }}>
-    <h3 className="text-lg font-semibold">{contact ? 'Edit contact' : 'Add a contact'}</h3>
+    <h3 ref={heading} tabIndex={-1} className="scroll-mt-4 text-lg font-semibold focus:outline-none">{contact ? 'Edit contact' : 'Add a contact'}</h3>
     <p className="text-sm text-muted-foreground">Changes are saved to the main CRM. Only a name is required.</p>
     <fieldset disabled={pending} className="space-y-4">
       <label className="block">Contact name<input name="name" defaultValue={contact?.name ?? ''} required maxLength={160} autoComplete="name" className={inputClass} /></label>

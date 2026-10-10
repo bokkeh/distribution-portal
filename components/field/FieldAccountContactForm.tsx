@@ -1,12 +1,17 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { updateFieldAccountContact, type getFieldAccount } from '@/actions/field-data'
 import { Button } from '@/components/ui/button'
 type Account = Awaited<ReturnType<typeof getFieldAccount>>
 export function FieldAccountContactForm({ account, kind, onCancel, onSaved }: { account: Account; kind: 'poc' | 'business'; onCancel: () => void; onSaved: (account: Account, name: string) => void }) {
   const locked = useRef(false)
   const [pending, setPending] = useState(false), [error, setError] = useState('')
+  const heading = useRef<HTMLHeadingElement>(null)
+  useEffect(() => {
+    heading.current?.focus({ preventScroll: true })
+    heading.current?.scrollIntoView({ block: 'start', behavior: 'instant' })
+  }, [])
   const current = kind === 'poc' ? account.pointOfContact : { ...account.businessContact, name: '' }
   const inputClass = 'mt-2 h-14 w-full rounded-xl border bg-white px-4 text-base'
   return <form className="space-y-4 rounded-2xl border bg-white p-4" onSubmit={async event => {
@@ -20,7 +25,7 @@ export function FieldAccountContactForm({ account, kind, onCancel, onSaved }: { 
     } catch { setError('Could not confirm update. Your details are kept; retry.') }
     finally { locked.current = false; setPending(false) }
   }}>
-    <h3 className="text-lg font-semibold">Edit {kind === 'poc' ? 'account point of contact' : 'business contact'}</h3>
+    <h3 ref={heading} tabIndex={-1} className="scroll-mt-4 text-lg font-semibold focus:outline-none">Edit {kind === 'poc' ? 'account point of contact' : 'business contact'}</h3>
     <p className="text-sm text-muted-foreground">Updates the account details in the main CRM. Job titles and preferences belong to the individual contact cards.</p>
     <fieldset disabled={pending} className="space-y-4">
       {kind === 'poc' ? <label className="block">Contact name<input name="name" maxLength={160} defaultValue={current.name ?? ''} className={inputClass} autoComplete="name" /></label> : null}
