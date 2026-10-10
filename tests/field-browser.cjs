@@ -13,7 +13,7 @@ async function main() {
   await h.runtime.db.insert(h.api.schema.tasterAvailability).values({ userId: h.rachelId, availableDate: '2030-11-06' })
   const rpc = names => `const call = async (name,args) => { const r = await fetch('/action/'+name,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(args)}); const data=await r.json(); if(!r.ok) throw new Error(data.error); return data }; ${names.map(name => `export const ${name} = (...args) => call('${name}',args);`).join('\n')}`
   const stubs = {
-    '@/actions/field-data': rpc(['getFieldAccount','searchFieldAccounts','saveFieldNote','saveFieldPhoto','getFieldAvailability']),
+    '@/actions/field-data': rpc(['createFieldAccount','getFieldAccount','searchFieldAccounts','saveFieldNote','saveFieldPhoto','getFieldAvailability']),
     '@/actions/field-documents': rpc(['quoteFieldDocument','saveFieldDocument','sendFieldInvoice','getFieldDocument','startFieldCardPayment']),
     '@/actions/quick-schedule-tasting': rpc(['quickScheduleTasting']),
     '@/actions/account-observations': rpc(['saveAccountObservations']).replace("call('saveAccountObservations',args)", "call('saveAccountObservations',[Object.fromEntries(args[0])])"),
@@ -25,6 +25,7 @@ async function main() {
   await build({ entryPoints:['tests/fixtures/field-browser.jsx'],bundle:true,platform:'browser',format:'iife',outfile:'tmp/operator-tests/field-client.js',jsx:'automatic',define:{'process.env.NODE_ENV':'"development"','process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY':'""'},plugins:[{name:'isolated-field-boundaries',setup(b){b.onResolve({filter:/.*/},args=>Object.hasOwn(stubs,args.path)?{path:args.path,namespace:'test'}:undefined);b.onLoad({filter:/.*/,namespace:'test'},args=>({contents:stubs[args.path],loader:'jsx',resolveDir:process.cwd()}))}}] })
   const css = (await require('postcss')([require('@tailwindcss/postcss')()]).process((await fs.readFile('app/globals.css','utf8'))+'\n@source "../components";',{from:path.resolve('app/globals.css')})).css
   let failNote = false
+  let failAccount = false, failDocument = false
   const calls = {}
   const server = http.createServer(async(req,res)=>{
     try {
@@ -39,6 +40,9 @@ async function main() {
         const chunks=[];for await(const chunk of req)chunks.push(chunk)
         let args=JSON.parse(Buffer.concat(chunks).toString())
         if(name==='saveFieldNote' && failNote){failNote=false;return res.end(JSON.stringify({error:'Connection failed. Your note is kept.'}))}
+        if(name==='createFieldAccount' && failAccount){failAccount=false;return res.end(JSON.stringify({error:'Connection failed. Your account details are kept.'}))}
+        if(name==='saveFieldDocument' && failDocument){failDocument=false;return res.end(JSON.stringify({error:'Connection failed. Your invoice details are kept.'}))}
+        if(name==='createFieldAccount')await new Promise(resolve=>setTimeout(resolve,200))
         if(name==='saveFieldDocument')await new Promise(resolve=>setTimeout(resolve,200))
         if(name==='saveAccountObservations'){const f=new FormData();for(const [k,v]of Object.entries(args[0]))f.set(k,v);args=[f]}
         if(typeof h.api[name]!=='function')throw new Error('Unknown test action')
@@ -54,6 +58,29 @@ async function main() {
       const context=await browser.newContext({viewport:{width,height:844},hasTouch:width===390,isMobile:width===390})
       const page=await context.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message))
       await page.goto(`http://127.0.0.1:${server.address().port}/field`)
+      await page.getByLabel('Find the account').fill('Test Venue')
+      await page.getByRole('button',{name:'Add new account',exact:true}).click()
+      await page.getByRole('button',{name:'Save account & continue',exact:true}).click()
+      await page.getByRole('alert').filter({hasText:'An account with this name already exists'}).waitFor()
+      await page.getByRole('button',{name:'Use Test Venue · Ellicott City',exact:true}).click()
+      await page.getByRole('button',{name:'Change',exact:true}).click()
+      const fieldName=`Field Mobile Venue ${width}`
+      await page.getByLabel('Find the account').fill(fieldName)
+      await page.getByRole('button',{name:'Add new account',exact:true}).click()
+      assert.equal(await page.getByLabel('Account name',{exact:true}).inputValue(),fieldName)
+      await page.getByText('Location & contact (optional)',{exact:true}).click()
+      await page.getByLabel('City',{exact:true}).fill('Baltimore')
+      failAccount=true;await page.getByRole('button',{name:'Save account & continue',exact:true}).click()
+      await page.getByText('Connection failed. Your account details are kept.',{exact:true}).waitFor()
+      assert.equal(await page.getByLabel('Account name',{exact:true}).inputValue(),fieldName)
+      assert.equal(await page.getByLabel('City',{exact:true}).inputValue(),'Baltimore')
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false)
+      await page.screenshot({path:`tmp/operator-tests/field-account-create-${width}.png`,fullPage:true})
+      const accountCalls=calls.createFieldAccount??0
+      await page.getByRole('button',{name:'Save account & continue',exact:true}).evaluate(button=>{button.click();button.click()})
+      await page.getByText(`${fieldName} saved. Ready for field tasks.`,{exact:true}).waitFor()
+      assert.equal(calls.createFieldAccount,accountCalls+1)
+      await page.getByRole('button',{name:'Change',exact:true}).click()
       await page.getByLabel('Find the account').fill('Test Venue')
       await page.getByRole('button',{name:/Test Venue.*Ellicott/}).click()
       await page.getByRole('button',{name:'Create order Cases, payment & invoice'}).waitFor()
@@ -95,8 +122,36 @@ async function main() {
       h.runtime.emailSuccess=true
       await page.getByRole('button',{name:'Email invoice to customer',exact:true}).click();await page.getByText(/Invoice (emailed|already emailed) to client/).waitFor()
       await page.screenshot({path:`tmp/operator-tests/field-saved-${width}.png`,fullPage:true})
+      await page.getByRole('button',{name:'Back to field tasks',exact:true}).click()
+      await page.getByRole('button',{name:'Quick invoice Create & send to customer',exact:true}).click()
+      assert.equal(await page.getByRole('button',{name:'Saved products',exact:true}).getAttribute('aria-pressed'),'true')
+      await page.getByRole('button',{name:'Custom amount',exact:true}).click()
+      await page.getByLabel('What is this invoice for?',{exact:true}).fill('Custom service')
+      await page.getByLabel('Amount (USD)',{exact:true}).fill('15')
+      await page.getByRole('button',{name:'Review total',exact:true}).click()
+      await page.getByText('Review invoice',{exact:true}).waitFor()
+      await page.getByRole('button',{name:'Edit entry',exact:true}).click()
+      assert.equal(await page.getByLabel('Amount (USD)',{exact:true}).inputValue(),'15')
+      await page.getByRole('button',{name:'Saved products',exact:true}).click()
+      await page.getByRole('spinbutton',{name:'Test Vodka cases',exact:true}).fill('3')
+      await page.getByLabel('Customer email (optional)',{exact:true}).fill('client@example.test')
+      await page.getByRole('button',{name:'Review total',exact:true}).click()
+      await page.getByText('Review invoice',{exact:true}).waitFor()
+      await page.getByText('3 cases × $100.00 $300.00',{exact:true}).waitFor()
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false)
+      await page.screenshot({path:`tmp/operator-tests/field-product-invoice-${width}.png`,fullPage:true})
+      failDocument=true;await page.getByRole('button',{name:'Create & email invoice',exact:true}).click()
+      await page.getByRole('alert').filter({hasText:'Connection failed. Your invoice details are kept.'}).waitFor()
+      await page.getByRole('button',{name:'Edit entry',exact:true}).click()
+      assert.equal(await page.getByRole('spinbutton',{name:'Test Vodka cases',exact:true}).inputValue(),'3')
+      await page.getByRole('button',{name:'Review total',exact:true}).click()
+      await page.getByText('Review invoice',{exact:true}).waitFor()
+      const invoiceCalls=calls.saveFieldDocument??0
+      await page.getByRole('button',{name:'Create & email invoice',exact:true}).evaluate(button=>{button.click();button.click()})
+      await page.getByText('Invoice saved',{exact:true}).waitFor()
+      assert.equal(calls.saveFieldDocument,invoiceCalls+1)
       assert.deepEqual(errors,[])
-      console.log(`PASS field ${width}px: account search, retained failed note, availability selection, price-only save, photo upload/save, retained order edit, repeated taps, saved invoice and email retry`)
+      console.log(`PASS field ${width}px: new account, duplicate selection, retained failed account/invoice/note, availability, observations, photos, orders, saved-product/custom invoice, repeated taps and email retry`)
       await context.close()
     }
   }finally{await browser.close();await new Promise(resolve=>server.close(resolve));await h.pg.close()}

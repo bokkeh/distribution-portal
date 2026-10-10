@@ -113,3 +113,63 @@ test('note and photo retries preserve one record and reject changed payloads', a
   assert.ok((await h.api.saveFieldPhoto({ ...photo, caption: 'Changed' })).error)
   assert.equal((await h.runtime.db.select().from(h.api.schema.accountMedia).where(eq(h.api.schema.accountMedia.id, photo.requestId))).length, 1)
 })
+
+test('saved-product invoice uses account pricing and persists case lines without an order or stock requirement', async () => {
+  const productId=randomUUID()
+  await h.runtime.db.insert(h.api.schema.products).values({id:productId,name:'Wisher Case',sku:'WISHER-CASE',unit:'case',price:'120',bottlesPerCase:12})
+  await h.runtime.db.insert(h.api.schema.geographicPricingRules).values({productId,accountId:h.accountId,ruleType:'account',casePrice:'95',effectiveStartDate:new Date('2020-01-01')})
+  const ordersBefore=(await h.runtime.db.select().from(h.api.schema.orders)).length
+  const stockBefore=await h.runtime.db.select().from(h.api.schema.inventory)
+  const input=await reviewed(entry({kind:'invoice',items:[{productId,quantity:3}],tax:'5',notes:'Shelf delivery'}))
+  assert.equal(input.quotedTotal,'290.00')
+  const saved=await h.api.saveFieldDocument(input)
+  assert.equal(saved.success,true,saved.error);assert.equal(saved.orderId,null)
+  const [line]=await h.runtime.db.select().from(h.api.schema.invoiceItems).where(eq(h.api.schema.invoiceItems.invoiceId,saved.invoiceId))
+  assert.equal(line.productId,productId);assert.equal(line.sku,'WISHER-CASE');assert.equal(line.quantity,'3.00');assert.equal(line.unit,'case');assert.equal(line.unitPrice,'95.00');assert.equal(line.total,'285.00')
+  assert.match(line.description,/Shelf delivery/)
+  assert.equal((await h.api.saveFieldDocument(input)).invoiceId,saved.invoiceId)
+  assert.equal((await h.runtime.db.select().from(h.api.schema.invoiceItems).where(eq(h.api.schema.invoiceItems.invoiceId,saved.invoiceId))).length,1)
+  assert.deepEqual(await h.runtime.db.select().from(h.api.schema.inventory),stockBefore)
+  assert.equal((await h.runtime.db.select().from(h.api.schema.orders)).length,ordersBefore)
+  assert.ok((await h.api.quoteFieldDocument(entry({items:[{productId,quantity:3}]}))).error)
+  assert.ok((await h.api.quoteFieldDocument(entry({kind:'invoice',items:[{productId,quantity:3},{productId,quantity:1}]}))).error)
+  assert.ok((await h.api.quoteFieldDocument(entry({kind:'invoice',items:[{productId,quantity:3}],amount:'1',description:'Ambiguous'}))).error)
+  await h.runtime.db.update(h.api.schema.products).set({active:false}).where(eq(h.api.schema.products.id,productId))
+  assert.ok((await h.api.quoteFieldDocument(entry({kind:'invoice',items:[{productId,quantity:3}]}))).error)
+})
+
+test('field account creation is lightweight, immediately selectable and retry-safe, with duplicate matching', async () => {
+  const input={requestId:randomUUID(),companyName:'New Field Venue',city:'Baltimore',state:'md',email:'new@example.test'}
+  const saved=await h.api.createFieldAccount(input)
+  assert.equal(saved.success,true,saved.error);assert.equal(saved.account.companyName,input.companyName);assert.equal(saved.account.state,'MD')
+  assert.equal((await h.api.searchFieldAccounts('New Field Venue'))[0].id,saved.account.id)
+  assert.equal((await h.api.createFieldAccount(input)).account.id,saved.account.id)
+  assert.ok((await h.api.createFieldAccount({...input,email:'changed@example.test'})).error)
+  const duplicate=await h.api.createFieldAccount({...input,requestId:randomUUID(),companyName:'NEW FIELD VENUE'})
+  assert.ok(duplicate.error);assert.equal(duplicate.matches[0].id,saved.account.id)
+  const minimal=await h.api.createFieldAccount({requestId:randomUUID(),companyName:'Minimal Field Venue'})
+  assert.equal(minimal.success,true,minimal.error)
+  const [record]=await h.runtime.db.select().from(h.api.schema.customerAccounts).where(eq(h.api.schema.customerAccounts.id,minimal.account.id))
+  assert.equal(record.dealStage,null);assert.equal(record.userId,null)
+  const concurrent={requestId:randomUUID(),companyName:'Concurrent Venue'}
+  const results=await Promise.all([h.api.createFieldAccount(concurrent),h.api.createFieldAccount(concurrent)])
+  assert.ok(results.every(row=>row.success));assert.equal(results[0].account.id,results[1].account.id)
+  assert.equal((await h.runtime.db.select().from(h.api.schema.customerAccounts).where(eq(h.api.schema.customerAccounts.id,concurrent.requestId))).length,1)
+})
+
+test('sales field accounts are assigned to the creator and duplicate results respect account scope', async () => {
+  const session=h.runtime.session,repId=randomUUID(),memberId=randomUUID()
+  await h.runtime.db.insert(h.api.schema.users).values({id:repId,name:'Field rep',email:'rep@example.test',passwordHash:'test',role:'sales_rep',roles:['sales_rep']})
+  await h.runtime.db.insert(h.api.schema.salesMembers).values({id:memberId,userId:repId,status:'active',name:'Field rep'})
+  try {
+    h.runtime.session={user:{id:repId,role:'sales_rep',roles:['sales_rep'],name:'Field rep'}}
+    const saved=await h.api.createFieldAccount({requestId:randomUUID(),companyName:'Rep Field Client'})
+    assert.equal(saved.success,true,saved.error)
+    const [record]=await h.runtime.db.select().from(h.api.schema.customerAccounts).where(eq(h.api.schema.customerAccounts.id,saved.account.id))
+    assert.equal(record.assignedSalesRepId,memberId)
+    const duplicate=await h.api.createFieldAccount({requestId:randomUUID(),companyName:'Test Venue'})
+    assert.ok(duplicate.error);assert.deepEqual(duplicate.matches,[])
+    h.runtime.session={user:{id:repId,role:'customer',roles:['customer']}}
+    assert.ok((await h.api.createFieldAccount({requestId:randomUUID(),companyName:'Unauthorized'})).error)
+  } finally {h.runtime.session=session}
+})

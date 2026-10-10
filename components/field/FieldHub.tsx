@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { FieldDocumentForm, type FieldProduct, type SavedFieldDocument } from './FieldDocumentForm'
 import { FieldCardPayment } from './FieldCardPayment'
 import { FieldPhotos } from './FieldPhotos'
+import { FieldAccountForm } from './FieldAccountForm'
 import { fieldAvailabilityRows, type FieldAvailability } from '@/lib/field/availability'
 import { formatEasternDate, getEasternDateKey } from '@/lib/tastings/time'
 import { formatCurrency } from '@/lib/utils'
@@ -64,6 +65,7 @@ export function FieldHub({ bootstrap, availability, initialAccount = null, initi
   const [recipientEmail, setRecipientEmail] = useState(initialDocument?.email ?? '')
   const [deliveryMessage, setDeliveryMessage] = useState(''), [docPending, setDocPending] = useState(false)
   const documentLocked = useRef(false)
+  const [addingAccount, setAddingAccount] = useState(false), [accountMessage, setAccountMessage] = useState('')
   useEffect(() => {
     if (!searching) return
     let active = true
@@ -88,12 +90,13 @@ export function FieldHub({ bootstrap, availability, initialAccount = null, initi
     <header className="sticky top-0 z-20 bg-[#120f0e] px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top))] text-white"><div className="mx-auto flex max-w-2xl items-center gap-3"><Image src="/brand/logo-badge.png" alt="AHAWC" width={44} height={44} className="rounded-lg" /><div className="flex-1"><p className="font-display text-2xl font-bold uppercase">Field notes</p><p className="text-xs text-stone-300">{bootstrap.userName} · At your client</p></div><span className="rounded-full bg-orange-500/20 px-3 py-1 text-xs text-orange-200">AHAWC / Wisher</span></div></header>
     <main className="mx-auto max-w-2xl space-y-5 p-4">
       <section className="rounded-2xl border bg-white p-4">
-        {account && !searching ? <div className="flex items-start gap-3"><div className="min-w-0 flex-1"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Working with</p><h1 className="mt-1 break-words text-xl font-bold">{account.companyName}</h1><p className="mt-1 text-sm text-muted-foreground">{[account.address, account.city, account.state].filter(Boolean).join(', ') || 'Address not entered'}</p></div><Button variant="outline" className="h-12" onClick={() => { setSearching(true); setQuery('') }}>Change</Button></div> : <>
+        {addingAccount ? <FieldAccountForm initialName={query} onCancel={() => setAddingAccount(false)} onSelected={(selected, created) => { setAccount(selected); setSearching(false); setAddingAccount(false); setView('home'); setSaved(null); setRecipientEmail(''); setDeliveryMessage(''); setError(''); setAccountMessage(created ? `${selected.companyName} saved. Ready for field tasks.` : ''); window.history.replaceState(null, '', '/field') }} /> : account && !searching ? <div className="flex items-start gap-3"><div className="min-w-0 flex-1"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Working with</p><h1 className="mt-1 break-words text-xl font-bold">{account.companyName}</h1><p className="mt-1 text-sm text-muted-foreground">{[account.address, account.city, account.state].filter(Boolean).join(', ') || 'Address not entered'}</p></div><Button variant="outline" className="h-12" onClick={() => { setSearching(true); setQuery(''); setAccountMessage('') }}>Change</Button></div> : <>
           <label htmlFor="field-search" className="mb-2 block text-lg font-semibold">Find the account</label><div className="relative"><Search className="pointer-events-none absolute left-4 top-4 size-5 text-muted-foreground" /><input id="field-search" type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Account, city or street…" autoComplete="off" className="h-14 w-full rounded-xl border bg-white pl-12 pr-4 text-base" /></div>
           <p className="mt-2 text-xs text-muted-foreground">{loading ? 'Searching…' : 'Tap an account. Search narrows the list.'}</p>
+          <Button variant="outline" className="mt-3 h-14 w-full text-base" onClick={() => setAddingAccount(true)}>Add new account</Button>
           <div className="mt-2 max-h-80 space-y-1 overflow-y-auto overscroll-contain">{results.map(row => <button type="button" key={row.id} disabled={loading} className="min-h-16 w-full rounded-xl p-3 text-left hover:bg-orange-50" onClick={async () => {
             setLoading(true); setError('')
-            try { const selected = await getFieldAccount(row.id); setAccount(selected); setSaved(null); setRecipientEmail(''); setDeliveryMessage(''); setSearching(false); setView('home'); window.history.replaceState(null, '', '/field') }
+            try { const selected = await getFieldAccount(row.id); setAccount(selected); setSaved(null); setRecipientEmail(''); setDeliveryMessage(''); setAccountMessage(''); setSearching(false); setView('home'); window.history.replaceState(null, '', '/field') }
             catch { setError('Could not load this account. Retry.') }
             finally { setLoading(false) }
           }}><span className="block font-semibold">{row.companyName}</span><span className="block text-sm text-muted-foreground">{[row.city, row.state, row.address].filter(Boolean).join(' · ')}</span></button>)}</div>
@@ -102,7 +105,8 @@ export function FieldHub({ bootstrap, availability, initialAccount = null, initi
         </>}
         {error ? <p role="alert" className="mt-3 text-sm text-red-700">{error}</p> : null}
       </section>
-      {!searching && account ? <>
+      {accountMessage && !searching ? <p role="status" className="rounded-xl bg-emerald-50 p-3 text-emerald-800">{accountMessage}</p> : null}
+      {!addingAccount && !searching && account ? <>
         {view !== 'home' ? <Button variant="outline" className="h-12 w-full justify-start" onClick={goHome}><ArrowLeft className="size-5" />Back to field tasks</Button> : null}
         {view === 'home' ? <><div><h2 className="text-lg font-semibold">What do you need to do?</h2><p className="mt-1 text-sm text-muted-foreground">One account. Simple actions while you’re there.</p></div><div className="grid grid-cols-2 gap-3">{tasks.map(task => <button key={task.view} type="button" onClick={() => setView(task.view)} className="flex min-h-36 flex-col items-start justify-between gap-3 rounded-2xl border bg-white p-4 text-left shadow-sm active:bg-orange-50"><task.icon className="size-7 text-[#ff5a00]" /><div><span className="block text-lg font-bold leading-tight">{task.title}</span><span className="mt-1 block text-xs text-muted-foreground">{task.detail}</span></div></button>)}</div>{saved ? <Button variant="outline" className="h-14 w-full" onClick={() => setView('document')}>Return to invoice {saved.invoiceNumber}</Button> : null}</> : null}
         {view === 'note' ? <FieldNote key={account.id} accountId={account.id} /> : null}

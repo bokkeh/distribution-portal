@@ -64,6 +64,7 @@ export async function buildPricedLineItems(input: {
   orderType: CheckoutOrderType
   items: { productId: string; quantity: number }[]
   customerBusinessType: string | null
+  checkInventory?: boolean
 }) {
   if (!input.items.length) {
     throw new Error('Add at least one item to the order')
@@ -72,7 +73,7 @@ export async function buildPricedLineItems(input: {
   const productIds = input.items.map((item) => item.productId)
   const [productList, inventoryRows, pricingContext, pricingRules] = await Promise.all([
     db.select().from(products).where(inArray(products.id, productIds)),
-    db.select().from(inventory).where(inArray(inventory.productId, productIds)),
+    input.checkInventory === false ? Promise.resolve([]) : db.select().from(inventory).where(inArray(inventory.productId, productIds)),
     getAccountPricingContext(input.customerId),
     getPricingRulesForProducts(productIds),
   ])
@@ -87,16 +88,16 @@ export async function buildPricedLineItems(input: {
     if (!product) {
       throw new Error(`Product ${item.productId} not found`)
     }
-    if (!inv) {
+    if (input.checkInventory !== false && !inv) {
       throw new Error(`Inventory record missing for product ${product.name}`)
     }
 
     const bottlesPerCase = product.bottlesPerCase || 12
-    const availableQuantity = input.purchaseUnit === 'bottle'
+    const availableQuantity = inv ? input.purchaseUnit === 'bottle'
       ? inv.quantityPaid * bottlesPerCase - inv.looseBottlePaid
-      : inv.quantityPaid
+      : inv.quantityPaid : 0
 
-    if (item.quantity > availableQuantity) {
+    if (input.checkInventory !== false && item.quantity > availableQuantity) {
       throw new Error(`Not enough ${input.purchaseUnit}s in stock for ${product.name}`)
     }
 

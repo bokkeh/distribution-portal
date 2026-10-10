@@ -22,8 +22,8 @@ function refresh(accountId: string) {
 async function priceDocument(input: ReturnType<typeof fieldDocumentSchema.parse>) {
   const { account, session, member } = await fieldAccount(input.accountId)
   if (input.kind === 'invoice' && !session.user.roles.some(role => ['admin', 'staff'].includes(role))) throw new Error('Quick invoices require staff or administrator access. You can create an order with its invoice instead.')
-  if (input.kind === 'order') {
-    const priced = await buildPricedLineItems({ customerId: account.id, customerBusinessType: account.businessType, purchaseUnit: 'case', orderType: 'paid', orderDate: new Date(), items: input.items })
+  if (input.kind === 'order' || input.items.length) {
+    const priced = await buildPricedLineItems({ customerId: account.id, customerBusinessType: account.businessType, purchaseUnit: 'case', orderType: 'paid', orderDate: new Date(), items: input.items, checkInventory: input.kind === 'order' })
     if (input.items.some(item => !priced.productMap.get(item.productId)?.active)) throw new Error('A selected product is inactive. Choose an active product.')
     const total = (Math.round(priced.subtotal * 100) + Math.round(Number(input.tax) * 100)) / 100
     return { ...priced, account, session, member, total: total.toFixed(2), amount: priced.subtotal.toFixed(2) }
@@ -77,6 +77,9 @@ export async function saveFieldDocument(raw: FieldDocumentInput) {
           db.insert(orderItems).values(priced.lineItems.map(item => ({ ...item, orderId }))),
           invoiceInsert, db.insert(invoiceItems).values(invoiceLines), ...stockUpdates, documentInsert,
         ])
+      } else if ('lineItems' in priced) {
+        const invoiceLines = priced.lineItems.map((item, index) => ({ invoiceId, productId: item.productId, description: (priced.productMap.get(item.productId)?.name ?? 'Product') + (index === 0 && input.notes ? `\nNotes: ${input.notes}` : ''), sku: priced.productMap.get(item.productId)?.sku, quantity: item.quantity, unit: 'case', unitPrice: item.unitPrice, total: item.total }))
+        await db.batch([invoiceInsert, db.insert(invoiceItems).values(invoiceLines), documentInsert])
       } else {
         await db.batch([invoiceInsert, db.insert(invoiceItems).values({ invoiceId, description: input.description + (input.notes ? `\nNotes: ${input.notes}` : ''), quantity: '1', unit: 'service', unitPrice: priced.amount, total: priced.amount }), documentInsert])
       }

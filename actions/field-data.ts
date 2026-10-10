@@ -9,6 +9,43 @@ import { upcomingTastingFilter } from '@/lib/tastings/upcoming-filter'
 import { revalidatePath } from 'next/cache'
 import { requireRole } from '@/lib/auth/session'
 import { z } from 'zod'
+import { fieldAccountSchema, type FieldAccountInput } from '@/lib/field/validation'
+import { normalizeVenueIdentity } from '@/lib/tastings/scheduling'
+import { after } from 'next/server'
+import { logActivityEvent } from '@/lib/activity/log'
+
+export async function createFieldAccount(raw: FieldAccountInput): Promise<{ success: true; account: Awaited<ReturnType<typeof getFieldAccount>> } | { error: string; matches?: Awaited<ReturnType<typeof searchFieldAccounts>> }> {
+  const parsed = fieldAccountSchema.safeParse(raw)
+  if (!parsed.success) return { error: parsed.error.issues[0].message }
+  const input = parsed.data
+  try {
+    const { session, managesAll, member } = await fieldContext()
+    const sourceExternalId = `field:${session.user.id}:${input.requestId}`
+    const [retry] = await db.select().from(customerAccounts).where(eq(customerAccounts.id, input.requestId)).limit(1)
+    if (retry) {
+      if (retry.sourceExternalId !== sourceExternalId || retry.companyName !== input.companyName || (retry.address ?? '') !== input.address || (retry.city ?? '') !== input.city || (retry.state ?? '') !== input.state || (retry.zip ?? '') !== input.zip || (retry.email ?? '') !== input.email || (retry.phone ?? '') !== input.phone) return { error: 'This request already saved different details. Start a new account or select the saved account.' }
+      const account = await getFieldAccount(retry.id)
+      refreshFieldAccount(account.id)
+      return { success: true as const, account }
+    }
+    const candidates = await db.select({ id: customerAccounts.id, companyName: customerAccounts.companyName, address: customerAccounts.address, city: customerAccounts.city, state: customerAccounts.state, assignedSalesRepId: customerAccounts.assignedSalesRepId }).from(customerAccounts)
+    const matches = candidates.filter(row => normalizeVenueIdentity(row.companyName) === normalizeVenueIdentity(input.companyName))
+    if (matches.length) return { error: 'An account with this name already exists. Select it below, or use a distinct location name. If it is not listed, ask your administrator to check your account access.', matches: matches.filter(row => managesAll || row.assignedSalesRepId === member?.id).map(({ id, companyName, address, city, state }) => ({ id, companyName, address, city, state })) }
+    const schedulingVenueKey = [input.companyName, input.address, input.city, input.state, input.zip].map(normalizeVenueIdentity).join('|')
+    const [created] = await db.insert(customerAccounts).values({ id: input.requestId, companyName: input.companyName, address: input.address || null, city: input.city || null, state: input.state || null, zip: input.zip || null, email: input.email || null, phone: input.phone || null, assignedSalesRepId: member?.id ?? null, schedulingVenueKey, customerSource: 'manual', sourceExternalId, dealStage: null }).onConflictDoNothing().returning({ id: customerAccounts.id })
+    if (!created) {
+      // A racing/lost-response request may have saved this exact entry. Verify it on retry.
+      const [saved] = await db.select({ id: customerAccounts.id, sourceExternalId: customerAccounts.sourceExternalId }).from(customerAccounts).where(eq(customerAccounts.id, input.requestId)).limit(1)
+      if (saved?.sourceExternalId === sourceExternalId) return createFieldAccount(raw)
+      return { error: 'This account may already have been saved. Search for its name before retrying.', matches: await searchFieldAccounts(input.companyName) }
+    }
+    const account = await getFieldAccount(created.id)
+    refreshFieldAccount(account.id)
+    for (const path of ['/admin/crm', '/staff/crm', '/sales/accounts', '/admin/dashboard', '/sales/dashboard']) revalidatePath(path)
+    after(async () => { try { await logActivityEvent({ entityType: 'account', entityId: account.id, actorUserId: session.user.id, kind: 'field_account_created', title: 'Account created in the field', body: account.companyName }) } catch (error) { console.error('Field account saved; audit failed:', error) } })
+    return { success: true as const, account }
+  } catch { return { error: 'Could not confirm account save. Your details are kept. Retry the same entry to avoid duplicates.' } }
+}
 
 export async function searchFieldAccounts(query: string) {
   const { managesAll, member } = await fieldContext()
