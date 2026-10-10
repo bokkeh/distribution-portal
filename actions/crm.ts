@@ -9,7 +9,6 @@ import { revalidatePath } from 'next/cache'
 import { after } from 'next/server'
 import { getHubSpotCompanyContacts, upsertHubSpotContact, getHubSpotCompanies, updateHubSpotCompany } from '@/lib/hubspot/client'
 import { logActivityEvent } from '@/lib/activity/log'
-import { queueTastingCalendarSync } from '@/lib/tastings/calendar-sync'
 import { createUserNotification } from '@/lib/notifications/in-app'
 import { normalizeAccountGeography } from '@/lib/pricing/geographic-service'
 import { isGeocodeActionRateLimited } from '@/lib/auth/rate-limit'
@@ -595,7 +594,6 @@ export async function mergeCustomerAccounts(formData: FormData) {
   await db.update(orders).set({ customerId: targetAccountId }).where(eq(orders.customerId, sourceAccountId))
   await db.update(invoices).set({ customerId: targetAccountId }).where(eq(invoices.customerId, sourceAccountId))
   const movedTastings = await db.update(tastings).set({ customerId: targetAccountId }).where(eq(tastings.customerId, sourceAccountId)).returning({ id: tastings.id })
-  queueTastingCalendarSync(movedTastings.map((tasting) => tasting.id))
   await db.update(deliveryStops).set({ customerId: targetAccountId }).where(eq(deliveryStops.customerId, sourceAccountId))
   await db.update(salesRouteStops).set({ customerId: targetAccountId }).where(eq(salesRouteStops.customerId, sourceAccountId))
   await db.update(smsThreads).set({ customerId: targetAccountId }).where(eq(smsThreads.customerId, sourceAccountId))

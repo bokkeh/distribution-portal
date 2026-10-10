@@ -24,7 +24,6 @@ import { upsertAccountInventoryItem } from '@/actions/crm-account'
 import { refreshTastingViews } from '@/lib/tastings/revalidate'
 import { requireRole } from '@/lib/auth/session'
 import { logActivityEvent } from '@/lib/activity/log'
-import { queueTastingCalendarSync } from '@/lib/tastings/calendar-sync'
 import { notify } from '@/lib/notifications/dispatch'
 
 const QUICK_ADD_ROLES = ['admin', 'staff', 'sales_rep', 'sales_manager'] as const
@@ -362,7 +361,6 @@ export async function quickCreateTasting(input: {
     }).onConflictDoNothing({ target: tastings.id }).returning({ id: tastings.id })
     if (!tasting) return { success: true as const, tastingId: input.requestId }
     refreshTastingViews(account.id, tasting.id)
-    queueTastingCalendarSync(tasting.id)
 
     try {
     const productRows = (input.products ?? []).filter((item) => item.productId && item.plannedQuantity > 0)
