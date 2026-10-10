@@ -1,6 +1,6 @@
 'use server'
 
-import { and, eq, isNull } from 'drizzle-orm'
+import { and, eq, isNull, sql } from 'drizzle-orm'
 import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
@@ -89,15 +89,17 @@ export async function createCrmPerson(
       .limit(1) : []
     if (customerId && !account) return { error: 'Company account not found.' }
 
+    // Shared emails are allowed across different people; only the same person entered twice is a duplicate.
+    const name = `${parsed.data.firstName} ${parsed.data.lastName}`.trim()
     const duplicate = parsed.data.email ? await db.select({ id: contacts.id })
       .from(contacts)
-      .where(and(customerId ? eq(contacts.customerId, customerId) : isNull(contacts.customerId), eq(contacts.email, parsed.data.email)))
+      .where(and(customerId ? eq(contacts.customerId, customerId) : isNull(contacts.customerId), sql`lower(${contacts.email}) = lower(${parsed.data.email})`, sql`lower(trim(${contacts.name})) = lower(${name})`))
       .limit(1) : []
-    if (duplicate[0]) return { error: 'That email is already a contact for this company.' }
+    if (duplicate[0]) return { error: `${name} is already a contact with that email for this company.` }
 
     await db.insert(contacts).values({
       customerId,
-      name: `${parsed.data.firstName} ${parsed.data.lastName}`.trim(),
+      name,
       email: parsed.data.email || null,
       phone: parsed.data.phone || null,
       relationshipStatus: 'relationshipStatus' in parsed.data ? contactPersonSchema.parse(parsed.data).relationshipStatus : null,

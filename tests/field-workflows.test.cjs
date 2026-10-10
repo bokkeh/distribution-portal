@@ -246,7 +246,8 @@ test('quick field contact creation is minimal, linked, retry-safe and preserves 
  assert.equal(saved.account.contacts.find(contact=>contact.id===input.requestId).email,'buyer@example.test')
  assert.equal((await h.api.createFieldContact(input)).success,true)
  assert.ok((await h.api.createFieldContact({...input,name:'Changed after save'})).error)
- assert.ok((await h.api.createFieldContact({...input,requestId:randomUUID(),name:'Duplicate email'})).error)
+ assert.ok((await h.api.createFieldContact({...input,requestId:randomUUID(),isPrimary:false})).error)
+ assert.equal((await h.api.createFieldContact({...input,requestId:randomUUID(),name:'Shared inbox buyer',phone:'',isPrimary:false})).success,true)
  assert.equal((await h.runtime.db.select().from(h.api.schema.contacts).where(eq(h.api.schema.contacts.id,input.requestId))).length,1)
  assert.equal((await h.runtime.db.select().from(h.api.schema.contacts).where(eq(h.api.schema.contacts.id,primaryId)))[0].isPrimary,true)
  const minimal={requestId:randomUUID(),accountId,name:'Name only person'}

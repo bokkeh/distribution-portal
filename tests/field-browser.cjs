@@ -194,7 +194,7 @@ async function main() {
       assert.equal(await page.getByLabel('Job title / role',{exact:true}).inputValue(),'Regional buyer')
       await page.getByRole('button',{name:'Cancel editing contact',exact:true}).click()
       await page.getByRole('button',{name:'Add contact',exact:true}).click()
-      await page.getByLabel('Contact name',{exact:true}).fill('Duplicate buyer')
+      await page.getByLabel('Contact name',{exact:true}).fill(contactName)
       await page.getByLabel('Contact email (optional)',{exact:true}).fill('edited'+width+'@example.test')
       await page.getByRole('button',{name:'Save contact',exact:true}).click()
       await page.getByRole('alert').filter({hasText:'is already listed for this account'}).waitFor()

@@ -74,7 +74,8 @@ export async function createFieldContact(raw: FieldContactInput) {
     if (retry && !matchesRequest(retry)) return { error: 'This request already saved different contact details. Check the contact list before starting another entry.' }
     if (!retry) {
       const existing = await db.select().from(contacts).where(eq(contacts.customerId, input.accountId))
-      const duplicate = existing.find(row => (values.email && row.email?.trim().toLowerCase() === values.email) || (row.name.trim().toLowerCase() === values.name.toLowerCase() && ((!values.email && !values.phone) || (values.phone && row.phone?.replace(/\D/g, '') === values.phone.replace(/\D/g, '')))))
+      // Shared emails are allowed across different people; only the same person entered twice is a duplicate.
+      const duplicate = existing.find(row => row.name.trim().toLowerCase() === values.name.toLowerCase() && ((!values.email && !values.phone) || (values.email && row.email?.trim().toLowerCase() === values.email) || (values.phone && row.phone?.replace(/\D/g, '') === values.phone.replace(/\D/g, ''))))
       if (duplicate) return { error: `${duplicate.name} is already listed for this account. Check the contact card before adding another entry.` }
       const [created] = await db.insert(contacts).values(values).onConflictDoNothing({ target: contacts.id }).returning()
       if (!created) {
