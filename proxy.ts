@@ -12,7 +12,7 @@ import {
   VIEW_AS_ROLES_COOKIE,
 } from '@/lib/auth/view-as'
 
-export default auth((req) => {
+const authenticatedProxy = auth((req) => {
   const { pathname } = req.nextUrl
   const session = req.auth
   const role = session?.user?.role as string | undefined
@@ -91,6 +91,12 @@ export default auth((req) => {
 
   return withSanitizedViewAsCookies(NextResponse.next())
 })
+
+// Auth.js lazy configuration may return the wrapped handler asynchronously.
+export default async function proxy(...args: Parameters<Awaited<typeof authenticatedProxy>>) {
+  const handler = await authenticatedProxy
+  return handler(...args)
+}
 
 export const config = {
   matcher: ['/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|gif|webp|svg|ico)$).*)'],
