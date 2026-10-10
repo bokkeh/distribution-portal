@@ -23,7 +23,7 @@ async function main() {
   ])
   const rpc = names => `const call = async (name,args) => { const r = await fetch('/action/'+name,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(args)}); const data=await r.json(); if(!r.ok) throw new Error(data.error); return data }; ${names.map(name => `export const ${name} = (...args) => call('${name}',args);`).join('\n')}`
   const stubs = {
-    '@/actions/field-data': rpc(['createFieldAccount','getFieldAccount','getFieldAccountTastings','searchFieldAccounts','saveFieldNote','saveFieldPhoto','getFieldAvailability']),
+    '@/actions/field-data': rpc(['createFieldAccount','createFieldContact','getFieldAccount','getFieldAccountTastings','searchFieldAccounts','saveFieldNote','saveFieldPhoto','getFieldAvailability']),
     '@/actions/field-documents': rpc(['quoteFieldDocument','saveFieldDocument','sendFieldInvoice','getFieldDocument','startFieldCardPayment']),
     '@/actions/quick-schedule-tasting': rpc(['quickScheduleTasting']),
     '@/actions/account-observations': rpc(['saveAccountObservations']).replace("call('saveAccountObservations',args)", "call('saveAccountObservations',[Object.fromEntries(args[0])])"),
@@ -37,6 +37,7 @@ async function main() {
   let failNote = false, failHistory = false, failContacts = false
   let failAccount = false, failDocument = false
   let uploads = 0, losePhotoResponse = false
+  let failContactSave=false, loseContactResponse=false
   const calls = {}
   const server = http.createServer(async(req,res)=>{
     try {
@@ -52,6 +53,8 @@ async function main() {
         let args=JSON.parse(Buffer.concat(chunks).toString())
         if(name==='getFieldAccountTastings' && failHistory){failHistory=false;res.statusCode=500;return res.end(JSON.stringify({error:'Connection lost'}))}
         if(name==='getFieldAccount' && failContacts){failContacts=false;res.statusCode=500;return res.end(JSON.stringify({error:'Connection lost'}))}
+        if(name==='createFieldContact' && failContactSave){failContactSave=false;return res.end(JSON.stringify({error:'Connection failed. Contact details kept.'}))}
+        if(name==='createFieldContact')await new Promise(resolve=>setTimeout(resolve,150))
         if(name==='saveFieldNote' && failNote){failNote=false;return res.end(JSON.stringify({error:'Connection failed. Your note is kept.'}))}
         if(name==='createFieldAccount' && failAccount){failAccount=false;return res.end(JSON.stringify({error:'Connection failed. Your account details are kept.'}))}
         if(name==='saveFieldDocument' && failDocument){failDocument=false;return res.end(JSON.stringify({error:'Connection failed. Your invoice details are kept.'}))}
@@ -60,6 +63,7 @@ async function main() {
         if(name==='saveAccountObservations'){const f=new FormData();for(const [k,v]of Object.entries(args[0]))f.set(k,v);args=[f]}
         if(typeof h.api[name]!=='function')throw new Error('Unknown test action')
         const result=await h.api[name](...args)
+        if(name==='createFieldContact' && loseContactResponse && result.success){loseContactResponse=false;return res.end(JSON.stringify({error:'Connection lost after contact save. Retry to confirm.'}))}
         if(name==='saveFieldPhoto' && losePhotoResponse){losePhotoResponse=false;return res.end(JSON.stringify({error:'Connection lost after save. Retry to confirm.'}))}
         return res.end(JSON.stringify(result))
       }
@@ -116,6 +120,39 @@ async function main() {
       await page.getByRole('alert').filter({hasText:'Could not refresh contacts'}).waitFor({state:'hidden'})
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false)
       await page.screenshot({path:`tmp/operator-tests/field-contacts-${width}.png`,fullPage:true})
+      const contactName='New buyer '+width, contactCalls=calls.createFieldContact??0
+      const contactRowsBefore=(await h.runtime.db.select().from(h.api.schema.contacts)).length
+      await page.getByRole('button',{name:'Add contact',exact:true}).click()
+      await page.getByLabel('Contact name',{exact:true}).fill(contactName)
+      await page.getByLabel('Contact phone (optional)',{exact:true}).fill('4105550140')
+      await page.getByLabel('Contact email (optional)',{exact:true}).fill('buyer'+width+'@example.test')
+      await page.getByText('Role & preferences (optional)',{exact:true}).click()
+      await page.getByLabel('Job title / role',{exact:true}).fill('Buyer')
+      failContactSave=true
+      await page.getByRole('button',{name:'Save contact',exact:true}).click()
+      await page.getByText('Connection failed. Contact details kept.',{exact:true}).waitFor()
+      assert.equal(await page.getByLabel('Contact name',{exact:true}).inputValue(),contactName)
+      assert.equal(await page.getByLabel('Contact phone (optional)',{exact:true}).inputValue(),'4105550140')
+      assert.equal(await page.getByLabel('Contact email (optional)',{exact:true}).inputValue(),'buyer'+width+'@example.test')
+      loseContactResponse=true
+      await page.getByRole('button',{name:'Save contact',exact:true}).click()
+      await page.getByText('Connection lost after contact save. Retry to confirm.',{exact:true}).waitFor()
+      await page.getByRole('button',{name:'Save contact',exact:true}).evaluate(button=>{button.click();button.click()})
+      await page.getByText(contactName+' saved to this account.',{exact:true}).waitFor()
+      await page.getByRole('heading',{name:contactName,exact:true}).waitFor()
+      assert.equal(calls.createFieldContact,contactCalls+3)
+      assert.equal((await h.runtime.db.select().from(h.api.schema.contacts)).length,contactRowsBefore+1)
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false)
+      await page.getByRole('button',{name:'Add contact',exact:true}).click()
+      await page.getByLabel('Contact name',{exact:true}).fill('Duplicate buyer')
+      await page.getByLabel('Contact email (optional)',{exact:true}).fill('buyer'+width+'@example.test')
+      await page.getByRole('button',{name:'Save contact',exact:true}).click()
+      await page.getByRole('alert').filter({hasText:'is already listed for this account'}).waitFor()
+      await page.getByRole('button',{name:'Cancel adding contact',exact:true}).click()
+      await page.getByRole('button',{name:'Back to field tasks'}).click()
+      await page.getByRole('button',{name:'Contact information Key points of contact',exact:true}).click()
+      await page.getByRole('heading',{name:contactName,exact:true}).waitFor()
+
       await page.getByRole('button',{name:'Back to field tasks'}).click()
       failHistory=true
       await page.getByRole('button',{name:'View tastings Last visit & future bookings',exact:true}).click()

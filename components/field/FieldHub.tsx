@@ -118,7 +118,7 @@ export function FieldHub({ bootstrap, availability, initialAccount = null, initi
         {view === 'note' ? <FieldNote key={account.id} accountId={account.id} /> : null}
         {view === 'photos' ? <FieldPhotos key={account.id} accountId={account.id} /> : null}
         {view === 'observations' ? <AccountObservationForm key={account.id} accountId={account.id} products={bootstrap.products} fieldMode /> : null}
-        {view === 'contacts' ? <FieldContacts key={account.id} account={account} /> : null}
+        {view === 'contacts' ? <FieldContacts key={account.id} account={account} onAccountChanged={setAccount} /> : null}
         {view === 'tastings' ? <FieldAccountTastings key={account.id} accountId={account.id} /> : null}
         {view === 'tasting' ? <FieldTasting key={account.id} account={account} members={bootstrap.members} initialAvailability={availability} /> : null}
         {view === 'order' || view === 'invoice' ? <FieldDocumentForm key={`${account.id}:${view}`} account={account} products={bootstrap.products} kind={view} onSaved={(document, message) => { setSaved(document); setRecipientEmail(document.email); setDeliveryMessage(message); setView('document'); window.history.replaceState(null, '', `/field?invoice=${document.requestId}`) }} /> : null}

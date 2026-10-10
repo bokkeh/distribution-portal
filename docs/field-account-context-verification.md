@@ -14,4 +14,13 @@ No migration, dependency or configuration change is required.
 
 Verification: 14 isolated field workflow tests passed, including contact scope/primary ordering and past/ongoing/future end boundaries. Touch Chromium at 390px and desktop Chromium at 1280px passed, including retained refresh failures, call/email link targets, expandable future lists, immediate tasting updates and reload persistence. Production build and scoped lint passed. Test data uses isolated PGlite; no live business records were changed. Physical iPhone Safari was not tested.
 
-Live browser verification was blocked because automatic approval review hit its usage limit. Production deployment status could not be confirmed through that browser.
+The contacts and tasting-history release (993046e) was subsequently confirmed Ready in the correct production Vercel project, with both live field views verified read-only.
+
+
+## Quick contact addition
+
+Contact information now includes Add contact, with only name required. Phone and email are optional; role, preferred contact method and primary-contact designation are expandable. Saves use the selected account and existing field account permissions. Existing primary contacts are preserved. No marketing consent, account pipeline or account point-of-contact fields are changed.
+
+A stable request ID prevents repeated taps and lost-response retries from inserting duplicate contact rows. Obvious account-local duplicates are reported without merging records. Failed saves retain form input; confirmed saves update the field card, survive navigating away/back, and invalidate CRM contact/account views.
+
+Verification: 15 isolated field workflow tests, mobile (390px) and desktop (1280px) browser checks, scoped lint and production build passed. Tests include name-only creation, authorization, validation, existing primaries, duplicate matches, concurrent retries, lost save responses, retained input, repeated taps, immediate display and navigation persistence. No migration or new dependency is required. No live contacts were created during testing.

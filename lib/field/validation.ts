@@ -28,6 +28,17 @@ export const fieldAccountSchema = z.object({
 })
 export type FieldAccountInput = z.input<typeof fieldAccountSchema>
 
+export const fieldContactSchema = z.object({
+  requestId: z.uuid(), accountId: z.uuid(),
+  name: z.string().trim().min(1, 'Enter the contact name.').max(160),
+  email: z.union([z.email().max(254), z.literal('')]).default(''),
+  phone: z.string().trim().max(40).default(''),
+  title: z.string().trim().max(160).default(''),
+  preferredContact: z.enum(['', 'email', 'sms', 'call']).default(''),
+  isPrimary: z.boolean().default(false),
+})
+export type FieldContactInput = z.input<typeof fieldContactSchema>
+
 export function fieldLoginReturn(value: string | null | undefined) {
   return value && /^\/field(?:\?|$)/.test(value) ? value : null
 }

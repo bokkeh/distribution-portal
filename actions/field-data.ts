@@ -9,7 +9,7 @@ import { upcomingTastingFilter } from '@/lib/tastings/upcoming-filter'
 import { revalidatePath } from 'next/cache'
 import { requireRole } from '@/lib/auth/session'
 import { z } from 'zod'
-import { fieldAccountSchema, type FieldAccountInput } from '@/lib/field/validation'
+import { fieldAccountSchema, fieldContactSchema, type FieldAccountInput, type FieldContactInput } from '@/lib/field/validation'
 import { normalizeVenueIdentity } from '@/lib/tastings/scheduling'
 import { after } from 'next/server'
 import { logActivityEvent } from '@/lib/activity/log'
@@ -60,6 +60,32 @@ export async function getFieldAccount(accountId: string) {
   const contactRows = await db.select({ id: contacts.id, name: contacts.name, title: contacts.title, email: contacts.email, phone: contacts.phone, preferredContact: contacts.preferredContact, isPrimary: contacts.isPrimary }).from(contacts).where(eq(contacts.customerId, accountId)).orderBy(desc(contacts.isPrimary), asc(contacts.name), asc(contacts.id))
   return { id: account.id, companyName: account.companyName, address: account.address, city: account.city, state: account.state, zip: account.zip, additionalLocations: account.additionalLocations, email: account.pocEmail || account.businessEmail || account.email || '',
     contacts: contactRows, pointOfContact: { name: account.pocName, phone: account.pocPhone, email: account.pocEmail }, businessContact: { phone: account.businessPhone || account.phone, email: account.businessEmail || account.email } }
+}
+
+export async function createFieldContact(raw: FieldContactInput) {
+  const parsed = fieldContactSchema.safeParse(raw)
+  if (!parsed.success) return { error: parsed.error.issues[0].message }
+  const input = parsed.data
+  try {
+    const { session } = await fieldAccount(input.accountId)
+    const values = { id: input.requestId, customerId: input.accountId, name: input.name, email: input.email.toLowerCase() || null, phone: input.phone || null, title: input.title || null, preferredContact: input.preferredContact || null, isPrimary: input.isPrimary }
+    const matchesRequest = (row: typeof contacts.$inferSelect) => row.customerId === values.customerId && row.name === values.name && row.email === values.email && row.phone === values.phone && row.title === values.title && row.preferredContact === values.preferredContact && row.isPrimary === values.isPrimary
+    const [retry] = await db.select().from(contacts).where(eq(contacts.id, input.requestId)).limit(1)
+    if (retry && !matchesRequest(retry)) return { error: 'This request already saved different contact details. Check the contact list before starting another entry.' }
+    if (!retry) {
+      const existing = await db.select().from(contacts).where(eq(contacts.customerId, input.accountId))
+      const duplicate = existing.find(row => (values.email && row.email?.trim().toLowerCase() === values.email) || (row.name.trim().toLowerCase() === values.name.toLowerCase() && ((!values.email && !values.phone) || (values.phone && row.phone?.replace(/\D/g, '') === values.phone.replace(/\D/g, '')))))
+      if (duplicate) return { error: `${duplicate.name} is already listed for this account. Check the contact card before adding another entry.` }
+      const [created] = await db.insert(contacts).values(values).onConflictDoNothing({ target: contacts.id }).returning()
+      if (!created) {
+        const [saved] = await db.select().from(contacts).where(eq(contacts.id, input.requestId)).limit(1)
+        if (!saved || !matchesRequest(saved)) return { error: 'This contact request contains different details. Check the contact list.' }
+      } else after(async () => { try { await logActivityEvent({ entityType: 'account', entityId: input.accountId, actorUserId: session.user.id, kind: 'contact_added', title: 'Contact added in the field', body: `${input.name} was added to the account contacts.` }) } catch (error) { console.error('Field contact saved; audit failed:', error) } })
+    }
+    refreshFieldAccount(input.accountId)
+    for (const path of ['/admin/crm', '/staff/crm', '/sales/accounts', `/admin/crm/${input.accountId}/contacts`, `/staff/crm/${input.accountId}/contacts`, `/sales/accounts/${input.accountId}/contacts`]) revalidatePath(path)
+    return { success: true as const, account: await getFieldAccount(input.accountId) }
+  } catch { return { error: 'Could not confirm contact save. Your details are kept; retry the same entry to avoid duplicates.' } }
 }
 
 export async function getFieldAccountTastings(accountId: string) {
