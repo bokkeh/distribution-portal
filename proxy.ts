@@ -1,5 +1,7 @@
 import { auth } from '@/lib/auth/config'
 import { NextResponse } from 'next/server'
+import { FIELD_DEVICE_COOKIE, FIELD_SESSION_MAX_AGE, isFieldEntry } from '@/lib/auth/field-session'
+import { fieldLoginReturn } from '@/lib/field/validation'
 import {
   getDashboardForRole,
   hasActiveViewAs,
@@ -26,6 +28,9 @@ export default auth((req) => {
   const dashboardPath = getDashboardForRole(effectiveRole ?? realRoles[0] ?? role)
   const redirectHome = () => NextResponse.redirect(new URL(dashboardPath, req.url))
   const withSanitizedViewAsCookies = (response: NextResponse) => {
+    if (isFieldEntry(pathname, req.nextUrl.searchParams.get('next'))) {
+      response.cookies.set(FIELD_DEVICE_COOKIE, '1', { httpOnly: true, secure: req.nextUrl.protocol === 'https:', sameSite: 'lax', path: '/', maxAge: FIELD_SESSION_MAX_AGE })
+    }
     if (isAdmin && viewAsUserId && !isViewAsActive) {
       response.cookies.delete(VIEW_AS_COOKIE)
       response.cookies.delete(VIEW_AS_ROLE_COOKIE)
@@ -40,7 +45,8 @@ export default auth((req) => {
 
   if (pathname === '/login' || pathname === '/' || pathname === '/privacy' || pathname === '/terms') {
     if (session) {
-      return withSanitizedViewAsCookies(NextResponse.redirect(new URL(dashboardPath, req.url)))
+      const field = pathname === '/login' ? fieldLoginReturn(req.nextUrl.searchParams.get('next')) : null
+      return withSanitizedViewAsCookies(NextResponse.redirect(new URL(field ?? dashboardPath, req.url)))
     }
     return withSanitizedViewAsCookies(NextResponse.next())
   }
@@ -48,7 +54,7 @@ export default auth((req) => {
   if (!session) {
     const loginUrl = new URL('/login', req.url)
     if (pathname === '/field') loginUrl.searchParams.set('next', `${pathname}${req.nextUrl.search}`)
-    return NextResponse.redirect(loginUrl)
+    return withSanitizedViewAsCookies(NextResponse.redirect(loginUrl))
   }
 
   if (pathname.startsWith('/admin') && isAdmin) {

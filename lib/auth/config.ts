@@ -1,4 +1,5 @@
 import NextAuth from 'next-auth'
+import { cookies } from 'next/headers'
 import type { Provider } from 'next-auth/providers'
 import Credentials from 'next-auth/providers/credentials'
 import Google from 'next-auth/providers/google'
@@ -9,6 +10,7 @@ import { eq } from 'drizzle-orm'
 import { recordUserAccessEvent } from '@/lib/auth/activity'
 import { resolveFeatureFlags } from '@/lib/users/features'
 import { isLoginRateLimited } from '@/lib/auth/rate-limit'
+import { DEFAULT_SESSION_MAX_AGE, FIELD_ACCOUNT_REFRESH_MS, FIELD_DEVICE_COOKIE, FIELD_SESSION_MAX_AGE } from './field-session'
 
 const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL ?? ''
 const ADMIN_ROLE = 'admin'
@@ -183,7 +185,10 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   )
 }
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+export const { handlers, auth, signIn, signOut } = NextAuth(async request => {
+  const cookieJar = request?.cookies ?? await cookies()
+  const rememberFieldDevice = cookieJar.get(FIELD_DEVICE_COOKIE)?.value === '1'
+  return {
   providers,
   trustHost: true,
   events: {
@@ -282,6 +287,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.featureFlags = (user as { featureFlags?: string[] }).featureFlags
         token.picture = user.image ?? token.picture
         token.name = user.name ?? token.name
+        token.accountCheckedAt = Date.now()
+      }
+
+      // Long-lived field sessions periodically refresh permissions and account status.
+      if (rememberFieldDevice && (!token.accountCheckedAt || Date.now() - Number(token.accountCheckedAt) >= FIELD_ACCOUNT_REFRESH_MS)) {
+        const dbUser = token.id ? await findUserById(token.id as string) : token.email ? await findUserByEmail(token.email as string) : null
+        if (!dbUser?.active) return null
+        token.id = dbUser.id
+        token.role = dbUser.role
+        token.roles = normalizeRoles(dbUser.role, dbUser.roles)
+        token.featureFlags = await getFeatureFlags(dbUser.id, token.roles as string[])
+        token.picture = dbUser.avatarUrl ?? token.picture
+        token.name = dbUser.name
+        token.accountCheckedAt = Date.now()
       }
 
       // Only hit the DB when required fields are genuinely missing (avoids pool exhaustion on every auth() call)
@@ -329,6 +348,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   session: {
     strategy: 'jwt',
-    maxAge: 4 * 60 * 60, // 4 hours
+    maxAge: rememberFieldDevice ? FIELD_SESSION_MAX_AGE : DEFAULT_SESSION_MAX_AGE,
   },
+  }
 })

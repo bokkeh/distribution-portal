@@ -1,12 +1,17 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useMemo, useState, useSyncExternalStore } from 'react'
 import Image from 'next/image'
-import { usePathname } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
+import { requiresPublicAgeGate } from '@/lib/auth/field-session'
 
 const AGE_GATE_COOKIE = 'ahawc_age_verified'
 const AGE_GATE_STORAGE = 'ahawc-age-verified'
-const GATED_PATHS = new Set(['/', '/login', '/privacy', '/terms'])
+
+function subscribeVerification(onChange: () => void) {
+  window.addEventListener('storage', onChange)
+  return () => window.removeEventListener('storage', onChange)
+}
 
 function hasVerification() {
   if (typeof document === 'undefined') return false
@@ -39,10 +44,14 @@ function isTwentyOneOrOlder(month: string, day: string, year: string) {
 }
 
 export function PublicAgeGate({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={<div className="min-h-screen bg-slate-950" role="status" aria-label="Loading portal" />}><PublicAgeGateContent>{children}</PublicAgeGateContent></Suspense>
+}
+
+function PublicAgeGateContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const isGated = useMemo(() => GATED_PATHS.has(pathname), [pathname])
-  const [mounted, setMounted] = useState(false)
-  const [storedVerified, setStoredVerified] = useState(false)
+  const searchParams = useSearchParams()
+  const isGated = requiresPublicAgeGate(pathname, searchParams.get('next'))
+  const storedVerified = useSyncExternalStore(subscribeVerification, hasVerification, () => false)
   const [sessionVerified, setSessionVerified] = useState(false)
   const [month, setMonth] = useState('')
   const [day, setDay] = useState('')
@@ -81,18 +90,7 @@ export function PublicAgeGate({ children }: { children: React.ReactNode }) {
     () => Array.from({ length: dayCount }, (_, index) => String(index + 1).padStart(2, '0')),
     [dayCount],
   )
-  const verified = !isGated || sessionVerified || (mounted && storedVerified)
-
-  useEffect(() => {
-    setMounted(true)
-    setStoredVerified(hasVerification())
-  }, [])
-
-  useEffect(() => {
-    if (day && Number(day) > dayCount) {
-      setDay('')
-    }
-  }, [day, dayCount])
+  const verified = !isGated || sessionVerified || storedVerified
 
   if (verified) {
     return <>{children}</>
@@ -142,6 +140,7 @@ export function PublicAgeGate({ children }: { children: React.ReactNode }) {
                   value={month}
                   onChange={event => {
                     setMonth(event.target.value)
+                    if (day && Number(day) > new Date(Number(year) || currentYear, Number(event.target.value), 0).getDate()) setDay('')
                     setError('')
                   }}
                   autoComplete="bday-month"
@@ -174,6 +173,7 @@ export function PublicAgeGate({ children }: { children: React.ReactNode }) {
                   value={year}
                   onChange={event => {
                     setYear(event.target.value)
+                    if (month && day && Number(day) > new Date(Number(event.target.value) || currentYear, Number(month), 0).getDate()) setDay('')
                     setError('')
                   }}
                   autoComplete="bday-year"
