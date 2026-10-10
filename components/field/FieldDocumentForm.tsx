@@ -11,8 +11,8 @@ export type SavedFieldDocument = { requestId: string; invoiceId: string; invoice
 
 export type FieldDocumentDraft = { values: Record<string, string>; method: 'check' | 'cod' | 'stripe'; invoiceMode: 'products' | 'custom'; requestId: string | null }
 
-export function FieldDocumentForm({ account, products, kind, draft, onDraftChange, backRevision = 0, onBusyChange, onSaved }: {
-  account: { id: string; companyName: string; email: string }; products: FieldProduct[]; kind: 'order' | 'invoice'; draft?: FieldDocumentDraft; onDraftChange: (draft: FieldDocumentDraft) => void; backRevision?: number; onBusyChange: (busy: boolean) => void; onSaved: (document: SavedFieldDocument, deliveryMessage: string) => void
+export function FieldDocumentForm({ account, products, kind, draft, onDraftChange, backRevision = 0, onBusyChange, onReviewChange, onSaved }: {
+  account: { id: string; companyName: string; email: string }; products: FieldProduct[]; kind: 'order' | 'invoice'; draft?: FieldDocumentDraft; onDraftChange: (draft: FieldDocumentDraft) => void; backRevision?: number; onBusyChange: (busy: boolean) => void; onReviewChange?: (reviewing: boolean) => void; onSaved: (document: SavedFieldDocument, deliveryMessage: string) => void
 }) {
   const locked = useRef(false), requestId = useRef<string | null>(draft?.requestId ?? null)
   const [pending, setPending] = useState(false), [error, setError] = useState('')
@@ -25,6 +25,8 @@ export function FieldDocumentForm({ account, products, kind, draft, onDraftChang
     onDraftChange({ values: draftValues.current, method: nextMethod, invoiceMode: nextMode, requestId: requestId.current })
   }
   useEffect(() => { if (backRevision) { setReview(null); setError('') } }, [backRevision])
+  useEffect(() => { onReviewChange?.(review !== null) }, [review, onReviewChange])
+  useEffect(() => () => onReviewChange?.(false), [onReviewChange])
   const useProducts = kind === 'order' || invoiceMode === 'products'
   const cls = 'mt-2 h-14 w-full rounded-xl border bg-white px-4 text-base'
   const reviewPanel = review ? <div className="space-y-4">

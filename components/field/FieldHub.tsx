@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { ArrowLeft, CalendarDays, Camera, Check, FileText, Package, Search, StickyNote, UserRound, Wine } from 'lucide-react'
+import { ArrowLeft, CalendarDays, Camera, Check, FileText, Home, Package, Search, StickyNote, UserRound, Wine } from 'lucide-react'
 import { getFieldAccount, searchFieldAccounts, saveFieldNote, getFieldAvailability } from '@/actions/field-data'
 import { getFieldDocument, sendFieldInvoice } from '@/actions/field-documents'
 import { QuickScheduleTasting } from '@/components/tastings/QuickScheduleTasting'
@@ -71,7 +71,7 @@ export function FieldHub({ bootstrap, availability, initialAccount = null, initi
   const [deliveryMessage, setDeliveryMessage] = useState(''), [docPending, setDocPending] = useState(false)
   const documentLocked = useRef(false)
   const [documentDrafts, setDocumentDrafts] = useState<Record<string, FieldDocumentDraft>>({})
-  const [documentBack, setDocumentBack] = useState(0), [documentBusy, setDocumentBusy] = useState(false)
+  const [documentBack, setDocumentBack] = useState(0), [documentBusy, setDocumentBusy] = useState(false), [documentReviewing, setDocumentReviewing] = useState(false)
   const [addingAccount, setAddingAccount] = useState(false), [accountMessage, setAccountMessage] = useState('')
   useEffect(() => {
     if (!searching) return
@@ -116,7 +116,7 @@ export function FieldHub({ bootstrap, availability, initialAccount = null, initi
       </section>
       {accountMessage && !searching ? <p role="status" className="rounded-xl bg-emerald-50 p-3 text-emerald-800">{accountMessage}</p> : null}
       {!addingAccount && !searching && account ? <>
-        {view !== 'home' ? <Button variant="outline" className="h-12 w-full justify-start" disabled={documentBusy} onClick={() => { if (view === 'order' || view === 'invoice') setDocumentBack(value => value + 1); else goHome() }}><ArrowLeft className="size-5" /> {view === 'order' || view === 'invoice' ? 'Back to edit entry' : 'Back to field tasks'}</Button> : null}{view === 'order' || view === 'invoice' ? <Button variant="ghost" className="h-12 w-full" disabled={documentBusy} onClick={goHome}>Field tasks · keep draft</Button> : null}
+        {view !== 'home' ? <Button variant="outline" className="h-12 w-full justify-start" disabled={documentBusy} onClick={() => { if ((view === 'order' || view === 'invoice') && documentReviewing) setDocumentBack(value => value + 1); else goHome() }}><ArrowLeft className="size-5" /> {(view === 'order' || view === 'invoice') && documentReviewing ? 'Back to edit entry' : (view === 'order' || view === 'invoice') ? 'Back to field tasks · keep draft' : 'Back to field tasks'}</Button> : null}{(view === 'order' || view === 'invoice') && documentReviewing ? <Button variant="outline" className="h-12 w-full justify-start" disabled={documentBusy} onClick={goHome}><Home className="size-5" /> Field tasks · keep draft</Button> : null}
         {view === 'home' ? <><div><h2 className="text-lg font-semibold">What do you need to do?</h2><p className="mt-1 text-sm text-muted-foreground">One account. Simple actions while you’re there.</p></div><div className="grid grid-cols-2 gap-3">{tasks.map(task => <button key={task.view} type="button" onClick={() => setView(task.view)} className="flex min-h-36 flex-col items-start justify-between gap-3 rounded-2xl border bg-white p-4 text-left shadow-sm active:bg-orange-50"><task.icon className="size-7 text-[#ff5a00]" /><div><span className="block text-lg font-bold leading-tight">{task.title}</span><span className="mt-1 block text-xs text-muted-foreground">{task.detail}</span></div></button>)}</div>{saved ? <Button variant="outline" className="h-14 w-full" onClick={() => setView('document')}>Return to invoice {saved.invoiceNumber}</Button> : null}</> : null}
         {view === 'note' ? <FieldNote key={account.id} accountId={account.id} /> : null}
         {view === 'photos' ? <FieldPhotos key={account.id} accountId={account.id} /> : null}
@@ -124,7 +124,7 @@ export function FieldHub({ bootstrap, availability, initialAccount = null, initi
         {view === 'contacts' ? <FieldContacts key={account.id} account={account} onAccountChanged={setAccount} /> : null}
         {view === 'tastings' ? <FieldAccountTastings key={account.id} accountId={account.id} /> : null}
         {view === 'tasting' ? <FieldTasting key={account.id} account={account} members={bootstrap.members} initialAvailability={availability} /> : null}
-        {view === 'order' || view === 'invoice' ? <FieldDocumentForm key={`${account.id}:${view}`} account={account} products={bootstrap.products} kind={view} draft={documentDrafts[`${account.id}:${view}`]} onDraftChange={draft => setDocumentDrafts(previous => ({ ...previous, [`${account.id}:${view}`]: draft }))} backRevision={documentBack} onBusyChange={setDocumentBusy} onSaved={(document, message) => { setDocumentDrafts(previous => { const next = { ...previous }; delete next[`${account.id}:${view}`]; return next }); setSaved(document); setRecipientEmail(document.email); setDeliveryMessage(message); setView('document'); window.history.replaceState(null, '', `/field?invoice=${document.requestId}`) }} /> : null}
+        {view === 'order' || view === 'invoice' ? <FieldDocumentForm key={`${account.id}:${view}`} account={account} products={bootstrap.products} kind={view} draft={documentDrafts[`${account.id}:${view}`]} onDraftChange={draft => setDocumentDrafts(previous => ({ ...previous, [`${account.id}:${view}`]: draft }))} backRevision={documentBack} onBusyChange={setDocumentBusy} onReviewChange={setDocumentReviewing} onSaved={(document, message) => { setDocumentDrafts(previous => { const next = { ...previous }; delete next[`${account.id}:${view}`]; return next }); setSaved(document); setRecipientEmail(document.email); setDeliveryMessage(message); setView('document'); window.history.replaceState(null, '', `/field?invoice=${document.requestId}`) }} /> : null}
         {view === 'document' && saved ? <div className="space-y-4">
           <div role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5"><Check className="mb-2 size-7 text-emerald-700" /><h2 className="text-xl font-bold">{saved.orderId ? 'Order & invoice saved' : 'Invoice saved'}</h2><p className="mt-2 break-all">{saved.invoiceNumber} · {formatCurrency(saved.total)}</p><p className="mt-2 text-sm">{saved.status === 'paid' ? 'Payment received.' : `${saved.paymentMethod === 'cod' ? 'COD' : saved.paymentMethod === 'check' ? 'Check' : 'Stripe card'} · Payment not yet confirmed.`}</p></div>
           {deliveryMessage ? <p role="status" className="rounded-xl bg-white p-3 text-sm">{deliveryMessage}</p> : saved.emailSentAt ? <p className="text-sm">Emailed to {saved.email}</p> : null}
