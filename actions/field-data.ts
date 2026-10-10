@@ -2,7 +2,7 @@
 
 import { and, asc, desc, eq, gte, inArray, ilike, or, sql } from 'drizzle-orm'
 import { db } from '@/db'
-import { accountMedia, accountNotes, contacts, customerAccounts, historicalOrders, orderItems, orders, products, tasterAvailability, tastings, users } from '@/db/schema'
+import { accountMedia, accountNotes, contacts, crmTasks, customerAccounts, historicalOrders, orderItems, orders, products, tasterAvailability, tastings, users } from '@/db/schema'
 import { fieldAccount, fieldContext } from '@/lib/field/access'
 import { getEasternDateKey } from '@/lib/tastings/time'
 import { upcomingTastingFilter } from '@/lib/tastings/upcoming-filter'
@@ -13,6 +13,9 @@ import { fieldAccountSchema, fieldContactSchema, fieldContactEditSchema, fieldAc
 import { normalizeVenueIdentity } from '@/lib/tastings/scheduling'
 import { after } from 'next/server'
 import { logActivityEvent } from '@/lib/activity/log'
+import { createTask, updateTaskStatus } from '@/actions/tasks'
+import { getTasksForView } from '@/lib/tasks/read'
+import { TASK_ROLES } from '@/lib/tasks/roles'
 
 export async function createFieldAccount(raw: FieldAccountInput): Promise<{ success: true; account: Awaited<ReturnType<typeof getFieldAccount>> } | { error: string; matches?: Awaited<ReturnType<typeof searchFieldAccounts>> }> {
   const parsed = fieldAccountSchema.safeParse(raw)
@@ -257,4 +260,54 @@ export async function saveFieldPhoto(input: { requestId: string; accountId: stri
     refreshFieldAccount(input.accountId)
     return { success: true as const }
   } catch { return { error: 'Could not confirm photo save. Your upload is kept; retry saving the same photo.' } }
+}
+
+export async function getFieldAccountTasks(accountId: string) {
+  const { session } = await fieldAccount(accountId)
+  const [tasks, team] = await Promise.all([
+    getTasksForView({ userId: session.user.id, roles: session.user.roles, accountId, includeOrganization: true, limit: 100 }),
+    db.select({ id: users.id, name: users.name, roles: users.roles }).from(users).where(eq(users.active, true)).orderBy(asc(users.name)),
+  ])
+  return {
+    currentUserId: session.user.id,
+    open: tasks.filter(task => task.status === 'open' || task.status === 'in_progress'),
+    completed: tasks.filter(task => task.status === 'completed').sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? '')).slice(0, 5),
+    assignees: team.filter(user => user.roles.some(role => (TASK_ROLES as readonly string[]).includes(role))).map(({ id, name }) => ({ id, name })),
+  }
+}
+
+const fieldTaskSchema = z.object({
+  requestId: z.uuid(), accountId: z.uuid(),
+  title: z.string().trim().min(1, 'Enter what needs to be done.').max(200),
+  description: z.string().trim().max(4000).default(''),
+  dueAt: z.iso.datetime({ offset: true, error: 'Choose a due date and time.' }),
+  priority: z.enum(['low', 'normal', 'high', 'urgent']).default('normal'),
+  contactId: z.union([z.uuid(), z.literal('')]).default(''),
+  assignedToUserId: z.union([z.uuid(), z.literal('')]).default(''),
+})
+export type FieldTaskInput = z.input<typeof fieldTaskSchema>
+
+export async function createFieldTask(raw: FieldTaskInput) {
+  const parsed = fieldTaskSchema.safeParse(raw)
+  if (!parsed.success) return { error: parsed.error.issues[0].message }
+  const input = parsed.data
+  try {
+    await fieldAccount(input.accountId)
+    const result = await createTask({ requestId: input.requestId, accountId: input.accountId, title: input.title, description: input.description || null, dueAt: input.dueAt, priority: input.priority, contactId: input.contactId || null, assignedToUserId: input.assignedToUserId || null })
+    if ('error' in result) return { error: result.error }
+    refreshFieldAccount(input.accountId)
+    return { success: true as const, tasks: await getFieldAccountTasks(input.accountId) }
+  } catch { return { error: 'Could not confirm task save. Your details are kept; retry the same entry to avoid duplicates.' } }
+}
+
+export async function setFieldTaskStatus(accountId: string, taskId: string, status: 'open' | 'completed') {
+  try {
+    await fieldAccount(accountId)
+    const [task] = await db.select({ accountId: crmTasks.accountId }).from(crmTasks).where(eq(crmTasks.id, taskId)).limit(1)
+    if (!task || task.accountId !== accountId) return { error: 'This task is no longer linked to this account. Refresh tasks.' }
+    const result = await updateTaskStatus(taskId, status)
+    if ('error' in result) return { error: result.error }
+    refreshFieldAccount(accountId)
+    return { success: true as const, tasks: await getFieldAccountTasks(accountId) }
+  } catch { return { error: 'Could not confirm the task update. Refresh tasks and retry.' } }
 }

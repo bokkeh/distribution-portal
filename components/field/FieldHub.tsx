@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { ArrowLeft, CalendarDays, Camera, Check, FileText, Home, Package, Search, StickyNote, UserRound, Wine } from 'lucide-react'
+import { ArrowLeft, CalendarDays, Camera, Check, FileText, Home, ListTodo, Package, Search, StickyNote, UserRound, Wine } from 'lucide-react'
 import { getFieldAccount, searchFieldAccounts, saveFieldNote, getFieldAvailability } from '@/actions/field-data'
 import { getFieldDocument, sendFieldInvoice } from '@/actions/field-documents'
 import { QuickScheduleTasting } from '@/components/tastings/QuickScheduleTasting'
@@ -13,6 +13,7 @@ import { FieldDocumentForm, type FieldDocumentDraft, type FieldProduct, type Sav
 import { FieldCardPayment } from './FieldCardPayment'
 import { FieldPhotos } from './FieldPhotos'
 import { FieldContacts } from './FieldContacts'
+import { FieldTasks } from './FieldTasks'
 import { FieldAccountTastings } from './FieldAccountTastings'
 import { FieldAccountOrders } from './FieldAccountOrders'
 import { FieldAccountForm } from './FieldAccountForm'
@@ -23,7 +24,7 @@ import { formatCurrency } from '@/lib/utils'
 
 type Account = Awaited<ReturnType<typeof getFieldAccount>>
 type Document = SavedFieldDocument & { status?: string; emailSentAt?: string | null }
-type View = 'home' | 'contacts' | 'tastings' | 'tasting' | 'order' | 'invoice' | 'note' | 'photos' | 'observations' | 'document'
+type View = 'home' | 'contacts' | 'tasks' | 'tastings' | 'tasting' | 'order' | 'invoice' | 'note' | 'photos' | 'observations' | 'document'
 
 function FieldNote({ accountId }: { accountId: string }) {
   const locked = useRef(false), requestId = useRef<string | null>(null)
@@ -87,6 +88,7 @@ export function FieldHub({ bootstrap, availability, initialAccount = null, initi
   }, [query, searching])
   const tasks = [
     { view: 'contacts' as const, title: 'Contact information', detail: 'Key points of contact', icon: UserRound },
+    { view: 'tasks' as const, title: 'Tasks', detail: 'Follow-ups & to-dos', icon: ListTodo },
     { view: 'tastings' as const, title: 'View tastings', detail: 'Last visit & future bookings', icon: CalendarDays },
     { view: 'tasting' as const, title: 'Schedule tasting', detail: 'Open dates & team assignment', icon: CalendarDays },
     { view: 'order' as const, title: 'Create order', detail: 'Cases, payment & invoice', icon: Package },
@@ -123,6 +125,7 @@ export function FieldHub({ bootstrap, availability, initialAccount = null, initi
         {view === 'photos' ? <FieldPhotos key={account.id} accountId={account.id} /> : null}
         {view === 'observations' ? <AccountObservationForm key={account.id} accountId={account.id} products={bootstrap.products} fieldMode /> : null}
         {view === 'contacts' ? <FieldContacts key={account.id} account={account} onAccountChanged={setAccount} /> : null}
+        {view === 'tasks' ? <FieldTasks key={account.id} account={account} /> : null}
         {view === 'tastings' ? <FieldAccountTastings key={account.id} accountId={account.id} /> : null}
         {view === 'tasting' ? <FieldTasting key={account.id} account={account} members={bootstrap.members} initialAvailability={availability} /> : null}
         {view === 'order' || view === 'invoice' ? <FieldDocumentForm key={`${account.id}:${view}`} account={account} products={bootstrap.products} kind={view} draft={documentDrafts[`${account.id}:${view}`]} onDraftChange={draft => setDocumentDrafts(previous => ({ ...previous, [`${account.id}:${view}`]: draft }))} backRevision={documentBack} onBusyChange={setDocumentBusy} onReviewChange={setDocumentReviewing} onSaved={(document, message) => { setDocumentDrafts(previous => { const next = { ...previous }; delete next[`${account.id}:${view}`]; return next }); setSaved(document); setRecipientEmail(document.email); setDeliveryMessage(message); setView('document'); window.history.replaceState(null, '', `/field?invoice=${document.requestId}`) }} /> : null}

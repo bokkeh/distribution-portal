@@ -10,6 +10,7 @@ import { logActivityEvent } from '@/lib/activity/log'
 import { sendTaskNotification, type TaskNotificationChannel } from '@/lib/tasks/notifications'
 import { TASK_ROLES } from '@/lib/tasks/roles'
 const taskInputSchema = z.object({
+  requestId: z.string().uuid().optional().nullable(),
   title: z.string().trim().min(1, 'Task title is required.').max(200),
   description: z.string().trim().max(4000).optional().nullable(),
   accountId: z.string().uuid().optional().nullable(),
@@ -56,6 +57,14 @@ export async function createTask(input: CreateTaskInput) {
   try {
     const session = await requireRole(...TASK_ROLES)
     const parsed = taskInputSchema.parse(input)
+    // A retried request (e.g. lost response on a mobile connection) returns the task it already saved.
+    if (parsed.requestId) {
+      const [saved] = await db.select({ id: crmTasks.id, createdByUserId: crmTasks.createdByUserId }).from(crmTasks).where(eq(crmTasks.id, parsed.requestId)).limit(1)
+      if (saved) {
+        if (saved.createdByUserId !== session.user.id) throw new Error('This task request was already used. Start a new task.')
+        return { success: true as const, taskId: saved.id }
+      }
+    }
     const roles = session.user.roles ?? [session.user.role as string]
     const account = await assertAccountAccess(session, parsed.accountId)
     const canAssignOthers = roles.some((role) => TASK_ROLES.includes(role as typeof TASK_ROLES[number]))
@@ -94,6 +103,7 @@ export async function createTask(input: CreateTaskInput) {
     if (Number.isNaN(dueAt.getTime())) throw new Error('Choose a valid due date and time.')
 
     const [task] = await db.insert(crmTasks).values({
+      ...(parsed.requestId ? { id: parsed.requestId } : {}),
       title: parsed.title,
       description: parsed.description || null,
       accountId: parsed.accountId || null,
