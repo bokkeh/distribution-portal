@@ -104,7 +104,11 @@ export default async function InvoiceDetailPage({
                 <form action={sendInvoiceEmail.bind(null, invoice.id)}>
                   <Button className="w-full" type="submit"><Send className="mr-2 h-4 w-4" />Send to Customer</Button>
                 </form>
-              ) : null}
+              ) : (
+                <form action={sendInvoiceEmail.bind(null, invoice.id)}>
+                  <Button variant="outline" className="w-full" type="submit"><Send className="mr-2 h-4 w-4" />Resend Invoice</Button>
+                </form>
+              )}
               {invoice.status !== 'paid' ? (
                 <form action={markInvoicePaid.bind(null, invoice.id)}>
                   <Button variant="secondary" className="w-full" type="submit">Mark as Paid</Button>

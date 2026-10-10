@@ -397,12 +397,13 @@ export async function createInvoice(formData: FormData) {
 }
 
 export async function sendInvoiceEmail(invoiceId: string) {
-  await requireAdminOrStaff()
+  const session = await requireAdminOrStaff()
 
   const [invoice] = await db
     .select({
       id: invoices.id,
       invoiceNumber: invoices.invoiceNumber,
+      status: invoices.status,
       total: invoices.total,
       customerEmail: customerAccounts.email,
       companyName: customerAccounts.companyName,
@@ -424,9 +425,23 @@ export async function sendInvoiceEmail(invoiceId: string) {
     invoiceUrl: `${process.env.NEXTAUTH_URL}/customer/invoices/${invoiceId}`,
   })
 
-  await db.update(invoices).set({ status: 'sent' }).where(eq(invoices.id, invoiceId))
+  const isResend = invoice.status !== 'draft'
+  if (!isResend) {
+    await db.update(invoices).set({ status: 'sent' }).where(eq(invoices.id, invoiceId))
+  }
+
+  await logActivityEvent({
+    entityType: 'invoice',
+    entityId: invoice.id,
+    actorUserId: session.user.id,
+    kind: isResend ? 'invoice_resent' : 'invoice_sent',
+    title: isResend ? 'Invoice resent' : 'Invoice sent',
+    body: `${invoice.invoiceNumber} emailed to ${invoice.customerEmail}.`,
+  })
+
   revalidatePath('/admin/invoicing')
   revalidatePath(`/admin/invoicing/${invoiceId}`)
+  redirect(`/admin/invoicing/${invoiceId}?success=${encodeURIComponent(`Invoice ${isResend ? 'resent' : 'sent'} to ${invoice.customerEmail}.`)}`)
 }
 
 export async function setInvoiceAchFeeWaiver(invoiceId: string, waiveAchFee: boolean) {

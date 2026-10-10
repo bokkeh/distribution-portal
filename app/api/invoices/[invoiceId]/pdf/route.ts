@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server'
 import { renderToBuffer } from '@react-pdf/renderer'
 import type { DocumentProps } from '@react-pdf/renderer'
 import { requireAuth } from '@/lib/auth/session'
+import { normalizeRoleList } from '@/lib/auth/view-as'
 import { db } from '@/db'
 import { customerAccounts } from '@/db/schema'
 import { eq } from 'drizzle-orm'
@@ -29,20 +30,22 @@ export async function GET(
 ) {
   const session = await requireAuth()
   const { invoiceId } = await params
-  const roles = session.user.roles ?? [session.user.role]
+  const roles = normalizeRoleList(session.user.role as string, session.user.roles)
   const invoice = await getInvoiceDetailData(invoiceId)
 
   if (!invoice) {
     return new NextResponse('Invoice not found', { status: 404 })
   }
 
-  if (roles.includes('customer')) {
+  // Admin/staff can download any invoice, even if the account also holds the customer role.
+  if (!roles.some((role) => ['admin', 'staff'].includes(role))) {
+    if (!roles.includes('customer')) {
+      return new NextResponse('Unauthorized', { status: 403 })
+    }
     const [account] = await db.select({ id: customerAccounts.id }).from(customerAccounts).where(eq(customerAccounts.userId, session.user.id)).limit(1)
     if (!account || account.id !== invoice.customerId) {
       return new NextResponse('Unauthorized', { status: 403 })
     }
-  } else if (!roles.some((role) => ['admin', 'staff'].includes(role))) {
-    return new NextResponse('Unauthorized', { status: 403 })
   }
 
   const logoDataUrl = getLogoDataUrl()
