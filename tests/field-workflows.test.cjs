@@ -308,3 +308,33 @@ test('field edits persist native account contacts and business fallbacks without
  assert.equal(cleared.success,true);assert.equal(cleared.account.businessContact.phone,null);assert.equal(cleared.account.businessContact.email,null)
  assert.equal((await h.runtime.db.select().from(h.api.schema.contacts)).length,before)
 })
+
+
+test('custom invoice quantity persists on the invoice line with exact unit-price totals and safe retries', async () => {
+ const before=(await h.runtime.db.select().from(h.api.schema.orders)).length
+ const input=await reviewed(entry({kind:'invoice',items:[],description:'Custom cases',customQuantity:3,amount:'12.35',tax:'1.20'}))
+ assert.equal(input.quotedTotal,'38.25')
+ const quote=await h.api.quoteFieldDocument(input)
+ assert.deepEqual(quote.lines,[{name:'Custom cases',quantity:'3',unitPrice:'12.35',total:'37.05'}])
+ const saved=await h.api.saveFieldDocument(input);assert.equal(saved.success,true,saved.error)
+ assert.equal((await h.api.saveFieldDocument(input)).invoiceId,saved.invoiceId)
+ assert.ok((await h.api.saveFieldDocument({...input,customQuantity:4})).error)
+ const [line]=await h.runtime.db.select().from(h.api.schema.invoiceItems).where(eq(h.api.schema.invoiceItems.invoiceId,saved.invoiceId))
+ assert.equal(Number(line.quantity),3);assert.equal(Number(line.unitPrice),12.35);assert.equal(Number(line.total),37.05)
+ const rendered=await h.api.getInvoiceDetailData(saved.invoiceId)
+ assert.equal(rendered.lineItems[0].quantity,3);assert.equal(rendered.lineItems[0].unitPrice,12.35);assert.equal(rendered.total,38.25)
+ assert.equal((await h.runtime.db.select().from(h.api.schema.orders)).length,before)
+ for(const customQuantity of [0,-1,1.5,10001]) assert.ok((await h.api.quoteFieldDocument({...input,customQuantity})).error)
+ assert.ok((await h.api.quoteFieldDocument({...input,customQuantity:10000,amount:'9999999.99'})).error)
+})
+
+
+test('quantity-one invoices preserve the legacy fingerprint for retries across deployment', async () => {
+ const input=await reviewed(entry({kind:'invoice',items:[],description:'Legacy retry',amount:'20.00',tax:'0'}))
+ const saved=await h.api.saveFieldDocument(input);assert.equal(saved.success,true,saved.error)
+ const oldInput={requestId:input.requestId,accountId:input.accountId,kind:input.kind,paymentMethod:input.paymentMethod,email:input.email,notes:input.notes,items:input.items,description:input.description,amount:input.amount,tax:input.tax,quotedTotal:input.quotedTotal}
+ const legacyFingerprint=require('node:crypto').createHash('sha256').update(JSON.stringify(oldInput)).digest('hex')
+ const [document]=await h.runtime.db.select().from(h.api.schema.fieldDocuments).where(eq(h.api.schema.fieldDocuments.id,input.requestId))
+ assert.equal(document.fingerprint,legacyFingerprint)
+ assert.equal((await h.api.saveFieldDocument({...input,customQuantity:1})).invoiceId,saved.invoiceId)
+})

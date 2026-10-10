@@ -17,3 +17,5 @@ export { quoteFieldDocument, saveFieldDocument, sendFieldInvoice, getFieldDocume
 export { createFieldAccount, createFieldContact, updateFieldContact, updateFieldAccountContact, searchFieldAccounts, getFieldAccount, getFieldAccountTastings, getFieldBootstrap, getFieldAvailability, saveFieldNote, saveFieldPhoto } from '../../actions/field-data'
 export { fieldAvailabilityRows } from '../../lib/field/availability'
 export { fieldLoginReturn } from '../../lib/field/validation'
+
+export { getInvoiceDetailData } from '../../lib/invoices/read'

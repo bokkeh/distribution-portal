@@ -6,12 +6,14 @@ export const fieldDocumentSchema = z.object({
   email: z.union([z.email().max(254), z.literal('')]).default(''), notes: z.string().trim().max(2000).default(''),
   items: z.array(z.object({ productId: z.uuid(), quantity: z.number().int().positive().max(10000) })).max(30).default([]),
   description: z.string().trim().max(200).default(''),
+  customQuantity: z.number().int().positive().max(10000).default(1),
   amount: z.string().regex(/^\d{1,7}(\.\d{1,2})?$/).optional(),
   tax: z.string().regex(/^\d{1,7}(\.\d{1,2})?$/).default('0'),
   quotedTotal: z.string().optional(),
 }).superRefine((input, ctx) => {
   if ((input.kind === 'order' && !input.items.length) || new Set(input.items.map(item => item.productId)).size !== input.items.length) ctx.addIssue({ code: 'custom', message: 'Choose products and whole case quantities without duplicate products.' })
   if (input.kind === 'invoice' && !input.items.length && (!input.description || !input.amount || Number(input.amount) <= 0)) ctx.addIssue({ code: 'custom', message: 'Choose saved products and quantities, or enter a description and positive amount for a custom invoice.' })
+  if (!input.items.length && input.amount && Number(input.amount) * input.customQuantity + Number(input.tax) > 9999999999.99) ctx.addIssue({ code: 'custom', message: 'The invoice total is too large. Reduce the quantity or unit price.' })
   if (input.kind === 'invoice' && input.items.length && (input.description || input.amount)) ctx.addIssue({ code: 'custom', message: 'Choose saved products or a custom invoice, not both.' })
 })
 export type FieldDocumentInput = z.input<typeof fieldDocumentSchema>

@@ -28,7 +28,8 @@ async function priceDocument(input: ReturnType<typeof fieldDocumentSchema.parse>
     const total = (Math.round(priced.subtotal * 100) + Math.round(Number(input.tax) * 100)) / 100
     return { ...priced, account, session, member, total: total.toFixed(2), amount: priced.subtotal.toFixed(2) }
   }
-  return { account, session, member, total: ((Math.round(Number(input.amount) * 100) + Math.round(Number(input.tax) * 100)) / 100).toFixed(2), amount: Number(input.amount).toFixed(2) }
+  const amount = Math.round(Number(input.amount) * 100) * input.customQuantity / 100
+  return { account, session, member, total: ((Math.round(amount * 100) + Math.round(Number(input.tax) * 100)) / 100).toFixed(2), amount: amount.toFixed(2) }
 }
 
 export async function quoteFieldDocument(raw: FieldDocumentInput) {
@@ -37,7 +38,7 @@ export async function quoteFieldDocument(raw: FieldDocumentInput) {
   try {
     const priced = await priceDocument(parsed.data)
     return { success: true as const, total: priced.total, amount: priced.amount,
-      lines: 'lineItems' in priced ? priced.lineItems.map(item => ({ name: priced.productMap.get(item.productId)?.name ?? 'Product', quantity: item.quantity, unitPrice: item.unitPrice, total: item.total })) : [{ name: parsed.data.description, quantity: '1', unitPrice: priced.amount, total: priced.amount }] }
+      lines: 'lineItems' in priced ? priced.lineItems.map(item => ({ name: priced.productMap.get(item.productId)?.name ?? 'Product', quantity: item.quantity, unitPrice: item.unitPrice, total: item.total })) : [{ name: parsed.data.description, quantity: String(parsed.data.customQuantity), unitPrice: Number(parsed.data.amount).toFixed(2), total: priced.amount }] }
   } catch (error) { return { error: error instanceof Error ? error.message : 'Could not load current prices. Retry.' } }
 }
 
@@ -47,7 +48,9 @@ export async function saveFieldDocument(raw: FieldDocumentInput) {
   const input = parsed.data
   try {
     const { session, account } = await fieldAccount(input.accountId)
-    const fingerprint = createHash('sha256').update(JSON.stringify(input)).digest('hex')
+    // Keep legacy quantity-one requests retryable after adding custom quantity.
+    const { customQuantity, ...legacyInput } = input
+    const fingerprint = createHash('sha256').update(JSON.stringify(customQuantity === 1 ? legacyInput : input)).digest('hex')
     const readSaved = async () => {
       const [existing] = await db.select({ document: fieldDocuments, invoice: invoices }).from(fieldDocuments).innerJoin(invoices, eq(fieldDocuments.invoiceId, invoices.id)).where(eq(fieldDocuments.id, input.requestId)).limit(1)
       if (!existing) return null
@@ -81,7 +84,7 @@ export async function saveFieldDocument(raw: FieldDocumentInput) {
         const invoiceLines = priced.lineItems.map((item, index) => ({ invoiceId, productId: item.productId, description: (priced.productMap.get(item.productId)?.name ?? 'Product') + (index === 0 && input.notes ? `\nNotes: ${input.notes}` : ''), sku: priced.productMap.get(item.productId)?.sku, quantity: item.quantity, unit: 'case', unitPrice: item.unitPrice, total: item.total }))
         await db.batch([invoiceInsert, db.insert(invoiceItems).values(invoiceLines), documentInsert])
       } else {
-        await db.batch([invoiceInsert, db.insert(invoiceItems).values({ invoiceId, description: input.description + (input.notes ? `\nNotes: ${input.notes}` : ''), quantity: '1', unit: 'service', unitPrice: priced.amount, total: priced.amount }), documentInsert])
+        await db.batch([invoiceInsert, db.insert(invoiceItems).values({ invoiceId, description: input.description + (input.notes ? `\nNotes: ${input.notes}` : ''), quantity: String(input.customQuantity), unit: 'item', unitPrice: Number(input.amount).toFixed(2), total: priced.amount }), documentInsert])
       }
     } catch (error) {
       // Concurrent/lost-response retries resolve to the one committed request.
