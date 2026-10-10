@@ -170,6 +170,12 @@ test('sales field accounts are assigned to the creator and duplicate results res
     assert.deepEqual(await h.api.getFieldAccountTastings(saved.account.id),{last:null,upcoming:[]})
     assert.equal((await h.api.createFieldContact({requestId:randomUUID(),accountId:saved.account.id,name:'Rep client contact'})).success,true)
     assert.ok((await h.api.createFieldContact({requestId:randomUUID(),accountId:h.accountId,name:'Forbidden contact'})).error)
+    const repContact=(await h.api.getFieldAccount(saved.account.id)).contacts[0]
+    const edit={accountId:saved.account.id,contactId:repContact.id,name:'Edited rep contact',email:'',phone:'123',title:'Buyer',preferredContact:'call',isPrimary:false,expected:{name:repContact.name,email:'',phone:'',title:'',preferredContact:'',isPrimary:false}}
+    assert.equal((await h.api.updateFieldContact(edit)).success,true)
+    assert.ok((await h.api.updateFieldContact({...edit,accountId:h.accountId})).error)
+    assert.ok((await h.api.updateFieldAccountContact({accountId:h.accountId,kind:'poc',name:'Forbidden',phone:'',email:'',expected:{name:'',phone:'',email:''}})).error)
+
     await assert.rejects(h.api.getFieldAccountTastings(h.accountId),/access/)
     await assert.rejects(h.api.getFieldAccount(h.accountId),/access/)
     const duplicate=await h.api.createFieldAccount({requestId:randomUUID(),companyName:'Test Venue'})
@@ -261,4 +267,44 @@ test('field availability carries each active taster photo through to its booking
  const rows=h.api.fieldAvailabilityRows({...data,dates:[{userId:h.rachelId,date:'2030-11-06'}]})
  assert.equal(rows[0].avatarUrl,avatarUrl);assert.equal(rows[0].name,'Rachel')
  assert.equal(h.api.fieldAvailabilityRows({tasters:[{id:h.rachelId,name:'Rachel'}],dates:[{userId:h.rachelId,date:'2030-11-07'}],bookings:[]})[0].avatarUrl,null)
+})
+
+
+test('field contact edits update the CRM row, retain metadata, reject stale edits and safely confirm retries', async () => {
+ const id=randomUUID(), otherId=randomUUID()
+ await h.runtime.db.insert(h.api.schema.contacts).values({id,customerId:h.accountId,name:'Original buyer',phoneType:'mobile',notes:'Preserve notes',relationshipStatus:'keep_in_touch',title:'Buyer'})
+ await h.runtime.db.insert(h.api.schema.customerAccounts).values({id:otherId,companyName:'Other edit account'})
+ const original=(await h.api.getFieldAccount(h.accountId)).contacts.find(row=>row.id===id)
+ const expected={name:original.name,email:original.email??'',phone:original.phone??'',title:original.title??'',preferredContact:original.preferredContact??'',isPrimary:original.isPrimary}
+ const input={accountId:h.accountId,contactId:id,expected,name:'Updated buyer',email:'BUYER@EXAMPLE.TEST',phone:'410-555-0987',title:'Purchasing director',preferredContact:'email',isPrimary:true}
+ assert.equal((await h.api.updateFieldContact(input)).success,true)
+ assert.equal((await h.api.updateFieldContact(input)).success,true)
+ const [crmRow]=await h.runtime.db.select().from(h.api.schema.contacts).where(eq(h.api.schema.contacts.id,id))
+ assert.equal(crmRow.name,'Updated buyer');assert.equal(crmRow.email,'buyer@example.test');assert.equal(crmRow.title,'Purchasing director')
+ assert.equal(crmRow.phoneType,'mobile');assert.equal(crmRow.notes,'Preserve notes');assert.equal(crmRow.relationshipStatus,'keep_in_touch')
+ assert.ok((await h.api.updateFieldContact({...input,name:'Stale overwrite'})).error)
+ assert.ok((await h.api.updateFieldContact({...input,accountId:otherId})).error)
+ assert.ok((await h.api.updateFieldContact({...input,email:'invalid'})).error)
+ assert.ok(h.runtime.paths.includes('/admin/crm/people/'+id))
+ const snapshot={name:crmRow.name,email:crmRow.email,phone:crmRow.phone,title:crmRow.title,preferredContact:crmRow.preferredContact,isPrimary:crmRow.isPrimary}
+ await h.runtime.db.update(h.api.schema.contacts).set({title:'Changed in core CRM'}).where(eq(h.api.schema.contacts.id,id))
+ assert.ok((await h.api.updateFieldContact({...input,expected:snapshot,phone:'410-555-0888'})).error)
+ assert.equal((await h.api.getFieldAccount(h.accountId)).contacts.find(row=>row.id===id).title,'Changed in core CRM')
+})
+
+test('field edits persist native account contacts and business fallbacks without creating people', async () => {
+ const id=randomUUID()
+ await h.runtime.db.insert(h.api.schema.customerAccounts).values({id,companyName:'Native contact account',pocName:'POC',pocPhone:'123',phone:'456',email:'business@example.test',businessPhone:'789'})
+ const before=(await h.runtime.db.select().from(h.api.schema.contacts)).length
+ const poc={accountId:id,kind:'poc',name:'Updated POC',phone:'321',email:'poc@example.test',expected:{name:'POC',phone:'123',email:''}}
+ assert.equal((await h.api.updateFieldAccountContact(poc)).success,true)
+ assert.equal((await h.api.updateFieldAccountContact(poc)).success,true)
+ assert.ok((await h.api.updateFieldAccountContact({...poc,name:'Old form overwrite'})).error)
+ const business={accountId:id,kind:'business',name:'',phone:'987',email:'updated@example.test',expected:{name:'',phone:'789',email:'business@example.test'}}
+ assert.equal((await h.api.updateFieldAccountContact(business)).success,true)
+ const [crm]=await h.runtime.db.select().from(h.api.schema.customerAccounts).where(eq(h.api.schema.customerAccounts.id,id))
+ assert.equal(crm.pocName,'Updated POC');assert.equal(crm.pocEmail,'poc@example.test');assert.equal(crm.businessPhone,'987');assert.equal(crm.phone,'456');assert.equal(crm.email,'updated@example.test')
+ const cleared=await h.api.updateFieldAccountContact({...business,phone:'',email:'',expected:{name:'',phone:'987',email:'updated@example.test'}})
+ assert.equal(cleared.success,true);assert.equal(cleared.account.businessContact.phone,null);assert.equal(cleared.account.businessContact.email,null)
+ assert.equal((await h.runtime.db.select().from(h.api.schema.contacts)).length,before)
 })

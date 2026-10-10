@@ -9,7 +9,7 @@ import { upcomingTastingFilter } from '@/lib/tastings/upcoming-filter'
 import { revalidatePath } from 'next/cache'
 import { requireRole } from '@/lib/auth/session'
 import { z } from 'zod'
-import { fieldAccountSchema, fieldContactSchema, type FieldAccountInput, type FieldContactInput } from '@/lib/field/validation'
+import { fieldAccountSchema, fieldContactSchema, fieldContactEditSchema, fieldAccountContactEditSchema, type FieldContactEditInput, type FieldAccountContactEditInput, type FieldAccountInput, type FieldContactInput } from '@/lib/field/validation'
 import { normalizeVenueIdentity } from '@/lib/tastings/scheduling'
 import { after } from 'next/server'
 import { logActivityEvent } from '@/lib/activity/log'
@@ -86,6 +86,78 @@ export async function createFieldContact(raw: FieldContactInput) {
     for (const path of ['/admin/crm', '/staff/crm', '/sales/accounts', `/admin/crm/${input.accountId}/contacts`, `/staff/crm/${input.accountId}/contacts`, `/sales/accounts/${input.accountId}/contacts`]) revalidatePath(path)
     return { success: true as const, account: await getFieldAccount(input.accountId) }
   } catch { return { error: 'Could not confirm contact save. Your details are kept; retry the same entry to avoid duplicates.' } }
+}
+
+function refreshContactViews(accountId: string, contactId?: string) {
+  refreshFieldAccount(accountId)
+  for (const prefix of ['/admin/crm', '/staff/crm']) {
+    for (const path of [prefix, `${prefix}/people`, `${prefix}/${accountId}/contacts`, ...(contactId ? [`${prefix}/people/${contactId}`] : [])]) revalidatePath(path)
+  }
+  revalidatePath('/sales/accounts')
+  revalidatePath(`/sales/accounts/${accountId}/contacts`)
+}
+
+export async function updateFieldContact(raw: FieldContactEditInput) {
+  const parsed = fieldContactEditSchema.safeParse(raw)
+  if (!parsed.success) return { error: parsed.error.issues[0].message }
+  const input = parsed.data
+  try {
+    const { session } = await fieldAccount(input.accountId)
+    const [contact] = await db.select().from(contacts).where(and(eq(contacts.id, input.contactId), eq(contacts.customerId, input.accountId))).limit(1)
+    if (!contact) return { error: 'This contact is no longer linked to this account. Refresh the contact list.' }
+    const values = { name: input.name, email: input.email.toLowerCase() || null, phone: input.phone || null, title: input.title || null, preferredContact: input.preferredContact || null, isPrimary: input.isPrimary }
+    const unchanged = Object.entries(values).every(([key, value]) => contact[key as keyof typeof contact] === value)
+    if (!unchanged) {
+      const before = input.expected
+      const [updated] = await db.update(contacts).set(values).where(and(
+        eq(contacts.id, input.contactId), eq(contacts.customerId, input.accountId),
+        sql`COALESCE(${contacts.name}, '') = ${before.name}`,
+        sql`COALESCE(${contacts.email}, '') = ${before.email}`,
+        sql`COALESCE(${contacts.phone}, '') = ${before.phone}`,
+        sql`COALESCE(${contacts.title}, '') = ${before.title}`,
+        sql`COALESCE(${contacts.preferredContact}, '') = ${before.preferredContact}`,
+        eq(contacts.isPrimary, before.isPrimary),
+      )).returning({ id: contacts.id })
+      if (!updated) return { error: 'This contact changed since you opened it. Your entry is kept. Cancel and refresh contacts to review the latest details before editing again.' }
+      after(async () => { try { await logActivityEvent({ entityType: 'account', entityId: input.accountId, actorUserId: session.user.id, kind: 'contact_updated', title: 'Contact updated in the field', body: `${input.name} contact details updated.` }) } catch (error) { console.error('Field contact updated; audit failed:', error) } })
+    }
+    refreshContactViews(input.accountId, input.contactId)
+    return { success: true as const, account: await getFieldAccount(input.accountId) }
+  } catch { return { error: 'Could not confirm contact update. Your details are kept; retry to confirm.' } }
+}
+
+export async function updateFieldAccountContact(raw: FieldAccountContactEditInput) {
+  const parsed = fieldAccountContactEditSchema.safeParse(raw)
+  if (!parsed.success) return { error: parsed.error.issues[0].message }
+  const input = parsed.data
+  try {
+    const { account, session } = await fieldAccount(input.accountId)
+    const poc = input.kind === 'poc'
+    // Business cards can display legacy phone/email fallbacks. Update the exact
+    // fields being displayed, including clearing them, rather than resurrecting them.
+    const phoneColumn = poc ? customerAccounts.pocPhone : account.businessPhone ? customerAccounts.businessPhone : customerAccounts.phone
+    const emailColumn = poc ? customerAccounts.pocEmail : account.businessEmail ? customerAccounts.businessEmail : customerAccounts.email
+    const current = { name: poc ? account.pocName ?? '' : '', phone: poc ? account.pocPhone ?? '' : account.businessPhone || account.phone || '', email: poc ? account.pocEmail ?? '' : account.businessEmail || account.email || '' }
+    const desired = { name: poc ? input.name : '', phone: input.phone, email: input.email }
+    if (JSON.stringify(current) !== JSON.stringify(desired)) {
+      if (JSON.stringify(current) !== JSON.stringify(input.expected)) return { error: 'Account contact details changed. Your entry is kept. Cancel and refresh to review the latest details.' }
+      const values = poc ? { pocName: input.name || null, pocPhone: input.phone || null, pocEmail: input.email || null } : {
+        ...(account.businessPhone ? { businessPhone: input.phone || null, ...(!input.phone ? { phone: null } : {}) } : { phone: input.phone || null }),
+        ...(account.businessEmail ? { businessEmail: input.email || null, ...(!input.email ? { email: null } : {}) } : { email: input.email || null }),
+      }
+      const [updated] = await db.update(customerAccounts).set(values).where(and(eq(customerAccounts.id, input.accountId),
+        sql`COALESCE(${phoneColumn}, '') = ${input.expected.phone}`, sql`COALESCE(${emailColumn}, '') = ${input.expected.email}`,
+        poc ? sql`COALESCE(${customerAccounts.pocName}, '') = ${input.expected.name}` : and(
+          sql`${customerAccounts.businessPhone} IS NOT DISTINCT FROM ${account.businessPhone}`, sql`${customerAccounts.businessEmail} IS NOT DISTINCT FROM ${account.businessEmail}`,
+          sql`${customerAccounts.phone} IS NOT DISTINCT FROM ${account.phone}`, sql`${customerAccounts.email} IS NOT DISTINCT FROM ${account.email}`,
+        ),
+      )).returning({ id: customerAccounts.id })
+      if (!updated) return { error: 'Account contact details changed. Cancel and refresh before editing again.' }
+      after(async () => { try { await logActivityEvent({ entityType: 'account', entityId: input.accountId, actorUserId: session.user.id, kind: 'account_updated', title: 'Account contact updated in the field', body: poc ? 'Account point of contact updated.' : 'Business phone and email updated.' }) } catch (error) { console.error('Account contact updated; audit failed:', error) } })
+    }
+    refreshContactViews(input.accountId)
+    return { success: true as const, account: await getFieldAccount(input.accountId) }
+  } catch { return { error: 'Could not confirm account contact update. Your details are kept; retry to confirm.' } }
 }
 
 export async function getFieldAccountTastings(accountId: string) {

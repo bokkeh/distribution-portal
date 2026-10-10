@@ -42,3 +42,18 @@ export type FieldContactInput = z.input<typeof fieldContactSchema>
 export function fieldLoginReturn(value: string | null | undefined) {
   return value && /^\/field(?:\?|$)/.test(value) ? value : null
 }
+
+// Edits carry the values seen when the form opened to protect newer CRM changes.
+export const fieldContactEditSchema = fieldContactSchema.omit({ requestId: true }).extend({
+  contactId: z.uuid(),
+  expected: z.object({ name: z.string(), email: z.string(), phone: z.string(), title: z.string(), preferredContact: z.enum(['', 'email', 'sms', 'call']), isPrimary: z.boolean() }),
+})
+export type FieldContactEditInput = z.input<typeof fieldContactEditSchema>
+export const fieldAccountContactEditSchema = z.object({
+  accountId: z.uuid(), kind: z.enum(['poc', 'business']),
+  name: z.string().trim().max(160).default(''),
+  phone: z.string().trim().max(40).default(''),
+  email: z.union([z.email().max(254), z.literal('')]).default(''),
+  expected: z.object({ name: z.string(), phone: z.string(), email: z.string() }),
+})
+export type FieldAccountContactEditInput = z.input<typeof fieldAccountContactEditSchema>
