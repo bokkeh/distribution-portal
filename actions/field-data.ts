@@ -2,7 +2,7 @@
 
 import { and, asc, desc, eq, gte, inArray, ilike, or, sql } from 'drizzle-orm'
 import { db } from '@/db'
-import { accountMedia, accountNotes, contacts, customerAccounts, products, tasterAvailability, tastings, users } from '@/db/schema'
+import { accountMedia, accountNotes, contacts, customerAccounts, historicalOrders, orderItems, orders, products, tasterAvailability, tastings, users } from '@/db/schema'
 import { fieldAccount, fieldContext } from '@/lib/field/access'
 import { getEasternDateKey } from '@/lib/tastings/time'
 import { upcomingTastingFilter } from '@/lib/tastings/upcoming-filter'
@@ -173,6 +173,27 @@ export async function getFieldAccountTastings(accountId: string) {
   ])
   const serialize = (row: typeof upcoming[number]) => ({ ...row, start: row.start.toISOString(), end: row.end?.toISOString() ?? null, assignee: row.assignee ?? 'Unassigned' })
   return { last: past[0] ? serialize(past[0]) : null, upcoming: upcoming.map(serialize) }
+}
+
+export async function getFieldAccountOrders(accountId: string) {
+  await fieldAccount(accountId)
+  const [liveOrders, items, backfilled] = await Promise.all([
+    db.select({ id: orders.id, createdAt: orders.createdAt, total: orders.total, status: orders.status, orderType: orders.orderType, paymentStatus: orders.paymentStatus })
+      .from(orders).where(eq(orders.customerId, accountId)).orderBy(desc(orders.createdAt)),
+    db.select({ orderId: orderItems.orderId, quantity: orderItems.quantity, unit: orderItems.unit, name: products.name })
+      .from(orderItems).innerJoin(orders, eq(orderItems.orderId, orders.id)).innerJoin(products, eq(orderItems.productId, products.id)).where(eq(orders.customerId, accountId)),
+    db.select({ id: historicalOrders.id, orderDate: historicalOrders.orderDate, orderValue: historicalOrders.orderValue, cases: historicalOrders.cases, productName: products.name, productNameFreeform: historicalOrders.productNameFreeform })
+      .from(historicalOrders).leftJoin(products, eq(historicalOrders.productId, products.id)).where(eq(historicalOrders.accountId, accountId)).orderBy(desc(historicalOrders.orderDate)),
+  ])
+  const itemsByOrder = new Map<string, string[]>()
+  for (const item of items) itemsByOrder.set(item.orderId, [...(itemsByOrder.get(item.orderId) ?? []), `${Number(item.quantity)} ${item.unit === 'bottle' ? 'btl' : 'cs'} ${item.name}`])
+  const counted = liveOrders.filter(order => order.status !== 'cancelled' && order.orderType !== 'sample')
+  const history = [
+    ...liveOrders.map(order => ({ id: order.id, date: order.createdAt.toISOString(), total: order.total, label: order.orderType === 'sample' ? 'Sample' : order.status === 'cancelled' ? 'Cancelled' : order.paymentStatus === 'paid' ? 'Paid' : 'Unpaid', summary: itemsByOrder.get(order.id)?.join(' · ') ?? '', historical: false })),
+    ...backfilled.map(order => ({ id: order.id, date: order.orderDate.toISOString(), total: order.orderValue, label: 'Historical', summary: `${Number(order.cases)} cs ${order.productName ?? order.productNameFreeform ?? 'Product'}`, historical: true })),
+  ].sort((a, b) => b.date.localeCompare(a.date))
+  const totalRevenue = counted.reduce((sum, order) => sum + Number(order.total), 0) + backfilled.reduce((sum, order) => sum + Number(order.orderValue ?? 0), 0)
+  return { totalRevenue, orderCount: counted.length + backfilled.length, lastOrderDate: history.find(order => order.label !== 'Cancelled' && order.label !== 'Sample')?.date ?? null, orders: history }
 }
 
 export async function getFieldBootstrap() {
