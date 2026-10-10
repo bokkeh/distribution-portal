@@ -167,6 +167,9 @@ test('sales field accounts are assigned to the creator and duplicate results res
     assert.equal(saved.success,true,saved.error)
     const [record]=await h.runtime.db.select().from(h.api.schema.customerAccounts).where(eq(h.api.schema.customerAccounts.id,saved.account.id))
     assert.equal(record.assignedSalesRepId,memberId)
+    assert.deepEqual(await h.api.getFieldAccountTastings(saved.account.id),{last:null,upcoming:[]})
+    await assert.rejects(h.api.getFieldAccountTastings(h.accountId),/access/)
+    await assert.rejects(h.api.getFieldAccount(h.accountId),/access/)
     const duplicate=await h.api.createFieldAccount({requestId:randomUUID(),companyName:'Test Venue'})
     assert.ok(duplicate.error);assert.deepEqual(duplicate.matches,[])
     h.runtime.session={user:{id:repId,role:'customer',roles:['customer']}}
@@ -178,4 +181,48 @@ test('photo saves accept upload proxy URLs and reject invalid paths', async () =
  const photo={requestId:randomUUID(),accountId:h.accountId,mediaUrl:'/api/image?path=account-media%2Fgallery.jpg',caption:'Gallery',date:'2030-11-06'}
  assert.equal((await h.api.saveFieldPhoto(photo)).success,true)
  for(const mediaUrl of ['/api/image?path=documents%2Ffile.jpg','/api/image?path=account-media%2F..%2Fsecret','//evil.test/image','/api/image?path=account-media%2Fphoto.jpg&extra=1']) assert.ok((await h.api.saveFieldPhoto({...photo,requestId:randomUUID(),mediaUrl})).error)
+})
+
+test('account tasting history separates past, ongoing and future bookings at the end boundary', async t => {
+  const accountId=randomUUID()
+  await h.runtime.db.insert(h.api.schema.customerAccounts).values({id:accountId,companyName:'History boundary venue'})
+  const make=(name,status,start,end,extra={})=>({id:randomUUID(),customerId:accountId,createdByUserId:h.runtime.session.user.id,eventName:name,status,scheduledAt:new Date(start),endAt:end?new Date(end):null,...extra})
+  await h.runtime.db.insert(h.api.schema.tastings).values([
+    make('Earlier completed','completed','2030-11-04T20:00:00Z','2030-11-04T23:00:00Z'),
+    make('Ended exactly now','confirmed','2030-11-05T23:00:00Z','2030-11-06T02:00:00Z',{timeZone:'America/Los_Angeles',assignedUserId:h.rachelId}),
+    make('Ongoing local previous day','scheduled','2030-11-06T01:00:00Z','2030-11-06T03:00:00Z'),
+    make('No end ongoing','scheduled','2030-11-06T01:30:00Z',null),
+    make('Cancelled','cancelled','2030-11-06T01:45:00Z','2030-11-06T02:00:00Z'),
+    make('Declined future','declined','2030-11-06T03:00:00Z',null),
+    make('Past request','requested','2030-11-05T00:00:00Z',null),
+    ...Array.from({length:16},(_,i)=>make('Future '+i,i===0?'requested':'confirmed',new Date(Date.UTC(2030,10,7+i,21)).toISOString(),null)),
+  ])
+  t.mock.timers.enable({apis:['Date'],now:Date.parse('2030-11-06T02:00:00Z')})
+  try {
+    const result=await h.api.getFieldAccountTastings(accountId)
+    assert.equal(result.last.eventName,'Ended exactly now');assert.equal(result.last.assignee,'Rachel');assert.equal(result.last.timeZone,'America/Los_Angeles')
+    assert.equal(result.upcoming.length,18)
+    assert.deepEqual(result.upcoming.slice(0,3).map(row=>row.eventName),['Ongoing local previous day','No end ongoing','Future 0'])
+    assert.equal(result.upcoming[2].status,'requested');assert.equal(result.upcoming[2].assignee,'Unassigned')
+    assert.ok(result.upcoming.every(row=>typeof row.start==='string'))
+    assert.deepEqual(await h.api.getFieldAccountTastings(randomUUID()).catch(error=>error.message),'You do not have access to this account.')
+  } finally {t.mock.timers.reset()}
+})
+
+test('field contacts include linked people, primary order and account contact fields without leaking standalone or other-account contacts', async () => {
+ const accountId=randomUUID()
+ await h.runtime.db.insert(h.api.schema.customerAccounts).values({id:accountId,companyName:'Contact Card Venue',pocName:'Venue buyer',pocPhone:'4105550111',pocEmail:'buyer@example.test',businessPhone:'4105550120',businessEmail:'venue@example.test'})
+ await h.runtime.db.insert(h.api.schema.contacts).values([
+  {customerId:accountId,name:'Z Primary',isPrimary:true,title:'Buyer',email:'primary@example.test',phone:'4105550130',preferredContact:'call'},
+  {customerId:accountId,name:'A Secondary',title:'Manager'},
+  {customerId:null,name:'Unlinked person',email:'private@example.test'},
+  {customerId:h.accountId,name:'Other account person'},
+ ])
+ const result=await h.api.getFieldAccount(accountId)
+ assert.deepEqual(result.contacts.map(contact=>contact.name),['Z Primary','A Secondary'])
+ assert.equal(result.contacts[0].title,'Buyer');assert.equal(result.contacts[0].preferredContact,'call')
+ assert.deepEqual(result.pointOfContact,{name:'Venue buyer',phone:'4105550111',email:'buyer@example.test'})
+ assert.deepEqual(result.businessContact,{phone:'4105550120',email:'venue@example.test'})
+ const empty=await h.api.createFieldAccount({requestId:randomUUID(),companyName:'No contacts card venue'})
+ assert.deepEqual(empty.account.contacts,[]);assert.equal(empty.account.pointOfContact.name,null)
 })

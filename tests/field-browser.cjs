@@ -11,9 +11,19 @@ async function main() {
   const h = await createHarness()
   await h.runtime.db.insert(h.api.schema.inventory).values({ productId: h.productId, quantityPaid: 40 })
   await h.runtime.db.insert(h.api.schema.tasterAvailability).values({ userId: h.rachelId, availableDate: '2030-11-06' })
+  await h.runtime.db.insert(h.api.schema.tastings).values([
+    {customerId:h.accountId,createdByUserId:h.runtime.session.user.id,eventName:'Previous shelf tasting',status:'completed',assignedUserId:h.rachelId,scheduledAt:new Date('2025-11-01T20:00:00Z'),endAt:new Date('2025-11-01T23:00:00Z'),timeZone:'America/Chicago'},
+    ...Array.from({length:7},(_,i)=>({customerId:h.accountId,createdByUserId:h.runtime.session.user.id,eventName:'Future field visit '+(i+1),status:i===0?'requested':'confirmed',scheduledAt:new Date(Date.UTC(2030,10,7+i,21)),endAt:new Date(Date.UTC(2030,10,7+i,23)),storeAddress:'Second location'})),
+  ])
+  await h.runtime.db.update(h.api.schema.customerAccounts).set({pocName:'Alex Client',pocPhone:'(410) 555-0111',pocEmail:'alexclient@example.test',businessPhone:'410-555-0120',businessEmail:'business@example.test'}).where(require('drizzle-orm').eq(h.api.schema.customerAccounts.id,h.accountId))
+  await h.runtime.db.insert(h.api.schema.contacts).values([
+    {customerId:h.accountId,name:'Alex Client',title:'Buyer',isPrimary:true,phone:'(410) 555-0111',email:'alexclient@example.test',preferredContact:'call'},
+    {customerId:h.accountId,name:'Jamie Manager',title:'Store manager',email:'manager@example.test'},
+    {customerId:null,name:'Standalone private contact',email:'private@example.test'},
+  ])
   const rpc = names => `const call = async (name,args) => { const r = await fetch('/action/'+name,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(args)}); const data=await r.json(); if(!r.ok) throw new Error(data.error); return data }; ${names.map(name => `export const ${name} = (...args) => call('${name}',args);`).join('\n')}`
   const stubs = {
-    '@/actions/field-data': rpc(['createFieldAccount','getFieldAccount','searchFieldAccounts','saveFieldNote','saveFieldPhoto','getFieldAvailability']),
+    '@/actions/field-data': rpc(['createFieldAccount','getFieldAccount','getFieldAccountTastings','searchFieldAccounts','saveFieldNote','saveFieldPhoto','getFieldAvailability']),
     '@/actions/field-documents': rpc(['quoteFieldDocument','saveFieldDocument','sendFieldInvoice','getFieldDocument','startFieldCardPayment']),
     '@/actions/quick-schedule-tasting': rpc(['quickScheduleTasting']),
     '@/actions/account-observations': rpc(['saveAccountObservations']).replace("call('saveAccountObservations',args)", "call('saveAccountObservations',[Object.fromEntries(args[0])])"),
@@ -24,7 +34,7 @@ async function main() {
   }
   await build({ entryPoints:['tests/fixtures/field-browser.jsx'],bundle:true,platform:'browser',format:'iife',outfile:'tmp/operator-tests/field-client.js',jsx:'automatic',define:{'process.env.NODE_ENV':'"development"','process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY':'""'},plugins:[{name:'isolated-field-boundaries',setup(b){b.onResolve({filter:/.*/},args=>Object.hasOwn(stubs,args.path)?{path:args.path,namespace:'test'}:undefined);b.onLoad({filter:/.*/,namespace:'test'},args=>({contents:stubs[args.path],loader:'jsx',resolveDir:process.cwd()}))}}] })
   const css = (await require('postcss')([require('@tailwindcss/postcss')()]).process((await fs.readFile('app/globals.css','utf8'))+'\n@source "../components";',{from:path.resolve('app/globals.css')})).css
-  let failNote = false
+  let failNote = false, failHistory = false, failContacts = false
   let failAccount = false, failDocument = false
   let uploads = 0, losePhotoResponse = false
   const calls = {}
@@ -40,6 +50,8 @@ async function main() {
         const name=req.url.slice('/action/'.length);calls[name]=(calls[name]??0)+1
         const chunks=[];for await(const chunk of req)chunks.push(chunk)
         let args=JSON.parse(Buffer.concat(chunks).toString())
+        if(name==='getFieldAccountTastings' && failHistory){failHistory=false;res.statusCode=500;return res.end(JSON.stringify({error:'Connection lost'}))}
+        if(name==='getFieldAccount' && failContacts){failContacts=false;res.statusCode=500;return res.end(JSON.stringify({error:'Connection lost'}))}
         if(name==='saveFieldNote' && failNote){failNote=false;return res.end(JSON.stringify({error:'Connection failed. Your note is kept.'}))}
         if(name==='createFieldAccount' && failAccount){failAccount=false;return res.end(JSON.stringify({error:'Connection failed. Your account details are kept.'}))}
         if(name==='saveFieldDocument' && failDocument){failDocument=false;return res.end(JSON.stringify({error:'Connection failed. Your invoice details are kept.'}))}
@@ -89,6 +101,35 @@ async function main() {
       await page.getByRole('button',{name:'Create order Cases, payment & invoice'}).waitFor()
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false)
       await page.screenshot({path:`tmp/operator-tests/field-home-${width}.png`,fullPage:true})
+      await page.getByRole('button',{name:'Contact information Key points of contact',exact:true}).click()
+      await page.getByRole('heading',{name:'Contact information',exact:true}).waitFor()
+      assert.equal(await page.getByRole('heading',{name:'Alex Client',exact:true}).count(),1)
+      await page.getByText('Primary contact · Buyer',{exact:true}).waitFor()
+      await page.getByRole('heading',{name:'Jamie Manager',exact:true}).waitFor()
+      assert.equal(await page.getByRole('link',{name:'Call Alex Client: (410) 555-0111',exact:true}).getAttribute('href'),'tel:4105550111')
+      assert.equal(await page.getByRole('link',{name:'Email Alex Client: alexclient@example.test',exact:true}).getAttribute('href'),'mailto:alexclient%40example.test')
+      assert.equal(await page.getByText('Standalone private contact',{exact:true}).count(),0)
+      failContacts=true
+      await page.getByRole('button',{name:'Refresh contacts',exact:true}).click()
+      await page.getByRole('alert').filter({hasText:'Could not refresh contacts'}).waitFor()
+      await page.getByRole('button',{name:'Refresh contacts',exact:true}).click()
+      await page.getByRole('alert').filter({hasText:'Could not refresh contacts'}).waitFor({state:'hidden'})
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false)
+      await page.screenshot({path:`tmp/operator-tests/field-contacts-${width}.png`,fullPage:true})
+      await page.getByRole('button',{name:'Back to field tasks'}).click()
+      failHistory=true
+      await page.getByRole('button',{name:'View tastings Last visit & future bookings',exact:true}).click()
+      await page.getByRole('alert').filter({hasText:'Could not refresh this account’s tastings'}).waitFor()
+      await page.getByRole('button',{name:'Refresh tastings',exact:true}).click()
+      await page.getByText('Previous shelf tasting',{exact:true}).waitFor()
+      await page.getByText('Nov 1, 2025 · 3–6 PM CDT',{exact:true}).waitFor()
+      await page.getByText('Future field visit 1',{exact:true}).waitFor()
+      assert.equal(await page.getByText('Future field visit 7',{exact:true}).count(),0)
+      await page.getByRole('button',{name:/Show more tastings/}).click()
+      await page.getByText('Future field visit 7',{exact:true}).waitFor()
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false)
+      await page.screenshot({path:`tmp/operator-tests/field-tastings-${width}.png`,fullPage:true})
+      await page.getByRole('button',{name:'Back to field tasks'}).click()
       await page.getByRole('button',{name:'Quick note Capture the conversation'}).click()
       await page.getByLabel('What happened?').fill('Client asked for a shelf visit.')
       failNote=true;await page.getByRole('button',{name:'Save note',exact:true}).click()
@@ -97,12 +138,22 @@ async function main() {
       await page.getByRole('button',{name:'Save note',exact:true}).click();await page.getByText('Note saved to this account.').waitFor()
       await page.getByRole('button',{name:'Back to field tasks'}).click()
       await page.getByRole('button',{name:'Schedule tasting Open dates & team assignment'}).click()
+      await page.getByText('Previous shelf tasting',{exact:true}).waitFor()
       if(width===1280) await page.getByRole('button',{name:'Include booked dates'}).click()
       await page.getByRole('button',{name:/Nov.*6.*Rachel/}).click()
       assert.equal(await page.getByLabel('Assigned team member').inputValue(),h.rachelId)
       assert.equal(await page.getByLabel('Date',{exact:true}).inputValue(),'2030-11-06')
       // Only book once; second width verifies the already-booked availability and chooses Unassigned.
-      if(width===390){await page.getByRole('button',{name:'Schedule tasting',exact:true}).click();await page.getByText('Tasting saved',{exact:true}).waitFor();await page.getByText(/Rachel/).first().waitFor()}
+      if(width===390){await page.getByRole('button',{name:'Schedule tasting',exact:true}).click();await page.getByText('Tasting saved',{exact:true}).waitFor();await page.getByRole('heading',{name:'Upcoming & requested tastings (8)',exact:true}).waitFor();await page.getByRole('region',{name:'Account tastings',exact:true}).getByText('Test Venue',{exact:true}).waitFor()}
+      await page.getByRole('button',{name:'Back to field tasks'}).click()
+      await page.getByRole('button',{name:'View tastings Last visit & future bookings',exact:true}).click()
+      await page.getByRole('heading',{name:'Upcoming & requested tastings (8)',exact:true}).waitFor()
+      await page.reload()
+      await page.getByLabel('Find the account').fill('Test Venue')
+      await page.getByRole('button',{name:/Test Venue.*Ellicott/}).click()
+      await page.getByRole('button',{name:'View tastings Last visit & future bookings',exact:true}).click()
+      await page.getByRole('heading',{name:'Upcoming & requested tastings (8)',exact:true}).waitFor()
+      await page.getByRole('region',{name:'Account tastings',exact:true}).getByText('Test Venue',{exact:true}).waitFor()
       await page.getByRole('button',{name:'Back to field tasks'}).click()
       await page.getByRole('button',{name:'Price & inventory Record either or both'}).click()
       await page.getByLabel('Product / SKU').selectOption(h.productId)
@@ -178,4 +229,3 @@ async function main() {
   }finally{await browser.close();await new Promise(resolve=>server.close(resolve));await h.pg.close()}
 }
 main().catch(error=>{console.error(error);process.exitCode=1})
-

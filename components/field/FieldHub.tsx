@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { ArrowLeft, CalendarDays, Camera, Check, FileText, Package, Search, StickyNote, Wine } from 'lucide-react'
+import { ArrowLeft, CalendarDays, Camera, Check, FileText, Package, Search, StickyNote, UserRound, Wine } from 'lucide-react'
 import { getFieldAccount, searchFieldAccounts, saveFieldNote, getFieldAvailability } from '@/actions/field-data'
 import { getFieldDocument, sendFieldInvoice } from '@/actions/field-documents'
 import { QuickScheduleTasting } from '@/components/tastings/QuickScheduleTasting'
@@ -12,6 +12,8 @@ import { Button } from '@/components/ui/button'
 import { FieldDocumentForm, type FieldProduct, type SavedFieldDocument } from './FieldDocumentForm'
 import { FieldCardPayment } from './FieldCardPayment'
 import { FieldPhotos } from './FieldPhotos'
+import { FieldContacts } from './FieldContacts'
+import { FieldAccountTastings } from './FieldAccountTastings'
 import { FieldAccountForm } from './FieldAccountForm'
 import { fieldAvailabilityRows, type FieldAvailability } from '@/lib/field/availability'
 import { formatEasternDate, getEasternDateKey } from '@/lib/tastings/time'
@@ -19,7 +21,7 @@ import { formatCurrency } from '@/lib/utils'
 
 type Account = Awaited<ReturnType<typeof getFieldAccount>>
 type Document = SavedFieldDocument & { status?: string; emailSentAt?: string | null }
-type View = 'home' | 'tasting' | 'order' | 'invoice' | 'note' | 'photos' | 'observations' | 'document'
+type View = 'home' | 'contacts' | 'tastings' | 'tasting' | 'order' | 'invoice' | 'note' | 'photos' | 'observations' | 'document'
 
 function FieldNote({ accountId }: { accountId: string }) {
   const locked = useRef(false), requestId = useRef<string | null>(null)
@@ -35,11 +37,13 @@ function FieldNote({ accountId }: { accountId: string }) {
 
 function FieldTasting({ account, members, initialAvailability }: { account: Account; members: { id: string; name: string }[]; initialAvailability: FieldAvailability }) {
   const [availability, setAvailability] = useState(initialAvailability)
+  const [historyRevision, setHistoryRevision] = useState(0)
   const [choice, setChoice] = useState({ date: getEasternDateKey(new Date()), memberId: '' })
   const [showCount, setShowCount] = useState(8), [showBooked, setShowBooked] = useState(false), [error, setError] = useState('')
   const rows = fieldAvailabilityRows(availability)
   const visible = (showBooked ? rows : rows.filter(row => row.free)).slice(0, showCount)
   return <div className="space-y-5">
+    <FieldAccountTastings accountId={account.id} revision={historyRevision} />
     <section className="space-y-3 rounded-2xl border bg-white p-4">
       <div className="flex items-center justify-between gap-2"><h2 className="text-lg font-semibold">Taster availability</h2><Button variant="outline" className="h-11" onClick={async () => { try { setAvailability(await getFieldAvailability()); setError('') } catch { setError('Could not refresh availability. Retry.') } }}>Refresh</Button></div>
       <p className="text-sm text-muted-foreground">Reported available dates for <strong>4–7 p.m. Eastern</strong>, with existing bookings checked. Final availability is checked again when saving.</p>
@@ -50,7 +54,7 @@ function FieldTasting({ account, members, initialAvailability }: { account: Acco
       {!visible.length ? <p className="rounded-xl bg-stone-50 p-3 text-sm">No reported open dates for this time window. Refresh, choose another time below, or schedule Unassigned.</p> : null}
       <div className="flex flex-wrap gap-2"><Button variant="outline" className="h-11" onClick={() => setShowCount(count => count + 12)}>More dates</Button><Button variant="ghost" className="h-11" onClick={() => setShowBooked(value => !value)}>{showBooked ? 'Show only open 4–7 dates' : 'Include booked dates'}</Button></div>
     </section>
-    <div className="rounded-2xl border bg-white p-4"><QuickScheduleTasting key={`${choice.date}:${choice.memberId}`} accounts={[account]} members={members} initialAccountId={account.id} initialMemberId={choice.memberId || undefined} date={choice.date} hideAccountPicker onSaved={async () => { try { setAvailability(await getFieldAvailability()) } catch { setError('Tasting saved. Refresh availability before the next booking.') } }} /></div>
+    <div className="rounded-2xl border bg-white p-4"><QuickScheduleTasting key={`${choice.date}:${choice.memberId}`} accounts={[account]} members={members} initialAccountId={account.id} initialMemberId={choice.memberId || undefined} date={choice.date} hideAccountPicker onSaved={async () => { setHistoryRevision(value => value + 1); try { setAvailability(await getFieldAvailability()) } catch { setError('Tasting saved. Refresh availability before the next booking.') } }} /></div>
   </div>
 }
 
@@ -78,6 +82,8 @@ export function FieldHub({ bootstrap, availability, initialAccount = null, initi
     return () => { active = false; clearTimeout(timer) }
   }, [query, searching])
   const tasks = [
+    { view: 'contacts' as const, title: 'Contact information', detail: 'Key points of contact', icon: UserRound },
+    { view: 'tastings' as const, title: 'View tastings', detail: 'Last visit & future bookings', icon: CalendarDays },
     { view: 'tasting' as const, title: 'Schedule tasting', detail: 'Open dates & team assignment', icon: CalendarDays },
     { view: 'order' as const, title: 'Create order', detail: 'Cases, payment & invoice', icon: Package },
     ...(bootstrap.canInvoice ? [{ view: 'invoice' as const, title: 'Quick invoice', detail: 'Create & send to customer', icon: FileText }] : []),
@@ -112,6 +118,8 @@ export function FieldHub({ bootstrap, availability, initialAccount = null, initi
         {view === 'note' ? <FieldNote key={account.id} accountId={account.id} /> : null}
         {view === 'photos' ? <FieldPhotos key={account.id} accountId={account.id} /> : null}
         {view === 'observations' ? <AccountObservationForm key={account.id} accountId={account.id} products={bootstrap.products} fieldMode /> : null}
+        {view === 'contacts' ? <FieldContacts key={account.id} account={account} /> : null}
+        {view === 'tastings' ? <FieldAccountTastings key={account.id} accountId={account.id} /> : null}
         {view === 'tasting' ? <FieldTasting key={account.id} account={account} members={bootstrap.members} initialAvailability={availability} /> : null}
         {view === 'order' || view === 'invoice' ? <FieldDocumentForm key={`${account.id}:${view}`} account={account} products={bootstrap.products} kind={view} onSaved={(document, message) => { setSaved(document); setRecipientEmail(document.email); setDeliveryMessage(message); setView('document'); window.history.replaceState(null, '', `/field?invoice=${document.requestId}`) }} /> : null}
         {view === 'document' && saved ? <div className="space-y-4">

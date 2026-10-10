@@ -1,8 +1,8 @@
 'use server'
 
-import { and, asc, eq, gte, inArray, ilike, or } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, inArray, ilike, or, sql } from 'drizzle-orm'
 import { db } from '@/db'
-import { accountMedia, accountNotes, customerAccounts, products, tasterAvailability, tastings, users } from '@/db/schema'
+import { accountMedia, accountNotes, contacts, customerAccounts, products, tasterAvailability, tastings, users } from '@/db/schema'
 import { fieldAccount, fieldContext } from '@/lib/field/access'
 import { getEasternDateKey } from '@/lib/tastings/time'
 import { upcomingTastingFilter } from '@/lib/tastings/upcoming-filter'
@@ -57,7 +57,24 @@ export async function searchFieldAccounts(query: string) {
 
 export async function getFieldAccount(accountId: string) {
   const { account } = await fieldAccount(accountId)
-  return { id: account.id, companyName: account.companyName, address: account.address, city: account.city, state: account.state, zip: account.zip, additionalLocations: account.additionalLocations, email: account.pocEmail || account.businessEmail || account.email || '' }
+  const contactRows = await db.select({ id: contacts.id, name: contacts.name, title: contacts.title, email: contacts.email, phone: contacts.phone, preferredContact: contacts.preferredContact, isPrimary: contacts.isPrimary }).from(contacts).where(eq(contacts.customerId, accountId)).orderBy(desc(contacts.isPrimary), asc(contacts.name), asc(contacts.id))
+  return { id: account.id, companyName: account.companyName, address: account.address, city: account.city, state: account.state, zip: account.zip, additionalLocations: account.additionalLocations, email: account.pocEmail || account.businessEmail || account.email || '',
+    contacts: contactRows, pointOfContact: { name: account.pocName, phone: account.pocPhone, email: account.pocEmail }, businessContact: { phone: account.businessPhone || account.phone, email: account.businessEmail || account.email } }
+}
+
+export async function getFieldAccountTastings(accountId: string) {
+  await fieldAccount(accountId)
+  const now = new Date()
+  const columns = { id: tastings.id, eventName: tastings.eventName, start: tastings.scheduledAt, end: tastings.endAt, timeZone: tastings.timeZone, status: tastings.status, assignee: users.name, address: tastings.storeAddress, city: tastings.storeCity, state: tastings.storeState }
+  const [past, upcoming] = await Promise.all([
+    db.select(columns).from(tastings).leftJoin(users, eq(tastings.assignedUserId, users.id)).where(and(
+      eq(tastings.customerId, accountId), inArray(tastings.status, ['scheduled', 'confirmed', 'completed']),
+      sql`COALESCE(${tastings.endAt}, ${tastings.scheduledAt} + interval '2 hours') <= ${now.toISOString()}::timestamptz`,
+    )).orderBy(desc(tastings.scheduledAt), desc(tastings.id)).limit(1),
+    db.select(columns).from(tastings).leftJoin(users, eq(tastings.assignedUserId, users.id)).where(and(eq(tastings.customerId, accountId), upcomingTastingFilter(now))).orderBy(asc(tastings.scheduledAt), asc(tastings.id)),
+  ])
+  const serialize = (row: typeof upcoming[number]) => ({ ...row, start: row.start.toISOString(), end: row.end?.toISOString() ?? null, assignee: row.assignee ?? 'Unassigned' })
+  return { last: past[0] ? serialize(past[0]) : null, upcoming: upcoming.map(serialize) }
 }
 
 export async function getFieldBootstrap() {

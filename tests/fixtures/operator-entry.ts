@@ -14,6 +14,6 @@ export { getTastingSmsSchedule } from '../../lib/tastings/sms-schedule'
 export { upcomingTastingFilter } from '../../lib/tastings/upcoming-filter'
 
 export { quoteFieldDocument, saveFieldDocument, sendFieldInvoice, getFieldDocument, startFieldCardPayment } from '../../actions/field-documents'
-export { createFieldAccount, searchFieldAccounts, getFieldAccount, getFieldBootstrap, getFieldAvailability, saveFieldNote, saveFieldPhoto } from '../../actions/field-data'
+export { createFieldAccount, searchFieldAccounts, getFieldAccount, getFieldAccountTastings, getFieldBootstrap, getFieldAvailability, saveFieldNote, saveFieldPhoto } from '../../actions/field-data'
 export { fieldAvailabilityRows } from '../../lib/field/availability'
 export { fieldLoginReturn } from '../../lib/field/validation'
