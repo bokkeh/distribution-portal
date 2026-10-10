@@ -173,3 +173,9 @@ test('sales field accounts are assigned to the creator and duplicate results res
     assert.ok((await h.api.createFieldAccount({requestId:randomUUID(),companyName:'Unauthorized'})).error)
   } finally {h.runtime.session=session}
 })
+
+test('photo saves accept upload proxy URLs and reject invalid paths', async () => {
+ const photo={requestId:randomUUID(),accountId:h.accountId,mediaUrl:'/api/image?path=account-media%2Fgallery.jpg',caption:'Gallery',date:'2030-11-06'}
+ assert.equal((await h.api.saveFieldPhoto(photo)).success,true)
+ for(const mediaUrl of ['/api/image?path=documents%2Ffile.jpg','/api/image?path=account-media%2F..%2Fsecret','//evil.test/image','/api/image?path=account-media%2Fphoto.jpg&extra=1']) assert.ok((await h.api.saveFieldPhoto({...photo,requestId:randomUUID(),mediaUrl})).error)
+})

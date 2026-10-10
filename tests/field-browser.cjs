@@ -26,6 +26,7 @@ async function main() {
   const css = (await require('postcss')([require('@tailwindcss/postcss')()]).process((await fs.readFile('app/globals.css','utf8'))+'\n@source "../components";',{from:path.resolve('app/globals.css')})).css
   let failNote = false
   let failAccount = false, failDocument = false
+  let uploads = 0, losePhotoResponse = false
   const calls = {}
   const server = http.createServer(async(req,res)=>{
     try {
@@ -34,7 +35,7 @@ async function main() {
       if(req.url==='/styles.css'){res.setHeader('content-type','text/css');return res.end(css)}
       if(req.url==='/brand/logo-badge.png'){res.setHeader('content-type','image/png');return res.end(await fs.readFile('public/brand/logo-badge.png'))}
       if(req.url==='/field-state')return res.end(JSON.stringify({bootstrap:await h.api.getFieldBootstrap(),availability:await h.api.getFieldAvailability()}))
-      if(req.url==='/api/upload')return res.end(JSON.stringify({publicUrl:'https://example.test/field-photo.jpg'}))
+      if(req.url==='/api/upload'){ for await(const chunk of req){ void chunk }; uploads++; await new Promise(resolve=>setTimeout(resolve,100)); return res.end(JSON.stringify({publicUrl:`/api/image?path=account-media%2Fphoto-${uploads}.jpg`})) }
       if(req.url.startsWith('/action/')){
         const name=req.url.slice('/action/'.length);calls[name]=(calls[name]??0)+1
         const chunks=[];for await(const chunk of req)chunks.push(chunk)
@@ -46,7 +47,9 @@ async function main() {
         if(name==='saveFieldDocument')await new Promise(resolve=>setTimeout(resolve,200))
         if(name==='saveAccountObservations'){const f=new FormData();for(const [k,v]of Object.entries(args[0]))f.set(k,v);args=[f]}
         if(typeof h.api[name]!=='function')throw new Error('Unknown test action')
-        return res.end(JSON.stringify(await h.api[name](...args)))
+        const result=await h.api[name](...args)
+        if(name==='saveFieldPhoto' && losePhotoResponse){losePhotoResponse=false;return res.end(JSON.stringify({error:'Connection lost after save. Retry to confirm.'}))}
+        return res.end(JSON.stringify(result))
       }
       res.setHeader('content-type','text/html');res.end('<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"></head><body><div id="root"></div><script src="/field-client.js"></script></body></html>')
     }catch(error){res.statusCode=500;res.end(JSON.stringify({error:error.message}))}
@@ -107,8 +110,26 @@ async function main() {
       await page.getByRole('button',{name:/Save observation/}).click();await page.getByText('Price saved.',{exact:true}).waitFor()
       await page.getByRole('button',{name:'Back to field tasks'}).click()
       await page.getByRole('button',{name:'Add photos Shelf, display or client visit'}).click()
-      await page.getByLabel('Take or choose photo').setInputFiles({name:'shelf.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a9X8AAAAASUVORK5CYII=','base64')})
-      await page.getByRole('button',{name:'Save photo to account'}).click();await page.getByText('Photo saved to this account.').waitFor()
+      const image = name => ({name,mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a9X8AAAAASUVORK5CYII=','base64')})
+      assert.equal(await page.getByLabel('Choose from gallery').getAttribute('capture'),null)
+      assert.notEqual(await page.getByLabel('Choose from gallery').getAttribute('multiple'),null)
+      assert.equal(await page.getByLabel('Take a photo').getAttribute('capture'),'environment')
+      await page.getByLabel('Choose from gallery').setInputFiles([image('shelf.png'),image('display.png')])
+      await page.getByLabel('Take a photo').setInputFiles(image('visit.png'))
+      await page.getByLabel('Caption for new photos (optional)').fill('Field visit')
+      const uploadsBefore=uploads, photosBefore=calls.saveFieldPhoto??0
+      const rowsBefore=(await h.runtime.db.select().from(h.api.schema.accountMedia)).length
+      losePhotoResponse=true
+      await page.getByRole('button',{name:'Save 3 photos to account'}).evaluate(button=>{button.click();button.click()})
+      await page.getByText('2 photos confirmed saved. 1 could not be confirmed; retry unsaved photos below.',{exact:true}).waitFor()
+      assert.equal(uploads,uploadsBefore+3);assert.equal(calls.saveFieldPhoto,photosBefore+3)
+      assert.equal(await page.getByLabel('Caption for new photos (optional)').inputValue(),'Field visit')
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false)
+      await page.screenshot({path:`tmp/operator-tests/field-photos-${width}.png`,fullPage:true})
+      await page.getByRole('button',{name:'Retry unsaved photos'}).click()
+      await page.getByText('1 photo saved to this account.',{exact:true}).waitFor()
+      assert.equal(uploads,uploadsBefore+3);assert.equal(calls.saveFieldPhoto,photosBefore+4)
+      assert.equal((await h.runtime.db.select().from(h.api.schema.accountMedia)).length,rowsBefore+3)
       await page.getByRole('button',{name:'Back to field tasks'}).click()
       await page.getByRole('button',{name:'Create order Cases, payment & invoice'}).click()
       await page.getByRole('spinbutton',{name:'Test Vodka cases'}).fill('2');await page.getByLabel('Customer email (optional)').fill('client@example.test')
@@ -157,3 +178,4 @@ async function main() {
   }finally{await browser.close();await new Promise(resolve=>server.close(resolve));await h.pg.close()}
 }
 main().catch(error=>{console.error(error);process.exitCode=1})
+

@@ -102,7 +102,13 @@ export async function saveFieldNote(accountId: string, noteBody: string, request
 }
 
 export async function saveFieldPhoto(input: { requestId: string; accountId: string; mediaUrl: string; caption: string; date: string }) {
-  const parsed = z.object({ requestId: z.uuid(), accountId: z.uuid(), mediaUrl: z.url().startsWith('https://'), caption: z.string().max(2000), date: z.iso.date() }).safeParse(input)
+  const mediaUrl = z.union([z.url().startsWith('https://'), z.string().refine(value => {
+    if (!value.startsWith('/api/image?')) return false
+    const url = new URL(value, 'https://field.invalid')
+    const path = url.searchParams.get('path')
+    return !!path && path.startsWith('account-media/') && !path.includes('..') && !url.hash && [...url.searchParams.keys()].every(key => key === 'path')
+  })])
+  const parsed = z.object({ requestId: z.uuid(), accountId: z.uuid(), mediaUrl, caption: z.string().max(2000), date: z.iso.date() }).safeParse(input)
   if (!parsed.success) return { error: 'Choose a valid uploaded photo, caption and date.' }
   try {
     // Match the existing account-media upload roles, including rep account scope.
