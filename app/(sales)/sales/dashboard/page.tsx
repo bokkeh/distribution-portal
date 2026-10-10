@@ -1,5 +1,7 @@
+import { upcomingTastingFilter } from '@/lib/tastings/upcoming-filter'
+import { formatEasternDateTime } from '@/lib/tastings/time'
 import Link from 'next/link'
-import { and, desc, eq, inArray, ne, sum } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, ne, sql, sum } from 'drizzle-orm'
 import { AlertCircle, ArrowRight, Building2, CalendarClock, DollarSign, Map as MapIcon, Target, Users, Wine } from 'lucide-react'
 import { requireRole } from '@/lib/auth/session'
 import { db } from '@/db'
@@ -100,13 +102,17 @@ export default async function SalesDashboardPage() {
           id: tastings.id,
           eventName: tastings.eventName,
           scheduledAt: tastings.scheduledAt,
+          endAt: tastings.endAt,
+          timeZone: tastings.timeZone,
+          assigneeName: sql<string>`COALESCE(${users.name}, 'Unassigned')`,
           customerId: tastings.customerId,
           status: tastings.status,
         })
         .from(tastings)
-        .where(inArray(tastings.customerId, accountIds))
-        .orderBy(desc(tastings.scheduledAt))
-        .limit(10)
+        .leftJoin(users, eq(tastings.assignedUserId, users.id))
+        .where(and(inArray(tastings.customerId, accountIds), upcomingTastingFilter()))
+        .orderBy(asc(tastings.scheduledAt))
+        .limit(4)
     : []
 
   const now = new Date()
@@ -120,7 +126,7 @@ export default async function SalesDashboardPage() {
   const mappedAccounts = accounts.filter(account => account.lat != null && account.lng != null)
   const openBalanceAccounts = accounts.filter(account => Number(account.balance ?? '0') > 0)
   const activeRoutes = routes.filter(route => route.status === 'active')
-  const nextTastings = upcomingTastings.filter(tasting => new Date(tasting.scheduledAt) >= now).slice(0, 4)
+  const nextTastings = upcomingTastings
   const totalRevenue = recentOrders.reduce((sumValue, order) => sumValue + Number(order.total ?? '0'), 0)
 
   const reorderTargets = (await getReorderFollowUps(accounts)).slice(0, 5)
@@ -431,7 +437,7 @@ export default async function SalesDashboardPage() {
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="font-medium text-slate-900">{account?.companyName ?? tasting.eventName}</p>
-                          <p className="mt-1 text-xs text-slate-500">{new Date(tasting.scheduledAt).toLocaleString()}</p>
+                          <p className="mt-1 text-xs text-slate-500">{formatEasternDateTime(tasting.scheduledAt, tasting.timeZone)} · {tasting.assigneeName}</p>
                         </div>
                         <Badge variant={tasting.status === 'confirmed' ? 'success' : 'info'} className="capitalize">
                           {tasting.status}

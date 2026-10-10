@@ -9,6 +9,7 @@ import { revalidatePath } from 'next/cache'
 import { after } from 'next/server'
 import { getHubSpotCompanyContacts, upsertHubSpotContact, getHubSpotCompanies, updateHubSpotCompany } from '@/lib/hubspot/client'
 import { logActivityEvent } from '@/lib/activity/log'
+import { queueTastingCalendarSync } from '@/lib/tastings/calendar-sync'
 import { createUserNotification } from '@/lib/notifications/in-app'
 import { normalizeAccountGeography } from '@/lib/pricing/geographic-service'
 import { isGeocodeActionRateLimited } from '@/lib/auth/rate-limit'
@@ -142,6 +143,10 @@ async function requireEditableContactAccess(contactId: string) {
     throw new Error('Contact not found.')
   }
 
+  if (!contact.customerId) {
+    const session = await requireRole('admin', 'staff')
+    return { session, roles: getSessionRoles(session), account: null, canManageAny: true, contact }
+  }
   const access = await requireEditableAccountAccess(contact.customerId)
   return { ...access, contact }
 }
@@ -589,7 +594,8 @@ export async function mergeCustomerAccounts(formData: FormData) {
   await db.update(contacts).set({ customerId: targetAccountId }).where(eq(contacts.customerId, sourceAccountId))
   await db.update(orders).set({ customerId: targetAccountId }).where(eq(orders.customerId, sourceAccountId))
   await db.update(invoices).set({ customerId: targetAccountId }).where(eq(invoices.customerId, sourceAccountId))
-  await db.update(tastings).set({ customerId: targetAccountId }).where(eq(tastings.customerId, sourceAccountId))
+  const movedTastings = await db.update(tastings).set({ customerId: targetAccountId }).where(eq(tastings.customerId, sourceAccountId)).returning({ id: tastings.id })
+  queueTastingCalendarSync(movedTastings.map((tasting) => tasting.id))
   await db.update(deliveryStops).set({ customerId: targetAccountId }).where(eq(deliveryStops.customerId, sourceAccountId))
   await db.update(salesRouteStops).set({ customerId: targetAccountId }).where(eq(salesRouteStops.customerId, sourceAccountId))
   await db.update(smsThreads).set({ customerId: targetAccountId }).where(eq(smsThreads.customerId, sourceAccountId))
@@ -701,7 +707,7 @@ export async function mergeContacts(formData: FormData) {
 
   await logActivityEvent({
     entityType: 'account',
-    entityId: targetContact.customerId,
+    entityId: targetContact.customerId ?? targetContact.id,
     actorUserId: session.user.id,
     kind: 'contact_merged',
     title: 'Duplicate contact merged',
@@ -778,7 +784,9 @@ export async function syncToHubSpot(accountId: string) {
   revalidatePath(`/staff/crm/${accountId}/contacts`)
 }
 
-function revalidateContactPaths(customerId: string) {
+function revalidateContactPaths(customerId: string | null) {
+  revalidateCRMIndexPaths()
+  if (!customerId) return
   revalidatePath(`/admin/crm/${customerId}`)
   revalidatePath(`/admin/crm/${customerId}/contacts`)
   revalidatePath(`/staff/crm/${customerId}`)
@@ -861,7 +869,7 @@ export async function updateContact(contactId: string, formData: FormData) {
 
     await logActivityEvent({
       entityType: 'account',
-      entityId: contact.customerId,
+      entityId: contact.customerId ?? contact.id,
       actorUserId: session.user.id,
       kind: 'contact_updated',
       title: 'Contact updated',
@@ -892,6 +900,8 @@ export async function updateContact(contactId: string, formData: FormData) {
       },
     })
 
+    revalidatePath(`/admin/crm/people/${contactId}`)
+    revalidatePath(`/staff/crm/people/${contactId}`)
     revalidateContactPaths(contact.customerId)
     return { success: true }
   } catch (error) {
@@ -907,7 +917,7 @@ export async function deleteContact(contactId: string) {
 
     await logActivityEvent({
       entityType: 'account',
-      entityId: contact.customerId,
+      entityId: contact.customerId ?? contact.id,
       actorUserId: session.user.id,
       kind: 'contact_deleted',
       title: 'Contact removed',
@@ -920,6 +930,8 @@ export async function deleteContact(contactId: string) {
       },
     })
 
+    revalidatePath(`/admin/crm/people/${contactId}`)
+    revalidatePath(`/staff/crm/people/${contactId}`)
     revalidateContactPaths(contact.customerId)
     return { success: true }
   } catch (error) {

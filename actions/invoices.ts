@@ -712,7 +712,7 @@ async function _createPaymentIntent(
           },
         }
       : {}),
-  })
+  }, { idempotencyKey: `invoice:${invoiceId}:${paymentMethod}:${breakdown.totalAmountCents}` })
 
   await db.update(invoices).set({ stripePaymentIntentId: paymentIntent.id }).where(eq(invoices.id, invoiceId))
 

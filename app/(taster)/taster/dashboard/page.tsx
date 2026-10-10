@@ -192,7 +192,7 @@ export default async function TasterDashboardPage({
                     <div>
                       <p className="font-medium text-slate-900">Next assignment</p>
                       <p className="mt-1 text-xs text-slate-500">
-                        {nextTasting ? `${nextTasting.eventName} on ${formatEasternDateTime(new Date(nextTasting.scheduledAt))}` : 'No upcoming tastings assigned yet.'}
+                        {nextTasting ? `${nextTasting.eventName} on ${formatEasternDateTime(new Date(nextTasting.scheduledAt), 'timeZone' in nextTasting ? nextTasting.timeZone : undefined)}` : 'No upcoming tastings assigned yet.'}
                       </p>
                     </div>
                     <Badge variant={nextTasting ? 'info' : 'secondary'}>{nextTasting ? 'Queued' : 'Open'}</Badge>
@@ -214,7 +214,7 @@ export default async function TasterDashboardPage({
                         {reportsNeeded.length ? 'Priority follow-up' : 'Next assignment'}
                       </p>
                       <h2 className="mt-2 text-2xl font-bold text-slate-900">{featuredTasting.eventName}</h2>
-                      <p className="mt-2 text-sm text-slate-600">{formatEasternDateTime(new Date(featuredTasting.scheduledAt))}</p>
+                      <p className="mt-2 text-sm text-slate-600">{formatEasternDateTime(new Date(featuredTasting.scheduledAt), 'timeZone' in featuredTasting ? featuredTasting.timeZone : undefined)}</p>
                       <p className="mt-3 text-sm text-slate-500">
                         {[featuredTasting.storeAddress, featuredTasting.storeCity, featuredTasting.storeState, featuredTasting.storeZip].filter(Boolean).join(', ') || 'Store address not provided'}
                       </p>

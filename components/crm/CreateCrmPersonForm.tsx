@@ -15,7 +15,7 @@ export function CreateCrmPersonForm({ accounts }: { accounts: Array<{ id: string
 
   useEffect(() => {
     if (!state?.success) return
-    toast.success(state.kind === 'company' ? 'Company contact added' : 'Community member added')
+    toast.success(state.kind === 'company' ? 'Contact added' : 'Community member added')
     router.push(`/admin/crm?tab=${state.kind === 'company' ? 'company-contacts' : 'community-contacts'}`)
   }, [router, state])
 
@@ -27,8 +27,8 @@ export function CreateCrmPersonForm({ accounts }: { accounts: Array<{ id: string
           {(['company', 'community'] as const).map((value) => (
             <label key={value} className={`cursor-pointer rounded-xl border p-4 transition ${kind === value ? 'border-[#ff5a00] bg-orange-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
               <input type="radio" name="kind" value={value} checked={kind === value} onChange={() => setKind(value)} className="sr-only" />
-              <span className="font-semibold text-slate-900">{value === 'company' ? 'Company contact' : 'Community member'}</span>
-              <span className="mt-1 block text-xs text-slate-500">{value === 'company' ? 'Associated with a CRM account' : 'Subscribed to brand news'}</span>
+              <span className="font-semibold text-slate-900">{value === 'company' ? 'Contact' : 'Community member'}</span>
+              <span className="mt-1 block text-xs text-slate-500">{value === 'company' ? 'Company optional; link later' : 'Subscribed to brand news'}</span>
             </label>
           ))}
         </div>
@@ -36,9 +36,9 @@ export function CreateCrmPersonForm({ accounts }: { accounts: Array<{ id: string
 
       {kind === 'company' ? (
         <div className="space-y-2">
-          <Label htmlFor="person-account">Company account</Label>
-          <select id="person-account" name="customerId" required className="h-10 w-full rounded-md border border-input bg-white px-3 text-sm">
-            <option value="">Select an account</option>
+          <Label htmlFor="person-account">Company account (optional)</Label>
+          <select id="person-account" name="customerId" className="h-10 w-full rounded-md border border-input bg-white px-3 text-sm">
+            <option value="">No company — link later</option>
             {accounts.map((account) => <option key={account.id} value={account.id}>{account.companyName}</option>)}
           </select>
         </div>
@@ -46,11 +46,12 @@ export function CreateCrmPersonForm({ accounts }: { accounts: Array<{ id: string
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2"><Label htmlFor="person-first-name">First name</Label><Input id="person-first-name" name="firstName" required autoComplete="given-name" /></div>
-        <div className="space-y-2"><Label htmlFor="person-last-name">Last name</Label><Input id="person-last-name" name="lastName" required autoComplete="family-name" /></div>
-        <div className="space-y-2"><Label htmlFor="person-email">Email</Label><Input id="person-email" name="email" type="email" required autoComplete="email" /></div>
-        <div className="space-y-2"><Label htmlFor="person-phone">Phone number</Label><Input id="person-phone" name="phone" type="tel" required autoComplete="tel" /></div>
+        <div className="space-y-2"><Label htmlFor="person-last-name">Last name</Label><Input id="person-last-name" name="lastName" required={kind === 'community'} autoComplete="family-name" /></div>
+        <div className="space-y-2"><Label htmlFor="person-email">Email</Label><Input id="person-email" name="email" type="email" required={kind === 'community'} autoComplete="email" /></div>
+        <div className="space-y-2"><Label htmlFor="person-phone">Phone number</Label><Input id="person-phone" name="phone" type="tel" required={kind === 'community'} autoComplete="tel" /></div>
       </div>
 
+      {kind === 'company' ? <label className="block space-y-2 text-sm">Relationship status<select name="relationshipStatus" className="h-10 w-full rounded-md border border-input bg-white px-3"><option value="">Unspecified</option><option value="active">Active</option><option value="keep_in_touch">Keep in touch</option><option value="inactive">Inactive</option></select></label> : null}
       {state?.error ? <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{state.error}</p> : null}
       <Button type="submit" disabled={pending}>{pending ? 'Saving…' : 'Add person'}</Button>
     </form>

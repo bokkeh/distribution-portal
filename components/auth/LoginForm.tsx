@@ -13,6 +13,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Chrome, Loader2, CheckCircle2 } from 'lucide-react'
 import { registerCustomerAccount } from '@/actions/auth'
 import { getDashboardForRoles } from '@/lib/auth/view-as'
+import { fieldLoginReturn } from '@/lib/field/validation'
 import { BUSINESS_TYPE_OPTIONS } from '@/lib/customers/business-types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,7 +24,9 @@ interface Props {
   defaultMode?: 'signin' | 'create'
 }
 
-async function getPostLoginDestination() {
+async function getPostLoginDestination(next?: string | null) {
+  const field = fieldLoginReturn(next)
+  if (field) return field
   const res = await fetch('/api/auth/session')
   const session = await res.json()
   const role = session?.user?.role as string | undefined
@@ -80,7 +83,7 @@ export function LoginForm({ onSuccess }: Props) {
       return
     }
 
-    router.push(await getPostLoginDestination())
+    router.push(await getPostLoginDestination(searchParams.get('next')))
   }
 
   async function handleCreateAccount(e: React.FormEvent<HTMLFormElement>) {
@@ -139,13 +142,13 @@ export function LoginForm({ onSuccess }: Props) {
       return
     }
 
-    router.push(await getPostLoginDestination())
+    router.push(await getPostLoginDestination(searchParams.get('next')))
   }
 
   async function handleGoogle() {
     setError('')
     setGoogleLoading(true)
-    await signIn('google', { callbackUrl: '/' })
+    await signIn('google', { callbackUrl: fieldLoginReturn(searchParams.get('next')) ?? '/' })
     setGoogleLoading(false)
   }
 

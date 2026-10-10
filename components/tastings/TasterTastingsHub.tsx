@@ -1,20 +1,20 @@
 'use client'
 
 import Link from 'next/link'
-import { format } from 'date-fns'
 import { isActiveTasterTasting, needsTastingReport } from '@/lib/tastings/report-workflow'
 import { Fragment, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ClipboardCheck, MapPin, Phone, Receipt } from 'lucide-react'
-import { formatEasternTimeRange } from '@/lib/tastings/time'
+import { formatEasternTimeRange, getEasternDateKey } from '@/lib/tastings/time'
 import { cn } from '@/lib/utils'
 import { TastingMapPanel } from './TastingMapPanel'
 
 type TastingRow = {
   id: string
   eventName: string
+  timeZone?: string
   scheduledAt: Date
   endAt: Date | null
   status: string
@@ -30,8 +30,8 @@ type TastingRow = {
   invoiceStatus?: string | null
 }
 
-function formatTimeRange(start: Date, end: Date | null) {
-  return formatEasternTimeRange(start, end)
+function formatTimeRange(start: Date, end: Date | null, timeZone?: string) {
+  return formatEasternTimeRange(start, end, timeZone)
 }
 
 const statusClasses: Record<string, string> = {
@@ -57,22 +57,22 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
-function TastingDateTile({ tasting }: { tasting: Pick<TastingRow, 'scheduledAt' | 'endAt'> }) {
+function TastingDateTile({ tasting }: { tasting: Pick<TastingRow, 'scheduledAt' | 'endAt' | 'timeZone'> }) {
   const tastingDate = new Date(tasting.scheduledAt)
 
   return (
     <div className="flex min-h-[150px] min-w-[96px] flex-col items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-4 text-center shadow-[0_1px_2px_rgba(24,22,21,0.03)]">
       <span className="font-mono text-xs font-bold uppercase tracking-[0.08em] text-[#ff4f00]">
-        {format(tastingDate, 'MMM')}
+        {new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: tasting.timeZone ?? 'America/New_York' }).format(tastingDate)}
       </span>
       <span className="font-display mt-1 text-4xl font-bold leading-none text-[#181615]">
-        {format(tastingDate, 'dd')}
+        {getEasternDateKey(tastingDate, tasting.timeZone).slice(-2)}
       </span>
       <span className="mt-2 font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-stone-500">
-        {format(tastingDate, 'EEE')}
+        {new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: tasting.timeZone ?? 'America/New_York' }).format(tastingDate)}
       </span>
       <span className="mt-3 whitespace-nowrap font-mono text-[10px] font-bold uppercase tracking-[0.04em] text-[#ff4f00]">
-        {formatTimeRange(tastingDate, tasting.endAt ? new Date(tasting.endAt) : null)}
+        {formatTimeRange(tastingDate, tasting.endAt ? new Date(tasting.endAt) : null, tasting.timeZone)}
       </span>
     </div>
   )
@@ -292,9 +292,9 @@ export function TasterTastingsHub({
           ) : null}
 
           {displayedTastings.length ? displayedTastings.map((tasting, index, visibleTastings) => {
-            const tastingYear = format(new Date(tasting.scheduledAt), 'yyyy')
+            const tastingYear = getEasternDateKey(tasting.scheduledAt, tasting.timeZone).slice(0, 4)
             const previousTastingYear = index > 0
-              ? format(new Date(visibleTastings[index - 1].scheduledAt), 'yyyy')
+              ? getEasternDateKey(visibleTastings[index - 1].scheduledAt, visibleTastings[index - 1].timeZone).slice(0, 4)
               : null
             const showYearMarker = activeTab === 'previous' && tastingYear !== previousTastingYear
 

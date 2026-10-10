@@ -1,12 +1,13 @@
 'use server'
 
-import { and, eq } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
 import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { db } from '@/db'
 import { communityContacts, contacts, customerAccounts } from '@/db/schema'
 import { requireRole } from '@/lib/auth/session'
+import { contactPersonSchema } from '@/lib/crm/contact-validation'
 import { isCommunitySignupRateLimited } from '@/lib/auth/rate-limit'
 
 export type PersonActionState = {
@@ -71,41 +72,41 @@ export async function createCrmPerson(
 ): Promise<PersonActionState> {
   try {
     const session = await requireRole('admin')
-    const parsed = parsePerson(formData)
+    const kind = formData.get('kind') === 'company' ? 'company' : 'community'
+    const parsed = kind === 'community' ? parsePerson(formData) : contactPersonSchema.safeParse({ firstName: String(formData.get('firstName') ?? ''), lastName: String(formData.get('lastName') ?? ''), email: String(formData.get('email') ?? ''), phone: String(formData.get('phone') ?? ''), relationshipStatus: String(formData.get('relationshipStatus') ?? '') || null })
     if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Check the person details.' }
 
-    const kind = formData.get('kind') === 'company' ? 'company' : 'community'
     if (kind === 'community') {
       await upsertCommunityContact({ ...parsed.data, source: 'admin_entry', createdByUserId: session.user.id })
       revalidatePath('/admin/crm')
       return { success: true, kind }
     }
 
-    const customerId = String(formData.get('customerId') ?? '').trim()
-    if (!customerId) return { error: 'Choose the company account for this contact.' }
-    const [account] = await db.select({ id: customerAccounts.id })
+    const customerId = String(formData.get('customerId') ?? '').trim() || null
+    const [account] = customerId ? await db.select({ id: customerAccounts.id })
       .from(customerAccounts)
       .where(eq(customerAccounts.id, customerId))
-      .limit(1)
-    if (!account) return { error: 'Company account not found.' }
+      .limit(1) : []
+    if (customerId && !account) return { error: 'Company account not found.' }
 
-    const duplicate = await db.select({ id: contacts.id })
+    const duplicate = parsed.data.email ? await db.select({ id: contacts.id })
       .from(contacts)
-      .where(and(eq(contacts.customerId, customerId), eq(contacts.email, parsed.data.email)))
-      .limit(1)
+      .where(and(customerId ? eq(contacts.customerId, customerId) : isNull(contacts.customerId), eq(contacts.email, parsed.data.email)))
+      .limit(1) : []
     if (duplicate[0]) return { error: 'That email is already a contact for this company.' }
 
     await db.insert(contacts).values({
       customerId,
-      name: `${parsed.data.firstName} ${parsed.data.lastName}`,
-      email: parsed.data.email,
-      phone: parsed.data.phone,
-      phoneType: 'mobile',
-      preferredContact: 'email',
+      name: `${parsed.data.firstName} ${parsed.data.lastName}`.trim(),
+      email: parsed.data.email || null,
+      phone: parsed.data.phone || null,
+      relationshipStatus: 'relationshipStatus' in parsed.data ? contactPersonSchema.parse(parsed.data).relationshipStatus : null,
+      phoneType: parsed.data.phone ? 'mobile' : null,
+      preferredContact: parsed.data.email ? 'email' : parsed.data.phone ? 'call' : null,
     })
     revalidatePath('/admin/crm')
-    revalidatePath(`/admin/crm/${customerId}`)
-    revalidatePath(`/admin/crm/${customerId}/contacts`)
+    revalidatePath('/staff/crm')
+    if (customerId) { revalidatePath(`/admin/crm/${customerId}`); revalidatePath(`/admin/crm/${customerId}/contacts`) }
     return { success: true, kind }
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Unable to add this person.' }

@@ -157,12 +157,13 @@ export default async function CRMPage({
       phoneType: contacts.phoneType,
       preferredContact: contacts.preferredContact,
       isPrimary: contacts.isPrimary,
+      relationshipStatus: contacts.relationshipStatus,
       dealStage: contacts.dealStage,
       companyName: customerAccounts.companyName,
       customerId: customerAccounts.id,
     })
       .from(contacts)
-      .innerJoin(customerAccounts, eq(contacts.customerId, customerAccounts.id))
+      .leftJoin(customerAccounts, eq(contacts.customerId, customerAccounts.id))
       .orderBy(contacts.name)
       .catch(() => db.select({
         id: contacts.id,
@@ -173,11 +174,12 @@ export default async function CRMPage({
         phoneType: contacts.phoneType,
         preferredContact: contacts.preferredContact,
         isPrimary: contacts.isPrimary,
+      relationshipStatus: contacts.relationshipStatus,
         companyName: customerAccounts.companyName,
         customerId: customerAccounts.id,
       })
         .from(contacts)
-        .innerJoin(customerAccounts, eq(contacts.customerId, customerAccounts.id))
+        .leftJoin(customerAccounts, eq(contacts.customerId, customerAccounts.id))
         .orderBy(contacts.name)
         .then((rows) => rows.map((row) => ({ ...row, dealStage: null as string | null })))),
     db.select({
@@ -332,7 +334,7 @@ export default async function CRMPage({
   const assignedToMeRows = currentSalesMember ? accountRows.filter((account) => account.assignedSalesRepId === currentSalesMember.id) : []
   const filteredAssignedToMeRows = assignedToMeRows.filter((account) => matchesAccountFilter(account, currentFilter))
   const filteredAccountIds = new Set(filteredAccounts.map((account) => account.id))
-  const filteredPeople = people.filter((person) => filteredAccountIds.has(person.customerId))
+  const filteredPeople = people.filter((person) => (!person.customerId || filteredAccountIds.has(person.customerId)))
   const localAccountIds = new Map(accounts.filter((account) => account.hubspotCompanyId).map((account) => [account.hubspotCompanyId!, account.id]))
   const importedHsIds = new Set(localAccountIds.keys())
   const { companies: hsCompanies, error: hsError } = hsResult
@@ -344,7 +346,7 @@ export default async function CRMPage({
     dealStage: person.dealStage,
     title: person.name,
     subtitle: person.companyName,
-    href: `/admin/crm/${person.customerId}`,
+    href: `/admin/crm/people/${person.id}`,
     fields: {
       company: person.companyName,
       title: person.title,

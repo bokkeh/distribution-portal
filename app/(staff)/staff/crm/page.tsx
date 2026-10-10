@@ -109,11 +109,12 @@ export default async function StaffCRMPage({
       phoneType: contacts.phoneType,
       preferredContact: contacts.preferredContact,
       isPrimary: contacts.isPrimary,
+      relationshipStatus: contacts.relationshipStatus,
       companyName: customerAccounts.companyName,
       customerId: customerAccounts.id,
     })
       .from(contacts)
-      .innerJoin(customerAccounts, eq(contacts.customerId, customerAccounts.id))
+      .leftJoin(customerAccounts, eq(contacts.customerId, customerAccounts.id))
       .orderBy(contacts.name),
     getHubSpotCompanies(),
     db.select({ id: salesMembers.id })
@@ -266,7 +267,7 @@ export default async function StaffCRMPage({
     : []
   const filteredAssignedToMeRows = assignedToMeRows.filter((account) => matchesAccountFilter(account, currentFilter))
   const filteredAccountIds = new Set(filteredAccounts.map((account) => account.id))
-  const filteredPeople = people.filter((person) => filteredAccountIds.has(person.customerId))
+  const filteredPeople = people.filter((person) => (!person.customerId || filteredAccountIds.has(person.customerId)))
 
   const localAccountIds = new Map<string, string>(
     accounts.filter(a => a.hubspotCompanyId).map(a => [a.hubspotCompanyId!, a.id])

@@ -104,6 +104,7 @@ export interface WholesaleRequestReceivedPayload {
 }
 
 export interface TastingTasterAssignedPayload {
+  timeZone?: string
   tasterName: string
   tasterEmail: string
   tasterPhone?: string | null
@@ -117,6 +118,7 @@ export interface TastingTasterAssignedPayload {
 }
 
 export interface TastingStatusChangedPayload {
+  timeZone?: string
   tasterEmail: string
   tasterPhone?: string | null
   storeName: string

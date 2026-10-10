@@ -63,7 +63,7 @@ export default async function StaffTastingsPage({
       }).from(users).orderBy(users.name),
       getTastingsForView({}),
     ])
-    const activeTasters = tasters.filter((user) => user.active && (user.roles ?? []).includes('taster'))
+    const activeTasters = tasters.filter((user) => user.active && (user.roles ?? []).some(role => ['admin', 'staff', 'sales_rep', 'sales_manager', 'taster'].includes(role)))
     const availability = await getAvailabilityForUsers(activeTasters.map((user) => user.id))
     data = {
       accounts,
@@ -98,6 +98,7 @@ export default async function StaffTastingsPage({
           <h1 className="text-2xl font-bold text-slate-900">Tastings</h1>
           <p className="text-muted-foreground mt-1">Coordinate upcoming tastings and keep tasters informed by text.</p>
         </div>
+        <Link href="/staff/tastings#quick-schedule-tasting"><Button>Quick schedule tasting</Button></Link>
         <Link href="/staff/tastings/reports">
           <Button variant="outline">View Reports</Button>
         </Link>

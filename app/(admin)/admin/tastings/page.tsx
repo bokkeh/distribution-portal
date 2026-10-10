@@ -36,7 +36,7 @@ export default async function AdminTastingsPage({
   const economicsSettings = await loadEconomicsSettings()
   const params = await searchParams
   const validTabs = ['team', 'schedule', 'upcoming', 'roi']
-  const defaultTab = validTabs.includes(params.tab ?? '') ? params.tab! : 'team'
+  const defaultTab = validTabs.includes(params.tab ?? '') ? params.tab! : 'schedule'
   let data:
     | {
         accounts: Array<{ id: string; companyName: string; address: string | null; city: string | null; state: string | null; zip: string | null; additionalLocations?: string | null }>
@@ -67,7 +67,7 @@ export default async function AdminTastingsPage({
       }).from(users).orderBy(users.name),
       getTastingsForView({}),
     ])
-    const activeTasters = tasters.filter((user) => user.active && (user.roles ?? []).includes('taster'))
+    const activeTasters = tasters.filter((user) => user.active && (user.roles ?? []).some(role => ['admin', 'staff', 'sales_rep', 'sales_manager', 'taster'].includes(role)))
     const availability = await getAvailabilityForUsers(activeTasters.map((user) => user.id))
     data = {
       accounts,
@@ -103,6 +103,7 @@ export default async function AdminTastingsPage({
           <p className="text-muted-foreground mt-1">Schedule in-store tastings, assign tasters, and track upcoming events.</p>
         </div>
         <div className="flex gap-2">
+          <Link href="?tab=schedule#quick-schedule-tasting"><Button>Quick schedule tasting</Button></Link>
           <Link href="/admin/tastings/reports">
             <Button variant="outline">View Reports</Button>
           </Link>

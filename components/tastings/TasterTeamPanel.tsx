@@ -32,7 +32,8 @@ type AvailabilityRow = {
 
 type TastingRow = {
   id: string
-  assignedUserId: string
+  assignedUserId: string | null
+  timeZone?: string
   scheduledAt: Date
   endAt: Date | null
   status: string
@@ -146,8 +147,8 @@ export function TasterTeamPanel({
   const rosterRows = useMemo(() => {
     return tasters.map((taster) => {
       const assigned = bookedTastings.filter((tasting) => tasting.assignedUserId === taster.id)
-      const bookedThisMonth = assigned.filter((tasting) => getEasternDateKey(tasting.scheduledAt).slice(0, 7) === format(selectedMonth, 'yyyy-MM'))
-      const bookedDayKeys = new Set(bookedThisMonth.map((tasting) => getEasternDateKey(tasting.scheduledAt)))
+      const bookedThisMonth = assigned.filter((tasting) => getEasternDateKey(tasting.scheduledAt, tasting.timeZone).slice(0, 7) === format(selectedMonth, 'yyyy-MM'))
+      const bookedDayKeys = new Set(bookedThisMonth.map((tasting) => getEasternDateKey(tasting.scheduledAt, tasting.timeZone)))
       const availableDayCount = tastingDays.filter((day) => availabilitySet.has(`${taster.id}:${format(day, 'yyyy-MM-dd')}`)).length
       const nextTasting = assigned
         .map((tasting) => new Date(tasting.scheduledAt))
@@ -166,7 +167,7 @@ export function TasterTeamPanel({
 
   const availabilityRows = useMemo(() => {
     return tastingDays.map((day) => {
-      const dayBookings = bookedTastings.filter((tasting) => getEasternDateKey(tasting.scheduledAt) === format(day, 'yyyy-MM-dd'))
+      const dayBookings = bookedTastings.filter((tasting) => getEasternDateKey(tasting.scheduledAt, tasting.timeZone) === format(day, 'yyyy-MM-dd'))
       const bookedIds = new Set(dayBookings.map((tasting) => tasting.assignedUserId))
 
       return {
@@ -381,7 +382,7 @@ export function TasterTeamPanel({
                             >
                               <span>{entry.name}</span>
                               <span className="text-[11px] uppercase tracking-wide text-amber-600">
-                                booked {entry.tasting ? formatEasternTimeRange(new Date(entry.tasting.scheduledAt), entry.tasting.endAt ? new Date(entry.tasting.endAt) : null) : ''}
+                                booked {entry.tasting ? formatEasternTimeRange(new Date(entry.tasting.scheduledAt), entry.tasting.endAt ? new Date(entry.tasting.endAt) : null, entry.tasting.timeZone) : ''}
                               </span>
                             </span>
                           )) : (

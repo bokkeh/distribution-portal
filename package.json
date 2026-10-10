@@ -15,7 +15,11 @@
     "db:repair:platform-ops": "node --env-file=.env.local -e \"require('tsx/cjs');require('./db/repair-platform-ops.ts')\"",
     "db:studio": "drizzle-kit studio",
     "db:seed": "node --env-file=.env.local -e \"require('tsx/cjs');require('./db/seed.ts')\"",
-    "db:super-admin": "node --env-file=.env.local -e \"require('tsx/cjs');require('./db/ensure-super-admin.ts')\""
+    "db:super-admin": "node --env-file=.env.local -e \"require('tsx/cjs');require('./db/ensure-super-admin.ts')\"",
+    "test:operator": "node --test tests/operator-workflows.test.cjs",
+    "test:operator:browser": "node tests/operator-browser.cjs",
+    "test:field": "node --test tests/field-workflows.test.cjs",
+    "test:field:browser": "node tests/field-browser.cjs"
   },
   "dependencies": {
     "@auth/core": "^0.41.0",
@@ -56,6 +60,7 @@
     "date-fns": "^4.1.0",
     "drizzle-kit": "^0.31.9",
     "drizzle-orm": "^0.45.1",
+    "google-auth-library": "^9.15.1",
     "lucide-react": "^0.577.0",
     "next": "16.1.6",
     "next-auth": "^5.0.0-beta.30",
@@ -74,6 +79,7 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
@@ -81,6 +87,7 @@
     "dotenv": "^17.3.1",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "playwright": "^1.64.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

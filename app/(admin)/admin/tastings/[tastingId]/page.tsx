@@ -1,6 +1,6 @@
 import { db } from '@/db'
 import { tastingReports, tasterInvoices, users, customerAccounts } from '@/db/schema'
-import { asc, eq } from 'drizzle-orm'
+import { asc, eq, sql } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { requireFeature } from '@/lib/auth/session'
 import { getTastingById } from '@/lib/tastings/read'
@@ -119,7 +119,7 @@ export default async function AdminTastingDetailPage({
       }).from(customerAccounts).where(eq(customerAccounts.id, tasting.customerId)).limit(1).then(r => r[0] ?? null),
 
       db.select({ id: users.id, name: users.name, phone: users.phone, email: users.email })
-        .from(users).where(eq(users.id, tasting.assignedUserId)).limit(1).then(r => r[0] ?? null),
+        .from(users).where(sql`${users.id} = ${tasting.assignedUserId}::uuid`).limit(1).then(r => r[0] ?? null),
 
       db.select().from(tastingReports).where(eq(tastingReports.tastingId, tastingId)).limit(1).then(r => r[0] ?? null),
 
@@ -129,7 +129,7 @@ export default async function AdminTastingDetailPage({
         .from(users)
         .where(eq(users.active, true))
         .orderBy(users.name)
-        .then(rows => rows.filter(u => u.roles?.includes('taster'))),
+        .then(rows => rows.filter(u => u.roles?.some(role => ['admin', 'staff', 'sales_rep', 'sales_manager', 'taster'].includes(role)))),
     ])
   } catch (error) {
     if (isMissingTasterInvoiceReceiptColumn(error)) {
@@ -144,7 +144,7 @@ export default async function AdminTastingDetailPage({
         }).from(customerAccounts).where(eq(customerAccounts.id, tasting.customerId)).limit(1).then(r => r[0] ?? null),
 
         db.select({ id: users.id, name: users.name, phone: users.phone, email: users.email })
-          .from(users).where(eq(users.id, tasting.assignedUserId)).limit(1).then(r => r[0] ?? null),
+          .from(users).where(sql`${users.id} = ${tasting.assignedUserId}::uuid`).limit(1).then(r => r[0] ?? null),
 
         db.select().from(tastingReports).where(eq(tastingReports.tastingId, tastingId)).limit(1).then(r => r[0] ?? null),
 
@@ -169,7 +169,7 @@ export default async function AdminTastingDetailPage({
           .from(users)
           .where(eq(users.active, true))
           .orderBy(users.name)
-          .then(rows => rows.filter(u => u.roles?.includes('taster'))),
+          .then(rows => rows.filter(u => u.roles?.some(role => ['admin', 'staff', 'sales_rep', 'sales_manager', 'taster'].includes(role)))),
       ])
     } else if (!isMissingSubmissionTables(error)) {
       throw error
@@ -188,13 +188,13 @@ export default async function AdminTastingDetailPage({
         }).from(customerAccounts).where(eq(customerAccounts.id, tasting.customerId)).limit(1).then(r => r[0] ?? null),
 
         db.select({ id: users.id, name: users.name, phone: users.phone, email: users.email })
-          .from(users).where(eq(users.id, tasting.assignedUserId)).limit(1).then(r => r[0] ?? null),
+          .from(users).where(sql`${users.id} = ${tasting.assignedUserId}::uuid`).limit(1).then(r => r[0] ?? null),
 
         db.select({ id: users.id, name: users.name, roles: users.roles })
           .from(users)
           .where(eq(users.active, true))
           .orderBy(users.name)
-          .then(rows => rows.filter(u => u.roles?.includes('taster'))),
+          .then(rows => rows.filter(u => u.roles?.some(role => ['admin', 'staff', 'sales_rep', 'sales_manager', 'taster'].includes(role)))),
       ])
     }
   }
@@ -257,12 +257,12 @@ export default async function AdminTastingDetailPage({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <span className="text-xs text-slate-400">Scheduled</span>
-                  <p className="font-medium">{formatEasternDateTime(tasting.scheduledAt)}</p>
+                  <p className="font-medium">{formatEasternDateTime(tasting.scheduledAt, 'timeZone' in tasting ? tasting.timeZone : undefined)}</p>
                 </div>
                 {tasting.endAt && (
                   <div>
                     <span className="text-xs text-slate-400">End Time</span>
-                    <p className="font-medium">{formatEasternDateTime(tasting.endAt)}</p>
+                    <p className="font-medium">{formatEasternDateTime(tasting.endAt, 'timeZone' in tasting ? tasting.timeZone : undefined)}</p>
                   </div>
                 )}
                 {tasting.checkedInAt && (
@@ -484,7 +484,8 @@ export default async function AdminTastingDetailPage({
                     <input type="hidden" name="redirectTo" value={`/admin/tastings/${tastingId}`} />
                     <label className="block text-xs text-slate-500 mb-1">Reassign to</label>
                     <div className="flex gap-2">
-                      <select name="assignedUserId" defaultValue={tasting.assignedUserId} className="flex-1 rounded-md border border-input bg-transparent px-2 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                      <select name="assignedUserId" key={tasting.assignedUserId ?? 'unassigned'} defaultValue={tasting.assignedUserId ?? ''} className="flex-1 rounded-md border border-input bg-transparent px-2 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+                        <option value="">Unassigned</option>
                         {allTasters.map(t => (
                           <option key={t.id} value={t.id}>{t.name}</option>
                         ))}

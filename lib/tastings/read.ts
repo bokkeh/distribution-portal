@@ -1,4 +1,5 @@
-import { desc, eq } from 'drizzle-orm'
+import { desc, eq, sql } from 'drizzle-orm'
+import { isUpcomingTasting } from './scheduling'
 import { db } from '@/db'
 import { customerAccounts, tastings, tastingReports, tasterInvoices, users } from '@/db/schema'
 
@@ -97,6 +98,7 @@ export async function getTastingsForViewWithFallback({ assignedUserId }: { assig
       eventName: tastings.eventName,
       scheduledAt: tastings.scheduledAt,
       endAt: tastings.endAt,
+      timeZone: tastings.timeZone,
       trainingDay: tastings.trainingDay,
       status: tastings.status,
       storeAddress: tastings.storeAddress,
@@ -107,7 +109,7 @@ export async function getTastingsForViewWithFallback({ assignedUserId }: { assig
       notes: tastings.notes,
       cancellationReason: tastings.cancellationReason,
       createdAt: tastings.createdAt,
-      tasterName: users.name,
+      tasterName: sql<string>`COALESCE(${users.name}, 'Unassigned')`,
       tasterPhone: users.phone,
       reportSubmittedAt: tastingReports.submittedAt,
       reportBottlesSold: tastingReports.bottlesSold,
@@ -117,7 +119,7 @@ export async function getTastingsForViewWithFallback({ assignedUserId }: { assig
     })
     .from(tastings)
     .leftJoin(customerAccounts, eq(tastings.customerId, customerAccounts.id))
-    .innerJoin(users, eq(tastings.assignedUserId, users.id))
+    .leftJoin(users, eq(tastings.assignedUserId, users.id))
     .leftJoin(tastingReports, eq(tastingReports.tastingId, tastings.id))
     .leftJoin(tasterInvoices, eq(tasterInvoices.tastingId, tastings.id))
 
@@ -150,7 +152,7 @@ export async function getTastingsForViewWithFallback({ assignedUserId }: { assig
         storePhone: tastings.storePhone,
         notes: tastings.notes,
         createdAt: tastings.createdAt,
-        tasterName: users.name,
+        tasterName: sql<string>`COALESCE(${users.name}, 'Unassigned')`,
         tasterPhone: users.phone,
         reportSubmittedAt: tastingReports.submittedAt,
         reportBottlesSold: tastingReports.bottlesSold,
@@ -160,7 +162,7 @@ export async function getTastingsForViewWithFallback({ assignedUserId }: { assig
       })
       .from(tastings)
       .leftJoin(customerAccounts, eq(tastings.customerId, customerAccounts.id))
-      .innerJoin(users, eq(tastings.assignedUserId, users.id))
+      .leftJoin(users, eq(tastings.assignedUserId, users.id))
       .leftJoin(tastingReports, eq(tastingReports.tastingId, tastings.id))
       .leftJoin(tasterInvoices, eq(tasterInvoices.tastingId, tastings.id))
 
@@ -176,8 +178,8 @@ export async function getTastingsForViewWithFallback({ assignedUserId }: { assig
 }
 
 export type AccountTastingSummary = {
-  nextTasting: { id: string; scheduledAt: Date; status: string } | null
-  associatedTaster: { userId: string; name: string; tastingId: string; scheduledAt: Date; status: string } | null
+  nextTasting: { id: string; scheduledAt: Date; timeZone: string; status: string } | null
+  associatedTaster: { userId: string; name: string; tastingId: string; scheduledAt: Date; timeZone: string; status: string } | null
 }
 
 /**
@@ -189,19 +191,21 @@ export async function getAccountTastingSummary(accountId: string): Promise<Accou
     .select({
       id: tastings.id,
       status: tastings.status,
+      endAt: tastings.endAt,
+      timeZone: tastings.timeZone,
       scheduledAt: tastings.scheduledAt,
       assignedUserId: tastings.assignedUserId,
-      tasterName: users.name,
+      tasterName: sql<string>`COALESCE(${users.name}, 'Unassigned')`,
     })
     .from(tastings)
-    .innerJoin(users, eq(tastings.assignedUserId, users.id))
+    .leftJoin(users, eq(tastings.assignedUserId, users.id))
     .where(eq(tastings.customerId, accountId))
     .orderBy(desc(tastings.scheduledAt))
 
   const now = Date.now()
 
   const upcoming = rows
-    .filter((row) => row.scheduledAt.getTime() >= now && !['cancelled', 'declined'].includes(row.status))
+    .filter((row) => isUpcomingTasting(row, now))
     .sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime())[0] ?? null
 
   const mostRecentPast = rows.find(
@@ -211,13 +215,14 @@ export async function getAccountTastingSummary(accountId: string): Promise<Accou
   const relevant = upcoming ?? mostRecentPast
 
   return {
-    nextTasting: upcoming ? { id: upcoming.id, scheduledAt: upcoming.scheduledAt, status: upcoming.status } : null,
-    associatedTaster: relevant
+    nextTasting: upcoming ? { id: upcoming.id, scheduledAt: upcoming.scheduledAt, timeZone: upcoming.timeZone, status: upcoming.status } : null,
+    associatedTaster: relevant?.assignedUserId
       ? {
           userId: relevant.assignedUserId,
           name: relevant.tasterName,
           tastingId: relevant.id,
           scheduledAt: relevant.scheduledAt,
+          timeZone: relevant.timeZone,
           status: relevant.status,
         }
       : null,

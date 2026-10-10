@@ -166,6 +166,7 @@ export async function handleEmailChannel<E extends NotificationEvent>(
         tasterName: p.tasterName,
         storeName: p.storeName,
         scheduledAt: p.scheduledAt,
+        timeZone: p.timeZone,
         endAt: p.endAt,
         notes: p.notes,
       })
@@ -181,6 +182,7 @@ export async function handleEmailChannel<E extends NotificationEvent>(
         storeName: p.storeName,
         status: p.status,
         scheduledAt: p.scheduledAt,
+        timeZone: p.timeZone,
       })
       break
     }

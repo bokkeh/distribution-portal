@@ -50,7 +50,7 @@ export async function payoutTasterInvoiceViaStripe(formData: FormData) {
         id: tasterInvoices.id,
         totalAmount: tasterInvoices.totalAmount,
         status: tasterInvoices.status,
-        payoutUserId: tastings.assignedUserId,
+        payoutUserId: users.id,
         payeeName: tasterInvoices.payeeName,
         tastingId: tasterInvoices.tastingId,
         eventName: tastings.eventName,
@@ -162,7 +162,7 @@ export async function approveTasterInvoice(formData: FormData) {
       id: tasterInvoices.id,
       tastingId: tasterInvoices.tastingId,
       payeeName: tasterInvoices.payeeName,
-      payoutUserId: tastings.assignedUserId,
+      payoutUserId: users.id,
       status: tasterInvoices.status,
     })
     .from(tasterInvoices)

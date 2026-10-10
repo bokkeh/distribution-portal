@@ -9,7 +9,9 @@ export type TastingObjectiveValue = (typeof TASTING_OBJECTIVES)[number]
 export const tastings = pgTable('tastings', {
   id: uuid('id').primaryKey().defaultRandom(),
   customerId: uuid('customer_id').notNull().references(() => customerAccounts.id, { onDelete: 'cascade' }),
-  assignedUserId: uuid('assigned_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  assignedUserId: uuid('assigned_user_id').references(() => users.id, { onDelete: 'set null' }),
+  timeZone: text('time_zone').notNull().default('America/New_York'),
+  schedulingFingerprint: text('scheduling_fingerprint'),
   createdByUserId: uuid('created_by_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   eventName: text('event_name').notNull(),
   scheduledAt: timestamp('scheduled_at', { withTimezone: true }).notNull(),
@@ -30,8 +32,7 @@ export const tastings = pgTable('tastings', {
   }),
   cancellationNote: text('cancellation_note'),
 
-  // Why the tasting was booked and what it must achieve. Required for new tastings;
-  // null on tastings scheduled before objectives existed.
+  // Optional enrichment: purpose and measurable goals can be filled in after booking.
   objective: text('objective', { enum: TASTING_OBJECTIVES }),
   primaryGoal: text('primary_goal'),
   targetBottlesSold: integer('target_bottles_sold'),

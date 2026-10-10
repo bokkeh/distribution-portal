@@ -18,8 +18,9 @@ export interface PersonRow {
   phoneType: string | null
   preferredContact: string | null
   isPrimary: boolean
-  companyName: string
-  customerId: string
+  companyName: string | null
+  customerId: string | null
+  relationshipStatus?: string | null
 }
 
 const COLUMN_OPTIONS = [
@@ -61,11 +62,12 @@ function MobilePersonCard({ person, basePath }: { person: PersonRow; basePath: '
           <p className="text-base font-bold text-slate-950">{person.name}</p>
           <p className="mt-0.5 text-sm text-slate-500">{person.title ?? 'Title not entered'}</p>
         </div>
+        {person.relationshipStatus === 'keep_in_touch' ? <Badge>Keep in touch</Badge> : null}
         {person.isPrimary ? <Badge variant="success">Primary</Badge> : null}
       </div>
 
-      <Link href={`${basePath}/${person.customerId}`} className="mt-3 block rounded-xl bg-[#f4f1ed] px-3 py-2.5 text-sm font-semibold text-slate-900 underline-offset-4 hover:text-[#d94c00] hover:underline">
-        {person.companyName}
+      <Link href={person.customerId ? `${basePath}/${person.customerId}` : `${basePath}/people/${person.id}`} className="mt-3 block rounded-xl bg-[#f4f1ed] px-3 py-2.5 text-sm font-semibold text-slate-900 underline-offset-4 hover:text-[#d94c00] hover:underline">
+        {person.companyName ?? 'No company — link later'}
       </Link>
 
       <div className="mt-3 space-y-2 text-sm">
@@ -77,8 +79,8 @@ function MobilePersonCard({ person, basePath }: { person: PersonRow; basePath: '
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2">
-        <Button asChild variant="outline" size="sm"><Link href={`${basePath}/${person.customerId}`}>View account</Link></Button>
-        <Button asChild variant="outline" size="sm"><Link href={`${basePath}/${person.customerId}/contacts`}>Manage</Link></Button>
+        <Button asChild variant="outline" size="sm"><Link href={person.customerId ? `${basePath}/${person.customerId}` : `${basePath}/people/${person.id}`}>View account</Link></Button>
+        <Button asChild variant="outline" size="sm"><Link href={`${basePath}/people/${person.id}`}>Manage</Link></Button>
       </div>
     </article>
   )
@@ -153,8 +155,8 @@ export function LocalPeopleTable({
     <div>
       <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:py-3">
         <div>
-          <p className="text-sm font-semibold text-slate-900">Company contacts</p>
-          <p className="text-xs text-slate-500">{filteredPeople.length} of {people.length} people associated with accounts</p>
+          <p className="text-sm font-semibold text-slate-900">Contacts</p>
+          <p className="text-xs text-slate-500">{filteredPeople.length} of {people.length} contacts, including standalone people</p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
           <div className="relative w-full sm:w-auto">
@@ -266,10 +268,10 @@ export function LocalPeopleTable({
               {vis.has('company') ? (
                 <td className="px-4 py-3 text-sm font-medium">
                   <Link
-                    href={`${basePath}/${person.customerId}`}
+                    href={person.customerId ? `${basePath}/${person.customerId}` : `${basePath}/people/${person.id}`}
                     className="text-slate-900 underline-offset-4 transition hover:text-[#ff5a00] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff5a00]"
                   >
-                    {person.companyName}
+                    {person.companyName ?? 'No company — link later'}
                   </Link>
                 </td>
               ) : null}
@@ -296,10 +298,10 @@ export function LocalPeopleTable({
               ) : null}
               <td className="px-4 py-3">
                 <div className="flex justify-end gap-2">
-                  <Link href={`${basePath}/${person.customerId}`}>
+                  <Link href={person.customerId ? `${basePath}/${person.customerId}` : `${basePath}/people/${person.id}`}>
                     <Button variant="ghost" size="sm">View Account</Button>
                   </Link>
-                  <Link href={`${basePath}/${person.customerId}/contacts`}>
+                  <Link href={`${basePath}/people/${person.id}`}>
                     <Button variant="outline" size="sm">Manage</Button>
                   </Link>
                 </div>

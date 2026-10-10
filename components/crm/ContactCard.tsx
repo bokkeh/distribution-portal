@@ -14,7 +14,7 @@ import { Pencil, Trash2, X, Check, MessageSquare, Phone, Mail } from 'lucide-rea
 
 type Contact = {
   id: string
-  customerId: string
+  customerId: string | null
   name: string
   email: string | null
   phone: string | null

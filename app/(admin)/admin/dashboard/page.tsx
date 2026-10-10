@@ -1,3 +1,4 @@
+import { ACCOUNT_REVENUE_DEFINITION, getReportDateRange } from '@/lib/dashboard/reporting'
 import { Suspense } from 'react'
 import Link from 'next/link'
 import { CustomerRecordLink } from '@/components/crm/CustomerRecordLink'
@@ -21,20 +22,6 @@ import { requireAdmin } from '@/lib/auth/session'
 import { getTasksForView } from '@/lib/tasks/read'
 import { TaskDashboardModule } from '@/components/tasks/TaskDashboardModule'
 
-function isValidDateInput(value?: string) {
-  if (!value) return false
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
-  return !Number.isNaN(new Date(`${value}T00:00:00`).getTime())
-}
-
-function startOfDay(value?: string) {
-  return isValidDateInput(value) ? new Date(`${value}T00:00:00`) : null
-}
-
-function endOfDay(value?: string) {
-  return isValidDateInput(value) ? new Date(`${value}T23:59:59.999`) : null
-}
-
 function buildRangeLabel(from?: string, to?: string) {
   if (from && to) {
     if (from === to) return formatDate(new Date(`${from}T00:00:00`))
@@ -53,12 +40,13 @@ export default async function AdminDashboard({
 }) {
   const session = await requireAdmin()
   const { from, to } = await searchParams
-  const fromInput = isValidDateInput(from) ? from : undefined
-  const toInput = isValidDateInput(to) ? to : undefined
-  const fromDate = startOfDay(fromInput)
-  const toDate = endOfDay(toInput)
+  const { fromInput, toInput, fromDate, toDate } = getReportDateRange(from, to)
   const hasDateFilter = Boolean(fromInput || toInput)
   const rangeLabel = buildRangeLabel(fromInput, toInput)
+  const detailParams = new URLSearchParams()
+  if (fromInput) detailParams.set('from', fromInput)
+  if (toInput) detailParams.set('to', toInput)
+  const detailHref = (view: string) => `/admin/dashboard/details?${new URLSearchParams({ ...Object.fromEntries(detailParams), view })}`
 
   const revenueFilters = [
     ne(orders.status, 'cancelled'),
@@ -178,9 +166,9 @@ export default async function AdminDashboard({
       total: sql<string>`COALESCE(SUM(${orders.total}), 0)`,
     })
       .from(customerAccounts)
-      .leftJoin(orders, and(...topAccountJoinFilters))
+      .innerJoin(orders, and(...topAccountJoinFilters))
       .groupBy(customerAccounts.id, customerAccounts.companyName)
-      .orderBy(desc(sql`COALESCE(SUM(${orders.total}), 0)`))
+      .orderBy(desc(sql`COALESCE(SUM(${orders.total}), 0)`), customerAccounts.companyName, customerAccounts.id)
       .limit(5),
     (async () => {
       const allDeliveries = await db
@@ -264,6 +252,7 @@ export default async function AdminDashboard({
         />
         <KpiCard
           title="Total Orders"
+          href={detailHref('orders')}
           value={String(totalOrders[0]?.count ?? 0)}
           icon={ShoppingCart}
           iconColor="text-blue-600"
@@ -279,6 +268,7 @@ export default async function AdminDashboard({
         />
         <KpiCard
           title="Low Stock Items"
+          href={detailHref('stock')}
           value={String(lowStockItems[0]?.count ?? 0)}
           change={Number(lowStockItems[0]?.count) > 0 ? 'Needs attention' : 'All good'}
           changeType={Number(lowStockItems[0]?.count) > 0 ? 'negative' : 'positive'}
@@ -326,6 +316,7 @@ export default async function AdminDashboard({
         </Card>
         <KpiCard
           title="System Health"
+          href="/admin/system"
           value={String((systemHealth.migrationHistoryState === 'tracked' ? systemHealth.pendingMigrations.length : 0) + systemHealth.missingTables.length + systemHealth.missingColumns.length)}
           change={
             systemHealth.migrationHistoryState === 'tracked'
@@ -437,9 +428,10 @@ export default async function AdminDashboard({
 
         {topAccounts.length > 0 && (
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">Top Accounts by Revenue</CardTitle>
-              <Link href="/admin/crm" className="text-xs text-primary hover:underline">View all</Link>
+            <CardHeader>
+              <div className="flex items-center justify-between gap-2"><CardTitle className="text-base">Top Accounts by Revenue</CardTitle>
+              <Link href={detailHref('revenue')} className="text-xs text-primary hover:underline">View all</Link></div>
+              <p className="text-xs text-muted-foreground">{ACCOUNT_REVENUE_DEFINITION} Reporting dates: Eastern Time · {rangeLabel}</p>
             </CardHeader>
             <CardContent className="p-0">
               <div className="divide-y">

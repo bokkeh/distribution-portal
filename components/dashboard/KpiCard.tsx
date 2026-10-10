@@ -2,9 +2,11 @@ import { Card, CardContent } from '@/components/ui/card'
 import { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Sparkline } from './Sparkline'
+import Link from 'next/link'
 
 interface KpiCardProps {
   title: string
+  href?: string
   value: string
   change?: string
   changeType?: 'positive' | 'negative' | 'neutral'
@@ -15,8 +17,8 @@ interface KpiCardProps {
   sparklineColor?: string
 }
 
-export default function KpiCard({ title, value, change, changeType = 'neutral', icon: Icon, iconColor = 'text-blue-600', sparklineData, sparklineColor }: KpiCardProps) {
-  return (
+export default function KpiCard({ title, href, value, change, changeType = 'neutral', icon: Icon, iconColor = 'text-blue-600', sparklineData, sparklineColor }: KpiCardProps) {
+  const card = (
     <Card className="border-0 bg-white shadow-sm">
       <CardContent className="p-5">
         <div className="flex items-start justify-between gap-2">
@@ -45,4 +47,5 @@ export default function KpiCard({ title, value, change, changeType = 'neutral', 
       </CardContent>
     </Card>
   )
+  return href ? <Link href={href} aria-label={`View ${title.toLowerCase()} details`} className="block rounded-xl transition-shadow hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">{card}</Link> : card
 }

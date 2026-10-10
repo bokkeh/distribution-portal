@@ -21,8 +21,10 @@ import {
 import { createOrder } from '@/actions/orders'
 import { createTask, type CreateTaskInput } from '@/actions/tasks'
 import { upsertAccountInventoryItem } from '@/actions/crm-account'
+import { refreshTastingViews } from '@/lib/tastings/revalidate'
 import { requireRole } from '@/lib/auth/session'
 import { logActivityEvent } from '@/lib/activity/log'
+import { queueTastingCalendarSync } from '@/lib/tastings/calendar-sync'
 import { notify } from '@/lib/notifications/dispatch'
 
 const QUICK_ADD_ROLES = ['admin', 'staff', 'sales_rep', 'sales_manager'] as const
@@ -96,7 +98,7 @@ export async function quickCreateAccount(input: {
 }
 
 export async function quickCreatePerson(input: {
-  accountId: string
+  accountId?: string
   firstName: string
   lastName: string
   title?: string
@@ -107,12 +109,13 @@ export async function quickCreatePerson(input: {
   try {
     const session = await requireRole(...QUICK_ADD_ROLES)
     const name = `${input.firstName.trim()} ${input.lastName.trim()}`.trim()
-    if (!input.accountId || !name) throw new Error('Account and person name are required.')
-    await assertQuickAccountAccess(session, input.accountId)
-    const [account] = await db.select({ companyName: customerAccounts.companyName }).from(customerAccounts).where(eq(customerAccounts.id, input.accountId)).limit(1)
-    if (!account) throw new Error('Account not found.')
+    if (!name) throw new Error('Person name is required.')
+    if (!input.accountId && !session.user.roles.some(role => ['admin', 'staff', 'sales_manager'].includes(role))) throw new Error('Only CRM managers can create standalone contacts.')
+    if (input.accountId) await assertQuickAccountAccess(session, input.accountId)
+    const [account] = input.accountId ? await db.select({ companyName: customerAccounts.companyName }).from(customerAccounts).where(eq(customerAccounts.id, input.accountId)).limit(1) : []
+    if (input.accountId && !account) throw new Error('Account not found.')
     const [person] = await db.insert(contacts).values({
-      customerId: input.accountId,
+      customerId: input.accountId || null,
       name,
       title: optionalText(input.title),
       email: optionalText(input.email)?.toLowerCase() ?? null,
@@ -121,11 +124,12 @@ export async function quickCreatePerson(input: {
       notes: optionalText(input.notes),
     }).returning({ id: contacts.id, name: contacts.name })
     await logActivityEvent({
-      entityType: 'account', entityId: input.accountId, actorUserId: session.user.id,
-      kind: 'contact_created', title: 'Contact added', body: `${name} was added to ${account.companyName}.`,
+      entityType: 'account', entityId: input.accountId || person.id, actorUserId: session.user.id,
+      kind: 'contact_created', title: 'Contact added', body: `${name} was added${account ? ` to ${account.companyName}` : ' as a standalone contact'}.`,
       metadata: { contactId: person.id },
     })
-    revalidateAccount(input.accountId)
+    if (input.accountId) revalidateAccount(input.accountId)
+    revalidatePath('/admin/crm'); revalidatePath('/staff/crm')
     return { success: true as const, person }
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Unable to create person.' }
@@ -306,6 +310,8 @@ export async function quickCreateDelivery(input: {
 }
 
 export async function quickCreateTasting(input: {
+  requestId: string
+  timeZone?: string
   accountId: string
   assignedUserId: string
   scheduledAt: string
@@ -318,23 +324,30 @@ export async function quickCreateTasting(input: {
 }) {
   try {
     const session = await requireRole(...QUICK_ADD_ROLES)
+    const [existing] = await db.select().from(tastings).where(eq(tastings.id, input.requestId)).limit(1)
+    if (existing) {
+      if (existing.createdByUserId !== session.user.id || existing.customerId !== input.accountId) throw new Error('This request has already been used.')
+      refreshTastingViews(existing.customerId, existing.id)
+      return { success: true as const, tastingId: existing.id }
+    }
     const scheduledAt = new Date(input.scheduledAt)
     const endAt = input.endAt ? new Date(input.endAt) : null
-    if (!input.accountId || !input.assignedUserId || Number.isNaN(scheduledAt.getTime())) throw new Error('Account, assigned rep, and tasting date are required.')
+    if (!input.accountId || Number.isNaN(scheduledAt.getTime())) throw new Error('Account, assigned rep, and tasting date are required.')
     await assertQuickAccountAccess(session, input.accountId)
     if (endAt && (Number.isNaN(endAt.getTime()) || endAt <= scheduledAt)) throw new Error('Tasting end time must be after the start time.')
     const [account] = await db.select().from(customerAccounts).where(eq(customerAccounts.id, input.accountId)).limit(1)
     if (!account) throw new Error('Account not found.')
-    const [assignedUser] = await db.select({ id: users.id, name: users.name, email: users.email, phone: users.phone, roles: users.roles, active: users.active })
-      .from(users).where(eq(users.id, input.assignedUserId)).limit(1)
-    if (!assignedUser?.active || !assignedUser.roles.some((role) => ['admin', 'staff', 'sales_rep', 'sales_manager', 'taster'].includes(role))) {
+    const [assignedUser] = input.assignedUserId ? await db.select({ id: users.id, name: users.name, email: users.email, phone: users.phone, roles: users.roles, active: users.active })
+      .from(users).where(eq(users.id, input.assignedUserId)).limit(1) : []
+    if (input.assignedUserId && (!assignedUser?.active || !assignedUser.roles.some((role) => ['admin', 'staff', 'sales_rep', 'sales_manager', 'taster'].includes(role)))) {
       throw new Error('Choose an eligible active tasting assignee.')
     }
 
     const locationParts = optionalText(input.location)?.split(',').map((part) => part.trim()) ?? []
     const [tasting] = await db.insert(tastings).values({
+      id: input.requestId, timeZone: input.timeZone ?? 'America/New_York',
       customerId: account.id,
-      assignedUserId: assignedUser.id,
+      assignedUserId: assignedUser?.id ?? null,
       createdByUserId: session.user.id,
       eventName: account.companyName,
       scheduledAt,
@@ -346,8 +359,12 @@ export async function quickCreateTasting(input: {
       storeZip: account.zip,
       storePhone: account.phone,
       notes: optionalText(input.notes),
-    }).returning({ id: tastings.id })
+    }).onConflictDoNothing({ target: tastings.id }).returning({ id: tastings.id })
+    if (!tasting) return { success: true as const, tastingId: input.requestId }
+    refreshTastingViews(account.id, tasting.id)
+    queueTastingCalendarSync(tasting.id)
 
+    try {
     const productRows = (input.products ?? []).filter((item) => item.productId && item.plannedQuantity > 0)
     if (productRows.length) {
       await db.insert(tastingProducts).values(productRows.map((item) => ({
@@ -360,13 +377,13 @@ export async function quickCreateTasting(input: {
       })))
     }
     await logActivityEvent({
-      entityType: 'tasting', entityId: tasting.id, actorUserId: session.user.id, relatedUserId: assignedUser.id,
+      entityType: 'tasting', entityId: tasting.id, actorUserId: session.user.id, relatedUserId: assignedUser?.id ?? null,
       kind: 'tasting_created', title: input.status === 'completed' ? 'Tasting logged' : 'Tasting scheduled',
       body: `${account.companyName} tasting ${input.status === 'completed' ? 'completed' : `scheduled for ${scheduledAt.toLocaleString()}`}.`,
       metadata: { accountId: account.id, productCount: productRows.length },
     })
 
-    if (['requested', 'scheduled', 'confirmed'].includes(input.status ?? 'scheduled')) {
+    if (assignedUser && ['requested', 'scheduled', 'confirmed'].includes(input.status ?? 'scheduled')) {
       await notify('tasting.taster_assigned', {
         tasterName: assignedUser.name,
         tasterEmail: assignedUser.email,
@@ -387,6 +404,10 @@ export async function quickCreateTasting(input: {
     revalidatePath('/sales/tastings')
     revalidateAccount(account.id)
     return { success: true as const, tastingId: tasting.id, warning }
+    } catch (error) {
+      console.error('Tasting saved; optional enrichment failed:', error)
+      return { success: true as const, tastingId: tasting.id, warning: 'Tasting saved. Some optional details or notifications failed; review the tasting before retrying them.' }
+    }
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Unable to create tasting.' }
   }

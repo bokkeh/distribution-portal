@@ -17,6 +17,7 @@ import {
   getAvailableInventoryProducts,
 } from '@/lib/crm/account-detail-data'
 import { normalizePhone } from '@/lib/telnyx/compliance'
+import { formatEasternDateTime } from '@/lib/tastings/time'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { notFound } from 'next/navigation'
 import { Badge } from '@/components/ui/badge'
@@ -27,6 +28,8 @@ import { AccountActivityCard } from '@/components/crm/AccountActivityCard'
 import { AccountDetailsCard } from '@/components/crm/AccountDetailsCard'
 import { AccountEditForm } from '@/components/crm/AccountEditForm'
 import { AccountInventoryOnHandCard } from '@/components/crm/AccountInventoryOnHandCard'
+import { AccountPriceHistoryCard } from '@/components/crm/AccountPriceHistoryCard'
+import { getAccountPriceHistory, getAccountPriceSales } from '@/actions/account-prices'
 import { AccountInventorySummaryCard } from '@/components/crm/AccountInventorySummaryCard'
 import { AccountMapCard } from '@/components/crm/AccountMapCard'
 import { AccountMediaGalleryCard } from '@/components/crm/AccountMediaGalleryCard'
@@ -44,7 +47,7 @@ import { TaskList } from '@/components/tasks/TaskList'
 import { SalesIntelligenceSection } from '@/components/pull-through/SalesIntelligenceSection'
 import { AccountEconomicsSection } from '@/components/pull-through/AccountEconomicsSection'
 import { HEALTH_META } from '@/lib/pull-through/display'
-import { loadAccountIntelligence, type AccountIntelligence, type PullThroughScope } from '@/lib/pull-through/data'
+import { loadAccountIntelligence, type PullThroughScope } from '@/lib/pull-through/data'
 import { coercePipelineStages } from '@/lib/deal-stages'
 import { ArrowLeft, CalendarDays, FileText, MessageSquare, Plus, Receipt, RefreshCcw, RefreshCw, Truck, UserRound } from 'lucide-react'
 
@@ -200,7 +203,7 @@ export async function AccountRecordPage({
     ...(createOrderHref ? [{ label: 'Create Order', href: createOrderHref, icon: Plus }] : []),
     ...(mode === 'admin' ? [{ label: 'Add Delivery', href: '/admin/deliveries/new', icon: Truck }] : []),
     ...(mode !== 'sales' ? [{ label: 'Add Event', href: `/${mode}/events?accountId=${account.id}`, icon: CalendarDays }] : []),
-    { label: 'Add Tasting', href: `/${mode}/tastings?account=${account.id}`, icon: CalendarDays },
+    { label: 'Quick schedule tasting', href: mode === 'sales' ? `/sales/tastings/schedule?account=${account.id}` : `/${mode}/tastings?tab=schedule&account=${account.id}#quick-schedule-tasting`, icon: CalendarDays },
     { label: 'Add Note', href: getTabHref(basePath, 'notes-activity'), icon: FileText },
   ]
 
@@ -218,7 +221,7 @@ export async function AccountRecordPage({
         firstOrderDate: Date | null
         recentDeliveries: Array<{ deliveryId: string; status: string; weekStartDate: string; stopStatus: string; completedAt: Date | null; proofOfDeliveryUrl: string | null; shelfPhotoUrl: string | null }>
         recentTexts: Array<{ id: string; direction: string; body: string; createdAt: Date; phoneNumber: string }>
-        recentTastings: Array<{ id: string; eventName: string; status: string; scheduledAt: Date; endAt: Date | null; reportSubmittedAt: Date | null }>
+        recentTastings: Array<{ id: string; eventName: string; status: string; scheduledAt: Date; endAt: Date | null; reportSubmittedAt: Date | null; timeZone: string }>
         recentEvents: Array<{ id: string; title: string; status: string; startAt: Date | null; attendeeCount: number }>
         notes: Awaited<ReturnType<typeof getAccountNotes>>
         inventoryItems: Awaited<ReturnType<typeof getAccountInventoryOnHand>>
@@ -233,7 +236,7 @@ export async function AccountRecordPage({
         recentOrders: Array<{ id: string; status: string; total: string; createdAt: Date; isAssisted: boolean }>
         recentInvoices: Array<{ id: string; invoiceNumber: string; dueDate: string | null; total: string; status: string }>
         recentDeliveries: Array<{ deliveryId: string; status: string; weekStartDate: string; stopStatus: string; completedAt: Date | null; proofOfDeliveryUrl: string | null; shelfPhotoUrl: string | null }>
-        recentTastings: Array<{ id: string; eventName: string; status: string; scheduledAt: Date; endAt: Date | null; reportSubmittedAt: Date | null }>
+        recentTastings: Array<{ id: string; eventName: string; status: string; scheduledAt: Date; endAt: Date | null; reportSubmittedAt: Date | null; timeZone: string }>
         historicalOrders?: Array<{ id: string; orderDate: Date; productName: string | null; cases: string; bottles: string; orderValue: string | null; notes: string | null; source: string }>
         historicalProductOptions?: Awaited<ReturnType<typeof getAvailableInventoryProducts>>
       }
@@ -337,6 +340,7 @@ export async function AccountRecordPage({
         status: tastings.status,
         scheduledAt: tastings.scheduledAt,
         endAt: tastings.endAt,
+        timeZone: tastings.timeZone,
         reportSubmittedAt: tastingReports.submittedAt,
       }).from(tastings).leftJoin(tastingReports, eq(tastingReports.tastingId, tastings.id)).where(eq(tastings.customerId, accountId)).orderBy(desc(tastings.scheduledAt)).limit(6),
       getAccountNotes(accountId),
@@ -414,6 +418,7 @@ export async function AccountRecordPage({
         status: tastings.status,
         scheduledAt: tastings.scheduledAt,
         endAt: tastings.endAt,
+        timeZone: tastings.timeZone,
         reportSubmittedAt: tastingReports.submittedAt,
       }).from(tastings).leftJoin(tastingReports, eq(tastingReports.tastingId, tastings.id)).where(eq(tastings.customerId, accountId)).orderBy(desc(tastings.scheduledAt)).limit(20),
     ])
@@ -573,7 +578,7 @@ export async function AccountRecordPage({
                     canEdit={mode !== 'sales'}
                   />
                   {tastingSummary.associatedTaster ? (
-                    <div className="flex min-h-12 items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+                    <div className="flex min-h-12 w-full items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm sm:w-auto">
                       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
                         <UserRound className="h-4 w-4" />
                       </span>
@@ -587,7 +592,7 @@ export async function AccountRecordPage({
                           ) : (
                             <span className="text-sm font-semibold text-slate-900">{tastingSummary.associatedTaster.name}</span>
                           )}
-                          <span className="text-xs text-slate-500">· {formatDate(tastingSummary.associatedTaster.scheduledAt)}</span>
+                          <span className="text-xs text-slate-500">· {formatEasternDateTime(tastingSummary.associatedTaster.scheduledAt, tastingSummary.associatedTaster.timeZone)}</span>
                           <Badge
                             variant={tastingSummary.associatedTaster.status === 'completed' ? 'success' : 'outline'}
                             className="px-1.5 py-0 text-[10px] capitalize"
@@ -651,7 +656,7 @@ export async function AccountRecordPage({
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Next Tasting</p>
                   {tastingSummary.nextTasting ? (
                     <>
-                      <p className="mt-1 text-lg font-bold" suppressHydrationWarning>{formatDate(tastingSummary.nextTasting.scheduledAt)}</p>
+                      <p className="mt-1 text-lg font-bold" suppressHydrationWarning>{formatEasternDateTime(tastingSummary.nextTasting.scheduledAt, tastingSummary.nextTasting.timeZone)}</p>
                       <Badge variant="outline" className="mt-1 text-[10px] capitalize">{tastingSummary.nextTasting.status}</Badge>
                     </>
                   ) : (
@@ -813,7 +818,7 @@ export async function AccountRecordPage({
                             <div className="flex items-start justify-between gap-3">
                               <div>
                                 <p className="text-sm font-medium text-slate-900">{tasting.eventName}</p>
-                                <p className="text-xs text-muted-foreground" suppressHydrationWarning>{formatDate(tasting.scheduledAt)}</p>
+                                <p className="text-xs text-muted-foreground" suppressHydrationWarning>{formatEasternDateTime(tasting.scheduledAt, tasting.timeZone)}</p>
                                 <div className="mt-2 flex flex-wrap items-center gap-2">
                                   <Badge variant={tasting.reportSubmittedAt ? 'success' : 'warning'} className="text-xs">{tasting.reportSubmittedAt ? 'Report submitted' : 'Report pending'}</Badge>
                                   <Badge variant="secondary" className="text-xs">{tasting.status}</Badge>
@@ -903,7 +908,7 @@ export async function AccountRecordPage({
           </Card>
           <Card>
             <CardHeader className="pb-3"><CardTitle>Taster Reports</CardTitle></CardHeader>
-            <CardContent>{ordersData.recentTastings.length === 0 ? <p className="text-sm text-slate-500">No tastings linked to this account yet.</p> : <div className="space-y-2">{ordersData.recentTastings.map((tasting) => <div key={tasting.id} className="rounded-xl border border-slate-100 px-3 py-3"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-medium text-slate-900">{tasting.eventName}</p><p className="text-xs text-muted-foreground" suppressHydrationWarning>{formatDate(tasting.scheduledAt)}</p><div className="mt-2 flex flex-wrap items-center gap-2"><Badge variant={tasting.reportSubmittedAt ? 'success' : 'warning'} className="text-xs">{tasting.reportSubmittedAt ? 'Report submitted' : 'Report pending'}</Badge><Badge variant="secondary" className="text-xs">{tasting.status}</Badge></div></div><Link href={getTastingReportPath(mode, tasting.id)} className="text-xs font-medium text-blue-600 hover:underline">{getTastingReportLinkLabel(mode, Boolean(tasting.reportSubmittedAt))}</Link></div></div>)}</div>}</CardContent>
+            <CardContent>{ordersData.recentTastings.length === 0 ? <p className="text-sm text-slate-500">No tastings linked to this account yet.</p> : <div className="space-y-2">{ordersData.recentTastings.map((tasting) => <div key={tasting.id} className="rounded-xl border border-slate-100 px-3 py-3"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-medium text-slate-900">{tasting.eventName}</p><p className="text-xs text-muted-foreground" suppressHydrationWarning>{formatEasternDateTime(tasting.scheduledAt, tasting.timeZone)}</p><div className="mt-2 flex flex-wrap items-center gap-2"><Badge variant={tasting.reportSubmittedAt ? 'success' : 'warning'} className="text-xs">{tasting.reportSubmittedAt ? 'Report submitted' : 'Report pending'}</Badge><Badge variant="secondary" className="text-xs">{tasting.status}</Badge></div></div><Link href={getTastingReportPath(mode, tasting.id)} className="text-xs font-medium text-blue-600 hover:underline">{getTastingReportLinkLabel(mode, Boolean(tasting.reportSubmittedAt))}</Link></div></div>)}</div>}</CardContent>
           </Card>
         </div>
         <AccountHistoricalOrdersCard
@@ -939,6 +944,8 @@ export async function AccountRecordPage({
       ) : null}
 
       {tab === 'inventory' && inventoryData ? (
+        <div className="space-y-6">
+        <AccountPriceHistoryCard accountId={account.id} products={inventoryData.productOptions} entries={await getAccountPriceHistory(account.id)} sales={await getAccountPriceSales(account.id)} />
         <AccountInventoryOnHandCard
           accountId={account.id}
           items={inventoryData.inventoryItems}
@@ -947,6 +954,8 @@ export async function AccountRecordPage({
           showHistory={mode === 'admin' || mode === 'sales'}
           canManageHistory={mode === 'admin'}
         />
+
+        </div>
       ) : null}
 
       {tab === 'notes-activity' && notesActivityData ? (

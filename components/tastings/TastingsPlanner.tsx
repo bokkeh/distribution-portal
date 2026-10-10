@@ -1,10 +1,10 @@
 'use client'
 
 import Link from 'next/link'
-import { Fragment, useId, useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameDay, isSameMonth, startOfMonth, startOfWeek } from 'date-fns'
 import { CalendarDays, Clock3, MapPin, Phone, Store } from 'lucide-react'
-import { createTasting, deleteTasting, reassignTasting, updateTastingStatus } from '@/actions/tastings'
+import { deleteTasting, reassignTasting, updateTastingStatus } from '@/actions/tastings'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ConfirmSubmitButton } from '@/components/ui/confirm-submit-button'
@@ -12,23 +12,23 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { getAccountTastingLocations } from '@/lib/tastings/locations'
+import { QuickScheduleTasting } from './QuickScheduleTasting'
+import { isUpcomingTasting } from '@/lib/tastings/scheduling'
 import { formatEasternDate, getEasternDateKey, formatEasternTimeRange } from '@/lib/tastings/time'
 import { tastingNeedsCoverage } from '@/lib/tastings/cancellation'
 import { CancelTastingControl } from '@/components/tastings/CancelTastingControl'
 import { cn } from '@/lib/utils'
-import { TastingScheduleAssistant } from './TastingScheduleAssistant'
-import { TastingObjectiveFields } from './TastingObjectiveFields'
 import { CustomerRecordLink } from '@/components/crm/CustomerRecordLink'
 
 type TastingRow = {
   id: string
   customerId: string
   accountName?: string | null
-  assignedUserId: string
+  assignedUserId: string | null
   createdByUserId: string
   eventName: string
   scheduledAt: Date
+  timeZone?: string
   endAt: Date | null
   status: string
   storeAddress: string | null
@@ -39,7 +39,7 @@ type TastingRow = {
   notes: string | null
   cancellationReason?: string | null
   createdAt: Date
-  tasterName: string
+  tasterName: string | null
   tasterPhone: string | null
   reportBottlesSold?: number | null
   reportSamplesServed?: number | null
@@ -49,7 +49,7 @@ type TastingRow = {
 }
 
 interface Props {
-  mode: 'admin' | 'staff' | 'taster'
+  mode: 'admin' | 'staff' | 'taster' | 'sales'
   tastings: TastingRow[]
   accounts: Array<{ id: string; companyName: string; address: string | null; city: string | null; state: string | null; zip: string | null; additionalLocations?: string | null }>
   tasters: Array<{ id: string; name: string; phone: string | null; avatarUrl?: string | null }>
@@ -82,8 +82,8 @@ const plannerStatusClasses: Record<string, string> = {
   declined: 'border-red-500 bg-red-50 text-red-700',
 }
 
-function formatTastingTimeRange(start: Date, end: Date | null) {
-  return formatEasternTimeRange(start, end)
+function formatTastingTimeRange(start: Date, end: Date | null, timeZone?: string) {
+  return formatEasternTimeRange(start, end, timeZone)
 }
 
 function PlannerStatusBadge({ status }: { status: string }) {
@@ -100,22 +100,22 @@ function PlannerStatusBadge({ status }: { status: string }) {
   )
 }
 
-function TastingDateTile({ tasting }: { tasting: Pick<TastingRow, 'scheduledAt' | 'endAt'> }) {
+function TastingDateTile({ tasting }: { tasting: Pick<TastingRow, 'scheduledAt' | 'endAt' | 'timeZone'> }) {
   const scheduledAt = new Date(tasting.scheduledAt)
 
   return (
     <div className="flex min-h-[150px] min-w-[96px] flex-col items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-4 text-center shadow-[0_1px_2px_rgba(24,22,21,0.03)]">
       <span className="font-mono text-xs font-bold uppercase tracking-[0.08em] text-[#ff4f00]">
-        {format(scheduledAt, 'MMM')}
+        {new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: tasting.timeZone ?? 'America/New_York' }).format(scheduledAt)}
       </span>
       <span className="font-display mt-1 text-4xl font-bold leading-none text-[#181615]">
-        {format(scheduledAt, 'dd')}
+        {getEasternDateKey(scheduledAt, tasting.timeZone).slice(-2)}
       </span>
       <span className="mt-2 font-mono text-[11px] font-semibold uppercase tracking-[0.06em] text-stone-500">
-        {format(scheduledAt, 'EEE')}
+        {new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: tasting.timeZone ?? 'America/New_York' }).format(scheduledAt)}
       </span>
       <span className="mt-3 whitespace-nowrap font-mono text-[10px] font-bold uppercase tracking-[0.04em] text-[#ff4f00]">
-        {formatTastingTimeRange(scheduledAt, tasting.endAt ? new Date(tasting.endAt) : null)}
+        {formatTastingTimeRange(scheduledAt, tasting.endAt ? new Date(tasting.endAt) : null, tasting.timeZone)}
       </span>
     </div>
   )
@@ -173,10 +173,7 @@ export function TastingScheduleBoard({
   initialDate,
   initialTasterId,
   formOnly = false,
-  fromAvailability = false,
-  defaultTastingCost = 90,
 }: Props) {
-  const formId = useId()
   const initialSelectedDate = useMemo(() => {
     if (!initialDate) return new Date()
     const parsed = new Date(`${initialDate}T12:00:00`)
@@ -184,12 +181,6 @@ export function TastingScheduleBoard({
   }, [initialDate])
   const [visibleMonth, setVisibleMonth] = useState(initialSelectedDate)
   const [selectedDate, setSelectedDate] = useState(initialSelectedDate)
-  const [selectedAccountId, setSelectedAccountId] = useState(() =>
-    initialAccountId && accounts.some((account) => account.id === initialAccountId) ? initialAccountId : ''
-  )
-  const [locationIndex, setLocationIndex] = useState('0')
-  const selectedAccount = accounts.find(account => account.id === selectedAccountId)
-  const locations = selectedAccount ? getAccountTastingLocations(selectedAccount) : []
   const [dateInput, setDateInput] = useState(() =>
     initialDate && !Number.isNaN(new Date(`${initialDate}T12:00:00`).getTime())
       ? initialDate
@@ -213,7 +204,7 @@ export function TastingScheduleBoard({
     [tastings],
   )
   const dayTastings = useMemo(
-    () => calendarVisibleTastings.filter((tasting) => isSameDay(new Date(tasting.scheduledAt), selectedDate)),
+    () => calendarVisibleTastings.filter((tasting) => getEasternDateKey(tasting.scheduledAt, tasting.timeZone) === format(selectedDate, 'yyyy-MM-dd')),
     [calendarVisibleTastings, selectedDate],
   )
   return (
@@ -223,7 +214,7 @@ export function TastingScheduleBoard({
 
       <div className={formOnly ? "space-y-4" : "grid gap-6 xl:grid-cols-[1.35fr_0.95fr]"}>
         {!formOnly && <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
+          <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 space-y-0">
             <div>
               <CardTitle className="flex items-center gap-2">
                 <CalendarDays className="h-5 w-5 text-slate-500" />
@@ -243,7 +234,7 @@ export function TastingScheduleBoard({
             </div>
             <div className="grid grid-cols-7 gap-2">
               {calendarDays.map(day => {
-                const events = calendarVisibleTastings.filter(tasting => isSameDay(new Date(tasting.scheduledAt), day))
+                const events = calendarVisibleTastings.filter(tasting => getEasternDateKey(tasting.scheduledAt, tasting.timeZone) === format(day, 'yyyy-MM-dd'))
                 const isSelected = isSameDay(day, selectedDate)
                 return (
                   <button
@@ -251,7 +242,7 @@ export function TastingScheduleBoard({
                     type="button"
                     onClick={() => applySelectedDate(format(day, 'yyyy-MM-dd'))}
                     className={cn(
-                      'min-h-24 rounded-2xl border p-2 text-left transition-colors',
+                      'min-h-14 sm:min-h-24 rounded-xl border p-1 sm:p-2 text-left transition-colors',
                       isSelected ? 'border-blue-400 bg-blue-50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300',
                       !isSameMonth(day, visibleMonth) && 'opacity-45'
                     )}
@@ -264,10 +255,10 @@ export function TastingScheduleBoard({
                         </span>
                       ) : null}
                     </div>
-                    <div className="mt-2 space-y-1">
+                    <div className="mt-2 hidden space-y-1 sm:block">
                       {events.slice(0, 2).map(event => (
                         <div key={event.id} className="truncate rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600">
-                          {formatTastingTimeRange(new Date(event.scheduledAt), event.endAt ? new Date(event.endAt) : null)} {event.eventName}
+                          {formatTastingTimeRange(new Date(event.scheduledAt), event.endAt ? new Date(event.endAt) : null, event.timeZone)} {event.eventName}
                         </div>
                       ))}
                     </div>
@@ -284,94 +275,7 @@ export function TastingScheduleBoard({
           </CardHeader>
           <CardContent className="space-y-4">
             {mode === 'taster' ? null : (
-              <form action={createTasting} className="space-y-4">
-                <input type="hidden" name="mode" value={mode} />
-                {fromAvailability ? <input type="hidden" name="fromAvailability" value="true" /> : null}
-                <div className="space-y-2">
-                  <Label htmlFor={`${formId}-customerId`}>Store Account</Label>
-                  <select
-                    id={`${formId}-customerId`}
-                    name="customerId"
-                    className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-                    required
-                    onChange={e => { setSelectedAccountId(e.target.value); setLocationIndex('0') }}
-                    value={selectedAccountId}
-                  >
-                    <option value="">Select store</option>
-                    {accounts.map(account => (
-                      <option key={account.id} value={account.id}>
-                        {account.companyName} {account.city ? `- ${account.city}, ${account.state ?? ''}` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {selectedAccount ? <div className="space-y-2">
-                  <Label htmlFor={`${formId}-tasting-location`}>Location</Label>
-                  <select id={`${formId}-tasting-location`} name="locationIndex" value={locationIndex} onChange={event => setLocationIndex(event.target.value)} className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm">
-                    {locations.map((location, index) => <option key={index} value={index}>{[location.address, location.city, location.state, location.zip].filter(Boolean).join(', ') || 'Account location (address not provided)'}</option>)}
-                  </select>
-                </div> : null}
-
-                {selectedAccountId && (
-                  <TastingScheduleAssistant
-                    accountId={selectedAccountId}
-                    accountName={accounts.find(a => a.id === selectedAccountId)?.companyName ?? ''}
-                    onSelectSlot={(date) => applySelectedDate(date)}
-                  />
-                )}
-
-                {/* Objective, measurable goal, cost, and the account's economics verdict. */}
-                <TastingObjectiveFields accountId={selectedAccountId || null} defaultTastingCost={defaultTastingCost} />
-
-                <div className="space-y-2">
-                  <Label htmlFor={`${formId}-assignedUserId`}>Assign Taster</Label>
-                  <select id={`${formId}-assignedUserId`} name="assignedUserId" defaultValue={initialTasterId ?? ""} className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm" required>
-                    <option value="">Select taster</option>
-                    {tasters.map(taster => (
-                      <option key={taster.id} value={taster.id}>
-                        {taster.name}{taster.phone ? ` (${taster.phone})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor={`${formId}-date`}>Date</Label>
-                    <Input id={`${formId}-date`} name="date" type="date" value={dateInput} onChange={e => applySelectedDate(e.target.value)} required />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor={`${formId}-time`}>Start Time (ET)</Label>
-                    <Input id={`${formId}-time`} name="time" type="time" defaultValue="16:00" required />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor={`${formId}-endTime`}>End Time (ET)</Label>
-                  <Input id={`${formId}-endTime`} name="endTime" type="time" defaultValue="19:00" />
-                </div>
-
-                <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                  <input type="checkbox" name="trainingDay" className="mt-0.5 accent-blue-600" />
-                  <span>
-                    <span className="block font-medium text-slate-900">Training day</span>
-                    <span className="block text-xs text-slate-500">Allows a second taster at the same store on the same date for onboarding or shadowing.</span>
-                  </span>
-                </label>
-
-                <div className="space-y-2">
-                  <Label htmlFor={`${formId}-notes`}>Notes</Label>
-                  <textarea
-                    id={`${formId}-notes`}
-                    name="notes"
-                    className="min-h-28 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                    placeholder="Sampling notes, promo setup, timing, or store instructions."
-                  />
-                </div>
-
-                <Button type="submit" className="w-full">Create And Notify Taster</Button>
-              </form>
+              <QuickScheduleTasting accounts={accounts} members={tasters} initialAccountId={initialAccountId} date={dateInput} initialMemberId={initialTasterId} />
             )}
 
             {!formOnly && <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -393,8 +297,8 @@ export function TastingScheduleBoard({
                           )}
                         </p>
                         <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-slate-500">
-                          <span className="flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" />{formatTastingTimeRange(new Date(tasting.scheduledAt), tasting.endAt ? new Date(tasting.endAt) : null)}</span>
-                          <span className="flex items-center gap-1"><Store className="h-3.5 w-3.5" />{tasting.tasterName}</span>
+                          <span className="flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" />{formatTastingTimeRange(new Date(tasting.scheduledAt), tasting.endAt ? new Date(tasting.endAt) : null, tasting.timeZone)}</span>
+                          <span className="flex items-center gap-1"><Store className="h-3.5 w-3.5" />{tasting.tasterName ?? 'Unassigned'}</span>
                         </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
@@ -444,7 +348,7 @@ export function TastingScheduleBoard({
                       </div>
                     ) : null}
 
-                    {mode !== 'taster' ? (
+                    {['admin', 'staff'].includes(mode) ? (
                       <div className="mt-4 grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
                         <form action={reassignTasting} className="flex flex-col gap-2 sm:flex-row sm:items-end">
                           <input type="hidden" name="tastingId" value={tasting.id} />
@@ -454,9 +358,10 @@ export function TastingScheduleBoard({
                             <select
                               id={`${mode}-reassign-${tasting.id}`}
                               name="assignedUserId"
-                              defaultValue={tasting.assignedUserId}
+                              key={tasting.assignedUserId ?? 'unassigned'} defaultValue={tasting.assignedUserId ?? ''}
                               className="flex h-10 w-full rounded-md border border-input bg-white px-3 text-sm"
                             >
+                              <option value="">Unassigned</option>
                               {tasters.map(taster => (
                                 <option key={taster.id} value={taster.id}>
                                   {taster.name}{taster.phone ? ` (${taster.phone})` : ''}
@@ -517,7 +422,7 @@ export function UpcomingTastingsList({ mode, tastings, tasters }: { mode: Props[
     () =>
       calendarVisibleTastings
         .filter((tasting) => !selectedTasterId || tasting.assignedUserId === selectedTasterId)
-        .filter((tasting) => new Date(tasting.scheduledAt).getTime() >= now)
+        .filter((tasting) => isUpcomingTasting(tasting, now))
         .sort((left, right) => new Date(left.scheduledAt).getTime() - new Date(right.scheduledAt).getTime()),
     [calendarVisibleTastings, now, selectedTasterId],
   )
@@ -525,7 +430,7 @@ export function UpcomingTastingsList({ mode, tastings, tasters }: { mode: Props[
     () =>
       tastings
         .filter((tasting) => !selectedTasterId || tasting.assignedUserId === selectedTasterId)
-        .filter((tasting) => new Date(tasting.scheduledAt).getTime() < now)
+        .filter((tasting) => !isUpcomingTasting(tasting, now))
         .sort((left, right) => new Date(right.scheduledAt).getTime() - new Date(left.scheduledAt).getTime()),
     [tastings, now, selectedTasterId],
   )
@@ -654,7 +559,7 @@ export function UpcomingTastingsList({ mode, tastings, tasters }: { mode: Props[
           ) : null}
 
           {displayedTastings.length ? displayedTastings.map((tasting, index, visibleTastings) => {
-            const tastingYear = format(new Date(tasting.scheduledAt), 'yyyy')
+            const tastingYear = getEasternDateKey(tasting.scheduledAt, tasting.timeZone).slice(0, 4)
             const previousTastingYear = index > 0
               ? format(new Date(visibleTastings[index - 1].scheduledAt), 'yyyy')
               : null
@@ -676,7 +581,7 @@ export function UpcomingTastingsList({ mode, tastings, tasters }: { mode: Props[
                       {tastingNeedsCoverage(tasting.status, tasting.cancellationReason) ? <Badge variant="destructive">Needs Coverage</Badge> : null}
                     </div>
                     <p className="text-sm text-stone-600">
-                      Assigned to <span className="font-semibold text-[#181615]">{tasting.tasterName}</span>
+                      Assigned to <span className="font-semibold text-[#181615]">{tasting.tasterName ?? 'Unassigned'}</span>
                     </p>
                     <p className="flex items-start gap-2 text-sm text-stone-500">
                       <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-stone-400" aria-hidden="true" />
@@ -699,7 +604,7 @@ export function UpcomingTastingsList({ mode, tastings, tasters }: { mode: Props[
                     ) : (
                       <span className="text-sm text-stone-400">No store phone on file</span>
                     )}
-                    {mode === 'taster' ? (
+                    {mode === 'sales' ? <Link href={`/sales/accounts/${tasting.customerId}`}><Button variant="outline">View account</Button></Link> : mode === 'taster' ? (
                       <Link href={`/taster/tastings/${tasting.id}`}>
                         <Button className="font-display h-10 px-4 text-xs uppercase tracking-[0.03em]">Open Report</Button>
                       </Link>

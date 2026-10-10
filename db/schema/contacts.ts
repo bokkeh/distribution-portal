@@ -3,7 +3,8 @@ import { customerAccounts } from './customers'
 
 export const contacts = pgTable('contacts', {
   id: uuid('id').primaryKey().defaultRandom(),
-  customerId: uuid('customer_id').notNull().references(() => customerAccounts.id, { onDelete: 'cascade' }),
+  customerId: uuid('customer_id').references(() => customerAccounts.id, { onDelete: 'set null' }),
+  relationshipStatus: text('relationship_status', { enum: ['active', 'keep_in_touch', 'inactive'] }),
   name: text('name').notNull(),
   email: text('email'),
   phone: text('phone'),

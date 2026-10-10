@@ -69,10 +69,11 @@ export async function createTask(input: CreateTaskInput) {
 
     if (parsed.contactId) {
       const [contact] = await db.select({ customerId: contacts.customerId }).from(contacts).where(eq(contacts.id, parsed.contactId)).limit(1)
-      if (!contact || !parsed.accountId || contact.customerId !== parsed.accountId) {
-        throw new Error('The related person must belong to the selected account.')
+      if (!contact || contact.customerId !== (parsed.accountId ?? null)) {
+        throw new Error('Choose the contact’s company, or leave the account empty for a standalone contact.')
       }
     }
+    if (parsed.contactId && !parsed.accountId && !roles.some(role => ['admin', 'staff', 'sales_manager'].includes(role))) throw new Error('Only CRM managers can manage standalone contact follow-ups.')
     if (parsed.orderId) {
       const [relatedOrder] = await db.select({ accountId: orders.customerId }).from(orders).where(eq(orders.id, parsed.orderId)).limit(1)
       if (!relatedOrder || !parsed.accountId || relatedOrder.accountId !== parsed.accountId) throw new Error('The related order must belong to the selected account.')

@@ -1,6 +1,6 @@
 import { db } from '@/db'
 import { notificationsLog } from '@/db/schema'
-import { formatEasternDateTime, formatEasternTimeRange } from '@/lib/tastings/time'
+import { formatEasternDate, formatEasternDateTime, formatEasternTimeRange } from '@/lib/tastings/time'
 import { getAvailabilityReminderSubject } from '@/lib/tastings/availability-reminder'
 import {
   getEmailAutomationTemplateMap,
@@ -126,12 +126,13 @@ async function sendEmail({
   }
 
   try {
-    await resend.emails.send({
+    const result = await resend.emails.send({
       from: process.env.RESEND_FROM_EMAIL ?? 'noreply@ahawc.com',
       to: recipients,
       subject,
       html,
     })
+    if (result.error) throw new Error(result.error.message)
 
     await Promise.all(recipients.map((recipient) =>
       logEmailNotification({
@@ -632,6 +633,7 @@ export async function sendTasterAssignmentEmail({
   tasterName,
   storeName,
   scheduledAt,
+  timeZone,
   endAt,
   notes,
 }: {
@@ -639,11 +641,12 @@ export async function sendTasterAssignmentEmail({
   tasterName: string
   storeName: string
   scheduledAt: Date
+  timeZone?: string
   endAt?: Date | null
   notes?: string | null
 }) {
-  const timeRange = formatEasternTimeRange(scheduledAt, endAt ?? null).replace(' ET', '')
-  const scheduledLabel = formatEasternDateTime(scheduledAt).replace(' ET', '')
+  const timeRange = formatEasternTimeRange(scheduledAt, endAt ?? null, timeZone)
+  const scheduledLabel = formatEasternDate(scheduledAt, timeZone)
 
   await sendAutomationEmail({
     key: 'taster_assignment',
@@ -652,7 +655,7 @@ export async function sendTasterAssignmentEmail({
     variables: {
       taster_name: escapeHtml(tasterName),
       store_name: escapeHtml(storeName),
-      scheduled_label: escapeHtml(`${scheduledLabel}${endAt ? ` - ${timeRange.split(' - ')[1]}` : ''} ET`),
+      scheduled_label: escapeHtml(`${scheduledLabel} · ${timeRange}`),
       notes_html: notes ? `<p style="margin: 0;"><strong>Notes:</strong> ${escapeHtml(notes)}</p>` : '',
     },
   })
@@ -663,11 +666,13 @@ export async function sendTastingStatusEmail({
   storeName,
   status,
   scheduledAt,
+  timeZone,
 }: {
   to: string
   storeName: string
   status: 'confirmed' | 'cancelled' | 'declined'
   scheduledAt: Date
+  timeZone?: string
 }) {
   const copy = {
     confirmed: {
@@ -690,7 +695,7 @@ export async function sendTastingStatusEmail({
     recipientName: storeName,
     variables: {
       store_name: escapeHtml(storeName),
-      scheduled_at: escapeHtml(formatEasternDateTime(scheduledAt)),
+      scheduled_at: escapeHtml(formatEasternDateTime(scheduledAt, timeZone)),
       status_title: escapeHtml(copy.title),
       status_intro: escapeHtml(copy.intro),
       status_cta_label: status === 'declined' ? 'Open tastings' : 'Open tasting portal',
@@ -1263,4 +1268,16 @@ export async function sendTasterAvailabilityReminderEmail({
     userId,
     recipientName: name,
   })
+}
+
+
+export async function sendFieldInvoiceEmail({ to, companyName, invoiceNumber, total, paymentMethod, invoicePath }: {
+  to: string; companyName: string; invoiceNumber: string; total: string; paymentMethod: 'check' | 'cod' | 'stripe'; invoicePath: string
+}) {
+  return sendEmail({ to, recipientName: companyName, subject: `AHAWC invoice ${invoiceNumber}`, html: renderEmailCard({
+    eyebrow: 'AHAWC Distribution', title: `Invoice ${escapeHtml(invoiceNumber)}`,
+    intro: `${escapeHtml(companyName)} · ${formatCurrencyValue(total)}`,
+    body: `<p>Payment selection: ${paymentMethod === 'stripe' ? 'Credit card via Stripe' : paymentMethod === 'cod' ? 'Cash on delivery (COD)' : 'Check'}.</p><p>Open your invoice to view its items, download a PDF, and see the current payment status.</p>`,
+    ctaLabel: 'View invoice', ctaHref: portalUrl(invoicePath),
+  }) })
 }

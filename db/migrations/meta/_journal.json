@@ -414,6 +414,27 @@
       "when": 1791324800000,
       "tag": "0073_birthdate_sms_age_gate",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1791500000000,
+      "tag": "0078_account_price_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1791600000000,
+      "tag": "0080_operator_workflows",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1791600000001,
+      "tag": "0081_field_documents",
+      "breakpoints": true
     }
   ]
 }

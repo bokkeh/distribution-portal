@@ -135,6 +135,7 @@ export async function handleInAppChannel<E extends NotificationEvent>(
       const p = payload as NotificationEventPayloads['tasting.taster_assigned']
       if (!p.userId) break
       const date = p.scheduledAt.toLocaleDateString('en-US', {
+        timeZone: p.timeZone ?? 'America/New_York',
         weekday: 'short',
         month: 'short',
         day: 'numeric',

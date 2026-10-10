@@ -11,8 +11,8 @@ export const CRM_ACCOUNT_FILTER_VALUES = ['all', 'b2b', 'b2c', 'wisher'] as cons
 export type CRMAccountFilter = (typeof CRM_ACCOUNT_FILTER_VALUES)[number]
 
 export const CUSTOMER_SEGMENT_LABELS: Record<CustomerSegment, string> = {
-  b2b_wholesale: 'B2B',
-  b2c_consumer: 'B2C',
+  b2b_wholesale: 'B2B wholesale',
+  b2c_consumer: 'B2C consumer',
 }
 
 export const CUSTOMER_SOURCE_LABELS: Record<CustomerSource, string> = {

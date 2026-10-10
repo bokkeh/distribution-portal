@@ -423,6 +423,7 @@ async function loadInventory(accountIds: string[], mode: ViewerMode) {
     const bottles = toNumber(row.bottlesOnHand) + cases * bottlesPerCase
     const updatedAt = new Date(row.updatedAt)
 
+    if (!row.accountId) continue
     const existing = byAccount.get(row.accountId)
 
     if (!existing) {
@@ -487,6 +488,7 @@ async function loadContactSummary(accountIds: string[]) {
   const byAccount = new Map<string, { count: number; primaryName: string | null }>()
 
   for (const row of rows) {
+    if (!row.accountId) continue
     const existing = byAccount.get(row.accountId) ?? { count: 0, primaryName: null }
     existing.count += 1
     if (existing.primaryName == null) existing.primaryName = row.name

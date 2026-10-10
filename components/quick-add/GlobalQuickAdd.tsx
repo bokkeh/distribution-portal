@@ -1,7 +1,10 @@
 'use client'
 
-import { parseDateTimeInTimeZone } from '@/lib/tastings/time'
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import { COMMON_TIME_ZONES } from '@/lib/timezones'
+import { saveAccountObservations } from '@/actions/account-observations'
+import { quickScheduleTasting } from '@/actions/quick-schedule-tasting'
+import { formatEasternTimeInput, parseDateTimeInTimeZone } from '@/lib/tastings/time'
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import {
@@ -9,7 +12,6 @@ import {
   PackagePlus, Plus, ShoppingCart, Truck, UserPlus, X,
 } from 'lucide-react'
 import {
-  quickAddAccountInventory,
   quickCreateAccount,
   quickCreateDelivery,
   quickCreateNote,
@@ -108,6 +110,9 @@ export function GlobalQuickAdd({ compact = false, dark = false }: { compact?: bo
   const [account, setAccount] = useState<QuickAccount | null>(null)
   const [items, setItems] = useState<LineItem[]>([{ productId: '', quantity: 1, unit: 'case' }])
   const [submitting, setSubmitting] = useState(false)
+  const saving = useRef(false)
+  const requestId = useRef<string | null>(null)
+  useEffect(() => { requestId.current = null }, [action])
   const [error, setError] = useState<string | null>(null)
   const initialAccountId = useMemo(() => pathname.match(/\/(?:crm|accounts)\/([0-9a-f-]{36})(?:\/|$)/i)?.[1] ?? null, [pathname])
 
@@ -163,8 +168,11 @@ export function GlobalQuickAdd({ compact = false, dark = false }: { compact?: bo
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!action || submitting) return
-    const form = new FormData(event.currentTarget)
+    if (saving.current || !action || submitting) return
+    saving.current = true
+    requestId.current ??= crypto.randomUUID()
+    const submittedForm = event.currentTarget
+    const form = new FormData(submittedForm)
     setSubmitting(true)
     setError(null)
     try {
@@ -176,10 +184,10 @@ export function GlobalQuickAdd({ compact = false, dark = false }: { compact?: bo
           phone: String(form.get('phone') ?? ''), website: String(form.get('website') ?? ''),
           assignedSalesMemberId: String(form.get('assignedSalesMemberId') ?? ''), dealStage: String(form.get('dealStage') ?? ''),
         })
-      } else if (!account && action !== 'task') {
+      } else if (!account && action !== 'task' && action !== 'person') {
         result = { error: 'Choose an account first.' }
       } else if (action === 'person') {
-        result = await quickCreatePerson({ accountId: account!.id, firstName: String(form.get('firstName') ?? ''), lastName: String(form.get('lastName') ?? ''), title: String(form.get('title') ?? ''), email: String(form.get('email') ?? ''), phone: String(form.get('phone') ?? ''), notes: String(form.get('notes') ?? '') })
+        result = await quickCreatePerson({ accountId: account?.id, firstName: String(form.get('firstName') ?? ''), lastName: String(form.get('lastName') ?? ''), title: String(form.get('title') ?? ''), email: String(form.get('email') ?? ''), phone: String(form.get('phone') ?? ''), notes: String(form.get('notes') ?? '') })
       } else if (action === 'note') {
         result = await quickCreateNote({ accountId: account!.id, noteBody: String(form.get('noteBody') ?? ''), noteType: String(form.get('noteType') ?? '') })
       } else if (action === 'task') {
@@ -194,12 +202,13 @@ export function GlobalQuickAdd({ compact = false, dark = false }: { compact?: bo
           notificationChannels: form.getAll('notificationChannels') as Array<'in-app' | 'email' | 'sms'>,
         })
       } else if (action === 'inventory') {
-        result = await quickAddAccountInventory({
-          accountId: account!.id,
-          productId: String(form.get('inventoryProductId') ?? ''),
-          bottlesOnHand: Number(form.get('bottlesOnHand') ?? 0),
-          inventoryDate: String(form.get('inventoryDate') ?? ''),
-        })
+        form.set('accountId', account!.id)
+        form.set('productId', String(form.get('inventoryProductId') ?? ''))
+        form.set('requestId', requestId.current!)
+        form.set('observedOn', String(form.get('inventoryDate') ?? ''))
+        const observation = await saveAccountObservations(form)
+        result = observation
+        if (observation.priceSaved && observation.error) { (submittedForm.elements.namedItem('price') as HTMLInputElement).value = ''; requestId.current = null; router.refresh() }
       } else if (action === 'order' || action === 'assisted-order') {
         result = await quickCreateOrder({
           accountId: account!.id, orderedDate: String(form.get('orderedDate')), purchaseUnit: items[0]?.unit ?? 'case',
@@ -218,12 +227,16 @@ export function GlobalQuickAdd({ compact = false, dark = false }: { compact?: bo
           items: items.filter((item) => item.productId).map((item) => ({ productId: item.productId, quantity: item.quantity, unit: item.unit })),
         })
       } else {
-        const scheduledAt = parseDateTimeInTimeZone(String(form.get('tastingDate')), String(form.get('startTime') || '16:00'))
+        const scheduledAt = parseDateTimeInTimeZone(String(form.get('tastingDate')), String(form.get('startTime') || '16:00'), String(form.get('timeZone') || 'America/New_York'))
         const endTime = String(form.get('endTime') || '')
         const createFollowUp = form.get('createFollowUp') === 'on'
-        result = await quickCreateTasting({
-          accountId: account!.id, assignedUserId: String(form.get('assignedUserId') || bootstrap?.currentUser.id || ''),
-          scheduledAt: scheduledAt.toISOString(), endAt: endTime ? parseDateTimeInTimeZone(String(form.get('tastingDate')), endTime).toISOString() : null,
+        if (String(form.get('status') || 'scheduled') === 'scheduled' && !createFollowUp && !items.some(item => item.productId)) {
+          const scheduled = await quickScheduleTasting({ requestId: requestId.current!, accountId: account!.id, date: String(form.get('tastingDate')), startTime: String(form.get('startTime')), endTime, timeZone: String(form.get('timeZone') || 'America/New_York'), assignedUserId: String(form.get('assignedUserId') ?? '') || null, notes: String(form.get('notes') ?? '') })
+          result = scheduled.error ? { error: scheduled.error } : { success: true, warning: scheduled.confirmation }
+        } else result = await quickCreateTasting({
+          requestId: requestId.current!, timeZone: String(form.get('timeZone') || 'America/New_York'),
+          accountId: account!.id, assignedUserId: String(form.get('assignedUserId') || ''),
+          scheduledAt: scheduledAt.toISOString(), endAt: endTime ? parseDateTimeInTimeZone(String(form.get('tastingDate')), endTime, String(form.get('timeZone') || 'America/New_York')).toISOString() : null,
           status: String(form.get('status') || 'scheduled') as 'requested' | 'scheduled' | 'confirmed' | 'completed' | 'cancelled',
           location: String(form.get('location') || ''), notes: String(form.get('notes') || ''),
           products: items.filter((item) => item.productId).map((item) => ({ productId: item.productId, plannedQuantity: item.quantity, unitsSold: item.unitsSold, revenueGenerated: item.revenueGenerated })),
@@ -243,6 +256,7 @@ export function GlobalQuickAdd({ compact = false, dark = false }: { compact?: bo
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Unable to save.')
     } finally {
+      saving.current = false
       setSubmitting(false)
     }
   }
@@ -274,7 +288,7 @@ export function GlobalQuickAdd({ compact = false, dark = false }: { compact?: bo
             </div>
             <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
               <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
-                {action !== 'account' ? <AccountSearchSelect value={account} onChange={setAccount} initialAccountId={initialAccountId} optional={action === 'task'} /> : null}
+                {action !== 'account' ? <AccountSearchSelect value={account} onChange={setAccount} initialAccountId={initialAccountId} optional={action === 'task' || action === 'person'} /> : null}
                 {!bootstrap && action !== 'account' ? <div className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" />Loading options…</div> : null}
 
                 {action === 'account' ? <>
@@ -315,8 +329,16 @@ export function GlobalQuickAdd({ compact = false, dark = false }: { compact?: bo
                       {bootstrap?.products.map((product) => <option key={product.id} value={product.id}>{product.name} · {product.sku}</option>)}
                     </select>
                   </div>
-                  <div><Label>Bottles on hand</Label><input name="bottlesOnHand" type="number" min="0" step="0.01" defaultValue="0" className={inputClass} required /></div>
-                  <div><Label>Inventory check date</Label><input name="inventoryDate" type="date" defaultValue={localDate()} className={inputClass} required /></div>
+                  <div><Label>Bottles on hand (optional)</Label><input name="bottlesOnHand" type="number" min="0" step="1" className={inputClass} /></div>
+                  <p className="text-sm text-slate-500">Enter an inventory count, retail price, or both. Leave the other value blank.</p>
+                  <div><Label>Retail price (optional)</Label><input name="price" type="number" min="0" max="99999999.99" step="0.01" className={inputClass} /></div>
+                  <div><Label>Size / SKU (optional)</Label><input name="productSize" className={inputClass} /></div>
+                  <div><Label>Currency</Label><input name="currency" defaultValue="USD" pattern="[A-Z]{3}" maxLength={3} className={inputClass} /></div>
+                  <div><Label>Price type</Label><select name="priceType" className={inputClass}><option value="regular">Regular</option><option value="promotional">Promotional</option></select></div>
+                  <div><Label>Price observation time</Label><input name="observedTime" type="time" defaultValue={formatEasternTimeInput(new Date())} className={inputClass} /></div>
+                  <div><Label>Venue timezone</Label><select name="timeZone" defaultValue="America/New_York" className={inputClass}>{COMMON_TIME_ZONES.map(zone => <option key={zone.value} value={zone.value}>{zone.label}</option>)}</select></div>
+                  <div><Label>Notes (optional)</Label><input name="notes" className={inputClass} /></div>
+                  <div><Label>Observation date</Label><input name="inventoryDate" type="date" defaultValue={localDate()} className={inputClass} required /></div>
                   <p className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs leading-relaxed text-blue-800">Account inventory is tracked in bottles. Paid, fulfilled case orders are converted automatically using that product&apos;s bottles-per-case quantity.</p>
                 </> : null}
 
@@ -326,7 +348,7 @@ export function GlobalQuickAdd({ compact = false, dark = false }: { compact?: bo
                   <div className="rounded-xl bg-slate-900 px-4 py-3 text-white"><p className="text-xs uppercase tracking-wide text-slate-400">Estimated subtotal</p><p className="mt-1 text-xl font-bold">${estimatedTotal.toFixed(2)}</p></div>
                   <div><Label>Payment terms</Label><select name="paymentTerms" className={inputClass}><option value="PREPAID">Prepaid</option><option value="NET15">Net 15</option><option value="NET30">Net 30</option><option value="NET45">Net 45</option></select></div>
                   <div><Label>Payment type</Label><select name="paymentType" defaultValue="unpaid" className={inputClass}><option value="unpaid">Unpaid</option><option value="check">Check</option><option value="cod">COD</option><option value="paid">Paid — manually confirmed</option></select><p className="mt-1 text-xs text-slate-500">Do not select Paid until payment has actually been received.</p></div>
-                  {action === 'assisted-order' ? <><div><Label>Assisted by</Label><select name="assistedByUserId" defaultValue={bootstrap?.currentUser.id} className={inputClass}>{bootstrap?.users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select></div><div><Label>Assistance type</Label><select name="assistanceType" className={inputClass}><option value="rep_placed">Rep placed order</option><option value="phone_order">Phone order</option><option value="in_person">In-person order</option><option value="follow_up">Follow-up order</option><option value="tasting_conversion">Tasting conversion</option><option value="other">Other</option></select></div><div><Label>Related tasting</Label><select name="relatedTastingId" className={inputClass}><option value="">None</option>{related.tastings.map((tasting) => <option key={tasting.id} value={tasting.id}>{new Date(tasting.scheduledAt).toLocaleDateString()} · {tasting.status}</option>)}</select></div></> : null}
+                  {action === 'assisted-order' ? <><div><Label>Assisted by</Label><select name="assistedByUserId" defaultValue="" className={inputClass}><option value="">Unassigned</option>{bootstrap?.users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select></div><div><Label>Assistance type</Label><select name="assistanceType" className={inputClass}><option value="rep_placed">Rep placed order</option><option value="phone_order">Phone order</option><option value="in_person">In-person order</option><option value="follow_up">Follow-up order</option><option value="tasting_conversion">Tasting conversion</option><option value="other">Other</option></select></div><div><Label>Related tasting</Label><select name="relatedTastingId" className={inputClass}><option value="">None</option>{related.tastings.map((tasting) => <option key={tasting.id} value={tasting.id}>{new Date(tasting.scheduledAt).toLocaleDateString()} · {tasting.status}</option>)}</select></div></> : null}
                   <div><Label>Notes</Label><textarea name="notes" className={textareaClass} /></div>
                 </> : null}
 
@@ -341,8 +363,9 @@ export function GlobalQuickAdd({ compact = false, dark = false }: { compact?: bo
 
                 {action === 'tasting' ? <>
                   <div className="grid gap-4 sm:grid-cols-2"><div><Label>Tasting date</Label><input name="tastingDate" type="date" defaultValue={localDate()} className={inputClass} required /></div><div><Label>Status</Label><select name="status" className={inputClass}><option value="scheduled">Scheduled</option><option value="confirmed">Confirmed</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></div></div>
-                  <div className="grid gap-4 sm:grid-cols-2"><div><Label>Start time (ET)</Label><input name="startTime" type="time" defaultValue="16:00" className={inputClass} /></div><div><Label>End time (ET)</Label><input name="endTime" type="time" defaultValue="19:00" className={inputClass} /></div></div>
+                  <div className="grid gap-4 sm:grid-cols-2"><div><Label>Start time (venue local)</Label><input name="startTime" type="time" defaultValue="16:00" className={inputClass} /></div><div><Label>End time (venue local)</Label><input name="endTime" type="time" defaultValue="19:00" className={inputClass} /></div></div>
                   <div><Label>Taster / assigned rep</Label><select name="assignedUserId" defaultValue={bootstrap?.currentUser.id} className={inputClass}>{bootstrap?.users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select></div>
+                  <div><Label>Venue timezone</Label><select name="timeZone" defaultValue="America/New_York" className={inputClass}>{COMMON_TIME_ZONES.map(zone => <option key={zone.value} value={zone.value}>{zone.label}</option>)}</select></div>
                   <div><Label>Location</Label><input name="location" className={inputClass} placeholder="Defaults to account address" /></div>
                   <ProductLines items={items} onChange={setItems} products={bootstrap?.products ?? []} tasting />
                   <div><Label>Notes / outcomes</Label><textarea name="notes" className={textareaClass} placeholder="Customer feedback, manager conversation, competitor observations…" /></div>
@@ -351,7 +374,7 @@ export function GlobalQuickAdd({ compact = false, dark = false }: { compact?: bo
 
                 {error ? <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p> : null}
               </div>
-              <div className="flex items-center justify-between gap-3 border-t border-slate-200 bg-white px-5 py-4 sm:px-6"><Button type="button" variant="outline" onClick={() => setAction(null)}>Close</Button><Button type="submit" disabled={submitting || (!['account', 'task'].includes(action) && !account)}>{submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Save</Button></div>
+              <div className="flex items-center justify-between gap-3 border-t border-slate-200 bg-white px-5 py-4 sm:px-6"><Button type="button" variant="outline" onClick={() => setAction(null)}>Close</Button><Button type="submit" disabled={submitting || (!['account', 'task', 'person'].includes(action) && !account)}>{submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Save</Button></div>
             </form>
           </aside>
         </div>

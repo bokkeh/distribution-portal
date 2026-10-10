@@ -46,7 +46,9 @@ export default auth((req) => {
   }
 
   if (!session) {
-    return NextResponse.redirect(new URL('/login', req.url))
+    const loginUrl = new URL('/login', req.url)
+    if (pathname === '/field') loginUrl.searchParams.set('next', `${pathname}${req.nextUrl.search}`)
+    return NextResponse.redirect(loginUrl)
   }
 
   if (pathname.startsWith('/admin') && isAdmin) {

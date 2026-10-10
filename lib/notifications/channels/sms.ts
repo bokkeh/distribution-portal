@@ -118,6 +118,7 @@ export async function handleSmsChannel<E extends NotificationEvent>(
           storeName: p.storeName,
           storeAddress: p.storeAddress,
           scheduledAt: p.scheduledAt,
+        timeZone: p.timeZone,
           endAt: p.endAt ?? null,
         }),
       })
@@ -137,6 +138,7 @@ export async function handleSmsChannel<E extends NotificationEvent>(
           storeName: p.storeName,
           storeAddress: p.storeAddress ?? '',
           scheduledAt: p.scheduledAt,
+        timeZone: p.timeZone,
           endAt: p.endAt ?? null,
         }),
       })

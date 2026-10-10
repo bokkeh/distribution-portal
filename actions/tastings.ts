@@ -1,6 +1,8 @@
 'use server'
 
-import { and, eq, gte, lte, sql } from 'drizzle-orm'
+import { and, eq, gte, isNull, lte, sql } from 'drizzle-orm'
+import { after } from 'next/server'
+import { refreshTastingViews } from '@/lib/tastings/revalidate'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { db } from '@/db'
@@ -384,10 +386,10 @@ export async function createTasting(formData: FormData) {
     redirect(`${redirectBase}error=${encodeURIComponent('Store, taster, and date are required.')}`)
   }
 
-  // Every tasting needs a purpose and a measurable goal before it can be booked.
-  const objectiveInput = parseTastingObjectiveFields(formData)
+  // Enrichment is optional when booking; validate it only when supplied.
+  const objectiveInput = formData.get('objective') ? parseTastingObjectiveFields(formData) : {}
   if ('error' in objectiveInput) {
-    redirect(`${redirectBase}error=${encodeURIComponent(objectiveInput.error)}&account=${encodeURIComponent(customerId)}&date=${encodeURIComponent(date)}`)
+    redirect(`${redirectBase}error=${encodeURIComponent(String(objectiveInput.error))}&account=${encodeURIComponent(customerId)}&date=${encodeURIComponent(date)}`)
   }
 
   const scheduledAt = parseDateTimeInTimeZone(date, time)
@@ -453,7 +455,7 @@ export async function createTasting(formData: FormData) {
     trainingDay,
     notes,
     ...objectiveInput,
-    decisionAcknowledgedByUserId: objectiveInput.decisionAtScheduling === 'not_recommended' ? session.user.id : null,
+    decisionAcknowledgedByUserId: ('decisionAtScheduling' in objectiveInput && objectiveInput.decisionAtScheduling === 'not_recommended') ? session.user.id : null,
   })
 
   const storeAddress = [location.address, location.city, location.state, location.zip].filter(Boolean).join(', ') || 'Store address not provided'
@@ -491,6 +493,7 @@ export async function createTasting(formData: FormData) {
     userId: (assignedUserPrefs?.inAppNotificationsEnabled ?? true) ? assignedUser.id : null,
   })
 
+  refreshTastingViews()
   revalidatePath('/admin/tastings')
   revalidatePath('/staff/tastings')
   revalidatePath('/taster/tastings')
@@ -595,6 +598,7 @@ export async function createTasterBackupTasting(formData: FormData) {
     href: `/admin/tastings/${tasting.id}`,
   })
 
+  refreshTastingViews()
   revalidatePath('/admin/tastings')
   revalidatePath('/staff/tastings')
   revalidatePath('/taster/tastings')
@@ -685,11 +689,11 @@ export async function updateTastingStatus(formData: FormData) {
     metadata: nextStatus === 'cancelled' ? { cancellationReason, cancellationNote } : undefined,
   })
 
-  if (nextStatus === 'confirmed') {
+  if (nextStatus === 'confirmed' && tasting.assignedUserId) {
     const [assignedUser] = await db
       .select({ phone: users.phone, email: users.email })
       .from(users)
-      .where(eq(users.id, tasting.assignedUserId))
+      .where(eq(users.id, tasting.assignedUserId ?? session.user.id))
       .limit(1)
 
     const [tastingDetails] = await db
@@ -725,7 +729,7 @@ export async function updateTastingStatus(formData: FormData) {
   if (nextStatus === 'declined') {
     await clearScheduledTastingSmsJobs(tastingId)
 
-    await clearUserNotifications({
+    if (tasting.assignedUserId) await clearUserNotifications({
       userId: tasting.assignedUserId,
       href: `/taster/tastings/${tastingId}`,
       kinds: ['tasting_assigned', 'tasting_report_reminder'],
@@ -784,7 +788,7 @@ export async function updateTastingStatus(formData: FormData) {
   if (nextStatus === 'cancelled' && cancellationReason) {
     await clearScheduledTastingSmsJobs(tastingId)
 
-    await clearUserNotifications({
+    if (tasting.assignedUserId) await clearUserNotifications({
       userId: tasting.assignedUserId,
       href: `/taster/tastings/${tastingId}`,
       kinds: ['tasting_assigned', 'tasting_report_reminder'],
@@ -813,6 +817,7 @@ export async function updateTastingStatus(formData: FormData) {
     })
   }
 
+  refreshTastingViews()
   revalidatePath('/admin/tastings')
   revalidatePath('/staff/tastings')
   revalidatePath('/taster/tastings')
@@ -842,7 +847,7 @@ export async function deleteTasting(formData: FormData) {
       tasterPhone: users.phone,
     })
     .from(tastings)
-    .innerJoin(users, eq(tastings.assignedUserId, users.id))
+    .leftJoin(users, eq(tastings.assignedUserId, users.id))
     .where(eq(tastings.id, tastingId))
     .limit(1)
 
@@ -866,7 +871,7 @@ export async function deleteTasting(formData: FormData) {
     body: `${tasting.eventName} was cancelled.`,
   })
 
-  await clearUserNotifications({
+  if (tasting.assignedUserId) await clearUserNotifications({
     userId: tasting.assignedUserId,
     href: `/taster/tastings/${tasting.id}`,
     kinds: ['tasting_assigned', 'tasting_report_reminder'],
@@ -882,6 +887,7 @@ export async function deleteTasting(formData: FormData) {
     userId: null,
   })
 
+  refreshTastingViews()
   revalidatePath('/admin/tastings')
   revalidatePath('/staff/tastings')
   revalidatePath('/taster/tastings')
@@ -943,6 +949,7 @@ export async function updateTastingAccount(formData: FormData) {
     actorUserId: session.user.id,
   })
 
+  refreshTastingViews()
   revalidatePath('/admin/tastings')
   revalidatePath(`/admin/tastings/${tastingId}`)
   redirect(`/admin/tastings/${tastingId}?success=${encodeURIComponent('Account updated.')}`)
@@ -950,172 +957,54 @@ export async function updateTastingAccount(formData: FormData) {
 
 export async function reassignTasting(formData: FormData) {
   const session = await requireFeature('tastings', 'admin', 'staff')
-  const tastingId = formData.get('tastingId') as string
-  const nextAssignedUserId = formData.get('assignedUserId') as string
-  const mode = (formData.get('mode') as string) || 'admin'
-
-  if (!nextAssignedUserId) {
-    redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('Select a taster to reassign this tasting.')}`)
-  }
-
-  const [tasting] = await db
-    .select({
-      id: tastings.id,
-      eventName: tastings.eventName,
-      scheduledAt: tastings.scheduledAt,
-      endAt: tastings.endAt,
-      storeAddress: tastings.storeAddress,
-      storeCity: tastings.storeCity,
-      storeState: tastings.storeState,
-      storeZip: tastings.storeZip,
-      trainingDay: tastings.trainingDay,
-      customerId: tastings.customerId,
-      assignedUserId: tastings.assignedUserId,
-      status: tastings.status,
-      currentTasterName: users.name,
-      currentTasterPhone: users.phone,
+  const tastingId = String(formData.get('tastingId') ?? '')
+  const assignedUserId = String(formData.get('assignedUserId') ?? '') || null
+  const mode = String(formData.get('mode') ?? 'admin')
+  const redirectTo = String(formData.get('redirectTo') ?? '')
+  const base = redirectTo.startsWith('/') && !redirectTo.startsWith('//') ? redirectTo.split('?')[0] : tastingRedirectPath(mode)
+  let errorMessage: string | null = null
+  let assignedName = 'Unassigned'
+  try {
+    const tasting = await getTastingById(tastingId)
+    if (!tasting) throw new Error('Tasting not found.')
+    if (TERMINAL_TASTING_STATUSES.has(tasting.status as TastingStatus)) throw new Error('Closed tastings cannot be reassigned.')
+    const [nextMember] = assignedUserId ? await db.select().from(users).where(eq(users.id, assignedUserId)).limit(1) : []
+    if (assignedUserId && (!nextMember?.active || !nextMember.roles.some(role => ['admin', 'staff', 'sales_rep', 'sales_manager', 'taster'].includes(role)))) throw new Error('Choose an active team member or Unassigned.')
+    assignedName = nextMember?.name ?? 'Unassigned'
+    if (assignedUserId) {
+      const start = new Date(tasting.scheduledAt)
+      const end = getTastingEndTime(start, tasting.endAt)
+      const [conflict] = await db.select({ id: tastings.id }).from(tastings).where(and(
+        eq(tastings.assignedUserId, assignedUserId), sql`${tastings.id} <> ${tastingId}::uuid`,
+        sql`${tastings.status} IN ('scheduled', 'confirmed')`,
+        sql`${tastings.scheduledAt} < ${end.toISOString()}::timestamptz`,
+        sql`COALESCE(${tastings.endAt}, ${tastings.scheduledAt} + interval '2 hours') > ${start.toISOString()}::timestamptz`,
+      )).limit(1)
+      if (conflict) throw new Error('This team member has an overlapping tasting. Choose another member or Unassigned.')
+    }
+    // Update the single canonical assignment before touching notification services.
+    const [saved] = await db.update(tastings).set({ assignedUserId, status: tasting.assignedUserId !== assignedUserId || tasting.status === 'requested' ? 'scheduled' : tasting.status })
+      .where(and(eq(tastings.id, tastingId), eq(tastings.status, tasting.status), tasting.assignedUserId ? eq(tastings.assignedUserId, tasting.assignedUserId) : isNull(tastings.assignedUserId))).returning({ id: tastings.id })
+    if (!saved) throw new Error('The tasting changed while you were editing. Reload and try again.')
+    refreshTastingViews(tasting.customerId, tastingId)
+    if (tasting.assignedUserId !== assignedUserId) after(async () => {
+      try {
+        await clearScheduledTastingSmsJobs(tastingId)
+        if (tasting.assignedUserId) {
+          await clearUserNotifications({ userId: tasting.assignedUserId, href: `/taster/tastings/${tastingId}`, kinds: ['tasting_assigned', 'tasting_report_reminder'] })
+          const [previous] = await db.select({ phone: users.phone }).from(users).where(eq(users.id, tasting.assignedUserId))
+          if (previous?.phone) await notify('tasting.status_changed', { tasterEmail: '', tasterPhone: previous.phone, storeName: tasting.eventName, status: 'cancelled', scheduledAt: tasting.scheduledAt, tastingId, userId: null })
+        }
+        await logActivityEvent({ entityType: 'tasting', entityId: tastingId, actorUserId: session.user.id, relatedUserId: assignedUserId, kind: 'tasting_reassigned', title: 'Tasting reassigned', body: `${tasting.eventName} was assigned to ${assignedName}.` })
+        if (!nextMember) return
+        const prefs = await getUserPreferences(nextMember.id)
+        const storeAddress = [tasting.storeAddress, tasting.storeCity, tasting.storeState, tasting.storeZip].filter(Boolean).join(', ')
+        if (nextMember.phone && prefs.smsNotificationsEnabled) await queueScheduledTastingSmsJobs({ ...formatTastingSmsPayload({ tastingId, userId: nextMember.id, phoneNumber: nextMember.phone, storeName: tasting.eventName, storeAddress, timeZone: 'timeZone' in tasting ? tasting.timeZone : undefined, scheduledAt: tasting.scheduledAt, endAt: tasting.endAt }), scheduledAt: tasting.scheduledAt, endAt: tasting.endAt })
+        await notify('tasting.taster_assigned', { tasterName: nextMember.name, tasterEmail: prefs.emailNotificationsEnabled ? nextMember.email : '', tasterPhone: prefs.smsNotificationsEnabled ? nextMember.phone : null, storeName: tasting.eventName, storeAddress, timeZone: 'timeZone' in tasting ? tasting.timeZone : undefined, scheduledAt: tasting.scheduledAt, endAt: tasting.endAt, notes: tasting.notes, tastingId, userId: prefs.inAppNotificationsEnabled ? nextMember.id : null })
+      } catch (error) { console.error('Reassignment saved; notification failed:', error) }
     })
-    .from(tastings)
-    .innerJoin(users, eq(tastings.assignedUserId, users.id))
-    .where(eq(tastings.id, tastingId))
-    .limit(1)
-    .catch(async (error) => {
-      if (!isMissingTrainingDayColumn(error)) throw error
-
-      const rows = await db
-        .select({
-          id: tastings.id,
-          eventName: tastings.eventName,
-          scheduledAt: tastings.scheduledAt,
-          endAt: tastings.endAt,
-          storeAddress: tastings.storeAddress,
-          storeCity: tastings.storeCity,
-          storeState: tastings.storeState,
-          storeZip: tastings.storeZip,
-          customerId: tastings.customerId,
-          assignedUserId: tastings.assignedUserId,
-          status: tastings.status,
-          currentTasterName: users.name,
-          currentTasterPhone: users.phone,
-        })
-        .from(tastings)
-        .innerJoin(users, eq(tastings.assignedUserId, users.id))
-        .where(eq(tastings.id, tastingId))
-        .limit(1)
-
-      return rows.map((row) => ({ ...row, trainingDay: false }))
-    })
-
-  if (!tasting) {
-    redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('Tasting not found.')}`)
-  }
-
-  if (tasting.assignedUserId === nextAssignedUserId) {
-    redirect(`${tastingRedirectPath(mode)}?success=${encodeURIComponent('Tasting already assigned to that taster.')}`)
-  }
-
-  if (TERMINAL_TASTING_STATUSES.has(tasting.status as TastingStatus)) {
-    redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('Closed tastings cannot be reassigned.')}`)
-  }
-
-  const [nextTaster] = await db
-    .select({ id: users.id, name: users.name, phone: users.phone, email: users.email, roles: users.roles, active: users.active })
-    .from(users)
-    .where(eq(users.id, nextAssignedUserId))
-    .limit(1)
-
-  if (!nextTaster || !nextTaster.active || !(nextTaster.roles ?? []).includes('taster')) {
-    redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent('Choose a valid taster account.')}`)
-  }
-
-  const reassignmentError = await validateTastingWindow({
-    customerId: tasting.customerId,
-    assignedUserId: nextTaster.id,
-    scheduledAt: new Date(tasting.scheduledAt),
-    endAt: tasting.endAt ? new Date(tasting.endAt) : null,
-    trainingDay: tasting.trainingDay,
-    excludeTastingId: tastingId,
-  })
-  if (reassignmentError) {
-    redirect(`${tastingRedirectPath(mode)}?error=${encodeURIComponent(reassignmentError)}`)
-  }
-
-  await db.update(tastings).set({
-    assignedUserId: nextTaster.id,
-  }).where(eq(tastings.id, tastingId))
-  await logActivityEvent({
-    entityType: 'tasting',
-    entityId: tastingId,
-    actorUserId: session.user.id,
-    relatedUserId: nextTaster.id,
-    kind: 'tasting_reassigned',
-    title: 'Tasting reassigned',
-    body: `${tasting.eventName} was reassigned to ${nextTaster.name}.`,
-  })
-
-  await clearScheduledTastingSmsJobs(tasting.id)
-
-  // Notify previous taster of reassignment (plain SMS only — no email/in-app)
-  if (tasting.currentTasterPhone) {
-    await notify('tasting.status_changed', {
-      tasterEmail: '',
-      tasterPhone: tasting.currentTasterPhone,
-      storeName: tasting.eventName,
-      status: 'cancelled',
-      scheduledAt: tasting.scheduledAt,
-      tastingId: tasting.id,
-      userId: null,
-    })
-  }
-
-  await clearUserNotifications({
-    userId: tasting.assignedUserId,
-    href: `/taster/tastings/${tasting.id}`,
-    kinds: ['tasting_assigned', 'tasting_report_reminder'],
-  })
-
-  const storeAddress = [tasting.storeAddress, tasting.storeCity, tasting.storeState, tasting.storeZip].filter(Boolean).join(', ') || 'Store address not provided'
-
-  if (nextTaster.phone) {
-    await queueScheduledTastingSmsJobs({
-      ...formatTastingSmsPayload({
-        tastingId: tasting.id,
-        userId: nextTaster.id,
-        phoneNumber: nextTaster.phone,
-        storeName: tasting.eventName,
-        storeAddress,
-        scheduledAt: tasting.scheduledAt,
-        endAt: tasting.endAt,
-      }),
-      scheduledAt: tasting.scheduledAt,
-      endAt: tasting.endAt,
-    })
-  }
-
-  await notify('tasting.taster_assigned', {
-    tasterName: nextTaster.name,
-    tasterEmail: nextTaster.email ?? '',
-    tasterPhone: nextTaster.phone,
-    storeName: tasting.eventName,
-    storeAddress,
-    scheduledAt: tasting.scheduledAt,
-    endAt: tasting.endAt,
-    notes: null,
-    tastingId: tasting.id,
-    userId: nextTaster.id,
-  })
-
-  revalidatePath('/admin/tastings')
-  revalidatePath('/staff/tastings')
-  revalidatePath('/taster/tastings')
-  revalidatePath('/taster/payouts')
-  revalidatePath(`/admin/tastings/${tastingId}`)
-
-  const redirectTo = formData.get('redirectTo') as string | null
-  if (redirectTo?.startsWith('/')) {
-    redirect(`${redirectTo}?success=${encodeURIComponent('Tasting reassigned and tasters notified.')}`)
-  }
-  redirect(`${tastingRedirectPath(mode)}?success=${encodeURIComponent('Tasting reassigned and tasters notified.')}`)
+  } catch (error) { errorMessage = error instanceof Error ? error.message : 'Unable to reassign. Reload and try again.' }
+  redirect(`${base}?${errorMessage ? `error=${encodeURIComponent(errorMessage)}` : `success=${encodeURIComponent(`Assignment saved: ${assignedName}.`)}`}`)
 }
 
 function normalizeTastingPhotoUrl(value: string | null | undefined) {
@@ -1318,7 +1207,7 @@ export async function submitTastingReport(formData: FormData) {
     inventorySyncNote = 'Inventory could not be updated automatically — record the count on the account.'
   }
 
-  await clearUserNotifications({
+  if (tasting.assignedUserId) await clearUserNotifications({
     userId: tasting.assignedUserId,
     href: `/taster/tastings/${tastingId}`,
     kinds: ['tasting_report_reminder'],
@@ -1341,7 +1230,7 @@ export async function submitTastingReport(formData: FormData) {
   const [assignedUser] = await db
     .select({ phone: users.phone, email: users.email, name: users.name })
     .from(users)
-    .where(eq(users.id, tasting.assignedUserId))
+    .where(eq(users.id, tasting.assignedUserId ?? session.user.id))
     .limit(1)
 
   if (assignedUser?.phone && tastingInfo) {
@@ -1349,7 +1238,7 @@ export async function submitTastingReport(formData: FormData) {
       templateKey: 'report_received',
       payload: formatTastingSmsPayload({
         tastingId,
-        userId: tasting.assignedUserId,
+        userId: tasting.assignedUserId ?? session.user.id,
         phoneNumber: assignedUser.phone,
         storeName: tastingInfo.eventName,
         storeAddress: [tastingInfo.storeAddress, tastingInfo.storeCity, tastingInfo.storeState, tastingInfo.storeZip].filter(Boolean).join(', ') || 'Store address not provided',
@@ -1379,6 +1268,7 @@ export async function submitTastingReport(formData: FormData) {
     })
   }
 
+  refreshTastingViews()
   revalidatePath('/admin/tastings')
   revalidatePath('/staff/tastings')
   revalidatePath('/taster/tastings')
@@ -1441,6 +1331,7 @@ export async function updateTastingObjective(formData: FormData) {
   })
 
   revalidatePath(`/admin/tastings/${tasting.id}`)
+  refreshTastingViews()
   revalidatePath('/admin/tastings')
   revalidatePath('/admin/pull-through/tastings')
   revalidatePath(`/admin/crm/${tasting.customerId}`)
@@ -1660,6 +1551,7 @@ export async function submitTasterInvoice(formData: FormData) {
     notes: payload.notes,
   })
 
+  refreshTastingViews()
   revalidatePath('/admin/tastings')
   revalidatePath('/admin/invoicing')
   revalidatePath('/staff/tastings')
@@ -1730,7 +1622,17 @@ export async function getTastingsForView({
 }: {
   assignedUserId?: string
 }) {
-  return getTastingsForViewWithFallback({ assignedUserId })
+  const session = await requireFeature('tastings', 'admin', 'staff', 'taster', 'sales_rep', 'sales_manager')
+  const roles = session.user.roles
+  if (roles.some(role => ['admin', 'staff', 'sales_manager'].includes(role))) return getTastingsForViewWithFallback({ assignedUserId })
+  if (roles.includes('sales_rep')) {
+    const memberId = await getSalesMemberIdForUser(session.user.id)
+    if (!memberId) return []
+    const accounts = await db.select({ id: customerAccounts.id }).from(customerAccounts).where(eq(customerAccounts.assignedSalesRepId, memberId))
+    const ids = new Set(accounts.map(account => account.id))
+    return (await getTastingsForViewWithFallback({ assignedUserId })).filter(tasting => ids.has(tasting.customerId))
+  }
+  return getTastingsForViewWithFallback({ assignedUserId: session.user.id })
 }
 
 // ─── Scheduling Assistant ─────────────────────────────────────────────────────
@@ -1938,6 +1840,7 @@ export async function requestTastingFromRep({
   ])
 
   revalidatePath('/sales/tastings')
+  refreshTastingViews()
   revalidatePath('/admin/tastings')
   revalidatePath('/staff/tastings')
   return { success: true }

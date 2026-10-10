@@ -11,6 +11,8 @@ const BUSINESS_TYPE_DEFINITIONS = [
   { value: 'Convenience Store', aliases: ['convenience store', 'convenience_store'] },
   { value: 'Country Club', aliases: ['country club', 'country_club'] },
   { value: 'Casino', aliases: ['casino'] },
+  { value: 'Distributor', aliases: ['distributor'] },
+  { value: 'Distiller/Producer', aliases: ['distiller', 'producer', 'distillery', 'distiller/producer'] },
   { value: 'Wholesaler', aliases: ['wholesaler'] },
   { value: 'Other', aliases: ['other', 'catering', 'catering company', 'catering_company'] },
 ] as const

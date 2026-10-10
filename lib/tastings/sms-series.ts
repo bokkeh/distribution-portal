@@ -118,6 +118,7 @@ You can view your activity in the portal:
 type TemplateKey = typeof TASTING_SMS_SEQUENCE[number]['key']
 
 type SmsPayload = {
+  timeZone?: string
   tastingId: string
   userId: string
   phoneNumber: string
@@ -147,18 +148,20 @@ export function formatTastingSmsPayload(input: {
   storeAddress: string
   scheduledAt: Date
   endAt: Date | null
+  timeZone?: string
 }): SmsPayload {
   const scheduledAt = new Date(input.scheduledAt)
   const endAt = input.endAt ? new Date(input.endAt) : null
   return {
+    timeZone: input.timeZone,
     tastingId: input.tastingId,
     userId: input.userId,
     phoneNumber: input.phoneNumber,
     store_name: input.storeName,
     store_address: input.storeAddress,
-    date: formatEasternDate(scheduledAt),
-    start_time: formatEasternTime(scheduledAt),
-    time_range: formatEasternTimeRange(scheduledAt, endAt),
+    date: formatEasternDate(scheduledAt, input.timeZone),
+    start_time: formatEasternTime(scheduledAt, input.timeZone),
+    time_range: formatEasternTimeRange(scheduledAt, endAt, input.timeZone),
   }
 }
 
@@ -245,9 +248,9 @@ export async function clearScheduledTastingSmsJobs(tastingId: string) {
     .where(and(eq(scheduledSmsJobs.tastingId, tastingId), eq(scheduledSmsJobs.status, 'pending')))
 }
 
-export async function queueScheduledTastingSmsJobs(payload: SmsPayload & { scheduledAt: Date; endAt: Date | null }) {
+export async function queueScheduledTastingSmsJobs(payload: SmsPayload & { scheduledAt: Date; endAt: Date | null; timeZone?: string }) {
   const startAt = new Date(payload.scheduledAt)
-  const jobs = Object.entries(getTastingSmsSchedule(startAt, payload.endAt ? new Date(payload.endAt) : null))
+  const jobs = Object.entries(getTastingSmsSchedule(startAt, payload.endAt ? new Date(payload.endAt) : null, payload.timeZone))
     .map(([templateKey, sendAt]) => ({ templateKey, sendAt }))
 
   const now = Date.now()

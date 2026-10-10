@@ -243,7 +243,7 @@ export function AccountEditForm({
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="space-y-2">
-          <Label htmlFor={`${mode}-customerSegment`}>Customer Segment</Label>
+          <Label htmlFor={`${mode}-customerSegment`}>Commercial segment</Label>
           <select
             id={`${mode}-customerSegment`}
             name="customerSegment"
@@ -268,7 +268,7 @@ export function AccountEditForm({
           </select>
         </div>
         <div className="space-y-2">
-          <Label htmlFor={`${mode}-businessType`}>Business Type</Label>
+          <Label htmlFor={`${mode}-businessType`}>Organization type</Label>
           <select
             id={`${mode}-businessType`}
             name="businessType"

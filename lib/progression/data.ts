@@ -300,6 +300,7 @@ export async function loadProgressionDataset(): Promise<ProgressionDataset> {
 
   const tastingsByUser = new Map<string, TastingRow[]>()
   for (const row of tastingRows) {
+    if (!row.t.assignedUserId) continue
     const list = tastingsByUser.get(row.t.assignedUserId) ?? []
     list.push({
       id: row.t.id,

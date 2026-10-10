@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { db } from '@/db'
@@ -81,7 +81,7 @@ export default async function TasterTastingDetailPage({
       db.select().from(tastingReports).where(eq(tastingReports.tastingId, tastingId)).then(r => r[0] ?? null),
       db.select().from(tastingReportPhotoDrafts).where(eq(tastingReportPhotoDrafts.tastingId, tastingId)).then(rows => rows[0] ?? null),
       db.select().from(tasterInvoices).where(eq(tasterInvoices.tastingId, tastingId)).then(rows => rows[0] ?? null),
-      db.select({ phone: users.phone, tasterHourlyRate: users.tasterHourlyRate }).from(users).where(eq(users.id, tasting.assignedUserId)).then(rows => rows[0] ?? null),
+      db.select({ phone: users.phone, tasterHourlyRate: users.tasterHourlyRate }).from(users).where(sql`${users.id} = ${tasting.assignedUserId}::uuid`).then(rows => rows[0] ?? null),
     ])
 
     const timeline = await getActivityTimeline('tasting', tasting.id, [

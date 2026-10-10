@@ -70,6 +70,7 @@ export default async function SalesTastingsPage({
     if (accountIds.length === 0) {
       return (
         <div className="space-y-6">
+      <Link href="/sales/tastings/schedule" className="inline-flex rounded-md bg-primary px-4 py-2 text-white">Quick schedule tasting</Link>
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Tasting ROI</h1>
             <p className="text-slate-500 mt-1">Revenue impact from in-store tastings</p>
@@ -170,6 +171,7 @@ export default async function SalesTastingsPage({
 
     return (
       <div className="space-y-6">
+      <Link href="/sales/tastings/schedule" className="inline-flex rounded-md bg-primary px-4 py-2 text-white">Quick schedule tasting</Link>
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Tasting ROI</h1>
@@ -335,6 +337,7 @@ export default async function SalesTastingsPage({
 
     return (
       <div className="space-y-6">
+      <Link href="/sales/tastings/schedule" className="inline-flex rounded-md bg-primary px-4 py-2 text-white">Quick schedule tasting</Link>
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Tasting ROI</h1>
           <p className="text-slate-500 mt-1">Revenue impact from in-store tastings (60-day window)</p>
