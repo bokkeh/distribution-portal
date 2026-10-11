@@ -262,22 +262,32 @@ export async function saveFieldPhoto(input: { requestId: string; accountId: stri
   } catch { return { error: 'Could not confirm photo save. Your upload is kept; retry saving the same photo.' } }
 }
 
-export async function getFieldAccountTasks(accountId: string) {
-  const { session } = await fieldAccount(accountId)
+async function fieldTaskList(session: Awaited<ReturnType<typeof fieldContext>>['session'], input: { accountId?: string; includeOrganization: boolean; completedLimit: number }) {
   const [tasks, team] = await Promise.all([
-    getTasksForView({ userId: session.user.id, roles: session.user.roles, accountId, includeOrganization: true, limit: 100 }),
+    getTasksForView({ userId: session.user.id, roles: session.user.roles, accountId: input.accountId, includeOrganization: input.includeOrganization, limit: 200 }),
     db.select({ id: users.id, name: users.name, roles: users.roles }).from(users).where(eq(users.active, true)).orderBy(asc(users.name)),
   ])
   return {
     currentUserId: session.user.id,
     open: tasks.filter(task => task.status === 'open' || task.status === 'in_progress'),
-    completed: tasks.filter(task => task.status === 'completed').sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? '')).slice(0, 5),
+    completed: tasks.filter(task => task.status === 'completed').sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? '')).slice(0, input.completedLimit),
     assignees: team.filter(user => user.roles.some(role => (TASK_ROLES as readonly string[]).includes(role))).map(({ id, name }) => ({ id, name })),
   }
 }
 
+export async function getFieldAccountTasks(accountId: string) {
+  const { session } = await fieldAccount(accountId)
+  return fieldTaskList(session, { accountId, includeOrganization: true, completedLimit: 5 })
+}
+
+/** The same task list as the portal Tasks page: mine (assigned to or created by me), or everyone's for CRM managers. */
+export async function getFieldMyTasks(scope: 'mine' | 'everyone' = 'mine') {
+  const { session, managesAll } = await fieldContext()
+  return { ...(await fieldTaskList(session, { includeOrganization: managesAll && scope === 'everyone', completedLimit: 10 })), canViewEveryone: managesAll, scope: managesAll ? scope : 'mine' as const }
+}
+
 const fieldTaskSchema = z.object({
-  requestId: z.uuid(), accountId: z.uuid(),
+  requestId: z.uuid(), accountId: z.union([z.uuid(), z.literal('')]).default(''),
   title: z.string().trim().min(1, 'Enter what needs to be done.').max(200),
   description: z.string().trim().max(4000).default(''),
   dueAt: z.iso.datetime({ offset: true, error: 'Choose a due date and time.' }),
@@ -292,21 +302,25 @@ export async function createFieldTask(raw: FieldTaskInput) {
   if (!parsed.success) return { error: parsed.error.issues[0].message }
   const input = parsed.data
   try {
-    await fieldAccount(input.accountId)
-    const result = await createTask({ requestId: input.requestId, accountId: input.accountId, title: input.title, description: input.description || null, dueAt: input.dueAt, priority: input.priority, contactId: input.contactId || null, assignedToUserId: input.assignedToUserId || null })
+    // Tasks without an account are general to-dos, like tasks added from the portal Tasks page.
+    if (input.accountId) await fieldAccount(input.accountId); else await fieldContext()
+    const result = await createTask({ requestId: input.requestId, accountId: input.accountId || null, title: input.title, description: input.description || null, dueAt: input.dueAt, priority: input.priority, contactId: input.contactId || null, assignedToUserId: input.assignedToUserId || null })
     if ('error' in result) return { error: result.error }
+    if (!input.accountId) return { success: true as const, tasks: null }
     refreshFieldAccount(input.accountId)
     return { success: true as const, tasks: await getFieldAccountTasks(input.accountId) }
   } catch { return { error: 'Could not confirm task save. Your details are kept; retry the same entry to avoid duplicates.' } }
 }
 
-export async function setFieldTaskStatus(accountId: string, taskId: string, status: 'open' | 'completed') {
+/** With an account, the task must belong to it; without one (My tasks), the portal task permissions decide. */
+export async function setFieldTaskStatus(accountId: string | null, taskId: string, status: 'open' | 'completed') {
   try {
-    await fieldAccount(accountId)
+    if (accountId) await fieldAccount(accountId); else await fieldContext()
     const [task] = await db.select({ accountId: crmTasks.accountId }).from(crmTasks).where(eq(crmTasks.id, taskId)).limit(1)
-    if (!task || task.accountId !== accountId) return { error: 'This task is no longer linked to this account. Refresh tasks.' }
+    if (!task || (accountId && task.accountId !== accountId)) return { error: 'This task is no longer linked to this account. Refresh tasks.' }
     const result = await updateTaskStatus(taskId, status)
     if ('error' in result) return { error: result.error }
+    if (!accountId) return { success: true as const, tasks: null }
     refreshFieldAccount(accountId)
     return { success: true as const, tasks: await getFieldAccountTasks(accountId) }
   } catch { return { error: 'Could not confirm the task update. Refresh tasks and retry.' } }

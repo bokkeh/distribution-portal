@@ -26,7 +26,7 @@ async function main() {
   let avatarBroken=false
   const rpc = names => `const call = async (name,args) => { const r = await fetch('/action/'+name,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(args)}); const data=await r.json(); if(!r.ok) throw new Error(data.error); return data }; ${names.map(name => `export const ${name} = (...args) => call('${name}',args);`).join('\n')}`
   const stubs = {
-    '@/actions/field-data': rpc(['createFieldAccount','createFieldContact','updateFieldContact','updateFieldAccountContact','getFieldAccount','getFieldAccountTastings','getFieldAccountOrders','getFieldAccountTasks','createFieldTask','setFieldTaskStatus','searchFieldAccounts','saveFieldNote','saveFieldPhoto','getFieldAvailability']),
+    '@/actions/field-data': rpc(['createFieldAccount','createFieldContact','updateFieldContact','updateFieldAccountContact','getFieldAccount','getFieldAccountTastings','getFieldAccountOrders','getFieldAccountTasks','getFieldMyTasks','createFieldTask','setFieldTaskStatus','searchFieldAccounts','saveFieldNote','saveFieldPhoto','getFieldAvailability']),
     '@/actions/field-documents': rpc(['quoteFieldDocument','saveFieldDocument','sendFieldInvoice','getFieldDocument','startFieldCardPayment']),
     '@/actions/quick-schedule-tasting': rpc(['quickScheduleTasting']),
     '@/actions/account-observations': rpc(['saveAccountObservations']).replace("call('saveAccountObservations',args)", "call('saveAccountObservations',[Object.fromEntries(args[0])])"),
@@ -211,6 +211,20 @@ async function main() {
       await page.getByRole('button',{name:'Complete Bring reorder sheet '+width,exact:true}).click()
       await page.getByText('Bring reorder sheet '+width+' completed.').waitFor()
       await page.getByRole('heading',{name:'Recently completed'}).waitFor()
+      await page.getByRole('button',{name:'Back to field tasks'}).click()
+      await page.getByRole('button',{name:'My tasks',exact:true}).click()
+      await page.getByRole('heading',{name:'My tasks',exact:true}).waitFor()
+      await page.getByRole('button',{name:'Add general task',exact:true}).click()
+      await page.getByLabel('What needs to be done?').fill('Call distributor '+width)
+      await page.getByRole('button',{name:'Save task',exact:true}).click()
+      await page.getByText('Task saved.',{exact:true}).waitFor()
+      await page.getByRole('heading',{name:'Call distributor '+width,exact:true}).waitFor()
+      await page.getByRole('button',{name:'Reopen Bring reorder sheet '+width,exact:true}).click()
+      await page.getByText('Bring reorder sheet '+width+' reopened.').waitFor()
+      await page.getByRole('button',{name:'Open account · Test Venue'}).first().click()
+      await page.getByRole('heading',{name:'Tasks',exact:true}).waitFor()
+      await page.getByRole('button',{name:'Complete Bring reorder sheet '+width,exact:true}).click()
+      await page.getByText('Bring reorder sheet '+width+' completed.').waitFor()
       await page.getByRole('button',{name:'Back to field tasks'}).click()
       await page.getByRole('button',{name:'Contact information Key points of contact',exact:true}).click()
       await page.getByRole('heading',{name:contactName,exact:true}).waitFor()

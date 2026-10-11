@@ -13,7 +13,7 @@ import { FieldDocumentForm, type FieldDocumentDraft, type FieldProduct, type Sav
 import { FieldCardPayment } from './FieldCardPayment'
 import { FieldPhotos } from './FieldPhotos'
 import { FieldContacts } from './FieldContacts'
-import { FieldTasks } from './FieldTasks'
+import { FieldMyTasks, FieldMyTasksButton, FieldTasks } from './FieldTasks'
 import { FieldAccountTastings } from './FieldAccountTastings'
 import { FieldAccountOrders } from './FieldAccountOrders'
 import { FieldAccountForm } from './FieldAccountForm'
@@ -75,6 +75,7 @@ export function FieldHub({ bootstrap, availability, initialAccount = null, initi
   const [documentDrafts, setDocumentDrafts] = useState<Record<string, FieldDocumentDraft>>({})
   const [documentBack, setDocumentBack] = useState(0), [documentBusy, setDocumentBusy] = useState(false), [documentReviewing, setDocumentReviewing] = useState(false)
   const [addingAccount, setAddingAccount] = useState(false), [accountMessage, setAccountMessage] = useState('')
+  const [myTasks, setMyTasks] = useState(false)
   useEffect(() => {
     if (!searching) return
     let active = true
@@ -101,6 +102,10 @@ export function FieldHub({ bootstrap, availability, initialAccount = null, initi
   return <div className="min-h-dvh bg-[#faf9f6] pb-[max(2rem,env(safe-area-inset-bottom))]">
     <header className="sticky top-0 z-20 bg-[#120f0e] px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top))] text-white"><div className="mx-auto flex max-w-2xl items-center gap-3"><Image src="/brand/logo-badge.png" alt="AHAWC" width={44} height={44} className="rounded-lg" /><div className="flex-1"><p className="font-display text-2xl font-bold uppercase">Field notes</p><p className="text-xs text-stone-300">{bootstrap.userName} · At your client</p></div><span className="rounded-full bg-orange-500/20 px-3 py-1 text-xs text-orange-200">AHAWC / Wisher</span></div></header>
     <main className="mx-auto max-w-2xl space-y-5 p-4">
+      {myTasks ? <>
+        <Button variant="outline" className="h-12 w-full justify-start" onClick={() => setMyTasks(false)}><ArrowLeft className="size-5" /> {account && !searching ? `Back to ${account.companyName}` : 'Back to accounts'}</Button>
+        <FieldMyTasks onOpenAccount={async accountId => { const selected = await getFieldAccount(accountId); setAccount(selected); setSaved(null); setRecipientEmail(''); setDeliveryMessage(''); setAccountMessage(''); setSearching(false); setAddingAccount(false); setView('tasks'); setMyTasks(false); window.history.replaceState(null, '', '/field') }} />
+      </> : <>
       <section className="rounded-2xl border bg-white p-4">
         {addingAccount ? <FieldAccountForm initialName={query} onCancel={() => setAddingAccount(false)} onSelected={(selected, created) => { setAccount(selected); setSearching(false); setAddingAccount(false); setView('home'); setSaved(null); setRecipientEmail(''); setDeliveryMessage(''); setError(''); setAccountMessage(created ? `${selected.companyName} saved. Ready for field tasks.` : ''); window.history.replaceState(null, '', '/field') }} /> : account && !searching ? <div className="flex items-start gap-3"><div className="min-w-0 flex-1"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Working with</p><h1 className="mt-1 break-words text-xl font-bold">{account.companyName}</h1><p className="mt-1 text-sm text-muted-foreground">{[account.address, account.city, account.state].filter(Boolean).join(', ') || 'Address not entered'}</p></div><Button variant="outline" className="h-12" disabled={documentBusy} onClick={() => { setSearching(true); setQuery(''); setAccountMessage('') }}>Change</Button></div> : <>
           <label htmlFor="field-search" className="mb-2 block text-lg font-semibold">Find the account</label><div className="relative"><Search className="pointer-events-none absolute left-4 top-4 size-5 text-muted-foreground" /><input id="field-search" type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Account, city or street…" autoComplete="off" className="h-14 w-full rounded-xl border bg-white pl-12 pr-4 text-base" /></div>
@@ -117,6 +122,7 @@ export function FieldHub({ bootstrap, availability, initialAccount = null, initi
         </>}
         {error ? <p role="alert" className="mt-3 text-sm text-red-700">{error}</p> : null}
       </section>
+      {!addingAccount && (searching || view === 'home') ? <FieldMyTasksButton onOpen={() => setMyTasks(true)} /> : null}
       {accountMessage && !searching ? <p role="status" className="rounded-xl bg-emerald-50 p-3 text-emerald-800">{accountMessage}</p> : null}
       {!addingAccount && !searching && account ? <>
         {view !== 'home' ? <Button variant="outline" className="h-12 w-full justify-start" disabled={documentBusy} onClick={() => { if ((view === 'order' || view === 'invoice') && documentReviewing) setDocumentBack(value => value + 1); else goHome() }}><ArrowLeft className="size-5" /> {(view === 'order' || view === 'invoice') && documentReviewing ? 'Back to edit entry' : (view === 'order' || view === 'invoice') ? 'Back to field tasks · keep draft' : 'Back to field tasks'}</Button> : null}{(view === 'order' || view === 'invoice') && documentReviewing ? <Button variant="outline" className="h-12 w-full justify-start" disabled={documentBusy} onClick={goHome}><Home className="size-5" /> Field tasks · keep draft</Button> : null}
@@ -141,6 +147,7 @@ export function FieldHub({ bootstrap, availability, initialAccount = null, initi
         </div> : null}
         <Link href="/field" onClick={event => { event.preventDefault(); if (documentBusy) return; setSearching(true); setView('home'); setAccount(null); setSaved(null); window.history.replaceState(null, '', '/field') }} className="flex min-h-12 items-center justify-center text-sm text-muted-foreground underline">Next client · choose another account</Link>
       </> : <p className="px-2 text-sm text-muted-foreground">Choose a client to schedule, order, invoice, or capture field notes.</p>}
+      </>}
     </main>
   </div>
 }
