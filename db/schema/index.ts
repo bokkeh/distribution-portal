@@ -62,3 +62,4 @@ export * from './hubspotCompanyPipelineStages'
 export * from './progression'
 
 export * from './fieldDocuments'
+export * from './communityRecipeEmails'
