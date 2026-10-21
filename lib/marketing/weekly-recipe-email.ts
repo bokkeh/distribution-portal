@@ -1,4 +1,4 @@
-import { desc, eq, gt, ne, or } from 'drizzle-orm'
+import { and, count, desc, eq, gt, lt, ne, or } from 'drizzle-orm'
 import { Resend } from 'resend'
 import { db } from '@/db'
 import { communityContactCommunications, communityContacts, communityRecipeEmails } from '@/db/schema'
@@ -304,6 +304,34 @@ export async function buildWeeklyRecipePreview({ handle, now = new Date() }: { h
   return {
     recipe,
     ...renderWeeklyRecipeEmail({ recipe, firstName: 'Friend', unsubscribeUrl: '#', sendDate: now, variant: history.length }),
+  }
+}
+
+/**
+ * Re-renders the email a past week's send used: same recipe, send date and subject/intro rotation.
+ * Personal details are placeholders. Returns null if the week wasn't sent or the recipe left wishervodka.com.
+ */
+export async function buildSentRecipeEmailPreview(weekKey: string) {
+  const [run] = await db.select().from(communityRecipeEmails).where(eq(communityRecipeEmails.weekKey, weekKey)).limit(1)
+  if (!run) return null
+
+  const [recipes, [earlier]] = await Promise.all([
+    fetchWisherRecipes(),
+    // The variant at send time was the number of counted sends before this one.
+    db
+      .select({ total: count() })
+      .from(communityRecipeEmails)
+      .where(and(
+        lt(communityRecipeEmails.createdAt, run.createdAt),
+        or(ne(communityRecipeEmails.status, 'failed'), gt(communityRecipeEmails.sentCount, 0)),
+      )),
+  ])
+  const recipe = recipes.find((item) => item.handle === run.recipeHandle)
+  if (!recipe) return null
+
+  return {
+    recipe,
+    ...renderWeeklyRecipeEmail({ recipe, firstName: 'Friend', unsubscribeUrl: '#', sendDate: run.createdAt, variant: earlier?.total ?? 0 }),
   }
 }
 

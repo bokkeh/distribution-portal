@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { db } from '@/db'
 import { activityEvents, communityContacts, communityRecipeEmails } from '@/db/schema'
+import { RecipeEmailTrendChart, type RecipeEmailTrendPoint } from '@/components/marketing/RecipeEmailTrendChart'
 import { requireFeature } from '@/lib/auth/session'
 import {
   COMMUNITY_UNSUBSCRIBE_KIND,
@@ -84,6 +85,13 @@ export default async function RecipeEmailsPage() {
   const subscribed = statusCounts.find((row) => row.status === 'subscribed')?.total ?? 0
   const unsubscribed = statusCounts.find((row) => row.status === 'unsubscribed')?.total ?? 0
   const totalSent = (sends ?? []).reduce((sum, row) => sum + row.sentCount, 0)
+  const trend: RecipeEmailTrendPoint[] = [...(sends ?? [])].reverse().map((row) => ({
+    week: new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(`${row.weekKey}T12:00:00Z`)),
+    sent: row.sentCount,
+    unsubscribed: row.unsubscribeCount,
+    complaints: row.complaintCount,
+    bounced: row.bounceCount,
+  }))
 
   return (
     <div className="space-y-6 bg-[#f4f1ed] p-4 sm:p-8">
@@ -114,6 +122,13 @@ export default async function RecipeEmailsPage() {
       </div>
 
       <Card className="shadow-none">
+        <CardHeader><CardTitle>Trends</CardTitle></CardHeader>
+        <CardContent>
+          {trend.length ? <RecipeEmailTrendChart data={trend} /> : <p className="text-sm text-slate-500">Charts appear after the first weekly email goes out.</p>}
+        </CardContent>
+      </Card>
+
+      <Card className="shadow-none">
         <CardHeader><CardTitle>Send history</CardTitle></CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -129,6 +144,7 @@ export default async function RecipeEmailsPage() {
                   <th className="px-4 py-3 text-right">Spam</th>
                   <th className="px-4 py-3 text-right">Unsubscribed</th>
                   <th className="px-4 py-3 text-right">Unsub rate</th>
+                  <th className="px-4 py-3 text-right"><span className="sr-only">Email</span></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -152,10 +168,13 @@ export default async function RecipeEmailsPage() {
                     <td className={`px-4 py-3 text-right tabular-nums ${row.complaintCount ? 'text-red-600' : 'text-slate-700'}`}>{row.complaintCount.toLocaleString()}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-slate-700">{row.unsubscribeCount.toLocaleString()}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-slate-700">{percent(row.unsubscribeCount + row.complaintCount, row.sentCount)}</td>
+                    <td className="px-4 py-3 text-right">
+                      <a href={`/api/admin/weekly-recipe-email/preview?week=${row.weekKey}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-[#ff5a00] hover:underline"><Eye className="h-3.5 w-3.5" />View email</a>
+                    </td>
                   </tr>
                 ))}
                 {!(sends ?? []).length ? (
-                  <tr><td colSpan={9} className="px-4 py-8 text-center text-slate-500">No weekly recipe emails have been sent yet. The first one goes out {formatDateTime(nextScheduledSend())} ET.</td></tr>
+                  <tr><td colSpan={10}className="px-4 py-8 text-center text-slate-500">No weekly recipe emails have been sent yet. The first one goes out {formatDateTime(nextScheduledSend())} ET.</td></tr>
                 ) : null}
               </tbody>
             </table>
