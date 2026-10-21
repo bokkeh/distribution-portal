@@ -16,6 +16,10 @@ export const communityRecipeEmails = pgTable('community_recipe_emails', {
   recipientCount: integer('recipient_count').notNull().default(0),
   sentCount: integer('sent_count').notNull().default(0),
   failedCount: integer('failed_count').notNull().default(0),
+  /** Incremented by the Resend webhook and unsubscribe route for emails tagged with this week. */
+  bounceCount: integer('bounce_count').notNull().default(0),
+  complaintCount: integer('complaint_count').notNull().default(0),
+  unsubscribeCount: integer('unsubscribe_count').notNull().default(0),
   error: text('error'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   completedAt: timestamp('completed_at', { withTimezone: true }),

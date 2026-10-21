@@ -8,6 +8,7 @@ import { fetchWisherRecipes, type WisherRecipe } from '@/lib/marketing/wisher-re
 /** A recipe is never re-sent while it is one of the last N emails (this also rules out back-to-back repeats). */
 export const RECIPE_NO_REPEAT_WINDOW = 5
 const BATCH_SIZE = 100
+export const WEEKLY_RECIPE_TAG = 'weekly_recipe'
 
 const ORDER_URL = 'https://pstreetwines.com/product/wisher-vodka-750-ml/'
 const WISHER_HOME_URL = 'https://wishervodka.com/'
@@ -295,7 +296,8 @@ async function getRecipeSendHistory() {
 }
 
 export async function buildWeeklyRecipePreview({ handle, now = new Date() }: { handle?: string | null; now?: Date } = {}) {
-  const [recipes, history] = await Promise.all([fetchWisherRecipes(), getRecipeSendHistory()])
+  // Previewing shouldn't require the migration; with no history the first pick is shown.
+  const [recipes, history] = await Promise.all([fetchWisherRecipes(), getRecipeSendHistory().catch(() => [])])
   const weekKey = getRecipeWeekKey(now)
   const recipe = handle ? recipes.find((item) => item.handle === handle) : selectNextRecipe(recipes, history, weekKey)
   if (!recipe) return null
@@ -356,7 +358,7 @@ export async function sendWeeklyRecipeEmail({ now = new Date() }: { now?: Date }
   for (let start = 0; start < contacts.length; start += BATCH_SIZE) {
     const batch = contacts.slice(start, start + BATCH_SIZE)
     const emails = batch.map((contact) => {
-      const unsubscribeUrl = portalUrl(`/api/community/unsubscribe?token=${encodeURIComponent(createCommunityUnsubscribeToken(contact.id))}`)
+      const unsubscribeUrl = portalUrl(`/api/community/unsubscribe?token=${encodeURIComponent(createCommunityUnsubscribeToken(contact.id))}&w=${weekKey}`)
       const content = renderWeeklyRecipeEmail({ recipe, firstName: contact.firstName, unsubscribeUrl, sendDate: now, variant })
       return {
         from,
@@ -365,6 +367,11 @@ export async function sendWeeklyRecipeEmail({ now = new Date() }: { now?: Date }
         html: content.html,
         text: content.text,
         ...(replyTo ? { replyTo } : {}),
+        // Read back by the Resend webhook to attribute bounces and complaints to this week's send.
+        tags: [
+          { name: 'campaign', value: WEEKLY_RECIPE_TAG },
+          { name: 'week', value: weekKey },
+        ],
         headers: {
           'List-Unsubscribe': `<${unsubscribeUrl}>`,
           'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',

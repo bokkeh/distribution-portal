@@ -41,7 +41,7 @@ export function CommunityContactsTable({ contacts }: { contacts: CommunityContac
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
         <div>
           <p className="font-semibold text-slate-900">Community contacts</p>
-          <p className="text-xs text-slate-500">{filtered.length} of {contacts.length} newsletter members</p>
+          <p className="text-xs text-slate-500">{filtered.length} of {contacts.length} newsletter members · <Link href="/admin/crm/community/recipe-emails" className="font-medium text-[#ff5a00] hover:underline">Weekly recipe emails</Link></p>
         </div>
         <label className="relative">
           <span className="sr-only">Search community contacts</span>
