@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { sendWeeklyRecipeEmail } from '@/lib/marketing/weekly-recipe-email'
 
-export const maxDuration = 300
+// Matches the other cron routes; Hobby-plan functions are capped at 60s. One Resend batch call covers 100 contacts.
+export const maxDuration = 60
 
 function isAuthorized(request: NextRequest) {
   const secret = process.env.CRON_SECRET
