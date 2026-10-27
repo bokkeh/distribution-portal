@@ -8,7 +8,7 @@ import { updateWholesaleRequestWorkflow } from '@/actions/wholesale-requests'
 import { SendInvitationModal } from '@/components/wholesale-requests/SendInvitationModal'
 import { formatBusinessType } from '@/lib/customers/business-types'
 import Link from 'next/link'
-import { ExternalLink } from 'lucide-react'
+import { ExternalLink, Eye } from 'lucide-react'
 
 type WholesaleRequestRow = {
   id: string
@@ -79,7 +79,7 @@ export default async function WholesaleRequestsPage() {
           createdAt: activityEvents.createdAt,
         })
         .from(activityEvents)
-        .where(and(eq(activityEvents.entityType, 'wholesale_request'), inArray(activityEvents.entityId, requestIds)))
+        .where(and(eq(activityEvents.entityType, 'wholesale_request'), eq(activityEvents.kind, 'wholesale_request_updated'), inArray(activityEvents.entityId, requestIds)))
         .orderBy(desc(activityEvents.createdAt))
     }
 
@@ -249,6 +249,7 @@ export default async function WholesaleRequestsPage() {
                         requestId={request.id}
                         accountId={workflow?.attachedAccountId ?? undefined}
                       />
+                      <Button asChild variant="outline"><Link href={`/admin/wholesale-requests/${request.id}/emails`}><Eye className="h-4 w-4" />View emails</Link></Button>
                     </div>
                   </div>
 

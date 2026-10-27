@@ -18,11 +18,11 @@ export default async function SalesRouteDetailPage({
   params,
   searchParams,
 }: {
-  params: Promise<{ routeId: string }> | { routeId: string }
-  searchParams?: Promise<{ addStop?: string; error?: string }> | { addStop?: string; error?: string }
+  params: Promise<{ routeId: string }>
+  searchParams?: Promise<{ addStop?: string; error?: string }>
 }) {
   const resolvedParams = await Promise.resolve(params)
-  const resolvedSearchParams = await Promise.resolve(searchParams ?? {})
+  const resolvedSearchParams: { addStop?: string; error?: string } = await Promise.resolve(searchParams ?? {})
   const showAddStop = resolvedSearchParams.addStop === '1'
   const addStopError = resolvedSearchParams.error
 

@@ -53,8 +53,8 @@ async function incrementWeekCounter(weekKey: string | null, column: 'bounceCount
 
 /**
  * Marks matching subscribed community contacts as unsubscribed and logs it on each contact's timeline.
- * Bounces and complaints are counted against the week even when the contact was already unsubscribed;
- * unsubscribes are only counted when the status actually changed.
+ * Counters represent newly removed contacts, not webhook deliveries. Replayed notifications
+ * and a suppression following a bounce must not inflate the totals.
  */
 export async function recordCommunityUnsubscribe({
   contactId,
@@ -94,6 +94,7 @@ export async function recordCommunityUnsubscribe({
   ))
 
   try {
+    if (!changed.length) return 0
     if (reason === 'complaint') await incrementWeekCounter(weekKey, 'complaintCount')
     else if (reason === 'bounce' || reason === 'suppressed') await incrementWeekCounter(weekKey, 'bounceCount')
     else if (changed.length) await incrementWeekCounter(weekKey, 'unsubscribeCount')

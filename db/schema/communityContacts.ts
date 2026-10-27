@@ -1,4 +1,5 @@
 import { index, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
 import { tastings } from './tastings'
 import { users } from './users'
 
@@ -23,7 +24,7 @@ export const communityContacts = pgTable('community_contacts', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
-  uniqueIndex('community_contacts_email_uidx').on(table.email),
+  uniqueIndex('community_contacts_email_uidx').on(table.email).where(sql`${table.email} <> ''`),
   index('community_contacts_status_idx').on(table.status),
   index('community_contacts_created_at_idx').on(table.createdAt),
 ])

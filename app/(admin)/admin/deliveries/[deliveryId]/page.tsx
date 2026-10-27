@@ -22,11 +22,11 @@ export default async function DeliveryDetailPage({
   params,
   searchParams,
 }: {
-  params: Promise<{ deliveryId: string }> | { deliveryId: string }
-  searchParams?: Promise<{ addStop?: string; error?: string; view?: string }> | { addStop?: string; error?: string; view?: string }
+  params: Promise<{ deliveryId: string }>
+  searchParams?: Promise<{ addStop?: string; error?: string; view?: string }>
 }) {
   const resolvedParams = await Promise.resolve(params)
-  const resolvedSearchParams = await Promise.resolve(searchParams ?? {})
+  const resolvedSearchParams: { addStop?: string; error?: string; view?: string } = await Promise.resolve(searchParams ?? {})
   const showAddStop = resolvedSearchParams.addStop === '1'
   const addStopError = resolvedSearchParams.error
   const pageError = resolvedSearchParams.error

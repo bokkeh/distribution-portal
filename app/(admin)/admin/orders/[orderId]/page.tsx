@@ -25,7 +25,7 @@ import { getActivityTimeline } from '@/lib/activity/read'
 
 const shippingStatuses = ['not_scheduled', 'scheduled', 'out_for_delivery', 'delivered', 'issue'] as const
 
-export default async function AdminOrderDetailPage({ params }: { params: Promise<{ orderId: string }> | { orderId: string } }) {
+export default async function AdminOrderDetailPage({ params }: { params: Promise<{ orderId: string }> }) {
   await requireFeature('orders', 'admin')
   const resolvedParams = await Promise.resolve(params)
 

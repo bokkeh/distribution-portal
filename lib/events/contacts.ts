@@ -32,8 +32,9 @@ export async function findOrCreateEventContact(input: {
     .select()
     .from(communityContacts)
     .where(or(
-      sql`lower(${communityContacts.email}) = ${email}`,
-      sql`regexp_replace(${communityContacts.phone}, '[^0-9]', '', 'g') = ${phoneDigits}`,
+      email ? sql`lower(${communityContacts.email}) = ${email}` : undefined,
+      phoneDigits ? sql`regexp_replace(${communityContacts.phone}, '[^0-9]', '', 'g') = ${phoneDigits}` : undefined,
+      sql`false`,
     ))
     .limit(1)
 

@@ -1,5 +1,6 @@
-import { and, count, desc, eq, gt, lt, ne, or } from 'drizzle-orm'
+import { and, count, desc, eq, gt, lt, ne, or, sql } from 'drizzle-orm'
 import { Resend } from 'resend'
+import { validateRecipeEmailConfig } from '@/lib/marketing/recipe-email-config'
 import { db } from '@/db'
 import { communityContactCommunications, communityContacts, communityRecipeEmails } from '@/db/schema'
 import { createCommunityUnsubscribeToken } from '@/lib/marketing/community-unsubscribe-token'
@@ -340,7 +341,7 @@ export type WeeklyRecipeSendResult =
   | { status: 'sent' | 'failed'; weekKey: string; recipe: string; recipients: number; sent: number; failed: number }
 
 export async function sendWeeklyRecipeEmail({ now = new Date() }: { now?: Date } = {}): Promise<WeeklyRecipeSendResult> {
-  if (!process.env.RESEND_API_KEY) throw new Error('RESEND_API_KEY is not configured')
+  validateRecipeEmailConfig(process.env)
   const resend = new Resend(process.env.RESEND_API_KEY)
   const weekKey = getRecipeWeekKey(now)
 
@@ -361,7 +362,7 @@ export async function sendWeeklyRecipeEmail({ now = new Date() }: { now?: Date }
     db
       .select({ id: communityContacts.id, firstName: communityContacts.firstName, email: communityContacts.email })
       .from(communityContacts)
-      .where(eq(communityContacts.status, 'subscribed')),
+      .where(and(eq(communityContacts.status, 'subscribed'), sql`trim(${communityContacts.email}) <> ''`)),
   ])
   if (!contacts.length) return { status: 'skipped', reason: 'no_recipients', weekKey }
 

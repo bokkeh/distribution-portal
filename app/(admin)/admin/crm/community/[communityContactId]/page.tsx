@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { desc, eq, or } from 'drizzle-orm'
+import { desc, eq, or, sql } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import { ArrowLeft, CalendarDays, Mail, MapPin, MessageSquare, NotebookPen, UserRound } from 'lucide-react'
 import {
@@ -124,7 +124,7 @@ export default async function CommunityContactProfilePage({
       actorName: users.name,
     }).from(smsMessages)
       .leftJoin(users, eq(smsMessages.userId, users.id))
-      .where(or(eq(smsMessages.phoneNumber, normalizedPhone), eq(smsMessages.phoneNumber, contact.phone)))
+      .where(contact.phone.trim() ? or(eq(smsMessages.phoneNumber, normalizedPhone), eq(smsMessages.phoneNumber, contact.phone)) : sql`false`)
       .orderBy(desc(smsMessages.createdAt))
       .limit(200),
     db.select({ id: tastings.id, eventName: tastings.eventName, scheduledAt: tastings.scheduledAt, city: tastings.storeCity, state: tastings.storeState })
@@ -176,8 +176,8 @@ export default async function CommunityContactProfilePage({
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2"><Label htmlFor="firstName">First name</Label><Input id="firstName" name="firstName" defaultValue={contact.firstName} required /></div>
                 <div className="space-y-2"><Label htmlFor="lastName">Last name</Label><Input id="lastName" name="lastName" defaultValue={contact.lastName} required /></div>
-                <div className="space-y-2"><Label htmlFor="email">Email</Label><Input id="email" name="email" type="email" defaultValue={contact.email} required /></div>
-                <div className="space-y-2"><Label htmlFor="phone">Phone</Label><Input id="phone" name="phone" type="tel" defaultValue={contact.phone} required /></div>
+                <div className="space-y-2"><Label htmlFor="email">Email (optional)</Label><Input id="email" name="email" type="email" defaultValue={contact.email} /></div>
+                <div className="space-y-2"><Label htmlFor="phone">Phone (optional)</Label><Input id="phone" name="phone" type="tel" defaultValue={contact.phone} /></div>
                 <div className="space-y-2 sm:col-span-2"><Label htmlFor="addressLine1">Address</Label><Input id="addressLine1" name="addressLine1" defaultValue={contact.addressLine1 ?? ''} autoComplete="street-address" /></div>
                 <div className="space-y-2 sm:col-span-2"><Label htmlFor="addressLine2">Address line 2</Label><Input id="addressLine2" name="addressLine2" defaultValue={contact.addressLine2 ?? ''} /></div>
                 <div className="space-y-2"><Label htmlFor="city">City</Label><Input id="city" name="city" defaultValue={contact.city ?? ''} autoComplete="address-level2" /></div>

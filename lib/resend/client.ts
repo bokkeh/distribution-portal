@@ -9,6 +9,8 @@ import {
   type EmailAutomationTemplateKey,
 } from '@/lib/resend/email-templates'
 import { Resend } from 'resend'
+import { logActivityEvent } from '@/lib/activity/log'
+import { wholesaleEmailSnapshot } from '@/lib/resend/wholesale-email-snapshot'
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
 
@@ -102,15 +104,27 @@ async function sendEmail({
   html,
   userId,
   recipientName,
+  wholesaleHistory,
 }: {
   to: string | string[]
   subject: string
   html: string
   userId?: string | null
   recipientName?: string | null
+  wholesaleHistory?: { requestId: string; privateUrl?: string }
 }) {
   const recipients = Array.isArray(to) ? to.filter(Boolean) : [to].filter(Boolean)
   if (!recipients.length) return false
+  const from = process.env.RESEND_FROM_EMAIL ?? 'noreply@ahawc.com'
+  const recordWholesaleEmail = async (status: 'sent' | 'failed') => {
+    if (!wholesaleHistory) return
+    await logActivityEvent({
+      entityType: 'wholesale_request', entityId: wholesaleHistory.requestId,
+      kind: 'wholesale_request_email_snapshot',
+      title: status === 'sent' ? 'Wholesale approval email accepted for sending' : 'Wholesale approval email failed',
+      metadata: wholesaleEmailSnapshot({ to: recipients, subject, html, from, privateUrl: wholesaleHistory.privateUrl, status }),
+    })
+  }
   if (!resend) {
     console.error('Email delivery skipped: RESEND_API_KEY is not configured')
     await Promise.all(recipients.map((recipient) =>
@@ -122,12 +136,13 @@ async function sendEmail({
         status: 'failed',
       }),
     ))
+    await recordWholesaleEmail('failed')
     return false
   }
 
   try {
     const result = await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL ?? 'noreply@ahawc.com',
+      from,
       to: recipients,
       subject,
       html,
@@ -143,6 +158,7 @@ async function sendEmail({
         status: 'sent',
       }),
     ))
+    await recordWholesaleEmail('sent')
     return true
   } catch (error) {
     console.error('Resend email failed:', error)
@@ -156,6 +172,7 @@ async function sendEmail({
         status: 'failed',
       }),
     ))
+    await recordWholesaleEmail('failed')
     return false
   }
 }
@@ -812,6 +829,7 @@ export async function sendCustomerPortalActivationEmail({
   to,
   businessName,
   senderName,
+  requestId,
   inviteUrl,
   expiresAt,
   personalMessage,
@@ -819,6 +837,7 @@ export async function sendCustomerPortalActivationEmail({
   to: string
   businessName: string
   senderName: string
+  requestId?: string
   inviteUrl: string
   expiresAt: Date
   personalMessage?: string | null
@@ -829,6 +848,7 @@ export async function sendCustomerPortalActivationEmail({
     year: 'numeric',
   })
   await sendEmail({
+    wholesaleHistory: requestId ? { requestId, privateUrl: inviteUrl } : undefined,
     to,
     recipientName: businessName,
     subject: `Activate ${businessName}'s AHAWC portal account`,
@@ -852,12 +872,15 @@ export async function sendCustomerPortalReadyEmail({
   to,
   businessName,
   senderName,
+  requestId,
 }: {
   to: string
   businessName: string
   senderName: string
+  requestId?: string
 }): Promise<void> {
   await sendEmail({
+    wholesaleHistory: requestId ? { requestId } : undefined,
     to,
     recipientName: businessName,
     subject: `${businessName}'s AHAWC portal access is ready`,

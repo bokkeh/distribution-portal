@@ -19,7 +19,7 @@ function maskDriverName(name: string | null) {
 export default async function ShareDeliveryPage({
   params,
 }: {
-  params: Promise<{ deliveryId: string }> | { deliveryId: string }
+  params: Promise<{ deliveryId: string }>
 }) {
   const { deliveryId } = await Promise.resolve(params)
 

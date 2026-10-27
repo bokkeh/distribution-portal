@@ -8,6 +8,7 @@ import { db } from '@/db'
 import { communityContacts, contacts, customerAccounts } from '@/db/schema'
 import { requireRole } from '@/lib/auth/session'
 import { contactPersonSchema } from '@/lib/crm/contact-validation'
+import { adminCommunityPersonSchema } from '@/lib/crm/community-validation'
 import { isCommunitySignupRateLimited } from '@/lib/auth/rate-limit'
 
 export type PersonActionState = {
@@ -55,10 +56,12 @@ async function upsertCommunityContact({
     createdByUserId: createdByUserId ?? null,
   }).onConflictDoUpdate({
     target: communityContacts.email,
+    targetWhere: sql`${communityContacts.email} <> ''`,
     set: {
       firstName,
       lastName,
-      phone,
+      // Preserve an existing phone when omitted while adding by email.
+      ...(phone ? { phone } : {}),
       status: 'subscribed',
       marketingConsentAt: now,
       updatedAt: now,
@@ -73,7 +76,7 @@ export async function createCrmPerson(
   try {
     const session = await requireRole('admin')
     const kind = formData.get('kind') === 'company' ? 'company' : 'community'
-    const parsed = kind === 'community' ? parsePerson(formData) : contactPersonSchema.safeParse({ firstName: String(formData.get('firstName') ?? ''), lastName: String(formData.get('lastName') ?? ''), email: String(formData.get('email') ?? ''), phone: String(formData.get('phone') ?? ''), relationshipStatus: String(formData.get('relationshipStatus') ?? '') || null })
+    const parsed = kind === 'community' ? adminCommunityPersonSchema.safeParse({ firstName: formData.get('firstName'), lastName: formData.get('lastName'), email: formData.get('email') ?? '', phone: formData.get('phone') ?? '' }) : contactPersonSchema.safeParse({ firstName: String(formData.get('firstName') ?? ''), lastName: String(formData.get('lastName') ?? ''), email: String(formData.get('email') ?? ''), phone: String(formData.get('phone') ?? ''), relationshipStatus: String(formData.get('relationshipStatus') ?? '') || null })
     if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Check the person details.' }
 
     if (kind === 'community') {

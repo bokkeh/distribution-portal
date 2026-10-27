@@ -140,10 +140,11 @@ export default async function RecipeEmailsPage() {
                   <th className="px-4 py-3 text-left">Status</th>
                   <th className="px-4 py-3 text-right">Sent</th>
                   <th className="px-4 py-3 text-right">Failed</th>
-                  <th className="px-4 py-3 text-right">Bounced</th>
+                  <th className="px-4 py-3 text-right">Bounced / suppressed</th>
                   <th className="px-4 py-3 text-right">Spam</th>
                   <th className="px-4 py-3 text-right">Unsubscribed</th>
                   <th className="px-4 py-3 text-right">Unsub rate</th>
+                  <th className="px-4 py-3 text-right">Recipients</th>
                   <th className="px-4 py-3 text-right"><span className="sr-only">Email</span></th>
                 </tr>
               </thead>
@@ -168,13 +169,14 @@ export default async function RecipeEmailsPage() {
                     <td className={`px-4 py-3 text-right tabular-nums ${row.complaintCount ? 'text-red-600' : 'text-slate-700'}`}>{row.complaintCount.toLocaleString()}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-slate-700">{row.unsubscribeCount.toLocaleString()}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-slate-700">{percent(row.unsubscribeCount + row.complaintCount, row.sentCount)}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-right"><Link href={`/admin/crm/community/recipe-emails/${row.id}`} className="inline-flex items-center gap-1 font-semibold text-[#ff5a00] hover:underline"><Users className="h-4 w-4" />View recipients</Link></td>
                     <td className="px-4 py-3 text-right">
                       <a href={`/api/admin/weekly-recipe-email/preview?week=${row.weekKey}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-[#ff5a00] hover:underline"><Eye className="h-3.5 w-3.5" />View email</a>
                     </td>
                   </tr>
                 ))}
                 {!(sends ?? []).length ? (
-                  <tr><td colSpan={10}className="px-4 py-8 text-center text-slate-500">No weekly recipe emails have been sent yet. The first one goes out {formatDateTime(nextScheduledSend())} ET.</td></tr>
+                  <tr><td colSpan={11} className="px-4 py-8 text-center text-slate-500">No weekly recipe emails have been sent yet. The first one goes out {formatDateTime(nextScheduledSend())} ET.</td></tr>
                 ) : null}
               </tbody>
             </table>

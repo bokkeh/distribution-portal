@@ -14,7 +14,7 @@ import { updateSharedSalesRouteOrigin, updateSharedSalesRouteStopNotes } from '@
 export default async function ShareSalesRoutePage({
   params,
 }: {
-  params: Promise<{ routeId: string }> | { routeId: string }
+  params: Promise<{ routeId: string }>
 }) {
   const { routeId } = await Promise.resolve(params)
 

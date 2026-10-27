@@ -60,6 +60,7 @@ export async function provisionCustomerPortalAccess(input: {
     }
 
     await sendCustomerPortalReadyEmail({
+      requestId: input.requestId,
       to: email,
       businessName: input.businessName,
       senderName: input.senderName,
@@ -93,6 +94,7 @@ export async function provisionCustomerPortalAccess(input: {
     }).where(eq(customerAccounts.id, account.id))
 
     await sendCustomerPortalReadyEmail({
+      requestId: input.requestId,
       to: email,
       businessName: input.businessName,
       senderName: input.senderName,
@@ -123,6 +125,7 @@ export async function provisionCustomerPortalAccess(input: {
   }).where(eq(customerAccounts.id, account.id))
 
   await sendCustomerPortalActivationEmail({
+    requestId: input.requestId,
     to: email,
     businessName: input.businessName,
     senderName: input.senderName,

@@ -12,9 +12,9 @@ import { ArrowLeft } from 'lucide-react'
 export default async function NewDeliveryPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ error?: string }> | { error?: string }
+  searchParams?: Promise<{ error?: string }>
 }) {
-  const resolvedSearchParams = await Promise.resolve(searchParams ?? {})
+  const resolvedSearchParams: { error?: string } = await Promise.resolve(searchParams ?? {})
   const pageError = resolvedSearchParams.error
 
   const activeDrivers = await db

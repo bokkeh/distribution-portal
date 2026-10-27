@@ -31,7 +31,7 @@ function formatMiles(value: string | null) {
 export default async function PublicDeliveryTrackingPage({
   params,
 }: {
-  params: Promise<{ token: string }> | { token: string }
+  params: Promise<{ token: string }>
 }) {
   const { token } = await Promise.resolve(params)
   const headerStore = await headers()

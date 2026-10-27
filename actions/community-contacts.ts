@@ -16,12 +16,13 @@ import { sendQuickEmail } from '@/actions/notifications'
 import { requireFeature } from '@/lib/auth/session'
 import { logActivityEvent } from '@/lib/activity/log'
 import { sendSms } from '@/lib/telnyx/client'
+import { optionalCommunityEmail, optionalCommunityPhone } from '@/lib/crm/community-validation'
 
 const profileSchema = z.object({
   firstName: z.string().trim().min(1, 'First name is required.').max(80),
   lastName: z.string().trim().min(1, 'Last name is required.').max(80),
-  email: z.string().trim().email('Enter a valid email address.').max(254).transform((value) => value.toLowerCase()),
-  phone: z.string().trim().min(7, 'Enter a valid phone number.').max(40),
+  email: optionalCommunityEmail,
+  phone: optionalCommunityPhone,
   status: z.enum(['subscribed', 'unsubscribed']),
   addressLine1: z.string().trim().max(200),
   addressLine2: z.string().trim().max(200),
@@ -54,8 +55,8 @@ export async function updateCommunityContactProfile(formData: FormData) {
   const parsed = profileSchema.safeParse({
     firstName: formData.get('firstName'),
     lastName: formData.get('lastName'),
-    email: formData.get('email'),
-    phone: formData.get('phone'),
+    email: formData.get('email') ?? '',
+    phone: formData.get('phone') ?? '',
     status: formData.get('status'),
     addressLine1: formData.get('addressLine1') ?? '',
     addressLine2: formData.get('addressLine2') ?? '',
@@ -178,6 +179,7 @@ export async function sendCommunityContactCommunication(formData: FormData) {
   if (!body) redirect(contactPath(contactId, 'error', 'Enter a message first.'))
 
   if (channel === 'email') {
+    if (!contact.email.trim()) redirect(contactPath(contactId, 'error', 'Add an email address before sending email.'))
     if (!subject) redirect(contactPath(contactId, 'error', 'Enter an email subject.'))
     const result = await sendQuickEmail(contact.email, recipientName, subject, body)
     await db.insert(communityContactCommunications).values({
@@ -190,6 +192,7 @@ export async function sendCommunityContactCommunication(formData: FormData) {
     })
     if (result.error) redirect(contactPath(contactId, 'error', result.error))
   } else {
+    if (!contact.phone.trim()) redirect(contactPath(contactId, 'error', 'Add a phone number before sending SMS.'))
     try {
       await sendSms({ to: contact.phone, body, userId: session.user.id, contactName: recipientName })
     } catch (error) {

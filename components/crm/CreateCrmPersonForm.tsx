@@ -47,8 +47,8 @@ export function CreateCrmPersonForm({ accounts }: { accounts: Array<{ id: string
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2"><Label htmlFor="person-first-name">First name</Label><Input id="person-first-name" name="firstName" required autoComplete="given-name" /></div>
         <div className="space-y-2"><Label htmlFor="person-last-name">Last name</Label><Input id="person-last-name" name="lastName" required={kind === 'community'} autoComplete="family-name" /></div>
-        <div className="space-y-2"><Label htmlFor="person-email">Email</Label><Input id="person-email" name="email" type="email" required={kind === 'community'} autoComplete="email" /></div>
-        <div className="space-y-2"><Label htmlFor="person-phone">Phone number</Label><Input id="person-phone" name="phone" type="tel" required={kind === 'community'} autoComplete="tel" /></div>
+        <div className="space-y-2"><Label htmlFor="person-email">Email (optional)</Label><Input id="person-email" name="email" type="email" autoComplete="email" /></div>
+        <div className="space-y-2"><Label htmlFor="person-phone">Phone number (optional)</Label><Input id="person-phone" name="phone" type="tel" autoComplete="tel" /></div>
       </div>
 
       {kind === 'company' ? <label className="block space-y-2 text-sm">Relationship status<select name="relationshipStatus" className="h-10 w-full rounded-md border border-input bg-white px-3"><option value="">Unspecified</option><option value="active">Active</option><option value="keep_in_touch">Keep in touch</option><option value="inactive">Inactive</option></select></label> : null}

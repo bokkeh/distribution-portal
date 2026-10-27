@@ -71,8 +71,8 @@ export function CommunityContactsTable({ contacts }: { contacts: CommunityContac
             {filtered.map((contact) => (
               <tr key={contact.id} className="hover:bg-slate-50">
                 <td className="px-4 py-3 font-semibold text-slate-900"><Link href={`/admin/crm/community/${contact.id}`} className="decoration-[#ff5a00] underline-offset-4 hover:text-[#ff5a00] hover:underline">{contact.firstName} {contact.lastName}</Link></td>
-                <td className="px-4 py-3 text-sm text-slate-600"><a href={`mailto:${contact.email}`} className="hover:text-[#ff5a00] hover:underline">{contact.email}</a></td>
-                <td className="px-4 py-3"><PhoneSmsButton phone={contact.phone} recipientName={`${contact.firstName} ${contact.lastName}`} /></td>
+                <td className="px-4 py-3 text-sm text-slate-600">{contact.email ? <a href={`mailto:${contact.email}`} className="hover:text-[#ff5a00] hover:underline">{contact.email}</a> : <span className="text-slate-400">No email</span>}</td>
+                <td className="px-4 py-3">{contact.phone ? <PhoneSmsButton phone={contact.phone} recipientName={`${contact.firstName} ${contact.lastName}`} /> : <span className="text-sm text-slate-400">No phone</span>}</td>
                 <td className="px-4 py-3 text-sm text-slate-600">{sourceLabels[contact.source]}</td>
                 <td className="px-4 py-3"><Badge variant={contact.status === 'subscribed' ? 'success' : 'outline'}>{contact.status}</Badge></td>
                 <td className="px-4 py-3 text-sm text-slate-500">{new Date(contact.createdAt).toLocaleDateString('en-US', { timeZone: 'UTC' })}</td>

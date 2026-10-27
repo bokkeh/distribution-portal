@@ -449,6 +449,13 @@
       "when": 1791600000003,
       "tag": "0083_community_recipe_email_engagement",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1791600000004,
+      "tag": "0084_optional_community_contact_details",
+      "breakpoints": true
     }
   ]
 }
