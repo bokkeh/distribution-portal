@@ -42,7 +42,7 @@ export const fieldContactSchema = z.object({
 export type FieldContactInput = z.input<typeof fieldContactSchema>
 
 export function fieldLoginReturn(value: string | null | undefined) {
-  return value && /^\/field(?:\?|$)/.test(value) ? value : null
+  return value && /^\/field(?:\/tastings)?(?:\?|$)/.test(value) ? value : null
 }
 
 // Edits carry the values seen when the form opened to protect newer CRM changes.

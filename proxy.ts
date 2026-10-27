@@ -53,7 +53,7 @@ const authenticatedProxy = auth((req) => {
 
   if (!session) {
     const loginUrl = new URL('/login', req.url)
-    if (pathname === '/field') loginUrl.searchParams.set('next', `${pathname}${req.nextUrl.search}`)
+    if (pathname === '/field' || pathname === '/field/tastings') loginUrl.searchParams.set('next', `${pathname}${req.nextUrl.search}`)
     return withSanitizedViewAsCookies(NextResponse.redirect(loginUrl))
   }
 

@@ -6,7 +6,7 @@ export const DEFAULT_SESSION_MAX_AGE = 4 * 60 * 60
 export const FIELD_ACCOUNT_REFRESH_MS = 5 * 60 * 1000
 
 export function isFieldEntry(pathname: string, next: string | null) {
-  return pathname === '/field' || (pathname === '/login' && fieldLoginReturn(next) !== null)
+  return pathname === '/field' || pathname === '/field/tastings' || (pathname === '/login' && fieldLoginReturn(next) !== null)
 }
 
 export function requiresPublicAgeGate(pathname: string, next: string | null) {

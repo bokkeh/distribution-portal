@@ -17,7 +17,7 @@ test('field login, persistent session, redirects and account revocation', async 
   }
   await build({stdin:{contents:`export * from './lib/auth/field-session';import './lib/auth/config';export {default as proxy} from './proxy'`,resolveDir:process.cwd()},bundle:true,platform:'node',format:'cjs',outfile:out,plugins:[{name:'auth-boundaries',setup(b){b.onResolve({filter:/.*/},a=>Object.hasOwn(stubs,a.path)?{path:a.path,namespace:'stub'}:undefined);b.onLoad({filter:/.*/,namespace:'stub'},a=>({contents:stubs[a.path],resolveDir:process.cwd()}))}}]})
   const api = require(out)
-  for (const next of ['/field', '/field?invoice=123']) assert.equal(api.requiresPublicAgeGate('/login',next),false)
+  for (const next of ['/field', '/field?invoice=123', '/field/tastings']) assert.equal(api.requiresPublicAgeGate('/login',next),false)
   for (const next of [null,'/field-other','//evil.test/field','https://evil.test/field']) assert.equal(api.requiresPublicAgeGate('/login',next),true)
   for (const page of ['/','/privacy','/terms']) assert.equal(api.requiresPublicAgeGate(page,'/field'),true)
   const jar = value => ({get:name=>name===api.FIELD_DEVICE_COOKIE && value?{value}:undefined})
@@ -47,7 +47,9 @@ test('field login, persistent session, redirects and account revocation', async 
   // A preference cookie grants no authentication; the signed-out field route redirects.
   const cookieOnly=request('/field');cookieOnly.cookies=jar('1')
   assert.equal((await api.proxy(cookieOnly)).kind,'redirect')
+  assert.equal((await api.proxy(request('/field/tastings'))).url,'https://ahawc.com/login?next=%2Ffield%2Ftastings')
   const signedIn={user:{role:'staff',roles:['staff']}}
+  assert.equal((await api.proxy(request('/login?next=%2Ffield%2Ftastings',signedIn))).url,'https://ahawc.com/field/tastings')
   assert.equal((await api.proxy(request('/login?next=%2Ffield%3Finvoice%3D123',signedIn))).url,'https://ahawc.com/field?invoice=123')
   assert.equal((await api.proxy(request('/login',signedIn))).url,'https://ahawc.com/staff')
   assert.equal((await api.proxy(request('/login'))).savedCookies.length,0)
