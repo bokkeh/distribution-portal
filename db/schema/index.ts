@@ -63,3 +63,5 @@ export * from './progression'
 
 export * from './fieldDocuments'
 export * from './communityRecipeEmails'
+
+export * from './accountOnboarding'

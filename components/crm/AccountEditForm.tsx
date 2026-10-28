@@ -325,8 +325,10 @@ export function AccountEditForm({
           <Input id={`${mode}-creditLimit`} name="creditLimit" type="number" step="0.01" min="0" defaultValue={account.creditLimit ?? '0'} />
         </div>
         <div className="space-y-2">
-          <Label htmlFor={`${mode}-paymentTerms`}>Payment Terms</Label>
-          <select id={`${mode}-paymentTerms`} name="paymentTerms" defaultValue={account.paymentTerms ?? 'PREPAID'} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+          <Label htmlFor={`${mode}-paymentTerms`}>Approved Payment Terms</Label>
+          <input type="hidden" name="paymentTerms" value={account.paymentTerms ?? ''} />
+          <p className="text-xs text-muted-foreground">Use Onboarding &amp; terms on the account to request or approve changes.</p>
+          <select id={`${mode}-paymentTerms`} disabled defaultValue={account.paymentTerms ?? 'PREPAID'} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
             <option value="PREPAID">Prepaid</option>
             <option value="DUE_ON_RECEIPT">Due on Receipt</option>
             <option value="NET7">Net 7</option>

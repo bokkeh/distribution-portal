@@ -1,4 +1,5 @@
-﻿import Link from 'next/link'
+import { AccountOnboarding } from './AccountOnboarding'
+import Link from 'next/link'
 import { and, asc, count, desc, eq, inArray, isNull, or } from 'drizzle-orm'
 import { db } from '@/db'
 import { contacts, crmPipelineStages, deliveries, deliveryStops, eventParticipants, events, historicalOrders, invoices, orders, products, salesMembers, salesRegions, smsMessages, tastingReports, tastings, users } from '@/db/schema'
@@ -672,6 +673,7 @@ export async function AccountRecordPage({
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
               <div className="space-y-6 lg:col-span-3">
                 <AccountDetailsCard account={account} mode={mode} />
+                {mode !== 'sales' && <AccountOnboarding accountId={account.id} approvedTerms={account.paymentTerms} />}
                 <AccountNotesCard accountId={account.id} notes={overviewData.notes} currentUserId={currentUserId} currentUserRoles={currentUserRoles} maxItems={3} href={getTabHref(basePath, 'notes-activity')} />
                 <AccountActivityCard items={overviewData.activityItems} showFilters={false} maxItems={8} href={getTabHref(basePath, 'notes-activity')} />
                 <Card>

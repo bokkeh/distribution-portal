@@ -1,7 +1,7 @@
 'use server'
 
 import { db } from '@/db'
-import { accountPreferences, activityEvents, communityContacts, contacts, crmPipelineStages, customerAccounts, deliveryStops, hubspotCompanyPipelineStages, invoices, orders, salesMembers, salesRegions, salesRouteStops, smsThreads, tastings, users, type CrmPipelineEntityType } from '@/db/schema'
+import { accountOnboarding, accountPreferences, activityEvents, communityContacts, contacts, crmPipelineStages, customerAccounts, deliveryStops, hubspotCompanyPipelineStages, invoices, orders, salesMembers, salesRegions, salesRouteStops, smsThreads, tastings, users, type CrmPipelineEntityType } from '@/db/schema'
 import { requireAdminOrStaff, requireRole } from '@/lib/auth/session'
 import { geocodeAddress } from '@/lib/maps/geocode'
 import { and, asc, eq, inArray } from 'drizzle-orm'
@@ -275,11 +275,7 @@ export async function updateCRMAccountInlineField(
 
     updateValues.assignedRegionId = nextValue
   } else if (field === 'paymentTerms') {
-    if (!PAYMENT_TERM_VALUES.has(value)) throw new Error('Select valid payment terms.')
-    previousValue = account.paymentTerms ?? 'PREPAID'
-    nextValue = value
-    label = PAYMENT_TERM_OPTIONS.find((option) => option.value === value)?.label ?? value
-    updateValues.paymentTerms = value
+    throw new Error('Use Onboarding & terms on the account to request or approve payment terms with a reason.')
   } else {
     if (!roles.has('admin')) throw new Error('Only admins can assign a sales lead.')
     previousValue = account.assignedSalesRepId
@@ -315,9 +311,7 @@ export async function updateCRMAccountInlineField(
     ? 'Type'
     : field === 'regionId'
       ? 'Region'
-      : field === 'paymentTerms'
-        ? 'Payment terms'
-        : 'Sales lead'
+      : 'Sales lead'
 
   try {
     await logActivityEvent({
@@ -965,7 +959,7 @@ export async function importHubSpotCompany(hubspotCompanyId: string) {
     hubspotCompanyId: company.id,
     creditLimit: '0',
     balance: '0',
-    paymentTerms: 'NET30',
+    paymentTerms: 'PREPAID',
     customerSegment: 'b2b_wholesale',
     customerSource: 'hubspot',
   }).returning({ id: customerAccounts.id })
@@ -1232,7 +1226,9 @@ export async function updateCustomerAccount(
     const dcAbraNumber = (formData.get('dcAbraNumber') as string) || null
     const businessType = normalizeBusinessType(formData.get('businessType') as string) ?? null
     const creditLimit = formData.get('creditLimit') as string
-    const paymentTerms = formData.get('paymentTerms') as string
+    const paymentTerms = existingAccount.paymentTerms
+    const requestedTermsChange = String(formData.get('paymentTerms') ?? paymentTerms ?? '')
+    if (requestedTermsChange !== (paymentTerms ?? '')) return { error: 'Use the account Onboarding & terms workflow to change approved terms.' }
     const customerSegment = normalizeCustomerSegment(formData.get('customerSegment') as string)
     const dealStage = await resolvePipelineStageKey(formData.get('dealStage') as string)
     const requestedAssignedSalesRepId = ((formData.get('assignedSalesRepId') as string) || '').trim() || null
@@ -1458,7 +1454,9 @@ export async function createCustomerAccount(
     const website = validateWebsiteUrl(((formData.get('website') as string) || '').trim() || null)
     const dcAbraNumber = ((formData.get('dcAbraNumber') as string) || '').trim() || null
     const creditLimit = ((formData.get('creditLimit') as string) || '0').trim() || '0'
-    const paymentTerms = ((formData.get('paymentTerms') as string) || 'PREPAID').trim() || 'PREPAID'
+    const requestedPaymentTerms = ((formData.get('paymentTerms') as string) || 'PREPAID').trim() || 'PREPAID'
+    if (!PAYMENT_TERM_VALUES.has(requestedPaymentTerms)) return { error: 'Select valid requested terms.' }
+    const paymentTerms = 'PREPAID'
     const customerSegment = normalizeCustomerSegment(formData.get('customerSegment') as string)
     const dealStage = await resolvePipelineStageKey(formData.get('dealStage') as string)
     const normalizedGeography = normalizeAccountGeography({ state, county })
@@ -1493,6 +1491,8 @@ export async function createCustomerAccount(
       dealStage,
       customerSource: 'manual',
     }).returning({ id: customerAccounts.id })
+
+    if (requestedPaymentTerms !== 'PREPAID') await db.insert(accountOnboarding).values({ accountId: account.id, requestedTerms: requestedPaymentTerms, status: 'pending_terms' }).onConflictDoNothing()
 
     await logActivityEvent({
       entityType: 'account',

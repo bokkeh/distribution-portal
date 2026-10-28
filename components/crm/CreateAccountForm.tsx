@@ -157,7 +157,8 @@ export function CreateAccountForm({
           <Input id="new-creditLimit" name="creditLimit" type="number" step="0.01" min="0" defaultValue="0" />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="new-paymentTerms">Payment Terms</Label>
+          <Label htmlFor="new-paymentTerms">Requested Payment Terms</Label>
+          <p className="text-xs text-muted-foreground">New accounts start prepaid. Credit terms require separate approval.</p>
           <select id="new-paymentTerms" name="paymentTerms" defaultValue="PREPAID" className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
             <option value="PREPAID">Prepaid</option>
             <option value="DUE_ON_RECEIPT">Due on Receipt</option>

@@ -456,6 +456,41 @@
       "when": 1791600000004,
       "tag": "0084_optional_community_contact_details",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1791600000005,
+      "tag": "0085_order_operations",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1791600000006,
+      "tag": "0086_contact_email_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1791600000007,
+      "tag": "0087_account_onboarding",
+      "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1791600000008,
+      "tag": "0088_historical_order_details",
+      "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1791600000009,
+      "tag": "0089_managed_recipes",
+      "breakpoints": true
     }
   ]
 }
