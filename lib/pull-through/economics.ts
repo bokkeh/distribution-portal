@@ -39,8 +39,6 @@ export const DEFAULT_ECONOMICS_SETTINGS: TastingEconomicsSettings = {
   bottlesPerCase: 12,
 }
 
-/** Beyond this many days a tasting is never credited for a reorder, however big its sales were. */
-const MAX_ASSISTED_DAYS = 45
 /** How many recent reorders the "tasting before each reorder" pattern check looks at. */
 const PATTERN_LOOKBACK = 2
 
@@ -53,94 +51,31 @@ function pct(numerator: number, denominator: number) {
 
 /* ------------------------------------------------------------ attribution */
 
-/**
- * Classifies every commercial order as organic or tasting-assisted.
- *
- * A reorder is assisted when a tasting happened inside the attribution window before
- * it, or — within 45 days — when that tasting alone sold at least half of the previous
- * order. Orders with a stored admin override keep the override. Sample drops are never
- * classified.
- */
+/** Explicit links and documented staff overrides classify sales; timing is correlation only. */
 export function classifyOrderAttribution(
   commercialOrders: PullThroughOrder[],
   tastings: PullThroughTasting[],
   settings: TastingEconomicsSettings,
   overrides: Map<string, { kind: OrderAttributionKind; reason: string | null }> = new Map(),
 ): PullThroughOrder[] {
-  const happened = tastings.filter((tasting) => tasting.status === 'completed' || tasting.hasReport)
-
-  return commercialOrders.map((order, index) => {
-    const previous = index > 0 ? commercialOrders[index - 1] : null
-    const before = happened.filter(
-      (tasting) =>
-        tasting.occurredAt.getTime() <= order.orderedAt.getTime() &&
-        // Only tastings since the previous order can have moved the previous order's stock.
-        (previous == null || tasting.occurredAt.getTime() > previous.orderedAt.getTime()),
-    )
-    const tasting = before.length > 0 ? before[before.length - 1] : null
-    const days = tasting ? daysBetween(tasting.occurredAt, order.orderedAt) : null
-    const soldAtTasting = tasting?.bottlesSold ?? null
-    const previousBottles = previous?.bottles ?? null
-    const movedOutside =
-      previousBottles != null ? Math.max(0, previousBottles - (soldAtTasting ?? 0)) : null
-
+  const happened = tastings.filter(t => !['cancelled','declined'].includes(t.status) && (t.status === 'completed' || t.hasReport))
+  return commercialOrders.map(order => {
+    if (order.orderType !== 'paid') return { ...order, attribution: null }
+    const preceding = happened.filter(t => t.accountId === order.accountId && t.occurredAt <= order.orderedAt).sort((a,b) => b.occurredAt.getTime() - a.occurredAt.getTime())
+    const recorded = preceding.find(t => t.id === order.relatedTastingId)
     const override = overrides.get(order.id) ?? order.attributionOverride
-    if (override) {
-      return {
-        ...order,
-        attribution: {
-          kind: override.kind,
-          source: 'override',
-          tastingId: tasting?.id ?? null,
-          tastingAt: tasting?.occurredAt ?? null,
-          daysSinceTasting: days,
-          bottlesSoldAtTasting: soldAtTasting,
-          bottlesMovedOutsideTasting: movedOutside,
-          why: override.reason ? `Set manually: ${override.reason}` : 'Set manually by an admin',
-          overrideReason: override.reason,
-        },
-      }
-    }
-
-    let kind: OrderAttributionKind = 'organic'
-    let why: string
-
-    if (!tasting || days == null) {
-      why = index === 0 ? 'Initial order — no tasting had been held' : 'No tasting since the previous order'
-    } else if (days <= settings.attributionWindowDays) {
-      kind = 'assisted'
-      why = `Placed ${days} day${days === 1 ? '' : 's'} after a tasting${
-        soldAtTasting != null ? ` that sold ${soldAtTasting} bottles` : ''
-      }`
-    } else if (
-      days <= MAX_ASSISTED_DAYS &&
-      soldAtTasting != null &&
-      previousBottles != null &&
-      previousBottles > 0 &&
-      soldAtTasting / previousBottles >= settings.assistedSalesShare
-    ) {
-      kind = 'assisted'
-      why = `The tasting ${days} days earlier sold ${soldAtTasting} of the previous ${Math.round(previousBottles)} bottles`
-    } else {
-      why = `${days} days after the last tasting${
-        movedOutside != null && movedOutside > 0 ? ` — about ${Math.round(movedOutside)} bottles moved on their own` : ''
-      }`
-    }
-
-    return {
-      ...order,
-      attribution: {
-        kind,
-        source: 'auto',
-        tastingId: tasting?.id ?? null,
-        tastingAt: tasting?.occurredAt ?? null,
-        daysSinceTasting: days,
-        bottlesSoldAtTasting: soldAtTasting,
-        bottlesMovedOutsideTasting: movedOutside,
-        why,
-        overrideReason: null,
-      },
-    }
+    // A manual "assisted" classification without a recorded event must not fabricate an event link.
+    const tasting = recorded ?? (override ? null : preceding[0])
+    const kind = override?.kind ?? (recorded ? 'assisted' : 'unknown')
+    const days = tasting ? daysBetween(tasting.occurredAt, order.orderedAt) : null
+    return { ...order, attribution: {
+      kind, source: override ? 'override' : recorded ? 'recorded' : 'auto',
+      tastingId: tasting?.id ?? null, tastingAt: tasting?.occurredAt ?? null,
+      daysSinceTasting: days, bottlesSoldAtTasting: tasting?.bottlesSold ?? null,
+      bottlesMovedOutsideTasting: null,
+      why: override ? `Set manually: ${override.reason ?? 'No reason recorded'}` : recorded ? 'Explicit tasting link recorded on the order.' : `Attribution unknown.${days == null ? ' No preceding tasting recorded.' : ` A tasting was recorded ${days} days earlier; timing does not prove attribution.`}`,
+      overrideReason: override?.reason ?? null,
+    } }
   })
 }
 
@@ -151,8 +86,8 @@ export function resolveTastingCost(
   input: { invoiceTotal: number | null; estimatedCost: number | null },
   settings: TastingEconomicsSettings,
 ): { cost: number; costSource: PullThroughTasting['costSource'] } {
-  if (input.invoiceTotal != null && input.invoiceTotal > 0) return { cost: input.invoiceTotal, costSource: 'invoice' }
-  if (input.estimatedCost != null && input.estimatedCost > 0) return { cost: input.estimatedCost, costSource: 'estimate' }
+  if (input.invoiceTotal != null && input.invoiceTotal >= 0) return { cost: input.invoiceTotal, costSource: 'invoice' }
+  if (input.estimatedCost != null && input.estimatedCost >= 0) return { cost: input.estimatedCost, costSource: 'estimate' }
   return { cost: settings.defaultTastingCost, costSource: 'default' }
 }
 
@@ -178,7 +113,7 @@ function contributionWindow(
     organicCases: round(organicCases),
     contribution: round(contribution),
     net: round(net),
-    roiPercent: tasting.cost > 0 ? round((net / tasting.cost) * 100, 0) : null,
+    roiPercent: null, // Observed window purchases do not establish incremental ROI.
   }
 }
 
@@ -193,8 +128,9 @@ export function computeTastingEconomics(
   attributedOrders: PullThroughOrder[],
   settings: TastingEconomicsSettings,
 ): TastingEconomics {
-  const attributed = attributedOrders.find((order) => order.attribution?.tastingId === tasting.id && order.attribution.kind === 'assisted')
-  const attributedCases = attributed?.cases ?? 0
+  const linked = attributedOrders.filter((order) => order.attribution?.tastingId === tasting.id && order.attribution.kind === 'assisted')
+  const attributed = linked[0]
+  const attributedCases = linked.reduce((sum, order) => sum + order.cases, 0)
   const contribution = attributedCases * settings.contributionPerCase
   const net = contribution - tasting.cost
 
@@ -205,7 +141,7 @@ export function computeTastingEconomics(
     attributedOrderId: attributed?.id ?? null,
     contribution: round(contribution),
     net: round(net),
-    roiPercent: tasting.cost > 0 ? round((net / tasting.cost) * 100, 0) : null,
+    roiPercent: linked.length > 0 && tasting.costSource === 'invoice' && tasting.cost > 0 && attributedOrders.every(order => order.attribution?.kind && order.attribution.kind !== 'unknown' && (order.attribution.kind !== 'assisted' || order.attribution.tastingId != null)) ? round((net / tasting.cost) * 100, 0) : null,
     windows: [30, 60, 90].map((days) => contributionWindow(days as 30 | 60 | 90, tasting, attributedOrders, settings)),
     excludedFromRetailRollup: tasting.objective === 'strategic',
   }
@@ -220,7 +156,8 @@ export function computeAccountVelocity(
   settings: TastingEconomicsSettings,
 ): AccountVelocity {
   const commercial = attributedOrders.filter((order) => order.orderType === 'paid')
-  const organic = commercial.filter((order) => order.attribution?.kind !== 'assisted')
+  const organic = commercial.filter((order) => order.attribution?.kind === 'organic')
+  const complete = commercial.every(order => order.attribution?.kind === 'organic' || order.attribution?.kind === 'assisted')
   const assisted = commercial.filter((order) => order.attribution?.kind === 'assisted')
 
   const sum = (list: PullThroughOrder[], key: 'cases' | 'bottles') => list.reduce((total, order) => total + order[key], 0)
@@ -251,15 +188,16 @@ export function computeAccountVelocity(
     totalCases: round(totalCases),
     totalBottles: round(totalBottles),
     organicCases: round(organicCases),
+    unknownCases: round(totalCases - organicCases - assistedCases),
     assistedCases: round(assistedCases),
     organicBottles: round(organicBottles),
     assistedBottles: round(assistedBottles),
     bottlesSoldAtTastings: tastings.reduce((total, tasting) => total + (tasting.bottlesSold ?? 0), 0),
-    organicPercent: pct(organicCases, totalCases),
-    assistedPercent: pct(assistedCases, totalCases),
+    organicPercent: complete ? pct(organicCases, totalCases) : null,
+    assistedPercent: complete ? pct(assistedCases, totalCases) : null,
     bottlesPerWeek,
-    organicBottlesPerWeek: perWeek(organicBottles),
-    assistedBottlesPerWeek: perWeek(assistedBottles),
+    organicBottlesPerWeek: complete ? perWeek(organicBottles) : null,
+    assistedBottlesPerWeek: complete ? perWeek(assistedBottles) : null,
     casesPerMonth,
     daysToSellOneCase,
     spanDays: spanDays == null ? null : Math.round(spanDays),
@@ -276,7 +214,7 @@ export function computeAccountEconomics(
   now: Date,
 ): AccountEconomics {
   const commercial = attributedOrders.filter((order) => order.orderType === 'paid')
-  const happened = tastings.filter((tasting) => tasting.status === 'completed' || tasting.hasReport)
+  const happened = tastings.filter((tasting) => !['cancelled', 'declined'].includes(tasting.status) && (tasting.status === 'completed' || tasting.hasReport))
   const retail = happened.filter((tasting) => tasting.objective !== 'strategic')
   const strategic = happened.filter((tasting) => tasting.objective === 'strategic')
 
@@ -292,12 +230,14 @@ export function computeAccountEconomics(
   const annualizedValue = ageDays != null && ageDays >= 30 ? round(netContribution * (365 / ageDays)) : null
 
   return {
-    revenue: round(revenue),
+    revenue: commercial.every(order => order.revenueKnown !== false) ? round(revenue) : null,
     casesPurchased: velocity.totalCases,
     contribution: round(contribution),
     tastingCount: happened.length,
     retailTastingCount: retail.length,
     tastingSpend: round(tastingSpend),
+    approvedTastingSpend: round(retail.filter(t => t.costSource === 'invoice').reduce((sum,t) => sum + t.cost,0)),
+    estimatedTastingSpend: round(retail.filter(t => t.costSource !== 'invoice').reduce((sum,t) => sum + t.cost,0)),
     strategicSpend: round(strategicSpend),
     netContribution: round(netContribution),
     profitPerTasting: retail.length > 0 ? round(netContribution / retail.length) : null,
@@ -318,7 +258,7 @@ export function computeTastingDependency(
 ): TastingDependency {
   const commercial = attributedOrders.filter((order) => order.orderType === 'paid')
   const reorders = commercial.filter((order) => order.isReorder)
-  const happened = tastings.filter((tasting) => tasting.status === 'completed' || tasting.hasReport)
+  const happened = tastings.filter((tasting) => !['cancelled', 'declined'].includes(tasting.status) && (tasting.status === 'completed' || tasting.hasReport))
   const retailTastings = happened.filter((tasting) => tasting.objective !== 'strategic')
   const flags: DependencyFlag[] = []
 
@@ -339,11 +279,15 @@ export function computeTastingDependency(
 
   const percent = velocity.assistedPercent
 
+  if (percent == null) return { percent: null, status: 'unknown', headline: 'Attribution is incomplete; organic share and tasting dependency cannot be established.', flags, recentReordersAssisted: recentAssisted, recentReordersConsidered: recent.length, patternWarning: null }
+
+  if (percent == null) return { percent: null, status: 'unknown', headline: 'Attribution is incomplete; organic share and tasting dependency cannot be established.', flags, recentReordersAssisted: recentAssisted, recentReordersConsidered: recent.length, patternWarning: null }
+
   if (retailTastings.length === 0) {
     return {
       percent: percent ?? 0,
       status: 'no_tastings',
-      headline: 'Every order so far has been organic — no paid tastings held',
+      headline: 'No completed retail tastings recorded; history may be incomplete',
       flags,
       recentReordersAssisted: recentAssisted,
       recentReordersConsidered: recent.length,
@@ -357,7 +301,7 @@ export function computeTastingDependency(
     flags.push({
       key: 'tasting_before_reorders',
       label: 'Tasting before nearly every reorder',
-      detail: `${assistedReorders} of ${reorders.length} reorders followed a paid tasting.`,
+      detail: `${assistedReorders} of ${reorders.length} reorders followed a retail tasting.`,
     })
   }
   if (economics.contribution > 0 && economics.tastingSpend >= economics.contribution * 0.8) {
@@ -378,7 +322,7 @@ export function computeTastingDependency(
     flags.push({
       key: 'no_organic_after_tastings',
       label: '2+ tastings, no organic sell-through',
-      detail: `${retailTastings.length} paid tastings and ${velocity.organicCases.toFixed(1)} organic cases.`,
+      detail: `${retailTastings.length} retail tastings and ${velocity.organicCases.toFixed(1)} organic cases.`,
     })
   }
 
@@ -415,15 +359,15 @@ export function computeTastingDependency(
   const headlines: Record<DependencyStatus, string> = {
     healthy: 'Reorders come mainly from organic demand',
     supported: 'Occasional tasting support with real organic sell-through',
-    tasting_dependent: 'A large share of sales happen around paid tastings',
+    tasting_dependent: 'A large share of sales happen around retail tastings',
     unprofitable_cycle: 'Buys stock, then needs a Wisher-funded tasting to move it',
-    no_tastings: 'No paid tastings held',
+    no_tastings: 'No retail tastings held',
     unknown: 'Not enough history',
   }
 
   const patternWarning =
     recent.length >= PATTERN_LOOKBACK && recentAssisted === recent.length
-      ? `This account has received a paid tasting before each of its last ${recent.length} reorders. Organic velocity ${
+      ? `This account has received a retail tasting before each of its last ${recent.length} reorders. Organic velocity ${
           velocity.organicPercent != null && velocity.organicPercent < 40 ? 'remains low' : 'is holding up'
         }.`
       : null
@@ -480,7 +424,7 @@ export function classifyAccountHealth(
     autoKind = 'growth'
     why.push(`${velocity.organicPercent?.toFixed(0)}% organic with ${orders.reorderCount} reorders`)
     if (frequencyImproving) why.push('Reorder frequency has improved since the first tasting')
-  } else if (orders.reorderCount >= 2 && (dependency.percent ?? 0) <= 30) {
+  } else if (orders.reorderCount >= 2 && dependency.percent != null && dependency.percent <= 30) {
     autoKind = 'healthy'
     why.push(`${orders.reorderCount} reorders with limited tasting support`)
   } else {
@@ -520,7 +464,7 @@ export function buildTastingDecision(input: {
   now: Date
 }): TastingDecision {
   const { orders, inventory, tastings, velocity, dependency, economics, health, settings, now } = input
-  const happened = tastings.filter((tasting) => tasting.status === 'completed' || tasting.hasReport)
+  const happened = tastings.filter((tasting) => !['cancelled', 'declined'].includes(tasting.status) && (tasting.status === 'completed' || tasting.hasReport))
   const lastTasting = happened[happened.length - 1] ?? null
   const last90 = happened.filter((tasting) => daysBetween(tasting.occurredAt, now) <= 90).length
 
@@ -544,13 +488,16 @@ export function buildTastingDecision(input: {
   const detail: string[] = []
   let kind: TastingDecisionKind
 
-  if (orders.totalOrders === 0) {
+  if (dependency.status === 'unknown' && orders.totalOrders > 0) {
+    kind = 'consider'
+    detail.push('Attribution is incomplete. Review recorded order links, historical purchases, tasting statuses, and cost sources before judging tasting effectiveness.')
+  } else if (orders.totalOrders === 0) {
     kind = 'recommended'
     detail.push('No orders yet — an account-opening tasting is how demand gets established here.')
   } else if (health.kind === 'unprofitable' || dependency.status === 'unprofitable_cycle') {
     kind = 'not_recommended'
     detail.push(
-      `This account has purchased ${velocity.totalCases.toFixed(1)} cases and received ${economics.retailTastingCount} paid tasting${
+      `This account has purchased ${velocity.totalCases.toFixed(1)} cases and received ${economics.retailTastingCount} retail tasting${
         economics.retailTastingCount === 1 ? '' : 's'
       }.`,
     )
@@ -579,7 +526,7 @@ export function buildTastingDecision(input: {
   const headlines: Record<TastingDecisionKind, string> = {
     recommended: 'Recommended — strong organic demand or early-stage acquisition',
     consider: 'Consider — moderate tasting dependency; require a measurable goal',
-    not_recommended: 'Not recommended — account appears dependent on paid tastings to move inventory',
+    not_recommended: 'Not recommended — account appears dependent on retail tastings to move inventory',
   }
 
   return {

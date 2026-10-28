@@ -30,6 +30,7 @@ import {
   tastings,
   users,
 } from '@/db/schema'
+import { readHistoricalPurchases } from '@/lib/orders/history-read'
 import type { Session } from 'next-auth'
 import {
   attachTastingOrderAttribution,
@@ -83,8 +84,8 @@ export function orderDetailPath(mode: ViewerMode, orderId: string) {
 
 export function tastingDetailPath(mode: ViewerMode, tastingId: string) {
   if (mode === 'admin') return `/admin/tastings/${tastingId}`
-  if (mode === 'staff') return '/staff/tastings/reports'
-  return '/sales/tastings'
+  if (mode === 'staff') return `/staff/tastings/reports?tasting=${tastingId}`
+  return `/sales/tastings?tasting=${tastingId}`
 }
 
 export function pullThroughBasePath(mode: ViewerMode) {
@@ -209,9 +210,10 @@ async function loadOrders(accountIds: string[]) {
       orderType: orders.orderType,
       status: orders.status,
       total: orders.total,
+      relatedTastingId: orders.relatedTastingId,
       attributionOverride: orders.tastingAttributionOverride,
       attributionOverrideReason: orders.tastingAttributionOverrideReason,
-      cases: sql<number>`coalesce(sum(case when ${orderItems.unit} = 'case' then ${orderItems.quantity}::numeric else 0 end), 0)::float`,
+      cases: sql<number>`coalesce(sum(case when ${orderItems.unit} = 'case' then ${orderItems.quantity}::numeric else ${orderItems.quantity}::numeric / nullif(coalesce(${products.bottlesPerCase}, ${DEFAULT_BOTTLES_PER_CASE}), 0) end), 0)::float`,
       bottles: sql<number>`coalesce(sum(
         case when ${orderItems.unit} = 'case'
           then ${orderItems.quantity}::numeric * coalesce(${products.bottlesPerCase}, ${DEFAULT_BOTTLES_PER_CASE})
@@ -230,6 +232,7 @@ async function loadOrders(accountIds: string[]) {
       orders.orderType,
       orders.status,
       orders.total,
+      orders.relatedTastingId,
       orders.tastingAttributionOverride,
       orders.tastingAttributionOverrideReason,
     )
@@ -250,6 +253,7 @@ async function loadOrders(accountIds: string[]) {
       total: toNumber(row.total),
       sequenceIndex: 0,
       attribution: null,
+      relatedTastingId: row.relatedTastingId,
       attributionOverride: row.attributionOverride
         ? { kind: row.attributionOverride as 'organic' | 'assisted', reason: row.attributionOverrideReason ?? null }
         : null,
@@ -257,6 +261,14 @@ async function loadOrders(accountIds: string[]) {
     })
     byAccount.set(row.accountId, list)
   }
+
+  const { purchases } = await readHistoricalPurchases(accountIds)
+  for (const purchase of purchases) {
+    const list = byAccount.get(purchase.accountId) ?? []
+    list.push({ id: purchase.id, accountId: purchase.accountId, orderedAt: purchase.date, orderType: 'paid', status: 'historical', cases: purchase.cases, bottles: purchase.bottles, total: purchase.total, revenueKnown: purchase.revenueKnown, sequenceIndex: 0, isReorder: false, attributionOverride: null, attribution: null })
+    byAccount.set(purchase.accountId, list)
+  }
+  for (const list of byAccount.values()) list.sort((a, b) => a.orderedAt.getTime() - b.orderedAt.getTime())
 
   // Reorder position is derived, never stored: order 1 is the initial order,
   // order 2 is the first reorder, and so on.
@@ -286,6 +298,7 @@ export async function loadTastings(
       accountId: tastings.customerId,
       eventName: tastings.eventName,
       scheduledAt: tastings.scheduledAt,
+      timeZone: tastings.timeZone,
       checkedInAt: tastings.checkedInAt,
       status: tastings.status,
       tasterUserId: tastings.assignedUserId,
@@ -307,7 +320,7 @@ export async function loadTastings(
       setupPhotoUrl: tastingReports.setupPhotoUrl,
       shelfPhotoUrls: tastingReports.shelfPhotoUrls,
       submittedByName: reportSubmitter.name,
-      invoiceTotal: tasterInvoices.totalAmount,
+      invoiceTotal: sql<string | null>`case when ${tasterInvoices.status} in ('approved', 'paid') then ${tasterInvoices.totalAmount} else null end`,
       objective: tastings.objective,
       primaryGoal: tastings.primaryGoal,
       targetBottlesSold: tastings.targetBottlesSold,
@@ -341,6 +354,7 @@ export async function loadTastings(
       accountId: row.accountId,
       eventName: row.eventName,
       occurredAt,
+      timeZone: row.timeZone,
       status: row.status,
       tasterUserId: row.tasterUserId,
       tasterName: row.tasterName,
@@ -707,7 +721,7 @@ export async function loadPullThroughDataset(scope: PullThroughScope): Promise<P
             at: lastOrder.orderedAt,
             recordType: 'order',
             recordId: lastOrder.id,
-            href: orderDetailPath(scope.mode, lastOrder.id),
+            href: lastOrder.status === 'historical' ? `${accountBasePath(scope.mode, lastOrder.accountId)}?tab=orders` : orderDetailPath(scope.mode, lastOrder.id),
           }
         : null,
       lastTastingSource: lastTasting
@@ -800,12 +814,12 @@ export async function loadAccountTimeline(
       id: `order-${order.id}`,
       kind: isSample ? 'sample_order' : order.isReorder ? 'reorder' : 'order',
       at: order.orderedAt,
-      title: isSample ? 'Sample order' : order.isReorder ? `Reorder #${order.sequenceIndex}` : 'First order',
+      title: isSample ? 'Sample order' : order.isReorder ? `Recorded reorder #${order.sequenceIndex}` : 'Earliest recorded order',
       detail: `${order.bottles.toFixed(0)} bottles${order.cases > 0 ? ` (${order.cases.toFixed(0)} cases)` : ''}`,
       actorName: null,
       actorRole: null,
-      href: orderDetailPath(mode, order.id),
-      sourceLabel: 'Order record',
+      href: order.status === 'historical' ? `${accountBasePath(mode, accountId)}?tab=orders` : orderDetailPath(mode, order.id),
+      sourceLabel: order.status === 'historical' ? 'Historical purchase' : 'Order record',
     })
   }
 

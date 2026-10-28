@@ -1,3 +1,4 @@
+import { TastingRecipeSelection } from '@/components/tastings/TastingRecipeSelection'
 import { db } from '@/db'
 import { tastingReports, tasterInvoices, users, customerAccounts } from '@/db/schema'
 import { asc, eq, sql } from 'drizzle-orm'
@@ -204,6 +205,7 @@ export default async function AdminTastingDetailPage({
   return (
     <div className="space-y-6">
       {/* Header */}
+      <TastingRecipeSelection tastingId={tastingId} />
       <div>
         <Link href="/admin/tastings" className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 mb-3">
           <ArrowLeft className="w-3.5 h-3.5" />

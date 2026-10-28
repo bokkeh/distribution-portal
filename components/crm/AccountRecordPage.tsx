@@ -1,6 +1,6 @@
-import { AccountOnboarding } from './AccountOnboarding'
-import Link from 'next/link'
-import { and, asc, count, desc, eq, inArray, isNull, or } from 'drizzle-orm'
+import { alias } from 'drizzle-orm/pg-core'
+﻿import Link from 'next/link'
+import { and, asc, count, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm'
 import { db } from '@/db'
 import { contacts, crmPipelineStages, deliveries, deliveryStops, eventParticipants, events, historicalOrders, invoices, orders, products, salesMembers, salesRegions, smsMessages, tastingReports, tastings, users } from '@/db/schema'
 import { syncToHubSpot } from '@/actions/crm'
@@ -8,6 +8,7 @@ import { getCRMAccountDetail } from '@/lib/crm/account-read'
 import { getLifetimeOrderSummary } from '@/lib/crm/lifetime-summary'
 import { getAccountTastingSummary } from '@/lib/tastings/read'
 import { AccountMemberSinceEditor } from '@/components/crm/AccountMemberSinceEditor'
+import { ContactEmailHistory } from './ContactEmailHistory'
 import { AccountHistoricalOrdersCard } from '@/components/crm/AccountHistoricalOrdersCard'
 import {
   getAccountActivityFeed,
@@ -26,6 +27,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { PhoneSmsButton } from '@/components/crm/PhoneSmsButton'
 import { AccountActivityCard } from '@/components/crm/AccountActivityCard'
+import { AccountOnboarding } from './AccountOnboarding'
 import { AccountDetailsCard } from '@/components/crm/AccountDetailsCard'
 import { AccountEditForm } from '@/components/crm/AccountEditForm'
 import { AccountInventoryOnHandCard } from '@/components/crm/AccountInventoryOnHandCard'
@@ -65,6 +67,8 @@ const ACCOUNT_TABS = [
 ] as const
 
 type TabId = (typeof ACCOUNT_TABS)[number]['id']
+const reportSubmitters = alias(users, 'crm_report_submitters')
+
 type AccountRecordMode = 'admin' | 'staff' | 'sales'
 
 function normalizeTab(value: string | undefined): TabId {
@@ -101,14 +105,14 @@ function getDeliveryReportPath(mode: AccountRecordMode, deliveryId: string) {
 
 function getTastingReportPath(mode: AccountRecordMode, tastingId: string) {
   if (mode === 'admin') return `/admin/tastings/${tastingId}`
-  if (mode === 'staff') return '/staff/tastings/reports'
-  return '/sales/tastings'
+  if (mode === 'staff') return `/staff/tastings/reports?tasting=${tastingId}`
+  return `/sales/tastings?tasting=${tastingId}`
 }
 
 function getTastingReportLinkLabel(mode: AccountRecordMode, hasReport: boolean) {
   if (mode === 'admin') return hasReport ? 'View report' : 'Open tasting'
-  if (mode === 'staff') return 'Open reports'
-  return 'Open tastings'
+  if (mode === 'staff') return hasReport ? 'View report' : 'Open tasting'
+  return hasReport ? 'View report' : 'Open tasting'
 }
 
 function getInvoicingIndexPath(mode: AccountRecordMode) {
@@ -222,7 +226,7 @@ export async function AccountRecordPage({
         firstOrderDate: Date | null
         recentDeliveries: Array<{ deliveryId: string; status: string; weekStartDate: string; stopStatus: string; completedAt: Date | null; proofOfDeliveryUrl: string | null; shelfPhotoUrl: string | null }>
         recentTexts: Array<{ id: string; direction: string; body: string; createdAt: Date; phoneNumber: string }>
-        recentTastings: Array<{ id: string; eventName: string; status: string; scheduledAt: Date; endAt: Date | null; reportSubmittedAt: Date | null; timeZone: string }>
+        recentTastings: Array<{ id: string; eventName: string; status: string; scheduledAt: Date; endAt: Date | null; reportSubmittedAt: Date | null; reportBottlesSold: number | null; reportTasterName: string | null; timeZone: string }>
         recentEvents: Array<{ id: string; title: string; status: string; startAt: Date | null; attendeeCount: number }>
         notes: Awaited<ReturnType<typeof getAccountNotes>>
         inventoryItems: Awaited<ReturnType<typeof getAccountInventoryOnHand>>
@@ -237,8 +241,8 @@ export async function AccountRecordPage({
         recentOrders: Array<{ id: string; status: string; total: string; createdAt: Date; isAssisted: boolean }>
         recentInvoices: Array<{ id: string; invoiceNumber: string; dueDate: string | null; total: string; status: string }>
         recentDeliveries: Array<{ deliveryId: string; status: string; weekStartDate: string; stopStatus: string; completedAt: Date | null; proofOfDeliveryUrl: string | null; shelfPhotoUrl: string | null }>
-        recentTastings: Array<{ id: string; eventName: string; status: string; scheduledAt: Date; endAt: Date | null; reportSubmittedAt: Date | null; timeZone: string }>
-        historicalOrders?: Array<{ id: string; orderDate: Date; productName: string | null; cases: string; bottles: string; orderValue: string | null; notes: string | null; source: string }>
+        recentTastings: Array<{ id: string; eventName: string; status: string; scheduledAt: Date; endAt: Date | null; reportSubmittedAt: Date | null; reportBottlesSold: number | null; reportTasterName: string | null; timeZone: string }>
+        historicalOrders?: Array<{ duplicateReviewReason?: string | null; productId?: string | null; revision?: number; caseUnitPrice?: string | null; bottleUnitPrice?: string | null; externalReference?: string | null; paymentStatus?: string | null; fulfillmentStatus?: string | null; id: string; orderDate: Date; productName: string | null; cases: string; bottles: string; orderValue: string | null; notes: string | null; source: string }>
         historicalProductOptions?: Awaited<ReturnType<typeof getAvailableInventoryProducts>>
       }
     | null = null
@@ -343,7 +347,9 @@ export async function AccountRecordPage({
         endAt: tastings.endAt,
         timeZone: tastings.timeZone,
         reportSubmittedAt: tastingReports.submittedAt,
-      }).from(tastings).leftJoin(tastingReports, eq(tastingReports.tastingId, tastings.id)).where(eq(tastings.customerId, accountId)).orderBy(desc(tastings.scheduledAt)).limit(6),
+        reportBottlesSold: tastingReports.bottlesSold,
+        reportTasterName: sql<string | null>`coalesce(${users.name}, ${reportSubmitters.name})`,
+      }).from(tastings).leftJoin(tastingReports, eq(tastingReports.tastingId, tastings.id)).leftJoin(users, eq(users.id, tastings.assignedUserId)).leftJoin(reportSubmitters, eq(reportSubmitters.id, tastingReports.submittedByUserId)).where(eq(tastings.customerId, accountId)).orderBy(desc(tastings.scheduledAt)).limit(6),
       getAccountNotes(accountId),
       getAccountInventoryOnHand(accountId),
       getAccountActivityFeed(accountId, mode),
@@ -421,7 +427,9 @@ export async function AccountRecordPage({
         endAt: tastings.endAt,
         timeZone: tastings.timeZone,
         reportSubmittedAt: tastingReports.submittedAt,
-      }).from(tastings).leftJoin(tastingReports, eq(tastingReports.tastingId, tastings.id)).where(eq(tastings.customerId, accountId)).orderBy(desc(tastings.scheduledAt)).limit(20),
+        reportBottlesSold: tastingReports.bottlesSold,
+        reportTasterName: sql<string | null>`coalesce(${users.name}, ${reportSubmitters.name})`,
+      }).from(tastings).leftJoin(tastingReports, eq(tastingReports.tastingId, tastings.id)).leftJoin(users, eq(users.id, tastings.assignedUserId)).leftJoin(reportSubmitters, eq(reportSubmitters.id, tastingReports.submittedByUserId)).where(eq(tastings.customerId, accountId)).orderBy(desc(tastings.scheduledAt)).limit(20),
     ])
 
     ordersData = { recentOrders, recentInvoices, recentDeliveries, recentTastings }
@@ -465,7 +473,7 @@ export async function AccountRecordPage({
   const [salesIntelligence, tastingSummary, lifetimeSummary] = await Promise.all([
     loadAccountIntelligence(accountId, intelligenceScope).catch(() => null),
     getAccountTastingSummary(accountId).catch(() => ({ nextTasting: null, associatedTaster: null })),
-    getLifetimeOrderSummary(accountId).catch(() => ({ lifetimeOrderCount: 0, firstOrderDate: null, lastOrderDate: null, averageOrderValue: null })),
+    getLifetimeOrderSummary(accountId).catch(() => ({ lifetimeOrderCount: 0, firstOrderDate: null, lastOrderDate: null, averageOrderValue: null, averageGapDays: null, excludedDuplicates: 0, excludedIds: [], history: [] })),
   ])
 
   if (tab === 'orders') {
@@ -481,6 +489,13 @@ export async function AccountRecordPage({
         orderValue: historicalOrders.orderValue,
         notes: historicalOrders.notes,
         source: historicalOrders.source,
+        duplicateReviewReason: historicalOrders.duplicateReviewReason,
+        revision: historicalOrders.revision,
+        caseUnitPrice: historicalOrders.caseUnitPrice,
+        bottleUnitPrice: historicalOrders.bottleUnitPrice,
+        externalReference: historicalOrders.externalReference,
+        paymentStatus: historicalOrders.paymentStatus,
+        fulfillmentStatus: historicalOrders.fulfillmentStatus,
       })
       .from(historicalOrders)
       .leftJoin(products, eq(historicalOrders.productId, products.id))
@@ -819,7 +834,7 @@ export async function AccountRecordPage({
                           <div key={tasting.id} className="rounded-xl border border-slate-100 px-3 py-3">
                             <div className="flex items-start justify-between gap-3">
                               <div>
-                                <p className="text-sm font-medium text-slate-900">{tasting.eventName}</p>
+                                <p className="text-sm font-medium text-slate-900">{tasting.eventName}</p><p className="text-xs text-slate-600">Taster: {tasting.reportTasterName ?? 'Not reported'} · Bottles sold: {tasting.reportSubmittedAt ? (tasting.reportBottlesSold ?? 'Not recorded') : 'Report pending'}</p>
                                 <p className="text-xs text-muted-foreground" suppressHydrationWarning>{formatEasternDateTime(tasting.scheduledAt, tasting.timeZone)}</p>
                                 <div className="mt-2 flex flex-wrap items-center gap-2">
                                   <Badge variant={tasting.reportSubmittedAt ? 'success' : 'warning'} className="text-xs">{tasting.reportSubmittedAt ? 'Report submitted' : 'Report pending'}</Badge>
@@ -910,11 +925,14 @@ export async function AccountRecordPage({
           </Card>
           <Card>
             <CardHeader className="pb-3"><CardTitle>Taster Reports</CardTitle></CardHeader>
-            <CardContent>{ordersData.recentTastings.length === 0 ? <p className="text-sm text-slate-500">No tastings linked to this account yet.</p> : <div className="space-y-2">{ordersData.recentTastings.map((tasting) => <div key={tasting.id} className="rounded-xl border border-slate-100 px-3 py-3"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-medium text-slate-900">{tasting.eventName}</p><p className="text-xs text-muted-foreground" suppressHydrationWarning>{formatEasternDateTime(tasting.scheduledAt, tasting.timeZone)}</p><div className="mt-2 flex flex-wrap items-center gap-2"><Badge variant={tasting.reportSubmittedAt ? 'success' : 'warning'} className="text-xs">{tasting.reportSubmittedAt ? 'Report submitted' : 'Report pending'}</Badge><Badge variant="secondary" className="text-xs">{tasting.status}</Badge></div></div><Link href={getTastingReportPath(mode, tasting.id)} className="text-xs font-medium text-blue-600 hover:underline">{getTastingReportLinkLabel(mode, Boolean(tasting.reportSubmittedAt))}</Link></div></div>)}</div>}</CardContent>
+            <CardContent>{ordersData.recentTastings.length === 0 ? <p className="text-sm text-slate-500">No tastings linked to this account yet.</p> : <div className="space-y-2">{ordersData.recentTastings.map((tasting) => <div key={tasting.id} className="rounded-xl border border-slate-100 px-3 py-3"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-medium text-slate-900">{tasting.eventName}</p><p className="text-xs text-slate-600">Taster: {tasting.reportTasterName ?? 'Not reported'} · Bottles sold: {tasting.reportSubmittedAt ? (tasting.reportBottlesSold ?? 'Not recorded') : 'Report pending'}</p><p className="text-xs text-muted-foreground" suppressHydrationWarning>{formatEasternDateTime(tasting.scheduledAt, tasting.timeZone)}</p><div className="mt-2 flex flex-wrap items-center gap-2"><Badge variant={tasting.reportSubmittedAt ? 'success' : 'warning'} className="text-xs">{tasting.reportSubmittedAt ? 'Report submitted' : 'Report pending'}</Badge><Badge variant="secondary" className="text-xs">{tasting.status}</Badge></div></div><Link href={getTastingReportPath(mode, tasting.id)} className="text-xs font-medium text-blue-600 hover:underline">{getTastingReportLinkLabel(mode, Boolean(tasting.reportSubmittedAt))}</Link></div></div>)}</div>}</CardContent>
           </Card>
         </div>
+        <div className="rounded-xl border bg-white p-4 text-sm"><p>Earliest recorded purchase: {lifetimeSummary.firstOrderDate ? formatDate(lifetimeSummary.firstOrderDate) : 'Unknown'} · Most recent: {lifetimeSummary.lastOrderDate ? formatDate(lifetimeSummary.lastOrderDate) : 'Unknown'} · Recorded orders: {lifetimeSummary.lifetimeOrderCount}</p><p>Purchase frequency: {lifetimeSummary.averageGapDays == null ? 'Insufficient history' : `${lifetimeSummary.averageGapDays.toFixed(1)} days on average between recorded purchases`}. History may be incomplete. Multi-product history with a shared source reference counts as one purchase. Values are line totals.</p>{lifetimeSummary.excludedDuplicates > 0 && <p className="text-amber-700">{lifetimeSummary.excludedDuplicates} exact historical overlaps excluded from summaries pending review; inspect the original history below.</p>}</div>
+        <details className="rounded-xl border bg-white p-4 text-sm"><summary>Chronological purchase history ({lifetimeSummary.history.length})</summary><div className="mt-3 space-y-2">{lifetimeSummary.history.map(purchase=><div className="flex flex-wrap justify-between gap-2 border-b py-2" key={`${purchase.source}-${purchase.id}`}><span>{formatDate(purchase.date)} · {purchase.source}</span><span>{purchase.total == null ? 'Value unknown' : formatCurrency(purchase.total)}</span>{purchase.source === 'Live order' && mode !== 'sales' && <Link className="text-blue-700 underline" href={`/${mode}/orders/${purchase.id}`}>View order</Link>}</div>)}</div></details>
         <AccountHistoricalOrdersCard
           accountId={account.id}
+          excludedIds={lifetimeSummary.excludedIds}
           historicalOrders={ordersData.historicalOrders ?? []}
           products={ordersData.historicalProductOptions ?? []}
           canManage={mode === 'admin' || mode === 'staff'}
@@ -939,7 +957,7 @@ export async function AccountRecordPage({
                 <p className="mb-2 text-sm font-medium text-slate-900">Recent SMS / MMS</p>
                 {contactsData.recentTexts.length === 0 ? <p className="text-sm text-slate-500">No communication history found yet.</p> : <div className="space-y-2">{contactsData.recentTexts.map((message) => <div key={message.id} className="rounded-xl border border-slate-100 px-3 py-3"><div className="flex items-center justify-between gap-3"><Badge variant={message.direction === 'inbound' ? 'warning' : 'secondary'}>{message.direction}</Badge><span className="text-xs text-muted-foreground" suppressHydrationWarning>{formatDate(message.createdAt)}</span></div><p className="mt-2 text-sm text-slate-700">{message.body}</p>{message.mediaUrls?.length ? <p className="mt-1 text-xs text-slate-500">{message.mediaUrls.length} media attachment{message.mediaUrls.length === 1 ? '' : 's'}</p> : null}</div>)}</div>}
               </div>
-              <div className="rounded-xl border border-dashed border-slate-300 px-4 py-4 text-sm text-slate-500">Use the Notes &amp; Activity tab to log call notes and email summaries for this account.</div>
+              {mode !== 'sales' && <ContactEmailHistory accountId={account.id} />}
             </CardContent>
           </Card>
         </div>

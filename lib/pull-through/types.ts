@@ -51,10 +51,12 @@ export type PullThroughOrder = {
   cases: number
   bottles: number
   total: number
+  revenueKnown?: boolean
   /** 0 = initial order, 1 = first reorder, 2+ = subsequent reorders. */
   sequenceIndex: number
   isReorder: boolean
   /** Admin override stored on the order row, applied by classifyOrderAttribution. */
+  relatedTastingId?: string | null
   attributionOverride: { kind: OrderAttributionKind; reason: string | null } | null
   /** Organic vs tasting-assisted classification; null for sample drops. */
   attribution: OrderAttribution | null
@@ -62,16 +64,16 @@ export type PullThroughOrder = {
 
 /* ------------------------------------------------------------ attribution */
 
-export type OrderAttributionKind = 'organic' | 'assisted'
+export type OrderAttributionKind = 'organic' | 'assisted' | 'unknown'
 
 /**
  * Whether a commercial order was earned by organic consumer demand or pulled through
- * by a paid tasting. Classified automatically from timing and tasting sales; an admin
- * override (stored on the order) always wins.
+ * by a tasting. Explicit links or documented staff overrides establish classification;
+ * absent evidence remains unknown. Timing is observational only.
  */
 export type OrderAttribution = {
   kind: OrderAttributionKind
-  source: 'auto' | 'override'
+  source: 'auto' | 'override' | 'recorded'
   /** The tasting this order is attributed to, when assisted. */
   tastingId: string | null
   tastingAt: Date | null
@@ -147,6 +149,7 @@ export type PullThroughTasting = {
   accountId: string
   eventName: string
   occurredAt: Date
+  timeZone?: string
   status: string
   tasterUserId: string | null
   tasterName: string | null
@@ -235,12 +238,13 @@ export type AccountVelocity = {
   totalCases: number
   totalBottles: number
   organicCases: number
+  unknownCases: number
   assistedCases: number
   organicBottles: number
   assistedBottles: number
   /** Bottles the reports say were sold during tastings themselves. */
   bottlesSoldAtTastings: number
-  /** Share of cases earned organically, 0..100. null without commercial orders. */
+  /** Share of cases earned organically, 0..100. null without commercial orders or with incomplete attribution. */
   organicPercent: number | null
   assistedPercent: number | null
   /** Bottles per week, split by channel. null when the span is too short to measure. */
@@ -280,13 +284,15 @@ export type TastingDependency = {
 }
 
 export type AccountEconomics = {
-  revenue: number
+  revenue: number | null
   casesPurchased: number
   contribution: number
   tastingCount: number
   /** Tastings whose cost counts against the account (strategic ones excluded). */
   retailTastingCount: number
   tastingSpend: number
+  approvedTastingSpend: number
+  estimatedTastingSpend: number
   strategicSpend: number
   netContribution: number
   profitPerTasting: number | null

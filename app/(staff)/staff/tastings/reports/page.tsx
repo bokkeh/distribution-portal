@@ -9,7 +9,8 @@ import { TastingReportsView } from '@/components/tastings/TastingReportsView'
 import { getTastingAnalysesForTastings } from '@/actions/tasting-analysis'
 import type { SerializedTastingAnalysis } from '@/components/tastings/TastingInsightsCard'
 
-export default async function StaffTastingReportsPage() {
+export default async function StaffTastingReportsPage({ searchParams }: { searchParams: Promise<{ tasting?: string }> }) {
+  const { tasting } = await searchParams
   await requireFeature('tastings', 'admin', 'staff')
 
   const rows = await db
@@ -54,6 +55,7 @@ export default async function StaffTastingReportsPage() {
     .leftJoin(users, eq(tastings.assignedUserId, users.id))
     .leftJoin(tastingReports, eq(tastingReports.tastingId, tastings.id))
     .leftJoin(tasterInvoices, eq(tasterInvoices.tastingId, tastings.id))
+    .where(tasting ? eq(tastings.id, tasting) : undefined)
     .orderBy(desc(tastings.scheduledAt))
 
   const tastingIds = rows.map(r => r.tastingId)

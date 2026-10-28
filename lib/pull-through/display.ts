@@ -119,6 +119,7 @@ export const OBJECTIVE_META: Record<TastingObjective, { label: string; short: st
 }
 
 export const ATTRIBUTION_META = {
+  unknown: { label: 'Unknown attribution', chip: 'bg-slate-50 text-slate-700 border-slate-200' },
   organic: { label: 'Organic', chip: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   assisted: { label: 'Tasting-assisted', chip: 'bg-violet-50 text-violet-700 border-violet-200' },
 } as const

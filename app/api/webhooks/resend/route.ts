@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { recordContactEmailEvent } from '@/lib/resend/contact-email-events'
 import { Resend } from 'resend'
 import { parseWeekKey, recordCommunityUnsubscribe, type CommunityUnsubscribeReason } from '@/lib/marketing/community-email-events'
 import { WEEKLY_RECIPE_TAG } from '@/lib/marketing/weekly-recipe-email'
@@ -30,6 +31,13 @@ export async function POST(request: NextRequest) {
     })
   } catch {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
+  }
+
+  // Signed provider events are the only source of confirmed delivery.
+  if ('email_id' in event.data && ['email.delivered', 'email.bounced', 'email.suppressed', 'email.failed'].includes(event.type)) {
+    const tags = ('tags' in event.data ? event.data.tags : undefined) ?? {}
+    const taggedId = typeof tags.contact_email_id === 'string' && /^[0-9a-f-]{36}$/i.test(tags.contact_email_id) ? tags.contact_email_id : null
+    await recordContactEmailEvent({ id: request.headers.get('svix-id') ?? '', type: event.type, at: event.created_at, providerMessageId: event.data.email_id, communicationId: taggedId })
   }
 
   let reason: CommunityUnsubscribeReason | null = null

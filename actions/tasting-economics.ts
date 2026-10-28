@@ -91,7 +91,7 @@ export async function setOrderTastingAttribution(input: {
   await db
     .update(orders)
     .set({
-      tastingAttributionOverride: input.kind,
+      tastingAttributionOverride: input.kind === 'organic' || input.kind === 'assisted' ? input.kind : null,
       tastingAttributionOverrideReason: input.kind ? reason : null,
       tastingAttributionOverrideByUserId: input.kind ? session.user.id : null,
       tastingAttributionOverrideAt: input.kind ? new Date() : null,

@@ -1,92 +1,54 @@
 'use server'
-
-import { eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
+import { createHash } from 'node:crypto'
 import { db } from '@/db'
-import { customerAccounts, historicalOrders } from '@/db/schema'
+import { historicalOrders } from '@/db/schema'
 import { requireAdminOrStaff } from '@/lib/auth/session'
 import { logActivityEvent } from '@/lib/activity/log'
-
-const SOURCE_OPTIONS = ['imported', 'manual_historical', 'legacy_system'] as const
+import { historicalInput, historicalFingerprintParts } from '@/lib/orders/historical'
 
 export async function addHistoricalOrder(formData: FormData): Promise<{ error?: string; success?: boolean }> {
   const session = await requireAdminOrStaff()
-
-  const accountId = String(formData.get('accountId') ?? '').trim()
-  const orderDateInput = String(formData.get('orderDate') ?? '').trim()
-  const productId = String(formData.get('productId') ?? '').trim() || null
-  const productNameFreeform = String(formData.get('productNameFreeform') ?? '').trim() || null
-  const cases = Number(formData.get('cases') ?? '0') || 0
-  const bottles = Number(formData.get('bottles') ?? '0') || 0
-  const orderValueRaw = String(formData.get('orderValue') ?? '').trim()
-  const orderValue = orderValueRaw ? Number(orderValueRaw) : null
-  const notes = String(formData.get('notes') ?? '').trim() || null
-  const sourceInput = String(formData.get('source') ?? 'manual_historical')
-  const source = (SOURCE_OPTIONS as readonly string[]).includes(sourceInput)
-    ? (sourceInput as typeof SOURCE_OPTIONS[number])
-    : 'manual_historical'
-
-  if (!accountId) return { error: 'Account is required.' }
-  if (!orderDateInput) return { error: 'Historical order date is required.' }
-
-  const orderDate = new Date(orderDateInput)
-  if (Number.isNaN(orderDate.getTime())) return { error: 'Enter a valid order date.' }
-  if (!productId && !productNameFreeform) return { error: 'Select a product or enter a product name.' }
-  if (orderValueRaw && (Number.isNaN(orderValue) || (orderValue ?? 0) < 0)) return { error: 'Enter a valid order value.' }
-
-  const [account] = await db
-    .select({ id: customerAccounts.id })
-    .from(customerAccounts)
-    .where(eq(customerAccounts.id, accountId))
-    .limit(1)
-  if (!account) return { error: 'Account not found.' }
-
-  const [row] = await db
-    .insert(historicalOrders)
-    .values({
-      accountId,
-      orderDate,
-      productId,
-      productNameFreeform,
-      cases: cases.toFixed(2),
-      bottles: bottles.toFixed(2),
-      orderValue: orderValue == null ? null : orderValue.toFixed(2),
-      notes,
-      source,
-      createdByUserId: session.user.id,
-    })
-    .returning({ id: historicalOrders.id })
-
-  await logActivityEvent({
-    entityType: 'account',
-    entityId: accountId,
-    actorUserId: session.user.id,
-    kind: 'historical_order_added',
-    title: 'Historical order added',
-    body: `Backfilled order dated ${orderDate.toISOString().slice(0, 10)} (${source.replace(/_/g, ' ')}).`,
-    metadata: { historicalOrderId: row.id, cases, bottles, orderValue },
-  })
-
-  revalidatePath(`/admin/crm/${accountId}`)
-  revalidatePath(`/staff/crm/${accountId}`)
-  return { success: true }
+  const parsed = historicalInput.safeParse(Object.fromEntries(formData))
+  if (!parsed.success) return { error: parsed.error.issues.map(i => i.message).join(' ') }
+  const v = parsed.data
+  const fingerprint = createHash('sha256').update(historicalFingerprintParts(v)).digest('hex')
+  try {
+    const possible = await db.execute(sql`SELECT id FROM historical_orders
+      WHERE account_id = ${v.accountId}::uuid AND (order_date AT TIME ZONE 'UTC')::date = ${v.orderDate}::date
+      AND id IS DISTINCT FROM ${v.id || null}::uuid
+      AND (${v.productId || null}::uuid IS NOT NULL AND product_id = ${v.productId || null}::uuid OR lower(trim(product_name_freeform)) = ${v.productNameFreeform.toLowerCase() || null})
+      UNION ALL SELECT o.id FROM orders o JOIN order_items i ON i.order_id = o.id
+      WHERE o.customer_id = ${v.accountId}::uuid AND (o.created_at AT TIME ZONE 'America/New_York')::date = ${v.orderDate}::date
+      AND o.status <> 'cancelled' AND i.product_id = ${v.productId || null}::uuid LIMIT 1`)
+    if (possible.rows.length && !v.duplicateReason) return { error: 'Possible duplicate purchase on this date. Review existing live/imported history; enter a duplicate review reason only if this is a separate purchase.' }
+    const data = { accountId: v.accountId, orderDate: new Date(`${v.orderDate}T12:00:00Z`), productId: v.productId || null, productNameFreeform: v.productNameFreeform || null,
+      cases: v.cases.toFixed(2), bottles: v.bottles.toFixed(2), orderValue: v.orderValue?.toFixed(2) ?? null,
+      caseUnitPrice: v.caseUnitPrice?.toFixed(2) ?? null, bottleUnitPrice: v.bottleUnitPrice?.toFixed(2) ?? null,
+      externalReference: v.externalReference || null, paymentStatus: v.paymentStatus || null, fulfillmentStatus: v.fulfillmentStatus || null,
+      duplicateReviewReason: v.duplicateReason || null, notes: v.notes || null, source: v.source, fingerprint }
+    let row
+    if (v.id) {
+      ;[row] = await db.update(historicalOrders).set({ ...data, revision: sql`${historicalOrders.revision} + 1` }).where(and(eq(historicalOrders.id, v.id), eq(historicalOrders.accountId, v.accountId), eq(historicalOrders.revision, v.revision))).returning()
+      if (!row) return { error: 'Historical purchase changed elsewhere. Reload and review.' }
+    } else {
+      ;[row] = await db.insert(historicalOrders).values({ ...data, createdByUserId: session.user.id }).onConflictDoNothing().returning()
+      if (!row) return { error: 'This exact purchase is already recorded. Review history before adding another.' }
+    }
+    await logActivityEvent({ entityType: 'account', entityId: v.accountId, actorUserId: session.user.id, kind: v.id ? 'historical_order_corrected' : 'historical_order_added', title: v.id ? 'Historical order corrected' : 'Historical order added', metadata: { ...v, historicalOrderId: row.id } })
+    for (const path of [`/admin/crm/${v.accountId}`, `/staff/crm/${v.accountId}`, `/sales/accounts/${v.accountId}`, '/admin/pull-through', '/sales/accounts']) revalidatePath(path)
+    return { success: true }
+  } catch { return { error: 'Could not save historical order. Check references and duplicate purchases.' } }
 }
 
 export async function deleteHistoricalOrder(id: string, accountId: string): Promise<{ error?: string; success?: boolean }> {
   const session = await requireAdminOrStaff()
-
-  await db.delete(historicalOrders).where(eq(historicalOrders.id, id))
-
-  await logActivityEvent({
-    entityType: 'account',
-    entityId: accountId,
-    actorUserId: session.user.id,
-    kind: 'historical_order_removed',
-    title: 'Historical order removed',
-    metadata: { historicalOrderId: id },
-  })
-
-  revalidatePath(`/admin/crm/${accountId}`)
-  revalidatePath(`/staff/crm/${accountId}`)
+  // Keep provenance and purchase details: voiding is reversible in the correction form.
+  const [row] = await db.update(historicalOrders).set({ fulfillmentStatus: 'cancelled', revision: sql`${historicalOrders.revision} + 1` }).where(and(eq(historicalOrders.id, id), eq(historicalOrders.accountId, accountId))).returning()
+  if (!row) return { error: 'Historical order not found.' }
+  await logActivityEvent({ entityType: 'account', entityId: accountId, actorUserId: session.user.id, kind: 'historical_order_voided', title: 'Historical order voided', metadata: { historicalOrderId: id } })
+  for (const mode of ['admin', 'staff']) revalidatePath(`/${mode}/crm/${accountId}`)
+  revalidatePath('/admin/pull-through')
   return { success: true }
 }

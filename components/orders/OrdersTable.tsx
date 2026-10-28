@@ -33,6 +33,7 @@ export type OrderRow = {
   shippingStatus: 'not_scheduled' | 'scheduled' | 'out_for_delivery' | 'delivered' | 'issue'
   orderType: 'paid' | 'sample'
   paymentStatus: string
+  driverName?: string | null
   paymentMethod: string | null
   createdAt: Date | string
   customerId: string
@@ -173,7 +174,7 @@ function renderCell(order: OrderRow, column: ColumnKey, portal: 'admin' | 'staff
     case 'payment':
       return <td key={column} className="px-6 py-4"><div className="flex flex-col items-start gap-1"><OrderStatusBadge kind="payment" status={order.paymentStatus} />{order.paymentMethod ? <span className="text-xs text-slate-500">{formatOrderPaymentMethodLabel(order.paymentMethod)}</span> : null}</div></td>
     case 'shipping':
-      return <td key={column} className="px-6 py-4"><OrderStatusBadge kind="shipping" status={order.shippingStatus} /></td>
+      return <td key={column} className="px-6 py-4"><OrderStatusBadge kind="shipping" status={order.shippingStatus} /><p className="mt-1 text-xs text-slate-500">Driver: {order.driverName ?? 'Unassigned'}</p></td>
     case 'total':
       return <td key={column} className="px-6 py-4 text-right text-sm font-semibold">{formatCurrency(order.total)}</td>
     default:

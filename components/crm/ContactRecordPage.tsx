@@ -5,6 +5,7 @@ import { db } from '@/db'
 import { contacts, customerAccounts } from '@/db/schema'
 import { requireRole } from '@/lib/auth/session'
 import { ContactRelationshipForm } from './ContactRelationshipForm'
+import { ContactEmailHistory } from './ContactEmailHistory'
 import ContactCard from './ContactCard'
 
 export async function ContactRecordPage({ contactId, mode }: { contactId: string; mode: 'admin' | 'staff' }) {
@@ -16,6 +17,7 @@ export async function ContactRecordPage({ contactId, mode }: { contactId: string
     <Link href={`/${mode}/crm?tab=company-contacts`} className="text-primary hover:underline">← Contacts</Link>
     <h1 className="text-2xl font-bold">{contact.name}</h1>
     <ContactCard contact={contact} />
+    <ContactEmailHistory contactId={contact.id} />
     <ContactRelationshipForm contact={contact} accounts={accounts} userId={session.user.id} />
   </div>
 }

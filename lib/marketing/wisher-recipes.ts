@@ -16,6 +16,7 @@ export type WisherRecipe = {
   imageUrl: string | null
   ingredientGroups: WisherRecipeIngredientGroup[]
   steps: string[]
+  seasons?: string[]
 }
 
 type ShopifyProduct = {
@@ -23,6 +24,7 @@ type ShopifyProduct = {
   title: string
   body_html: string | null
   images: Array<{ src: string }>
+  tags?: string[]
 }
 
 const NAMED_ENTITIES: Record<string, string> = {
@@ -106,6 +108,7 @@ export async function fetchWisherRecipes(): Promise<WisherRecipe[]> {
       const { ingredientGroups, steps } = parseRecipeBody(product.body_html ?? '')
       const image = product.images[0]?.src
       return {
+        seasons: (product.tags ?? []).map(t => t.toLowerCase().replace(/^season:/, '').replace('fall', 'autumn')).filter(t => ['spring','summer','autumn','winter'].includes(t)),
         handle: product.handle,
         title: product.title.trim(),
         url: `${RECIPES_COLLECTION_URL}/products/${product.handle}`,

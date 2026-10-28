@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdmin } from '@/lib/auth/session'
+import { requireAdminOrStaff } from '@/lib/auth/session'
 import { parseWeekKey } from '@/lib/marketing/community-email-events'
 import { buildSentRecipeEmailPreview, buildWeeklyRecipePreview } from '@/lib/marketing/weekly-recipe-email'
 
@@ -10,7 +10,7 @@ export const runtime = 'nodejs'
  * `?handle=` previews a specific recipe, and `?format=text` shows the plain-text part.
  */
 export async function GET(request: NextRequest) {
-  await requireAdmin()
+  await requireAdminOrStaff()
   const params = request.nextUrl.searchParams
   const week = parseWeekKey(params.get('week'))
   const preview = week

@@ -1,13 +1,14 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Mail, X, Send, CheckCircle } from 'lucide-react'
-import { sendQuickEmail } from '@/actions/notifications'
+import { getContactEmailIdentity, saveContactEmailDraft, sendQuickEmail } from '@/actions/notifications'
 
 interface Props {
+  contactId?: string
   email: string
   recipientName: string
   onClose: () => void
@@ -20,7 +21,11 @@ const QUICK_SUBJECTS = [
   { subject: 'Delivery scheduled this week', body: 'Hi, this is AHAWC. Your delivery is scheduled for this week. Please make sure someone is available to receive it.' },
 ]
 
-export function EmailModal({ email, recipientName, onClose }: Props) {
+export function EmailModal({ email, recipientName, contactId, onClose }: Props) {
+  const requestId = useRef<string | null>(null)
+  const sending = useRef(false)
+  const [identity, setIdentity] = useState<{ sender: string | null; replyTo: string | null } | null>(null)
+  useEffect(() => { getContactEmailIdentity().then(setIdentity).catch(() => setError('Could not load email configuration.')) }, [])
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
   const [sent, setSent] = useState(false)
@@ -28,23 +33,39 @@ export function EmailModal({ email, recipientName, onClose }: Props) {
   const [saving, setSaving] = useState(false)
   const [, startTransition] = useTransition()
 
+  useEffect(() => {
+    if (!contactId || sent || saving || (!subject && !body)) return
+    requestId.current ??= crypto.randomUUID()
+    const timer = setTimeout(() => {
+      void saveContactEmailDraft(contactId, requestId.current!, subject, body).then(result => {
+        if (result.error) setError(result.error)
+      }).catch(() => setError('Draft could not be saved. Keep this window open.'))
+    }, 600)
+    return () => clearTimeout(timer)
+  }, [contactId, subject, body, saving, sent])
+
   function handleQuickSelect(quick: { subject: string; body: string }) {
     setSubject(quick.subject)
     setBody(quick.body)
   }
 
   function handleSend() {
-    if (!subject.trim() || !body.trim()) return
+    if (sending.current || !identity?.sender || !subject.trim() || !body.trim()) return
+    sending.current = true
+    requestId.current ??= crypto.randomUUID()
     setSaving(true)
     setError(null)
     startTransition(async () => {
-      const result = await sendQuickEmail(email, recipientName, subject, body)
+      let result
+      try { result = await sendQuickEmail(email, recipientName, subject, body, requestId.current!, contactId) }
+      catch { result = { error: 'Request interrupted. Check history before sending again.' } }
       if ('error' in result && result.error) {
         setError(result.error)
       } else {
         setSent(true)
       }
       setSaving(false)
+      sending.current = false
     })
   }
 
@@ -67,8 +88,8 @@ export function EmailModal({ email, recipientName, onClose }: Props) {
         {sent ? (
           <div className="space-y-2 px-5 py-12 text-center">
             <CheckCircle className="mx-auto h-10 w-10 text-green-500" />
-            <p className="font-medium">Email sent</p>
-            <p className="text-sm text-muted-foreground">Delivered to {email}</p>
+            <p className="font-medium">Email accepted by provider</p>
+            <p className="text-sm text-muted-foreground">Addressed to {email}. Delivery has not been confirmed.</p>
             <Button className="mt-4" onClick={onClose}>Done</Button>
           </div>
         ) : (
@@ -90,6 +111,7 @@ export function EmailModal({ email, recipientName, onClose }: Props) {
             </div>
 
             <div className="space-y-1">
+              <p className="text-xs text-slate-600">From: {identity?.sender ?? 'Email sender not configured'}<br />Reply-to: {identity?.replyTo ?? identity?.sender ?? 'Not configured'}</p>
               <Label>Subject</Label>
               <Input
                 value={subject}
@@ -114,7 +136,7 @@ export function EmailModal({ email, recipientName, onClose }: Props) {
 
             <div className="flex justify-end gap-2 pb-1">
               <Button variant="outline" onClick={onClose}>Cancel</Button>
-              <Button onClick={handleSend} disabled={!subject.trim() || !body.trim() || saving}>
+              <Button onClick={handleSend} disabled={!identity?.sender || !subject.trim() || !body.trim() || saving}>
                 <Send className="mr-1.5 h-3.5 w-3.5" />
                 {saving ? 'Sending...' : 'Send Email'}
               </Button>

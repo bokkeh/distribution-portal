@@ -1,5 +1,5 @@
 import { db } from '@/db'
-import { orders, customerAccounts, orderItems } from '@/db/schema'
+import { orders, customerAccounts, orderItems, drivers, users } from '@/db/schema'
 import { eq, desc, inArray, sql } from 'drizzle-orm'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -26,6 +26,7 @@ export default async function AdminOrdersPage({
     shippingStatus: 'not_scheduled' | 'scheduled' | 'out_for_delivery' | 'delivered' | 'issue'
     orderType: 'paid' | 'sample'
     paymentStatus: string
+    driverName?: string | null
     paymentMethod: string | null
     createdAt: Date
     customerId: string
@@ -39,6 +40,7 @@ export default async function AdminOrdersPage({
         total: orders.total,
         status: orders.status,
         shippingStatus: orders.shippingStatus,
+        driverName: users.name,
         orderType: orders.orderType,
         paymentStatus: orders.paymentStatus,
         paymentMethod: orders.paymentMethod,
@@ -48,6 +50,8 @@ export default async function AdminOrdersPage({
       })
       .from(orders)
       .leftJoin(customerAccounts, eq(orders.customerId, customerAccounts.id))
+      .leftJoin(drivers, eq(drivers.id, orders.assignedDriverId))
+      .leftJoin(users, eq(users.id, drivers.userId))
       .orderBy(desc(orders.createdAt))
       .then(rows => rows.map(row => ({ ...row, quantity: 0 })))
   } catch (error) {

@@ -19,7 +19,10 @@
     "test:operator": "node --test tests/operator-workflows.test.cjs",
     "test:operator:browser": "node tests/operator-browser.cjs",
     "test:field": "node --test tests/field-workflows.test.cjs",
-    "test:field:browser": "node tests/field-browser.cjs"
+    "test:field:browser": "node tests/field-browser.cjs",
+    "test:stakeholder": "tsx --test lib/orders/operations.test.ts lib/orders/history-reconciliation.test.ts lib/marketing/recipe-selection.test.ts lib/pull-through/economics.test.ts && node --test tests/stakeholder-workflows.test.cjs",
+    "test:stakeholder:browser": "node tests/stakeholder-browser.cjs",
+    "test:admin-terms": "node --test tests/admin-terms.test.cjs"
   },
   "dependencies": {
     "@auth/core": "^0.41.0",

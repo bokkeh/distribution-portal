@@ -1,10 +1,11 @@
-import { date, boolean, index, pgTable, uuid, text, numeric, timestamp } from 'drizzle-orm/pg-core'
+import { date, boolean, integer, index, pgTable, uuid, text, numeric, timestamp } from 'drizzle-orm/pg-core'
 import { customerAccounts } from './customers'
 import { users } from './users'
 import { products } from './products'
 import { salesMembers } from './salesMembers'
 import { geographicPricingRules } from './geographicPricingRules'
 import { tastings } from './tastings'
+import { drivers } from './drivers'
 
 export const ORDER_PAYMENT_STATUSES = ['not_applicable', 'unpaid', 'requires_action', 'processing', 'paid', 'failed', 'canceled'] as const
 export type OrderPaymentStatus = typeof ORDER_PAYMENT_STATUSES[number]
@@ -16,6 +17,8 @@ export const orders = pgTable('orders', {
   customerId: uuid('customer_id').notNull().references(() => customerAccounts.id),
   createdBy: uuid('created_by').notNull().references(() => users.id),
   orderType: text('order_type', { enum: ['paid', 'sample'] }).notNull(),
+  operationsRevision: integer('operations_revision').notNull().default(0),
+  assignedDriverId: uuid('assigned_driver_id').references(() => drivers.id, { onDelete: 'set null' }),
   paymentTerms: text('payment_terms').default('NET30'),
   deliveryDate: date('delivery_date'),
   stripePaymentIntentId: text('stripe_payment_intent_id'),

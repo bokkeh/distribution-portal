@@ -131,7 +131,7 @@ export function AccountEconomicsSection({
                     {velocity.organicPercent == null ? '—' : `${velocity.organicPercent.toFixed(0)}%`}
                   </p>
                   <p className="mt-1 text-xs text-slate-600">
-                    {velocity.organicCases.toFixed(1)} of {velocity.totalCases.toFixed(1)} cases earned without a paid tasting
+                    {velocity.organicCases.toFixed(1)} of {velocity.totalCases.toFixed(1)} cases explicitly classified organic
                   </p>
                 </div>
                 <div className="text-right">
@@ -204,7 +204,7 @@ export function AccountEconomicsSection({
             Account Velocity
           </CardTitle>
           <p className="text-xs text-muted-foreground">
-            Organic = product moved with no Wisher tasting behind it. Assisted = orders that followed a paid tasting.
+            Organic and assisted cases require explicit classification. Unknown attribution remains unknown; wholesale purchases measure sell-in, not consumer sell-through.
           </p>
         </CardHeader>
         <CardContent>
@@ -214,6 +214,7 @@ export function AccountEconomicsSection({
             <Stat label="Total bottles / week" value={velocity.bottlesPerWeek == null ? NOT_ENOUGH_DATA : velocity.bottlesPerWeek.toFixed(1)} sub={velocity.casesPerMonth == null ? null : `${velocity.casesPerMonth.toFixed(2)} cases / month`} />
             <Stat label="Days to sell one case" value={velocity.daysToSellOneCase == null ? NOT_ENOUGH_DATA : `${velocity.daysToSellOneCase}d`} sub={row.orders.avgDaysBetweenOrders == null ? null : `Reorders every ${Math.round(row.orders.avgDaysBetweenOrders)} days`} />
             <Stat label="Lifetime orders" value={String(velocity.totalOrders)} sub={`${velocity.totalCases.toFixed(1)} cases · ${Math.round(velocity.totalBottles)} bottles`} />
+            <Stat label="Unknown attribution cases" value={velocity.unknownCases.toFixed(1)} />
             <Stat label="Organic cases" value={velocity.organicCases.toFixed(1)} sub={`${Math.round(velocity.organicBottles)} bottles`} tone="text-emerald-700" />
             <Stat label="Tasting-assisted cases" value={velocity.assistedCases.toFixed(1)} sub={`${Math.round(velocity.assistedBottles)} bottles`} tone="text-violet-700" />
             <Stat label="Sold at tastings" value={`${velocity.bottlesSoldAtTastings} btl`} sub={`${heldTastings.length} tasting${heldTastings.length === 1 ? '' : 's'} · ${fmtMoney(economics.tastingSpend + economics.strategicSpend)} spend`} />
@@ -234,9 +235,11 @@ export function AccountEconomicsSection({
         <CardContent>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Stat label="Revenue" value={fmtMoney(economics.revenue)} sub={`${economics.casesPurchased.toFixed(1)} cases purchased`} />
-            <Stat label="Contribution from cases" value={fmtMoney(economics.contribution)} sub={`at $${settings.contributionPerCase} per case`} />
-            <Stat label="Tasting spend" value={economics.tastingSpend > 0 ? `-${fmtMoney(economics.tastingSpend)}` : '$0'} sub={`${economics.retailTastingCount} retail tasting${economics.retailTastingCount === 1 ? '' : 's'}`} tone={economics.tastingSpend > 0 ? 'text-rose-700' : 'text-slate-900'} />
-            <Stat label="Net account contribution" value={fmtMoney(economics.netContribution)} tone={moneyTone(economics.netContribution)} emphasis />
+            <Stat label="Estimated gross contribution" value={fmtMoney(economics.contribution)} sub={`at $${settings.contributionPerCase} per case`} />
+            <Stat label="Tasting expense (incl. estimates)" value={economics.tastingSpend > 0 ? `-${fmtMoney(economics.tastingSpend)}` : '$0'} sub={`${economics.retailTastingCount} retail tasting${economics.retailTastingCount === 1 ? '' : 's'}`} tone={economics.tastingSpend > 0 ? 'text-rose-700' : 'text-slate-900'} />
+            <Stat label="Estimated net contribution" value={fmtMoney(economics.netContribution)} tone={moneyTone(economics.netContribution)} emphasis />
+            <Stat label="Approved invoice expense" value={fmtMoney(economics.approvedTastingSpend)} />
+            <Stat label="Estimated expense without approved invoices" value={fmtMoney(economics.estimatedTastingSpend)} />
             <Stat label="Profit per tasting" value={fmtMoney(economics.profitPerTasting)} sub="Net contribution ÷ retail tastings" tone={moneyTone(economics.profitPerTasting)} />
             <Stat label="Net per case" value={fmtMoney(economics.netPerCase)} sub="After tasting spend" tone={moneyTone(economics.netPerCase)} />
             <Stat label="Lifetime account value" value={fmtMoney(economics.lifetimeValue)} tone={moneyTone(economics.lifetimeValue)} />
@@ -253,10 +256,9 @@ export function AccountEconomicsSection({
       {/* Order attribution */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Orders — organic or tasting-assisted</CardTitle>
+          <CardTitle className="text-base">Orders — recorded attribution</CardTitle>
           <p className="text-xs text-muted-foreground">
-            A reorder inside {settings.attributionWindowDays} days of a tasting, or up to 45 days when the tasting sold at least{' '}
-            {Math.round(settings.assistedSalesShare * 100)}% of the previous order, is classified as tasting-assisted.
+            Timing alone does not establish tasting-driven sales. Only an explicit tasting link or staff override classifies an order. Unknown attribution is excluded from organic claims. Contribution uses the configured per-case assumption; net contribution subtracts retail tasting costs. ROI requires actual cost and complete attribution. Window purchases are observational.
           </p>
         </CardHeader>
         <CardContent className="p-0">
@@ -281,7 +283,7 @@ export function AccountEconomicsSection({
                   {ordersDesc.map((order) => {
                     const attribution = order.attribution
                     const meta = attribution ? ATTRIBUTION_META[attribution.kind] : null
-                    const href = mode === 'sales' ? null : `/${mode}/orders/${order.id}`
+                    const href = order.status === 'historical' ? `/${mode === 'sales' ? 'sales/accounts' : mode + '/crm'}/${order.accountId}?tab=orders` : mode === 'sales' ? null : `/${mode}/orders/${order.id}`
                     return (
                       <tr key={order.id} className="border-b border-slate-50 last:border-0">
                         <td className="whitespace-nowrap px-4 py-2.5">
@@ -300,7 +302,7 @@ export function AccountEconomicsSection({
                               {attribution?.source === 'override' && <span className="ml-1 font-normal opacity-70">(manual)</span>}
                             </span>
                           ) : '—'}
-                          {canOverride && attribution && (
+                          {canOverride && attribution && order.status !== 'historical' && (
                             <div className="mt-1">
                               <OrderAttributionOverride orderId={order.id} current={attribution.kind} source={attribution.source} />
                             </div>
@@ -329,7 +331,7 @@ export function AccountEconomicsSection({
             Tasting Economics
           </CardTitle>
           <p className="text-xs text-muted-foreground">
-            Immediate = the reorder attributed to that tasting only. 30/60/90-day columns add every order that followed, organic included.
+            Attributed net = explicitly linked cases × configured contribution per case − tasting cost. ROI = attributed net ÷ approved invoice cost × 100, shown only with complete attribution. 30/60/90-day columns show observed purchase contribution less cost; they do not prove incremental ROI. All-history totals use original order dates.
           </p>
         </CardHeader>
         <CardContent className="p-0">
@@ -345,11 +347,11 @@ export function AccountEconomicsSection({
                     <th className="px-4 py-2 text-right">Cost</th>
                     <th className="px-4 py-2 text-right">Sold</th>
                     <th className="px-4 py-2 text-right">Attributed cases</th>
-                    <th className="px-4 py-2 text-right">Immediate net</th>
+                    <th className="px-4 py-2 text-right">Attributed net (estimate)</th>
                     <th className="px-4 py-2 text-right">ROI</th>
-                    <th className="px-4 py-2 text-right">30-day net</th>
-                    <th className="px-4 py-2 text-right">60-day net</th>
-                    <th className="px-4 py-2 text-right">90-day net</th>
+                    <th className="px-4 py-2 text-right">30-day observed net</th>
+                    <th className="px-4 py-2 text-right">60-day observed net</th>
+                    <th className="px-4 py-2 text-right">90-day observed net</th>
                   </tr>
                 </thead>
                 <tbody>

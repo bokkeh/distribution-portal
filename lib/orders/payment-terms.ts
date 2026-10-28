@@ -17,6 +17,6 @@ export const PAYMENT_TERMS_LABELS = Object.fromEntries(
 ) as Record<string, string>
 
 export function formatPaymentTerms(terms: string | null | undefined) {
-  if (!terms) return 'Net 30'
+  if (!terms) return 'Unknown / not recorded'
   return PAYMENT_TERMS_LABELS[terms] ?? terms
 }

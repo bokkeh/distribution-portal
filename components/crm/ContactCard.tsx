@@ -217,6 +217,7 @@ export default function ContactCard({ contact }: { contact: Contact }) {
 
       {emailOpen && contact.email && (
         <EmailModal
+          contactId={contact.id}
           email={contact.email}
           recipientName={contact.name}
           onClose={() => setEmailOpen(false)}

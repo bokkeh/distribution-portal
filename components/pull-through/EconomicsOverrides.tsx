@@ -19,10 +19,10 @@ export function OrderAttributionOverride({
 }: {
   orderId: string
   current: OrderAttributionKind | null
-  source: 'auto' | 'override' | null
+  source: 'auto' | 'override' | 'recorded' | null
 }) {
   const [open, setOpen] = useState(false)
-  const [kind, setKind] = useState<OrderAttributionKind | ''>(current ?? '')
+  const [kind, setKind] = useState<OrderAttributionKind | ''>(current === 'unknown' ? '' : current ?? '')
   const [reason, setReason] = useState('')
   const [isPending, startTransition] = useTransition()
 
@@ -85,7 +85,7 @@ export function AccountHealthOverride({
 }: {
   accountId: string
   current: AccountHealthKind
-  source: 'auto' | 'override'
+  source: 'auto' | 'override' | 'recorded'
   autoKind: AccountHealthKind
 }) {
   const [open, setOpen] = useState(false)

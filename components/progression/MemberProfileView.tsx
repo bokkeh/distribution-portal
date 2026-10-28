@@ -53,6 +53,7 @@ export async function MemberProfileView({ userId, backHref }: { userId: string; 
         />
       )}
 
+      <p className="rounded-lg border bg-slate-50 p-3 text-sm text-slate-600">My Rank is your assigned career progression level under the Wisher program. It is not a sales leaderboard position. Requirements and approval history appear below. Performance totals cover all recorded history through today; wholesale credit follows the representative explicitly recorded on each order. Retail tasting sales and wholesale purchases are separate measures.</p>
       {/* Rank summary */}
       <section className="rounded-xl border border-slate-200 bg-white p-5">
         <div className="flex flex-wrap items-center justify-between gap-4">

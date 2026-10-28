@@ -1,3 +1,7 @@
+import { getManagedRecipes } from '@/lib/marketing/managed-recipes'
+import { getRecipeWeekKey } from '@/lib/marketing/weekly-recipe-email'
+import { recipeSelections } from '@/db/schema'
+import { ManagedRecipeForm, RecipeSelectionForm } from '@/components/marketing/ManagedRecipeForm'
 import Link from 'next/link'
 import { and, count, desc, eq, gte } from 'drizzle-orm'
 import { ArrowLeft, ExternalLink, Eye, MailX, Send, Users } from 'lucide-react'
@@ -54,6 +58,9 @@ function StatCard({ icon: Icon, label, value, hint }: { icon: typeof Users; labe
 export default async function RecipeEmailsPage() {
   await requireFeature('crm', 'admin')
   const thirtyDaysAgo = daysAgo(30)
+  const week = getRecipeWeekKey(nextScheduledSend())
+  const [catalog, [selection]] = await Promise.all([getManagedRecipes().then(recipes => ({ recipes, error: null as string | null })).catch(() => ({ recipes: [], error: 'Recipe catalog is unavailable. Existing selections have not changed; try again before sending.' })), db.select().from(recipeSelections).where(eq(recipeSelections.scope, `week:${week}`)).catch(() => [])])
+  const recipes = catalog.recipes
 
   const [sends, statusCounts, recentUnsubscribes, unsubscribesLast30] = await Promise.all([
     db.select().from(communityRecipeEmails).orderBy(desc(communityRecipeEmails.weekKey)).limit(52).catch(() => null),
@@ -108,6 +115,7 @@ export default async function RecipeEmailsPage() {
         </Button>
       </div>
 
+      <section className="space-y-3 rounded-xl border bg-white p-4"><h2 className="font-semibold">Recipe selection &amp; seasonal content</h2>{catalog.error && <p role="alert" className="text-amber-800">{catalog.error}</p>}<p className="text-sm text-slate-600">Automatic selection prefers published recipes tagged for the season, then evergreen recipes, rotating away from the last five sends. Availability windows apply. Explicit selections override seasonal preference; incomplete or unpublished content blocks selection. If no eligible recipe exists, sending is skipped. Draft recipes require ingredients and instructions before they can be published and selected.</p><RecipeSelectionForm scope={`week:${week}`} recipes={recipes} selected={selection?.handle ?? ''}/><details><summary>Manage recipe content and seasonal tags</summary><div className="mt-3 space-y-2">{recipes.map(recipe=><ManagedRecipeForm key={recipe.handle} recipe={recipe}/>)}</div></details></section>
       {sends === null ? (
         <div className="rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
           The send history table isn’t in the database yet. Run <code>npm run db:migrate</code> to create it.

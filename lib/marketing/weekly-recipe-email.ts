@@ -1,3 +1,5 @@
+import { getManagedRecipes, getExplicitRecipe } from './managed-recipes'
+import { seasonalRecipePool } from './recipe-selection'
 import { and, count, desc, eq, gt, lt, ne, or, sql } from 'drizzle-orm'
 import { Resend } from 'resend'
 import { validateRecipeEmailConfig } from '@/lib/marketing/recipe-email-config'
@@ -79,7 +81,8 @@ function hash(value: string) {
  * never sent, then the ones sent longest ago. Ties are broken by a stable per-week shuffle.
  * `history` must be ordered newest first.
  */
-export function selectNextRecipe(recipes: WisherRecipe[], history: Array<{ recipeHandle: string }>, weekKey: string) {
+export function selectNextRecipe(recipes: WisherRecipe[], history: Array<{ recipeHandle: string }>, weekKey: string, date = weekKey) {
+  recipes = seasonalRecipePool(recipes, date)
   if (!recipes.length) return null
 
   const lastSentIndex = new Map<string, number>()
@@ -298,9 +301,10 @@ async function getRecipeSendHistory() {
 
 export async function buildWeeklyRecipePreview({ handle, now = new Date() }: { handle?: string | null; now?: Date } = {}) {
   // Previewing shouldn't require the migration; with no history the first pick is shown.
-  const [recipes, history] = await Promise.all([fetchWisherRecipes(), getRecipeSendHistory().catch(() => [])])
+  const [recipes, history] = await Promise.all([getManagedRecipes(), getRecipeSendHistory().catch(() => [])])
   const weekKey = getRecipeWeekKey(now)
-  const recipe = handle ? recipes.find((item) => item.handle === handle) : selectNextRecipe(recipes, history, weekKey)
+  const explicit = await getExplicitRecipe(`week:${weekKey}`, recipes, easternIsoDate(now))
+  const recipe = handle ? recipes.find((item) => item.handle === handle && item.status !== 'draft') : explicit === undefined ? selectNextRecipe(recipes, history, weekKey, easternIsoDate(now)) : explicit
   if (!recipe) return null
   return {
     recipe,
@@ -357,7 +361,7 @@ export async function sendWeeklyRecipeEmail({ now = new Date() }: { now?: Date }
   }
 
   const [recipes, history, contacts] = await Promise.all([
-    fetchWisherRecipes(),
+    getManagedRecipes(),
     getRecipeSendHistory(),
     db
       .select({ id: communityContacts.id, firstName: communityContacts.firstName, email: communityContacts.email })
@@ -366,7 +370,8 @@ export async function sendWeeklyRecipeEmail({ now = new Date() }: { now?: Date }
   ])
   if (!contacts.length) return { status: 'skipped', reason: 'no_recipients', weekKey }
 
-  const recipe = selectNextRecipe(recipes, history, weekKey)
+  const explicit = await getExplicitRecipe(`week:${weekKey}`, recipes, easternIsoDate(now))
+  const recipe = explicit === undefined ? selectNextRecipe(recipes, history, weekKey, easternIsoDate(now)) : explicit
   if (!recipe) return { status: 'skipped', reason: 'no_recipes', weekKey }
 
   const variant = history.length
