@@ -99,8 +99,8 @@ export function TastingObjectiveFields({
               </ul>
               <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
                 <DecisionFact label="Inventory" value={decision.facts.currentInventoryBottles == null ? 'Unknown' : `${Math.round(decision.facts.currentInventoryBottles)} btl`} />
-                <DecisionFact label="Last order" value={decision.facts.lastOrderAt ? new Date(decision.facts.lastOrderAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'None'} />
-                <DecisionFact label="Last tasting" value={decision.facts.lastTastingAt ? `${new Date(decision.facts.lastTastingAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}${decision.facts.lastTastingCost != null ? ` · ${fmtMoney(decision.facts.lastTastingCost)}` : ''}` : 'None'} />
+                <DecisionFact label="Last order" value={decision.facts.lastOrderAt ? new Date(decision.facts.lastOrderAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'None'} />
+                <DecisionFact label="Last tasting" value={decision.facts.lastTastingAt ? `${new Date(decision.facts.lastTastingAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}${decision.facts.lastTastingCost != null ? ` · ${fmtMoney(decision.facts.lastTastingCost)}` : ''}` : 'None'} />
                 <DecisionFact label="Tastings, 90d" value={String(decision.facts.tastingsLast90Days)} />
                 <DecisionFact label="Organic velocity" value={decision.facts.organicPercent == null ? '—' : fmtPercent(decision.facts.organicPercent)} tone="text-emerald-700" />
                 <DecisionFact label="Tasting dependency" value={decision.facts.dependencyPercent == null ? '—' : fmtPercent(decision.facts.dependencyPercent)} tone="text-violet-700" />

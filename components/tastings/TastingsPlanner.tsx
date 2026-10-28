@@ -106,7 +106,7 @@ function TastingDateTile({ tasting }: { tasting: Pick<TastingRow, 'scheduledAt' 
   return (
     <div className="flex min-h-[150px] min-w-[96px] flex-col items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-4 text-center shadow-[0_1px_2px_rgba(24,22,21,0.03)]">
       <span className="font-mono text-xs font-bold uppercase tracking-[0.08em] text-[#ff4f00]">
-        {new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: tasting.timeZone ?? 'America/New_York' }).format(scheduledAt)}
+        {new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric', timeZone: tasting.timeZone ?? 'America/New_York' }).format(scheduledAt)}
       </span>
       <span className="font-display mt-1 text-4xl font-bold leading-none text-[#181615]">
         {getEasternDateKey(scheduledAt, tasting.timeZone).slice(-2)}
