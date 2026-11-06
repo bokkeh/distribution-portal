@@ -162,7 +162,7 @@ export async function approveTasterInvoice(formData: FormData) {
       id: tasterInvoices.id,
       tastingId: tasterInvoices.tastingId,
       payeeName: tasterInvoices.payeeName,
-      payoutUserId: users.id,
+      payoutUserId: tastings.assignedUserId,
       status: tasterInvoices.status,
     })
     .from(tasterInvoices)

@@ -30,3 +30,8 @@ Authoritative Vercel project: https://vercel.com/alex-6771s-projects/distributio
 Preserve unrelated uncommitted work in the primary checkout. Prepare scoped releases against current master in an isolated checkout. Merge relevant feature changes with newer production changes instead of replacing newer files wholesale. Verify migrations, tests and build before pushing. Verify the exact commit's intended Vercel deployment afterward. No live customer message should be used for development verification.
 
 See stakeholder-workflows-verification.md for detailed feature, calculation, migration and verification notes. Remaining source-data and approved-content decisions should stay explicit even after application deployment.
+
+
+## Taster invoice approval repair (2026-11-05)
+
+Kristen Buser's account is active with admin/staff roles and invoicing access. No permission change was needed. approveTasterInvoice selected users.id without joining users, causing Drizzle to reject the query before approval. Select the same assigned user ID directly from the already joined tastings table; unassigned tastings remain approvable. Approval authorization, invoice amounts, paid statuses and Stripe payout behavior are unchanged. Four isolated regression tests reproduced the failure before the fix and passed afterward: administrator approval/reopening, staff approval of an unassigned tasting, preserving paid invoices, and denying sales-only approval. Scoped ESLint passed. No live invoice was approved or paid for testing, and no user role was changed.
