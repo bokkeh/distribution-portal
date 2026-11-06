@@ -325,3 +325,10 @@ export async function setFieldTaskStatus(accountId: string | null, taskId: strin
     return { success: true as const, tasks: await getFieldAccountTasks(accountId) }
   } catch { return { error: 'Could not confirm the task update. Refresh tasks and retry.' } }
 }
+
+export async function getFieldAccountNotes(accountId: string) {
+  await fieldAccount(accountId)
+  const rows = await db.select({ id: accountNotes.id, body: accountNotes.noteBody, occurredAt: accountNotes.occurredAt, author: users.name, pinned: accountNotes.isPinned }).from(accountNotes).leftJoin(users, eq(accountNotes.authorUserId, users.id)).where(eq(accountNotes.accountId, accountId)).orderBy(desc(accountNotes.isPinned), desc(accountNotes.occurredAt), desc(accountNotes.createdAt), asc(accountNotes.id))
+  return rows.map(row => ({ ...row, occurredAt: row.occurredAt.toISOString() }))
+}
+

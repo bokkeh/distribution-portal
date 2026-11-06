@@ -23,10 +23,11 @@ async function main() {
     ...Array.from({length:8},(_,i)=>({customerId:h.accountId,name:'ZZ Field contact '+i,title:'Manager'})),
   ])
   await h.runtime.db.update(h.api.schema.users).set({avatarUrl:'https://storage.googleapis.com/test-bucket/avatars/rachel.png'}).where(require('drizzle-orm').eq(h.api.schema.users.id,h.rachelId))
+  await h.runtime.db.insert(h.api.schema.accountNotes).values({accountId:h.accountId,noteBody:'Previous desktop account note',isPinned:true,authorUserId:h.runtime.session.user.id,occurredAt:new Date('2026-01-02T17:00:00Z')})
   let avatarBroken=false
   const rpc = names => `const call = async (name,args) => { const r = await fetch('/action/'+name,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(args)}); const data=await r.json(); if(!r.ok) throw new Error(data.error); return data }; ${names.map(name => `export const ${name} = (...args) => call('${name}',args);`).join('\n')}`
   const stubs = {
-    '@/actions/field-data': rpc(['createFieldAccount','createFieldContact','updateFieldContact','updateFieldAccountContact','getFieldAccount','getFieldAccountTastings','getFieldAccountOrders','getFieldAccountTasks','getFieldMyTasks','createFieldTask','setFieldTaskStatus','searchFieldAccounts','saveFieldNote','saveFieldPhoto','getFieldAvailability']),
+    '@/actions/field-data': rpc(['createFieldAccount','createFieldContact','updateFieldContact','updateFieldAccountContact','getFieldAccount','getFieldAccountTastings','getFieldAccountOrders','getFieldAccountTasks','getFieldMyTasks','createFieldTask','setFieldTaskStatus','searchFieldAccounts','saveFieldNote','saveFieldPhoto','getFieldAvailability','getFieldAccountNotes']),
     '@/actions/field-documents': rpc(['quoteFieldDocument','saveFieldDocument','sendFieldInvoice','getFieldDocument','startFieldCardPayment']),
     '@/actions/quick-schedule-tasting': rpc(['quickScheduleTasting']),
     '@/actions/account-observations': rpc(['saveAccountObservations']).replace("call('saveAccountObservations',args)", "call('saveAccountObservations',[Object.fromEntries(args[0])])"),
@@ -37,6 +38,7 @@ async function main() {
   }
   await build({ entryPoints:['tests/fixtures/field-browser.jsx'],bundle:true,platform:'browser',format:'iife',outfile:'tmp/operator-tests/field-client.js',jsx:'automatic',define:{'process.env.NODE_ENV':'"development"','process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY':'""'},plugins:[{name:'isolated-field-boundaries',setup(b){b.onResolve({filter:/.*/},args=>Object.hasOwn(stubs,args.path)?{path:args.path,namespace:'test'}:undefined);b.onLoad({filter:/.*/,namespace:'test'},args=>({contents:stubs[args.path],loader:'jsx',resolveDir:process.cwd()}))}}] })
   const css = (await require('postcss')([require('@tailwindcss/postcss')()]).process((await fs.readFile('app/globals.css','utf8'))+'\n@source "../components";',{from:path.resolve('app/globals.css')})).css
+  let failNoteRead = false
   let failNote = false, failHistory = false, failContacts = false
   let failAccount = false, failDocument = false
   let uploads = 0, losePhotoResponse = false
@@ -55,6 +57,7 @@ async function main() {
         const name=req.url.slice('/action/'.length);calls[name]=(calls[name]??0)+1
         const chunks=[];for await(const chunk of req)chunks.push(chunk)
         let args=JSON.parse(Buffer.concat(chunks).toString())
+        if(name==='getFieldAccountNotes' && failNoteRead){failNoteRead=false;res.statusCode=500;return res.end(JSON.stringify({error:'Connection lost'}))}
         if(name==='getFieldAccountTastings' && failHistory){failHistory=false;res.statusCode=500;return res.end(JSON.stringify({error:'Connection lost'}))}
         if(name==='getFieldAccount' && failContacts){failContacts=false;res.statusCode=500;return res.end(JSON.stringify({error:'Connection lost'}))}
         if(['createFieldContact','updateFieldContact'].includes(name) && failContactSave){failContactSave=false;return res.end(JSON.stringify({error:'Connection failed. Contact details kept.'}))}
@@ -246,12 +249,20 @@ async function main() {
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false)
       await page.screenshot({path:`tmp/operator-tests/field-tastings-${width}.png`,fullPage:true})
       await page.getByRole('button',{name:'Back to field tasks'}).click()
-      await page.getByRole('button',{name:'Quick note Capture the conversation'}).click()
+      await page.getByRole('button',{name:'Account notes Read notes & capture the conversation'}).click()
+      await page.getByText('Previous desktop account note',{exact:true}).waitFor()
+      await page.getByText('Pinned note',{exact:true}).waitFor()
+      failNoteRead=true;await page.getByRole('button',{name:'Refresh notes',exact:true}).click()
+      await page.getByRole('alert').filter({hasText:'Could not refresh account notes'}).waitFor()
+      await page.getByText('Previous desktop account note',{exact:true}).waitFor()
+      await page.getByRole('button',{name:'Refresh notes',exact:true}).click()
+      await page.getByRole('alert').filter({hasText:'Could not refresh account notes'}).waitFor({state:'hidden'})
       await page.getByLabel('What happened?').fill('Client asked for a shelf visit.')
       failNote=true;await page.getByRole('button',{name:'Save note',exact:true}).click()
       await page.getByText('Connection failed. Your note is kept.').waitFor()
       assert.equal(await page.getByLabel('What happened?').inputValue(),'Client asked for a shelf visit.')
       await page.getByRole('button',{name:'Save note',exact:true}).click();await page.getByText('Note saved to this account.').waitFor()
+      await page.getByRole('region',{name:'Previous account notes',exact:true}).getByText('Client asked for a shelf visit.',{exact:true}).first().waitFor()
       await page.getByRole('button',{name:'Back to field tasks'}).click()
       await page.getByRole('button',{name:'Schedule tasting Open dates & team assignment'}).click()
       await page.getByText('Previous shelf tasting',{exact:true}).waitFor()

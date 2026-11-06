@@ -21,3 +21,5 @@ export { fieldLoginReturn } from '../../lib/field/validation'
 export { getInvoiceDetailData } from '../../lib/invoices/read'
 
 export { getFieldTastings } from '../../actions/field-tastings'
+
+export { getFieldAccountNotes } from '../../actions/field-data'

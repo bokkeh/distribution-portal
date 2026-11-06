@@ -4,13 +4,14 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { ArrowLeft, CalendarDays, Camera, Check, FileText, Home, ListTodo, Package, Search, StickyNote, UserRound, Wine } from 'lucide-react'
-import { getFieldAccount, searchFieldAccounts, saveFieldNote, getFieldAvailability } from '@/actions/field-data'
+import { getFieldAccount, searchFieldAccounts, getFieldAvailability } from '@/actions/field-data'
 import { getFieldDocument, sendFieldInvoice } from '@/actions/field-documents'
 import { QuickScheduleTasting } from '@/components/tastings/QuickScheduleTasting'
 import { AccountObservationForm } from '@/components/crm/AccountObservationForm'
 import { Button } from '@/components/ui/button'
 import { FieldDocumentForm, type FieldDocumentDraft, type FieldProduct, type SavedFieldDocument } from './FieldDocumentForm'
 import { FieldCardPayment } from './FieldCardPayment'
+import { FieldAccountNotes } from './FieldAccountNotes'
 import { FieldPhotos } from './FieldPhotos'
 import { FieldContacts } from './FieldContacts'
 import { FieldMyTasks, FieldMyTasksButton, FieldTasks } from './FieldTasks'
@@ -25,18 +26,6 @@ import { formatCurrency } from '@/lib/utils'
 type Account = Awaited<ReturnType<typeof getFieldAccount>>
 type Document = SavedFieldDocument & { status?: string; emailSentAt?: string | null }
 type View = 'home' | 'contacts' | 'tasks' | 'tastings' | 'tasting' | 'order' | 'invoice' | 'note' | 'photos' | 'observations' | 'document'
-
-function FieldNote({ accountId }: { accountId: string }) {
-  const locked = useRef(false), requestId = useRef<string | null>(null)
-  const [text, setText] = useState(''), [pending, setPending] = useState(false), [message, setMessage] = useState('')
-  return <form className="space-y-4" onSubmit={async event => {
-    event.preventDefault(); if (locked.current) return
-    locked.current = true; setPending(true); setMessage('')
-    try { requestId.current ??= crypto.randomUUID(); const result = await saveFieldNote(accountId, text, requestId.current); if (result.error) { setMessage(result.error); return }; requestId.current = null; setText(''); setMessage('Note saved to this account.') }
-    catch { setMessage('Could not confirm save. Your note is kept; retry.') }
-    finally { locked.current = false; setPending(false) }
-  }}><h2 className="text-xl font-semibold">Quick client note</h2><label className="block">What happened?<textarea value={text} onChange={event => setText(event.target.value)} required maxLength={4000} disabled={pending} placeholder="Conversation, next step, shelf conditions…" className="mt-2 min-h-52 w-full rounded-2xl border bg-white p-4 text-base" /></label>{message ? <p role="status" className="rounded-xl bg-stone-100 p-3">{message}</p> : null}<Button className="h-14 w-full text-base" disabled={pending}>{pending ? 'Saving…' : 'Save note'}</Button></form>
-}
 
 function FieldTasting({ account, members, initialAvailability }: { account: Account; members: { id: string; name: string }[]; initialAvailability: FieldAvailability }) {
   const [availability, setAvailability] = useState(initialAvailability)
@@ -94,7 +83,7 @@ export function FieldHub({ bootstrap, availability, initialAccount = null, initi
     { view: 'tasting' as const, title: 'Schedule tasting', detail: 'Open dates & team assignment', icon: CalendarDays },
     { view: 'order' as const, title: 'Create order', detail: 'Cases, payment & invoice', icon: Package },
     ...(bootstrap.canInvoice ? [{ view: 'invoice' as const, title: 'Quick invoice', detail: 'Create & send to customer', icon: FileText }] : []),
-    { view: 'note' as const, title: 'Quick note', detail: 'Capture the conversation', icon: StickyNote },
+    { view: 'note' as const, title: 'Account notes', detail: 'Read notes & capture the conversation', icon: StickyNote },
     ...(bootstrap.canPhotos ? [{ view: 'photos' as const, title: 'Add photos', detail: 'Shelf, display or client visit', icon: Camera }] : []),
     { view: 'observations' as const, title: 'Price & inventory', detail: 'Record either or both', icon: Wine },
   ]
@@ -128,7 +117,7 @@ export function FieldHub({ bootstrap, availability, initialAccount = null, initi
       {!addingAccount && !searching && account ? <>
         {view !== 'home' ? <Button variant="outline" className="h-12 w-full justify-start" disabled={documentBusy} onClick={() => { if ((view === 'order' || view === 'invoice') && documentReviewing) setDocumentBack(value => value + 1); else goHome() }}><ArrowLeft className="size-5" /> {(view === 'order' || view === 'invoice') && documentReviewing ? 'Back to edit entry' : (view === 'order' || view === 'invoice') ? 'Back to field tasks · keep draft' : 'Back to field tasks'}</Button> : null}{(view === 'order' || view === 'invoice') && documentReviewing ? <Button variant="outline" className="h-12 w-full justify-start" disabled={documentBusy} onClick={goHome}><Home className="size-5" /> Field tasks · keep draft</Button> : null}
         {view === 'home' ? <><div><h2 className="text-lg font-semibold">What do you need to do?</h2><p className="mt-1 text-sm text-muted-foreground">One account. Simple actions while you’re there.</p></div><div className="grid grid-cols-2 gap-3">{tasks.map(task => <button key={task.view} type="button" onClick={() => setView(task.view)} className="flex min-h-36 flex-col items-start justify-between gap-3 rounded-2xl border bg-white p-4 text-left shadow-sm active:bg-orange-50"><task.icon className="size-7 text-[#ff5a00]" /><div><span className="block text-lg font-bold leading-tight">{task.title}</span><span className="mt-1 block text-xs text-muted-foreground">{task.detail}</span></div></button>)}</div>{saved ? <Button variant="outline" className="h-14 w-full" onClick={() => setView('document')}>Return to invoice {saved.invoiceNumber}</Button> : null}<FieldAccountOrders key={account.id} accountId={account.id} /></> : null}
-        {view === 'note' ? <FieldNote key={account.id} accountId={account.id} /> : null}
+        {view === 'note' ? <FieldAccountNotes key={account.id} accountId={account.id} /> : null}
         {view === 'photos' ? <FieldPhotos key={account.id} accountId={account.id} /> : null}
         {view === 'observations' ? <AccountObservationForm key={account.id} accountId={account.id} products={bootstrap.products} fieldMode /> : null}
         {view === 'contacts' ? <FieldContacts key={account.id} account={account} onAccountChanged={setAccount} /> : null}
