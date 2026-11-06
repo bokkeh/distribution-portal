@@ -84,7 +84,7 @@ function ProductLines({ items, onChange, products, tasting = false, sharedUnit =
               <option value="">Select product…</option>
               {products.map((product) => <option key={product.id} value={product.id}>{product.name} · {product.sku}</option>)}
             </select>
-            <input type="number" min="0.01" step="0.01" value={item.quantity} onChange={(event) => update(index, { quantity: Number(event.target.value) })} className={inputClass} aria-label="Quantity" required />
+            <input type="number" min={sharedUnit ? "1" : "0.01"} step={sharedUnit ? "1" : "0.01"} inputMode={sharedUnit ? "numeric" : "decimal"} value={item.quantity} onKeyDown={(event) => { if (sharedUnit && [".", ",", "e", "E", "+", "-"].includes(event.key)) event.preventDefault() }} onChange={(event) => { const value = event.target.value; if (sharedUnit && (!/^\d*$/.test(value) || !Number.isSafeInteger(Number(value)))) return; update(index, { quantity: Number(value) }) }} className={inputClass} aria-label="Quantity" required />
           </div>
           <div className="mt-2 flex items-center gap-3">
             <select value={item.unit} onChange={(event) => update(index, { unit: event.target.value as LineItem['unit'] })} className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-xs">
@@ -169,6 +169,10 @@ export function GlobalQuickAdd({ compact = false, dark = false }: { compact?: bo
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (saving.current || !action || submitting) return
+    if ((action === 'order' || action === 'assisted-order') && items.some(item => !Number.isSafeInteger(item.quantity) || item.quantity < 1)) {
+      setError('Enter a positive whole number of cases or bottles for each product.')
+      return
+    }
     saving.current = true
     requestId.current ??= crypto.randomUUID()
     const submittedForm = event.currentTarget

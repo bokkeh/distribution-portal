@@ -197,7 +197,7 @@ const orderInputSchema = z.object({
   paymentType: z.enum(['unpaid', 'check', 'cod', 'paid']).default('unpaid'),
   paymentTerms: z.string().optional(),
   notes: z.string().optional(),
-  items: z.array(z.object({ productId: z.string().uuid(), quantity: z.number().positive() })).min(1),
+  items: z.array(z.object({ productId: z.string().uuid(), quantity: z.number().int("Cases and bottles must be whole numbers.").positive() })).min(1),
   isAssisted: z.boolean().default(false),
   assistedByUserId: z.string().uuid().optional().nullable(),
   assistanceType: z.string().optional().nullable(),
