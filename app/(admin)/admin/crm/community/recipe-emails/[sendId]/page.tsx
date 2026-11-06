@@ -1,3 +1,5 @@
+import { getRecipeEmailEngagement, getRecipeEmailRecipientEngagement } from '@/lib/marketing/recipe-email-engagement-data'
+import { RecipeEmailEngagementSummary } from '@/components/marketing/RecipeEmailEngagement'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { and, asc, desc, eq, gte, lte, sql } from 'drizzle-orm'
@@ -49,6 +51,9 @@ export default async function RecipeEmailRecipientsPage({ params }: { params: Pr
         sql`${activityEvents.metadata}->>'weekKey' = ${send.weekKey}`,
       )).orderBy(desc(activityEvents.createdAt)),
   ])
+  const [metrics, recipientEngagement] = await Promise.all([getRecipeEmailEngagement([send]).catch(() => null), getRecipeEmailRecipientEngagement(send.id).catch(() => null)])
+  const engagement = metrics?.get(send.id)
+  const unavailable = metrics === null || recipientEngagement === null
   const outcomes = new Map<string, typeof events[number]>()
   for (const event of events) if (!outcomes.has(event.contactId)) outcomes.set(event.contactId, event)
 
@@ -61,6 +66,8 @@ export default async function RecipeEmailRecipientsPage({ params }: { params: Pr
           <p className="mt-1 text-sm text-slate-600">{send.recipeTitle} · Week of {send.weekKey}</p>
         </div>
       </div>
+      <RecipeEmailEngagementSummary campaigns={engagement ? [engagement] : []} unavailable={unavailable} />
+      <Card className="shadow-none"><CardHeader><CardTitle>Marketing links clicked</CardTitle></CardHeader><CardContent className="space-y-2">{engagement?.links.length ? engagement.links.map(link => <div key={link.url} className="flex flex-wrap justify-between gap-2 rounded-xl border p-3 text-sm"><span className="min-w-0 break-all">{link.url}</span><strong>{link.recipients} unique recipients</strong></div>) : <p className="text-sm text-slate-500">{unavailable ? 'Engagement data is unavailable.' : engagement?.tracked ? 'No marketing link clicks recorded yet.' : 'This send was not tracked.'}</p>}</CardContent></Card>
       <Card className="shadow-none">
         <CardHeader>
           <CardTitle>{send.subject}</CardTitle>
@@ -70,10 +77,12 @@ export default async function RecipeEmailRecipientsPage({ params }: { params: Pr
           <div className="overflow-x-auto">
             <table className="w-full min-w-[640px] text-sm">
               <thead className="border-y bg-[#f4f1ed] text-left text-xs uppercase tracking-wide text-slate-500">
-                <tr><th className="px-4 py-3">Contact</th><th className="px-4 py-3">Email</th><th className="px-4 py-3">Send status</th><th className="px-4 py-3">Reported outcome</th></tr>
+                <tr><th className="px-4 py-3">Contact</th><th className="px-4 py-3">Email</th><th className="px-4 py-3">Send status</th><th className="px-4 py-3">Opened</th><th className="px-4 py-3">Clicked</th><th className="px-4 py-3">Reported outcome</th></tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {recipients.map((recipient) => {
+                  const signals = recipientEngagement?.get(recipient.contactId)
+                  const signalLabel = (value: string | null | undefined) => unavailable ? 'Unavailable' : !engagement?.tracked ? 'Not tracked' : value ? new Date(value).toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'short' }) + ' ET' : 'Not recorded'
                   const event = outcomes.get(recipient.contactId)
                   const reason = (event?.metadata as { reason?: string } | undefined)?.reason
                   const label = reason && Object.hasOwn(UNSUBSCRIBE_REASON_LABELS, reason) ? UNSUBSCRIBE_REASON_LABELS[reason as CommunityUnsubscribeReason] : null
@@ -82,13 +91,15 @@ export default async function RecipeEmailRecipientsPage({ params }: { params: Pr
                       <td className="px-4 py-3"><Link href={`/admin/crm/community/${recipient.contactId}`} className="font-semibold text-slate-900 hover:underline">{`${recipient.firstName} ${recipient.lastName}`.trim()}</Link></td>
                       <td className="px-4 py-3 text-slate-700">{recipient.email}</td>
                       <td className="px-4 py-3"><Badge variant={recipient.status === 'sent' ? 'success' : 'destructive'}>{recipient.status}</Badge></td>
+                      <td className="px-4 py-3 text-sm text-slate-700">{signalLabel(signals?.openedAt)}</td>
+                      <td className="px-4 py-3 text-sm text-slate-700">{signalLabel(signals?.clickedAt)}</td>
                       <td className="px-4 py-3">
                         {label ? <><Badge variant={reason === 'link' || reason === 'one_click' ? 'outline' : 'warning'}>{label}</Badge><p className="mt-1 max-w-md text-xs text-slate-500">{event?.detail}</p></> : <span className="text-slate-500">No outcome recorded</span>}
                       </td>
                     </tr>
                   )
                 })}
-                {!recipients.length ? <tr><td colSpan={4} className="px-4 py-8 text-center text-slate-500">No recipient logs are available for this send.</td></tr> : null}
+                {!recipients.length ? <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500">No recipient logs are available for this send.</td></tr> : null}
               </tbody>
             </table>
           </div>

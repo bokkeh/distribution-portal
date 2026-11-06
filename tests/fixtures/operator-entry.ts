@@ -23,3 +23,6 @@ export { getInvoiceDetailData } from '../../lib/invoices/read'
 export { getFieldTastings } from '../../actions/field-tastings'
 
 export { getFieldAccountNotes } from '../../actions/field-data'
+
+export { markRecipeEmailTracking, recordRecipeEmailEngagement, getRecipeEmailEngagement, getRecipeEmailRecipientEngagement } from '../../lib/marketing/recipe-email-engagement-data'
+export { createRecipeTrackingToken, resolveRecipeTrackingToken, trackRecipeEmailContent } from '../../lib/marketing/recipe-email-tracking-token'

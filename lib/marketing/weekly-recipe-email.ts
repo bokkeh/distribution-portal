@@ -1,3 +1,5 @@
+import { trackRecipeEmailContent } from '@/lib/marketing/recipe-email-tracking-token'
+import { markRecipeEmailTracking } from '@/lib/marketing/recipe-email-engagement-data'
 import { getManagedRecipes, getExplicitRecipe } from './managed-recipes'
 import { seasonalRecipePool } from './recipe-selection'
 import { and, count, desc, eq, gt, lt, ne, or, sql } from 'drizzle-orm'
@@ -393,7 +395,7 @@ export async function sendWeeklyRecipeEmail({ now = new Date() }: { now?: Date }
     const batch = contacts.slice(start, start + BATCH_SIZE)
     const emails = batch.map((contact) => {
       const unsubscribeUrl = portalUrl(`/api/community/unsubscribe?token=${encodeURIComponent(createCommunityUnsubscribeToken(contact.id))}&w=${weekKey}`)
-      const content = renderWeeklyRecipeEmail({ recipe, firstName: contact.firstName, unsubscribeUrl, sendDate: now, variant })
+      const content = trackRecipeEmailContent(renderWeeklyRecipeEmail({ recipe, firstName: contact.firstName, unsubscribeUrl, sendDate: now, variant }), { sendId: run.id, contactId: contact.id, origin: process.env.NEXTAUTH_URL ?? 'https://portal.ahawc.com' })
       return {
         from,
         to: [contact.email],
@@ -438,6 +440,10 @@ export async function sendWeeklyRecipeEmail({ now = new Date() }: { now?: Date }
     }
   }
 
+  if (sent > 0) {
+    try { await markRecipeEmailTracking(run.id) }
+    catch (error) { console.error('Could not record recipe tracking coverage:', error) }
+  }
   const status = sent > 0 ? 'sent' : 'failed'
   await db
     .update(communityRecipeEmails)

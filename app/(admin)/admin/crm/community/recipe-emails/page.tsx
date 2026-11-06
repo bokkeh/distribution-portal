@@ -1,3 +1,7 @@
+import { getRecipeEmailEngagement } from '@/lib/marketing/recipe-email-engagement-data'
+import { calculateRecipeEngagement } from '@/lib/marketing/recipe-email-engagement'
+import { RecipeEmailEngagementSummary, RecipeEmailEngagementCells } from '@/components/marketing/RecipeEmailEngagement'
+import { RecipeEmailEngagementChart } from '@/components/marketing/RecipeEmailEngagementChart'
 import { getManagedRecipes } from '@/lib/marketing/managed-recipes'
 import { getRecipeWeekKey } from '@/lib/marketing/weekly-recipe-email'
 import { recipeSelections } from '@/db/schema'
@@ -89,6 +93,9 @@ export default async function RecipeEmailsPage() {
       .catch(() => 0),
   ])
 
+  const engagement = await getRecipeEmailEngagement(sends ?? []).catch(() => null)
+  const engagementTrend = [...(sends ?? [])].reverse().map(row => { const metrics = engagement?.get(row.id); return { week: row.weekKey, openRate: metrics?.tracked ? metrics.openRate : null, clickRate: metrics?.tracked ? metrics.clickRate : null, engagementRate: metrics?.tracked ? metrics.engagementRate : null } })
+
   const subscribed = statusCounts.find((row) => row.status === 'subscribed')?.total ?? 0
   const unsubscribed = statusCounts.find((row) => row.status === 'unsubscribed')?.total ?? 0
   const totalSent = (sends ?? []).reduce((sum, row) => sum + row.sentCount, 0)
@@ -125,9 +132,12 @@ export default async function RecipeEmailsPage() {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard icon={Users} label="Subscribed" value={subscribed.toLocaleString()} hint="Will receive the next email" />
         <StatCard icon={MailX} label="Unsubscribed" value={unsubscribed.toLocaleString()} hint={`${unsubscribesLast30.toLocaleString()} in the last 30 days`} />
-        <StatCard icon={Send} label="Emails delivered to Resend" value={totalSent.toLocaleString()} hint={`Across ${(sends ?? []).length} weekly sends`} />
+        <StatCard icon={Send} label="Emails accepted by Resend" value={totalSent.toLocaleString()} hint={`Across ${(sends ?? []).length} weekly sends`} />
         <StatCard icon={Send} label="Next send" value={formatDate(nextScheduledSend())} hint={`${formatDateTime(nextScheduledSend())} ET`} />
       </div>
+
+      <RecipeEmailEngagementSummary campaigns={[...(engagement?.values() ?? [])]} unavailable={engagement === null} />
+      <Card className="shadow-none"><CardHeader><CardTitle>Engagement trends</CardTitle></CardHeader><CardContent><RecipeEmailEngagementChart data={engagementTrend} /></CardContent></Card>
 
       <Card className="shadow-none">
         <CardHeader><CardTitle>Trends</CardTitle></CardHeader>
@@ -147,6 +157,9 @@ export default async function RecipeEmailsPage() {
                   <th className="px-4 py-3 text-left">Recipe</th>
                   <th className="px-4 py-3 text-left">Status</th>
                   <th className="px-4 py-3 text-right">Sent</th>
+                  <th className="px-4 py-3 text-right">Open rate</th>
+                  <th className="px-4 py-3 text-right">Click-through</th>
+                  <th className="px-4 py-3 text-right">Engagement</th>
                   <th className="px-4 py-3 text-right">Failed</th>
                   <th className="px-4 py-3 text-right">Bounced / suppressed</th>
                   <th className="px-4 py-3 text-right">Spam</th>
@@ -172,6 +185,7 @@ export default async function RecipeEmailsPage() {
                       {row.error ? <p className="mt-1 max-w-48 text-xs text-red-600">{row.error}</p> : null}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums">{row.sentCount.toLocaleString()}<span className="text-slate-400"> / {row.recipientCount.toLocaleString()}</span></td>
+                    <RecipeEmailEngagementCells engagement={engagement?.get(row.id) ?? calculateRecipeEngagement(row.sentCount, [])} unavailable={engagement === null} />
                     <td className={`px-4 py-3 text-right tabular-nums ${row.failedCount ? 'text-red-600' : 'text-slate-500'}`}>{row.failedCount.toLocaleString()}</td>
                     <td className="px-4 py-3 text-right tabular-nums text-slate-700">{row.bounceCount.toLocaleString()}</td>
                     <td className={`px-4 py-3 text-right tabular-nums ${row.complaintCount ? 'text-red-600' : 'text-slate-700'}`}>{row.complaintCount.toLocaleString()}</td>
@@ -184,7 +198,7 @@ export default async function RecipeEmailsPage() {
                   </tr>
                 ))}
                 {!(sends ?? []).length ? (
-                  <tr><td colSpan={11} className="px-4 py-8 text-center text-slate-500">No weekly recipe emails have been sent yet. The first one goes out {formatDateTime(nextScheduledSend())} ET.</td></tr>
+                  <tr><td colSpan={14} className="px-4 py-8 text-center text-slate-500">No weekly recipe emails have been sent yet. The first one goes out {formatDateTime(nextScheduledSend())} ET.</td></tr>
                 ) : null}
               </tbody>
             </table>
