@@ -1,10 +1,12 @@
 'use server'
 
 import Stripe from 'stripe'
+import { randomUUID } from 'crypto'
+import { orderDraftWrites } from '@/lib/invoices/order-draft'
 import { db } from '@/db'
-import { customerAccounts, inventory, orderItems, orders, salesMembers, tastings, users } from '@/db/schema'
+import { customerAccounts, inventory, invoices, orderItems, orders, salesMembers, tastings, users } from '@/db/schema'
 import { getEffectiveSession, requireAuth, requireRole } from '@/lib/auth/session'
-import { eq, inArray } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { calculateCommissionForOrder, recordCommission } from '@/actions/sales-members'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
@@ -364,18 +366,20 @@ export async function createOrder(formData: FormData) {
         : null,
     ].filter(Boolean).join('\n')
 
-    const [order] = await db.insert(orders).values({
+    const orderId = randomUUID()
+    const orderValues = {
+      id: orderId,
       customerId,
       createdBy: session.user.id,
       createdAt: orderDate,
-      orderType,
+      orderType: orderType as CheckoutOrderType,
       paymentTerms,
       stripePaymentIntentId: paymentIntentId,
       paymentStatus,
       paymentMethod: orderPaymentMethod,
       paidAt,
-      status: 'pending',
-      shippingStatus: 'not_scheduled',
+      status: 'pending' as const,
+      shippingStatus: 'not_scheduled' as const,
       subtotal: subtotal.toFixed(2),
       tax: tax.toFixed(2),
       total: total.toFixed(2),
@@ -384,9 +388,13 @@ export async function createOrder(formData: FormData) {
       assistedByUserId,
       assistanceType,
       relatedTastingId,
-    }).returning()
-
-    await db.insert(orderItems).values(lineItems.map(item => ({ ...item, orderId: order.id })))
+    }
+    await db.batch([
+      db.insert(orders).values(orderValues),
+      db.insert(orderItems).values(lineItems.map(item => ({ ...item, orderId }))),
+      ...orderDraftWrites({ orderId, customerId, orderType, subtotal, tax, total, paymentStatus, paidAt, stripePaymentIntentId: paymentIntentId, lines: lineItems, products: productMap }),
+    ])
+    const order = orderValues
 
     // Assisted attribution is a dimension on this order, never a second revenue record.
     const [acct] = await db
@@ -544,12 +552,19 @@ export async function applyWebhookOrderPaymentUpdate(
       id: orders.id,
       customerId: orders.customerId,
       paymentStatus: orders.paymentStatus,
+      paidAt: orders.paidAt,
     })
     .from(orders)
     .where(eq(orders.stripePaymentIntentId, paymentIntentId))
     .limit(1)
 
   if (!order) return
+  if (nextPaymentStatus === 'paid') {
+    await db.update(invoices).set({ status: 'paid', paidAt: order.paidAt ?? new Date() })
+      .where(and(eq(invoices.orderId, order.id), eq(invoices.stripePaymentIntentId, paymentIntentId)))
+    revalidatePath('/admin/invoicing')
+    revalidatePath('/staff/invoicing')
+  }
   if (order.paymentStatus === nextPaymentStatus) {
     if (nextPaymentStatus === 'paid') await syncOrderAccountInventory(order.id, actorUserId)
     return
@@ -792,7 +807,7 @@ export async function reorderCustomerOrder(orderId: string) {
   }
 
   const purchaseUnit = purchaseUnits[0]
-  const { lineItems, subtotal } = await buildPricedLineItems({
+  const { lineItems, subtotal, productMap } = await buildPricedLineItems({
     customerId: account.id,
     purchaseUnit,
     orderDate: new Date(),
@@ -804,24 +819,25 @@ export async function reorderCustomerOrder(orderId: string) {
     customerBusinessType: account.businessType ?? null,
   })
 
-  const [newOrder] = await db.insert(orders).values({
+  const reorderId = randomUUID()
+  const reorderValues = {
+    id: reorderId,
     customerId: account.id,
     createdBy: session.user.id,
     orderType: existingOrder.orderType,
-    status: 'pending',
-    shippingStatus: 'not_scheduled',
+    status: 'pending' as const,
+    shippingStatus: 'not_scheduled' as const,
     subtotal: subtotal.toFixed(2),
     tax: '0.00',
     total: subtotal.toFixed(2),
     notes: existingOrder.notes,
-  }).returning()
-
-  await db.insert(orderItems).values(
-    lineItems.map((item) => ({
-      ...item,
-      orderId: newOrder.id,
-    }))
-  )
+  }
+  await db.batch([
+    db.insert(orders).values(reorderValues),
+    db.insert(orderItems).values(lineItems.map(item => ({ ...item, orderId: reorderId }))),
+    ...orderDraftWrites({ orderId: reorderId, customerId: account.id, orderType: existingOrder.orderType, subtotal, tax: 0, total: subtotal, lines: lineItems, products: productMap }),
+  ])
+  const newOrder = reorderValues
 
   await logActivityEvent({
     entityType: 'order',

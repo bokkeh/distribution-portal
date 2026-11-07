@@ -113,17 +113,18 @@ export async function getFieldDocument(requestId: string) {
   return { requestId: document.id, invoiceId: invoice.id, invoiceNumber: invoice.invoiceNumber, total: invoice.total, orderId: document.orderId, paymentMethod: document.paymentMethod, email: document.recipientEmail, emailSentAt: document.emailSentAt?.toISOString() ?? null, status: invoice.status, accountName: account.companyName, accountId: account.id, paymentPath: getInvoicePublicPaymentPath(invoice.id) }
 }
 
-export async function sendFieldInvoice(requestId: string, recipientEmail?: string) {
+export async function sendFieldInvoice(requestId: string, recipientEmail?: string, resend = false) {
   try {
-    const { document, invoice, account } = await authorizedDocument(requestId)
+    const { document, invoice, account, session } = await authorizedDocument(requestId)
     if (recipientEmail && !z.email().max(254).safeParse(recipientEmail).success) return { error: 'Enter a valid customer email or share the invoice link.' }
     const email = recipientEmail || document.recipientEmail
     if (!email) return { error: 'Invoice saved. Add a customer email or share its secure link.' }
-    if (document.emailSentAt) return { success: true as const, message: `Invoice already emailed to ${document.recipientEmail}.` }
+    if (document.emailSentAt && email === document.recipientEmail && !resend) return { success: true as const, message: `Invoice already emailed to ${document.recipientEmail}.` }
     const sent = await sendFieldInvoiceEmail({ to: email, companyName: account.companyName, invoiceNumber: invoice.invoiceNumber, total: invoice.total, paymentMethod: document.paymentMethod, invoicePath: getInvoicePublicPaymentPath(invoice.id) })
     if (!sent) return { error: 'Invoice saved, but email delivery failed. Share its secure link or retry sending; do not create another invoice.' }
     await db.update(fieldDocuments).set({ emailSentAt: new Date(), recipientEmail: email }).where(eq(fieldDocuments.id, requestId))
     await db.update(invoices).set({ status: 'sent' }).where(and(eq(invoices.id, invoice.id), eq(invoices.status, 'draft')))
+    await logActivityEvent({ entityType: 'invoice', entityId: invoice.id, actorUserId: session.user.id, kind: document.emailSentAt ? 'invoice_resent' : 'invoice_sent', title: document.emailSentAt ? 'Invoice resent' : 'Invoice sent', body: `${invoice.invoiceNumber} emailed to ${email}.`, metadata: { recipientEmail: email } })
     refresh(account.id)
     return { success: true as const, message: `Invoice emailed to ${email}.` }
   } catch { return { error: 'Invoice saved, but email could not be confirmed. Check its status before retrying.' } }

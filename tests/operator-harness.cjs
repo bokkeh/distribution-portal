@@ -7,7 +7,7 @@ const { drizzle } = require('drizzle-orm/pglite')
 const { is, SQL } = require('drizzle-orm')
 const { PgTable, PgDialect, getTableConfig } = require('drizzle-orm/pg-core')
 
-async function createHarness() {
+async function createHarness(options = {}) {
   const runtime = {
     paths: [], after: [],
     session: { user: { id: '10000000-0000-4000-8000-000000000001', name: 'Operator', role: 'admin', roles: ['admin'] } },
@@ -35,8 +35,9 @@ async function createHarness() {
     '@/actions/invoices': 'export async function createPublicPaymentIntent() { return { clientSecret: \"test-secret\", amount: \"103.30\", processingFee: \"3.30\" } }',
     'server-only': '',
   }
+  Object.assign(stubs, options.stubs ?? {})
   const outfile = path.resolve(`tmp/operator-tests/server-${process.pid}.cjs`)
-  await build({ entryPoints: ['tests/fixtures/operator-entry.ts'], bundle: true, platform: 'node', format: 'cjs', packages: 'external', outfile,
+  await build({ entryPoints: [options.entry ?? 'tests/fixtures/operator-entry.ts'], bundle: true, platform: 'node', format: 'cjs', packages: 'external', outfile,
     plugins: [{ name: 'isolated-boundaries', setup(b) {
       b.onResolve({ filter: /.*/ }, args => Object.hasOwn(stubs, args.path) ? { path: args.path, namespace: 'test' } : undefined)
       b.onLoad({ filter: /.*/, namespace: 'test' }, args => ({ contents: stubs[args.path], loader: 'js' }))

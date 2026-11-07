@@ -1,3 +1,4 @@
+import { InvoiceSendForm } from '@/components/invoices/InvoiceSendForm'
 import { db } from '@/db'
 import { invoices, customerAccounts } from '@/db/schema'
 import { eq } from 'drizzle-orm'
@@ -12,8 +13,9 @@ import { getInvoiceDetailData } from '@/lib/invoices/read'
 import { InvoiceVisual } from '@/components/invoices/InvoiceVisual'
 import { CustomerRecordLink } from '@/components/crm/CustomerRecordLink'
 
-export default async function StaffInvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function StaffInvoiceDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string; success?: string }> }) {
   const { id } = await params
+  const qs = await searchParams
 
   const [invoice] = await db
     .select({
@@ -42,6 +44,8 @@ export default async function StaffInvoiceDetailPage({ params }: { params: Promi
 
   return (
     <div className="max-w-6xl space-y-6 p-4 sm:p-8">
+      {qs.error ? <p role="alert" className="rounded-xl bg-red-50 p-4 text-red-800">{qs.error}</p> : null}
+      {qs.success ? <p role="status" className="rounded-xl bg-green-50 p-4 text-green-800">{qs.success}</p> : null}
       <div className="flex items-center gap-4">
         <Link href="/staff/invoicing"><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
         <div className="flex-1">
@@ -67,6 +71,7 @@ export default async function StaffInvoiceDetailPage({ params }: { params: Promi
                 <Button variant="ghost" className="w-full">Open legacy PDF</Button>
               </a>
             ) : null}
+            <InvoiceSendForm invoiceId={invoice.id} status={invoice.status} portal="staff" defaultEmail={invoiceVisual.customerEmail ?? ''} />
             {invoice.status !== 'paid' ? (
               <form action={markInvoicePaid.bind(null, invoice.id)}>
                 <Button variant="secondary" className="w-full" type="submit">Mark as Paid</Button>

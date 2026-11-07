@@ -202,10 +202,10 @@ export function RepAssistedOrderForm({ customers, products, initialDraft }: { cu
           <Summary label="Shipping" value={formatCurrency(shipping)} />
           <Summary label="Tax" value={formatCurrency(tax)} />
           <div className="flex justify-between border-t pt-3 text-lg font-bold"><span>Estimated total</span><span>{formatCurrency(estimatedTotal)}</span></div>
-          <p className="text-xs text-slate-500">Server-side pricing and inventory are checked again before the order and invoice are created.</p>
+          <p className="text-xs text-slate-500">Pricing and inventory are checked before saving. Nothing is sent until you review the saved invoice and click Send.</p>
           <div className="flex flex-wrap justify-end gap-2 pt-3">
             <Button type="button" variant="outline" disabled={isPending} onClick={(event) => run(event.currentTarget.form!, 'draft')}><Save className="mr-2 h-4 w-4" />Save draft</Button>
-            <Button type="submit" disabled={isPending || !lines.length || (accountMode === 'existing' && !customerId)}><Send className="mr-2 h-4 w-4" />{isPending ? 'Submitting…' : 'Submit and notify customer'}</Button>
+            <Button type="submit" disabled={isPending || !lines.length || (accountMode === 'existing' && !customerId)}><Send className="mr-2 h-4 w-4" />{isPending ? 'Submitting…' : 'Create order & draft invoice'}</Button>
           </div>
         </CardContent>
       </Card>

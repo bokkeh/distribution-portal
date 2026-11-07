@@ -216,6 +216,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
                   {linkedInvoice ? (
                     <>
                       <p className="mt-1 text-sm font-semibold text-slate-900">{linkedInvoice.invoiceNumber}</p>
+                      {linkedInvoice.status === 'draft' ? <p className="text-sm text-amber-800">Draft saved — not yet emailed. Review and send when ready.</p> : null}
                       <p className="text-xs text-slate-500">{formatDate(linkedInvoice.createdAt)}</p>
                     </>
                   ) : (
@@ -227,7 +228,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
               <div className="mt-3 flex flex-wrap gap-2">
                 {linkedInvoice ? (
                   <Link href={`/admin/invoicing/${linkedInvoice.id}`}>
-                    <Button type="button" variant="outline" size="sm">View Invoice</Button>
+                    <Button type="button" variant="outline" size="sm">Review / send invoice</Button>
                   </Link>
                 ) : (
                   <Link href={`/admin/invoicing/new?orderId=${order.id}`}>

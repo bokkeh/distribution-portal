@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { quoteFieldDocument, saveFieldDocument, sendFieldInvoice } from '@/actions/field-documents'
+import { quoteFieldDocument, saveFieldDocument } from '@/actions/field-documents'
 import type { FieldDocumentInput } from '@/lib/field/validation'
 import { Button } from '@/components/ui/button'
 import { formatCurrency } from '@/lib/utils'
@@ -34,7 +34,7 @@ export function FieldDocumentForm({ account, products, kind, draft, onDraftChang
     <p>{account.companyName} · {review.input.paymentMethod === 'stripe' ? 'Stripe card' : review.input.paymentMethod === 'cod' ? 'Cash on delivery' : 'Check'}</p>
     <div className="divide-y rounded-2xl border bg-white p-4">{review.lines.map((line, index) => <div key={index} className="py-3"><p className="font-semibold">{line.name}</p><p className="text-sm text-muted-foreground">{line.quantity} {review.input.items?.length ? 'cases' : Number(line.quantity) === 1 ? 'item' : 'items'} × {formatCurrency(line.unitPrice)} <strong className="float-right text-foreground">{formatCurrency(line.total)}</strong></p></div>)}</div>
     <div className="rounded-2xl bg-[#120f0e] p-5 text-white"><span>Total before card processing fee</span><p className="mt-1 text-3xl font-bold">{formatCurrency(review.total)}</p></div>
-    <p className="text-sm">{review.input.email ? <>Invoice will be emailed to <strong>{review.input.email}</strong>.</> : 'Invoice will be saved for sharing. You can add an email after saving.'} {kind === 'invoice' ? 'This invoice does not reserve inventory or create an order.' : 'Standard delivery. Cases are reserved when the order saves.'}</p>
+    <p className="text-sm">Invoice will be saved as a draft. Review it and choose an email before sending. {kind === 'invoice' ? 'This invoice does not reserve inventory or create an order.' : 'Standard delivery. Cases are reserved when the order saves.'}</p>
     {error ? <p role="alert" className="rounded-xl bg-red-50 p-3 text-red-700">{error}</p> : null}
     <Button className="h-14 w-full text-base" disabled={pending} onClick={async () => {
       if (locked.current) return
@@ -43,12 +43,11 @@ export function FieldDocumentForm({ account, products, kind, draft, onDraftChang
         const result = await saveFieldDocument({ ...review.input, quotedTotal: review.total })
         if ('error' in result) { setError(result.error); return }
         if (!result.success) throw new Error('Save not confirmed.')
-        let deliveryMessage = 'Invoice saved. Email has not been confirmed.'
-        try { const sent = await sendFieldInvoice(result.requestId); deliveryMessage = sent.error ?? sent.message ?? deliveryMessage } catch { deliveryMessage = 'Invoice saved; email could not be confirmed. Retry email from the saved invoice.' }
+        const deliveryMessage = 'Draft invoice saved. Review it, then choose an email and send when ready.'
         onSaved(result, deliveryMessage)
       } catch { setError('Could not confirm save. Your entry is kept. Retry uses the same request to avoid duplicates.') }
       finally { locked.current = false; setPending(false); onBusyChange(false) }
-    }}>{pending ? 'Saving and sending…' : kind === 'order' ? (review.input.email ? 'Create order & email invoice' : 'Create order & invoice') : (review.input.email ? 'Create & email invoice' : 'Create invoice')}</Button>
+    }}>{pending ? 'Saving…' : kind === 'order' ? 'Create order & draft invoice' : 'Save draft invoice'}</Button>
     <Button variant="outline" className="h-12 w-full" disabled={pending} onClick={() => { setReview(null); setError('') }}>Edit entry</Button>
   </div> : null
   return <>{reviewPanel}<form onChange={event => remember(new FormData(event.currentTarget))} hidden={!!review} className="space-y-5" onSubmit={async event => {

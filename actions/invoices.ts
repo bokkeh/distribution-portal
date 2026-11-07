@@ -2,7 +2,9 @@
 
 import { randomBytes } from 'crypto'
 import Stripe from 'stripe'
-import { and, eq, inArray, ne } from 'drizzle-orm'
+import { z } from 'zod'
+import { sendFieldInvoiceEmail } from '@/lib/resend/client'
+import { and, eq, inArray, ne, sql } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { db } from '@/db'
@@ -85,10 +87,12 @@ async function getInvoiceSettlementContext(invoiceId: string) {
       businessEmail: customerAccounts.businessEmail,
       pocEmail: customerAccounts.pocEmail,
       accountUserId: customerAccounts.userId,
+      orderPaymentStatus: orders.paymentStatus,
       waiveAchFee: invoices.waiveAchFee,
     })
     .from(invoices)
     .leftJoin(customerAccounts, eq(invoices.customerId, customerAccounts.id))
+    .leftJoin(orders, eq(invoices.orderId, orders.id))
     .where(eq(invoices.id, invoiceId))
     .limit(1)
 
@@ -245,6 +249,7 @@ export async function createInvoice(formData: FormData) {
         id: orders.id,
         customerId: orders.customerId,
         status: orders.status,
+        orderType: orders.orderType,
         subtotal: orders.subtotal,
         tax: orders.tax,
         total: orders.total,
@@ -263,8 +268,8 @@ export async function createInvoice(formData: FormData) {
       redirect('/admin/invoicing/new?error=' + encodeURIComponent('The selected order belongs to a different customer account.'))
     }
 
-    if (order.status !== 'fulfilled') {
-      redirect('/admin/invoicing/new?error=' + encodeURIComponent('Only fulfilled orders can be invoiced.'))
+    if (order.status === 'cancelled' || order.orderType === 'sample') {
+      redirect('/admin/invoicing/new?error=' + encodeURIComponent('Cancelled and sample orders cannot be invoiced.'))
     }
 
     const [existingInvoice] = await db
@@ -396,52 +401,34 @@ export async function createInvoice(formData: FormData) {
   redirect(`/admin/invoicing/${invoice.id}`)
 }
 
-export async function sendInvoiceEmail(invoiceId: string) {
+export async function sendInvoiceEmail(invoiceId: string, formData?: FormData) {
   const session = await requireAdminOrStaff()
-
-  const [invoice] = await db
-    .select({
-      id: invoices.id,
-      invoiceNumber: invoices.invoiceNumber,
-      status: invoices.status,
-      total: invoices.total,
-      customerEmail: customerAccounts.email,
-      companyName: customerAccounts.companyName,
-    })
-    .from(invoices)
-    .leftJoin(customerAccounts, eq(invoices.customerId, customerAccounts.id))
-    .where(eq(invoices.id, invoiceId))
-    .limit(1)
-
-  if (!invoice || !invoice.customerEmail) {
-    redirect(`/admin/invoicing/${invoiceId}?error=${encodeURIComponent('Customer email is required before sending an invoice.')}`)
-  }
-
-  await notify('invoice.created', {
-    customerEmail: invoice.customerEmail,
-    invoiceNumber: invoice.invoiceNumber,
-    companyName: invoice.companyName ?? '',
-    total: invoice.total,
-    invoiceUrl: `${process.env.NEXTAUTH_URL}/customer/invoices/${invoiceId}`,
-  })
-
+  const portal = formData?.get('portal') === 'staff' ? 'staff' : formData?.get('portal') === 'field' ? 'field' : 'admin'
+  const path = portal === 'field' ? `/field/invoices/${invoiceId}` : `/${portal}/invoicing/${invoiceId}`
+  const fail = (message: string): never => redirect(`${path}?error=${encodeURIComponent(message)}`)
+  const [invoice] = await db.select({ id: invoices.id, invoiceNumber: invoices.invoiceNumber, status: invoices.status, total: invoices.total,
+    customerEmail: sql<string | null>`COALESCE((SELECT recipient_email FROM field_documents WHERE invoice_id = ${invoices.id} LIMIT 1), ${customerAccounts.businessEmail}, ${customerAccounts.email}, ${customerAccounts.pocEmail})`,
+    companyName: customerAccounts.companyName, orderStatus: orders.status, dueDate: invoices.dueDate, deliveryDate: orders.deliveryDate, paymentTerms: orders.paymentTerms,
+  }).from(invoices).leftJoin(customerAccounts, eq(invoices.customerId, customerAccounts.id)).leftJoin(orders, eq(invoices.orderId, orders.id)).where(eq(invoices.id, invoiceId)).limit(1)
+  if (!invoice) fail('Invoice not found.')
+  if (invoice.orderStatus === 'cancelled') fail('This order is cancelled. Review it before sending an invoice.')
+  const email = String(formData?.get('recipientEmail') ?? invoice.customerEmail ?? '').trim()
+  if (!z.email().max(254).safeParse(email).success) fail('Enter a valid recipient email.')
+  let sent = false
+  try {
+    sent = await sendFieldInvoiceEmail({ to: email, companyName: invoice.companyName ?? '', invoiceNumber: invoice.invoiceNumber,
+      total: invoice.total, paymentMethod: 'manual', invoicePath: getInvoicePublicPaymentPath(invoice.id) })
+  } catch { /* Keep the saved invoice and status when delivery fails. */ }
+  if (!sent) fail('Invoice saved, but email could not be sent. Check the address and retry; do not create another invoice.')
+  const dueDate = invoice.dueDate ?? getDeliveryDueDate(invoice.deliveryDate, invoice.paymentTerms)
+  await db.update(invoices).set({ status: 'sent', dueDate }).where(and(eq(invoices.id, invoice.id), eq(invoices.status, 'draft')))
   const isResend = invoice.status !== 'draft'
-  if (!isResend) {
-    await db.update(invoices).set({ status: 'sent' }).where(eq(invoices.id, invoiceId))
-  }
-
-  await logActivityEvent({
-    entityType: 'invoice',
-    entityId: invoice.id,
-    actorUserId: session.user.id,
-    kind: isResend ? 'invoice_resent' : 'invoice_sent',
-    title: isResend ? 'Invoice resent' : 'Invoice sent',
-    body: `${invoice.invoiceNumber} emailed to ${invoice.customerEmail}.`,
-  })
-
-  revalidatePath('/admin/invoicing')
-  revalidatePath(`/admin/invoicing/${invoiceId}`)
-  redirect(`/admin/invoicing/${invoiceId}?success=${encodeURIComponent(`Invoice ${isResend ? 'resent' : 'sent'} to ${invoice.customerEmail}.`)}`)
+  await logActivityEvent({ entityType: 'invoice', entityId: invoice.id, actorUserId: session.user.id,
+    kind: isResend ? 'invoice_resent' : 'invoice_sent', title: isResend ? 'Invoice resent' : 'Invoice sent',
+    body: `${invoice.invoiceNumber} emailed to ${email}.`, metadata: { recipientEmail: email } })
+  for (const prefix of ['admin', 'staff']) { revalidatePath(`/${prefix}/invoicing`); revalidatePath(`/${prefix}/invoicing/${invoice.id}`) }
+  revalidatePath(`/field/invoices/${invoice.id}`)
+  redirect(`${path}?success=${encodeURIComponent(`Invoice ${isResend ? 'resent' : 'sent'} to ${email}.`)}`)
 }
 
 export async function setInvoiceAchFeeWaiver(invoiceId: string, waiveAchFee: boolean) {
@@ -693,6 +680,7 @@ async function _createPaymentIntent(
 ) {
   const invoice = await getInvoiceSettlementContext(invoiceId)
   if (!invoice) throw new Error('Invoice not found')
+  if (invoice.orderPaymentStatus === 'paid' || invoice.orderPaymentStatus === 'processing') throw new Error('This order is already paid or its payment is processing.')
   if (!isInvoicePayable(invoice.status)) throw new Error('Invoice is not payable')
 
   if (session) {

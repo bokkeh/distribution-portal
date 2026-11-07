@@ -1295,12 +1295,12 @@ export async function sendTasterAvailabilityReminderEmail({
 
 
 export async function sendFieldInvoiceEmail({ to, companyName, invoiceNumber, total, paymentMethod, invoicePath }: {
-  to: string; companyName: string; invoiceNumber: string; total: string; paymentMethod: 'check' | 'cod' | 'stripe'; invoicePath: string
+  to: string; companyName: string; invoiceNumber: string; total: string; paymentMethod: 'check' | 'cod' | 'stripe' | 'manual'; invoicePath: string
 }) {
   return sendEmail({ to, recipientName: companyName, subject: `AHAWC invoice ${invoiceNumber}`, html: renderEmailCard({
     eyebrow: 'AHAWC Distribution', title: `Invoice ${escapeHtml(invoiceNumber)}`,
     intro: `${escapeHtml(companyName)} · ${formatCurrencyValue(total)}`,
-    body: `<p>Payment selection: ${paymentMethod === 'stripe' ? 'Credit card via Stripe' : paymentMethod === 'cod' ? 'Cash on delivery (COD)' : 'Check'}.</p><p>Open your invoice to view its items, download a PDF, and see the current payment status.</p>`,
+    body: `<p>Payment selection: ${paymentMethod === 'manual' ? 'Arrange check / payment with your representative, or pay securely online' : paymentMethod === 'stripe' ? 'Credit card via Stripe' : paymentMethod === 'cod' ? 'Cash on delivery (COD)' : 'Check'}.</p><p>Open your invoice to view its items, download a PDF, and see the current payment status.</p>`,
     ctaLabel: 'View invoice', ctaHref: portalUrl(invoicePath),
   }) })
 }

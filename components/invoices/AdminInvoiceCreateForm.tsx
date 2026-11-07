@@ -235,7 +235,7 @@ export function AdminInvoiceCreateForm({
         {matchingOrders.length === 0 ? (
           <p className="text-xs text-muted-foreground">No eligible orders match your search.</p>
         ) : null}
-        <p className="text-xs text-muted-foreground">Only fulfilled orders without an existing invoice are listed.</p>
+        <p className="text-xs text-muted-foreground">Active customer orders without an existing invoice are listed.</p>
       </div>
 
       <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">

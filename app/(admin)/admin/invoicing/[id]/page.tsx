@@ -1,16 +1,17 @@
+import { InvoiceSendForm } from '@/components/invoices/InvoiceSendForm'
 import { db } from '@/db'
 import { activityEvents, invoices, customerAccounts } from '@/db/schema'
 import { desc, eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Download, Send } from 'lucide-react'
+import { ArrowLeft, Download } from 'lucide-react'
 import { CopyPaymentLinkButton } from '@/components/invoices/CopyPaymentLinkButton'
 import { DeleteDraftInvoiceButton } from '@/components/invoices/DeleteDraftInvoiceButton'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatDate } from '@/lib/utils'
-import { createInvoiceAdjustment, deleteDraftInvoice, markInvoicePaid, recordOfflineInvoicePayment, sendInvoiceEmail, setInvoiceAchFeeWaiver } from '@/actions/invoices'
+import { createInvoiceAdjustment, deleteDraftInvoice, markInvoicePaid, recordOfflineInvoicePayment, setInvoiceAchFeeWaiver } from '@/actions/invoices'
 import { getInvoiceDetailData } from '@/lib/invoices/read'
 import { getInvoicePublicPaymentPath } from '@/lib/invoices/public-token'
 import { InvoiceVisual } from '@/components/invoices/InvoiceVisual'
@@ -100,15 +101,7 @@ export default async function InvoiceDetailPage({
                   <Button variant="ghost" className="w-full">Open legacy PDF</Button>
                 </a>
               ) : null}
-              {invoice.status === 'draft' ? (
-                <form action={sendInvoiceEmail.bind(null, invoice.id)}>
-                  <Button className="w-full" type="submit"><Send className="mr-2 h-4 w-4" />Send to Customer</Button>
-                </form>
-              ) : (
-                <form action={sendInvoiceEmail.bind(null, invoice.id)}>
-                  <Button variant="outline" className="w-full" type="submit"><Send className="mr-2 h-4 w-4" />Resend Invoice</Button>
-                </form>
-              )}
+              <InvoiceSendForm invoiceId={invoice.id} status={invoice.status} portal="admin" defaultEmail={invoiceVisual.customerEmail ?? ''} />
               {invoice.status !== 'paid' ? (
                 <form action={markInvoicePaid.bind(null, invoice.id)}>
                   <Button variant="secondary" className="w-full" type="submit">Mark as Paid</Button>

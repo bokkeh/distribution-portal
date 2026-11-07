@@ -1,5 +1,7 @@
 'use server'
 
+import { z } from 'zod'
+
 import { randomBytes } from 'crypto'
 import { and, desc, eq, ilike, or } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
@@ -350,7 +352,7 @@ export async function submitRepAssistedOrder(formData: FormData) {
       amount: amount.toFixed(2),
       tax: payload.tax.toFixed(2),
       total: total.toFixed(2),
-      status: 'sent',
+      status: 'draft',
     }).returning()
     createdInvoiceId = invoice.id
     const itemRows = lineItems.map((item) => {
@@ -399,20 +401,13 @@ export async function submitRepAssistedOrder(formData: FormData) {
       metadata: { workflowId: workflow.id, invoiceId: invoice.id, discountPercent: payload.discountPercent },
     })
 
-    const errors: Record<string, string> = {}
-    let emailStatus: 'sent' | 'failed' = 'sent'
-    let smsStatus: 'sent' | 'failed' = 'sent'
-    try { await sendWorkflowEmail(workflow, tokenPair.token) } catch (error) { emailStatus = 'failed'; errors.email = error instanceof Error ? error.message : String(error) }
-    try { await sendWorkflowSms(workflow, tokenPair.token) } catch (error) { smsStatus = 'failed'; errors.sms = error instanceof Error ? error.message : String(error) }
-    await db.update(repAssistedOrders).set({
-      emailStatus, emailSentAt: emailStatus === 'sent' ? new Date() : null,
-      smsStatus, smsSentAt: smsStatus === 'sent' ? new Date() : null,
-      notificationErrors: errors, status: 'awaiting_payment', updatedAt: new Date(),
-    }).where(eq(repAssistedOrders.id, workflow.id))
+    // Saving an order never contacts the customer. Notifications are explicit actions after review.
+    await db.update(repAssistedOrders).set({ emailStatus: 'pending', smsStatus: 'pending', emailSentAt: null, smsSentAt: null,
+      notificationErrors: {}, updatedAt: new Date() }).where(eq(repAssistedOrders.id, workflow.id))
 
     revalidatePath('/sales/dashboard')
     revalidatePath('/sales/orders/assisted')
-    return { success: true as const, workflowId: workflow.id, redirectTo: `/sales/orders/assisted/${workflow.id}`, partialFailure: Object.keys(errors).length ? errors : undefined }
+    return { success: true as const, workflowId: workflow.id, redirectTo: `/sales/orders/assisted/${workflow.id}` }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to submit order.'
     // Neon HTTP does not support an interactive transaction for this multi-step workflow.
@@ -432,8 +427,14 @@ async function getAuthorizedWorkflow(workflowId: string) {
   return workflow
 }
 
-export async function resendRepAssistedNotification(workflowId: string, channel: 'email' | 'sms') {
-  const workflow = await getAuthorizedWorkflow(workflowId)
+export async function resendRepAssistedNotification(workflowId: string, channel: 'email' | 'sms', recipientEmail?: string) {
+  let workflow = await getAuthorizedWorkflow(workflowId)
+  if (workflow.status === 'cancelled') return { error: 'This order is cancelled.' }
+  if (channel === 'email' && recipientEmail !== undefined) {
+    const email = recipientEmail.trim()
+    if (!z.email().max(254).safeParse(email).success) return { error: 'Enter a valid recipient email.' }
+    workflow = { ...workflow, recipientEmail: email }
+  }
   const { token, hash } = createRepAssistedAccessToken()
   const expiresAt = getRepAssistedTokenExpiration()
   await db.update(repAssistedOrders).set({ accessTokenHash: hash, accessTokenExpiresAt: expiresAt, revokedAt: null, updatedAt: new Date() }).where(eq(repAssistedOrders.id, workflow.id))
@@ -441,8 +442,10 @@ export async function resendRepAssistedNotification(workflowId: string, channel:
   try {
     if (channel === 'email') await sendWorkflowEmail(refreshed, token)
     else await sendWorkflowSms(refreshed, token)
+    if (workflow.invoiceId) await db.update(invoices).set({ status: 'sent' }).where(and(eq(invoices.id, workflow.invoiceId), eq(invoices.status, 'draft')))
     const history = Array.isArray(workflow.resendHistory) ? workflow.resendHistory : []
     await db.update(repAssistedOrders).set({
+      ...(channel === 'email' ? { recipientEmail: workflow.recipientEmail } : {}),
       [channel === 'email' ? 'emailStatus' : 'smsStatus']: 'sent',
       [channel === 'email' ? 'emailSentAt' : 'smsSentAt']: new Date(),
       resendHistory: [...history, { channel, sentAt: new Date().toISOString() }],

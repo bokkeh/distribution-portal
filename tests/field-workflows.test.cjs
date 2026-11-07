@@ -41,6 +41,12 @@ test('quick invoice does not create an order or change stock, and failed email d
   const calls = h.runtime.emailCalls
   assert.equal((await h.api.sendFieldInvoice(saved.requestId)).success, true)
   assert.equal(h.runtime.emailCalls, calls)
+  const originalInvoice = saved.invoiceId
+  assert.equal((await h.api.sendFieldInvoice(saved.requestId, 'bookkeeper@example.test')).success, true)
+  assert.equal((await h.api.getFieldDocument(saved.requestId)).email, 'bookkeeper@example.test')
+  assert.equal((await h.api.sendFieldInvoice(saved.requestId, 'bookkeeper@example.test', true)).success, true)
+  assert.equal((await h.api.getFieldDocument(saved.requestId)).invoiceId, originalInvoice)
+  assert.equal(h.runtime.emailCalls, calls + 2)
   assert.equal((await h.api.getFieldDocument(saved.requestId)).status, 'sent')
   await assert.rejects(h.api.startFieldCardPayment(saved.requestId), /check or COD/)
 })

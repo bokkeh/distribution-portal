@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { db } from '@/db'
 import { customerAccounts, invoices, orders, products } from '@/db/schema'
 import { AdminInvoiceCreateForm } from '@/components/invoices/AdminInvoiceCreateForm'
@@ -48,7 +48,7 @@ export default async function NewInvoicePage({
       paymentTerms: orders.paymentTerms,
     })
     .from(orders)
-    .where(eq(orders.status, 'fulfilled'))
+    .where(sql`${orders.status} <> 'cancelled' AND ${orders.orderType} <> 'sample'`)
 
   const existingInvoices = await db
     .select({ orderId: invoices.orderId })

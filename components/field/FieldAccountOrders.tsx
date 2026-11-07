@@ -36,6 +36,7 @@ export function FieldAccountOrders({ accountId }: { accountId: string }) {
       {history.orders.length ? <div className="space-y-2">{history.orders.slice(0, showCount).map(order => <div key={order.id} className="rounded-xl border bg-stone-50 p-3">
         <p className="flex items-baseline justify-between gap-2 font-semibold"><span>{formatEasternDate(order.date)}</span><span>{order.total != null ? formatCurrency(order.total) : '—'}</span></p>
         <p className="mt-1 text-xs font-medium text-muted-foreground">{order.label}</p>
+        {order.invoiceId ? <div className="mt-3 flex flex-wrap gap-3"><a className="inline-flex min-h-12 items-center rounded-lg border bg-white px-4 font-medium" href={`/field/invoices/${order.invoiceId}`}>Review / send invoice</a><a className="inline-flex min-h-12 items-center rounded-lg border bg-white px-4 font-medium" href={`/api/invoices/${order.invoiceId}/pdf`}>Download PDF</a></div> : null}
         {order.summary ? <p className="mt-1 break-words text-sm text-muted-foreground">{order.summary}</p> : null}
       </div>)}</div> : <p className="text-sm text-muted-foreground">No orders recorded for this account yet.</p>}
       {history.orders.length > showCount ? <Button type="button" variant="outline" className="h-12 w-full" onClick={() => setShowCount(count => count + 10)}>Show more orders ({history.orders.length - showCount} remaining)</Button> : null}
