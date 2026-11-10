@@ -10,5 +10,5 @@ export function isFieldEntry(pathname: string, next: string | null) {
 }
 
 export function requiresPublicAgeGate(pathname: string, next: string | null) {
-  return ['/', '/login', '/privacy', '/terms'].includes(pathname) && !isFieldEntry(pathname, next)
+  return ['/', '/login'].includes(pathname) && !isFieldEntry(pathname, next)
 }

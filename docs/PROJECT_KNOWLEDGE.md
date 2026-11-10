@@ -53,3 +53,10 @@ Five pure token/rate/content tests, five isolated database/route tests, mobile C
 ## Draft invoices and field resending (2026-11-07)
 
 User explicitly approved implementation and production deployment. See docs/invoice-workflow.md for behavior and validation. New orders save invoices automatically; emailing remains an explicit review/send action, and resending keeps the same invoice number with an editable recipient. Existing historical orders are not bulk-backfilled or emailed. Target remains alex-6771s-projects/distribution-portal from master; release verification is pending. No migration is required.
+
+
+## Public SMS disclosure rendering — November 9, 2026
+
+Raw public HTML confirmed that /privacy, /terms and /sms-consent/taster exposed only the title and call drawer before JavaScript. The shared PublicAgeGate read useSearchParams around every route, causing static pages to fall back to the loading shell. Query-parameter handling is now confined to login. The three disclosure pages bypass the general browsing age gate and omit the call drawer. Homepage/regular-login gates and field-login exemptions remain; authenticated SMS consent and server-side birthdate validation are unchanged.
+
+Validated on an isolated checkout of production master e21c5a3a: production webpack build including type checks, targeted lint, field-session regression, three birthdate tests, and tests/public-disclosures-browser.cjs. Browser checks cover raw HTML, all three disclosures visible with JavaScript disabled, homepage age gate, regular login gate and field-login exemption. No consent was submitted and no messages were sent. Production release verification is recorded below once complete.

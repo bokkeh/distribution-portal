@@ -44,13 +44,26 @@ function isTwentyOneOrOlder(month: string, day: string, year: string) {
 }
 
 export function PublicAgeGate({ children }: { children: React.ReactNode }) {
-  return <Suspense fallback={<div className="min-h-screen bg-slate-950" role="status" aria-label="Loading portal" />}><PublicAgeGateContent>{children}</PublicAgeGateContent></Suspense>
+  const pathname = usePathname()
+  // Legal disclosures must be available in the initial HTML without an age-gate interaction.
+  if (pathname === '/privacy' || pathname === '/terms' || pathname === '/sms-consent/taster') {
+    return <>{children}</>
+  }
+  // Only login needs query parameters. Reading them around every route forces
+  // statically rendered pages into the Suspense fallback until JavaScript runs.
+  if (pathname === '/login') {
+    return <Suspense fallback={<div className="min-h-screen bg-slate-950" role="status" aria-label="Loading portal" />}><LoginAgeGate>{children}</LoginAgeGate></Suspense>
+  }
+  return <PublicAgeGateContent pathname={pathname} next={null}>{children}</PublicAgeGateContent>
 }
 
-function PublicAgeGateContent({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname()
+function LoginAgeGate({ children }: { children: React.ReactNode }) {
   const searchParams = useSearchParams()
-  const isGated = requiresPublicAgeGate(pathname, searchParams.get('next'))
+  return <PublicAgeGateContent pathname="/login" next={searchParams.get('next')}>{children}</PublicAgeGateContent>
+}
+
+function PublicAgeGateContent({ children, pathname, next }: { children: React.ReactNode; pathname: string; next: string | null }) {
+  const isGated = requiresPublicAgeGate(pathname, next)
   const storedVerified = useSyncExternalStore(subscribeVerification, hasVerification, () => false)
   const [sessionVerified, setSessionVerified] = useState(false)
   const [month, setMonth] = useState('')
