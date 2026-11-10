@@ -121,6 +121,20 @@ function getInvoicingIndexPath(mode: AccountRecordMode) {
   return null
 }
 
+function InvoiceRecordRow({ mode, invoice, compact = false }: {
+  mode: AccountRecordMode
+  invoice: { id: string; invoiceNumber: string; dueDate: string | null; total: string; status: string }
+  compact?: boolean
+}) {
+  const indexPath = getInvoicingIndexPath(mode)
+  const className = `flex items-center justify-between ${compact ? 'border-b py-1.5 last:border-0' : 'rounded-xl border border-slate-100 px-3 py-3'}`
+  const content = <>
+    <div><p className="text-sm font-medium">{invoice.invoiceNumber}</p>{invoice.dueDate ? <p className="text-xs text-muted-foreground">Due {formatDate(invoice.dueDate)}</p> : null}</div>
+    <div className="text-right"><p className="text-sm font-semibold">{formatCurrency(invoice.total)}</p><Badge variant={invoice.status === 'paid' ? 'success' : invoice.status === 'overdue' ? 'destructive' : invoice.status === 'sent' ? 'info' : 'secondary'} className="text-xs">{invoice.status}</Badge></div>
+  </>
+  return indexPath ? <Link href={`${indexPath}/${invoice.id}`} aria-label={`View invoice ${invoice.invoiceNumber}`} className={`${className} transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600`}>{content}</Link> : <div className={className}>{content}</div>
+}
+
 function getAccountPhonesForInboxMatch(...values: Array<string | null | undefined>) {
   const phones = new Set<string>()
 
@@ -761,10 +775,7 @@ export async function AccountRecordPage({
                     <CardHeader className="flex flex-row items-center justify-between pb-3"><CardTitle className="flex items-center gap-2"><Receipt className="h-4 w-4" />Invoices</CardTitle>{invoicingIndexHref ? <Link href={invoicingIndexHref} className="text-xs font-medium text-blue-600 hover:underline">View all</Link> : null}</CardHeader>
                     <CardContent className="space-y-2">
                       {overviewData.recentInvoices.map((invoice) => (
-                        <div key={invoice.id} className="flex items-center justify-between border-b py-1.5 last:border-0">
-                          <div><p className="text-sm font-medium">{invoice.invoiceNumber}</p>{invoice.dueDate ? <p className="text-xs text-muted-foreground">Due {formatDate(invoice.dueDate)}</p> : null}</div>
-                          <div className="text-right"><p className="text-sm font-semibold">{formatCurrency(invoice.total)}</p><Badge variant={invoice.status === 'paid' ? 'success' : invoice.status === 'overdue' ? 'destructive' : invoice.status === 'sent' ? 'info' : 'secondary'} className="text-xs">{invoice.status}</Badge></div>
-                        </div>
+                        <InvoiceRecordRow key={invoice.id} mode={mode} invoice={invoice} compact />
                       ))}
                     </CardContent>
                   </Card>
@@ -913,7 +924,7 @@ export async function AccountRecordPage({
           />
           <Card>
             <CardHeader className="pb-3"><CardTitle>Invoices</CardTitle></CardHeader>
-            <CardContent>{ordersData.recentInvoices.length === 0 ? <p className="text-sm text-slate-500">No invoices yet.</p> : <div className="space-y-2">{ordersData.recentInvoices.map((invoice) => <div key={invoice.id} className="flex items-center justify-between rounded-xl border border-slate-100 px-3 py-3"><div><p className="text-sm font-medium">{invoice.invoiceNumber}</p>{invoice.dueDate ? <p className="text-xs text-muted-foreground">Due {formatDate(invoice.dueDate)}</p> : null}</div><div className="text-right"><p className="text-sm font-semibold">{formatCurrency(invoice.total)}</p><Badge variant={invoice.status === 'paid' ? 'success' : invoice.status === 'overdue' ? 'destructive' : invoice.status === 'sent' ? 'info' : 'secondary'} className="text-xs">{invoice.status}</Badge></div></div>)}</div>}</CardContent>
+            <CardContent>{ordersData.recentInvoices.length === 0 ? <p className="text-sm text-slate-500">No invoices yet.</p> : <div className="space-y-2">{ordersData.recentInvoices.map((invoice) => <InvoiceRecordRow key={invoice.id} mode={mode} invoice={invoice} />)}</div>}</CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-3"><CardTitle>Delivery Reports</CardTitle></CardHeader>

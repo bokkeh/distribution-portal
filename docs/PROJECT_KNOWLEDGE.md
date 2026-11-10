@@ -60,3 +60,8 @@ User explicitly approved implementation and production deployment. See docs/invo
 Raw public HTML confirmed that /privacy, /terms and /sms-consent/taster exposed only the title and call drawer before JavaScript. The shared PublicAgeGate read useSearchParams around every route, causing static pages to fall back to the loading shell. Query-parameter handling is now confined to login. The three disclosure pages bypass the general browsing age gate and omit the call drawer. Homepage/regular-login gates and field-login exemptions remain; authenticated SMS consent and server-side birthdate validation are unchanged.
 
 Validated on an isolated checkout of production master e21c5a3a: production webpack build including type checks, targeted lint, field-session regression, three birthdate tests, and tests/public-disclosures-browser.cjs. Browser checks cover raw HTML, all three disclosures visible with JavaScript disabled, homepage age gate, regular login gate and field-login exemption. No consent was submitted and no messages were sent. Production release verification is recorded below once complete.
+
+
+## CRM invoice links — November 9, 2026
+
+CRM account invoice rows in Overview and Orders now link to the existing admin/staff invoice detail page using the invoice ID. The full row is keyboard accessible with a descriptive label, hover feedback and visible keyboard focus. Sales retains its existing display because no sales invoice detail route exists. Validation: targeted lint, TypeScript checks, and six server-rendered row checks covering both placements and all three role modes. Invoice number, amount, due date and status remain visible; no billing data or permissions change.
