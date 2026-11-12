@@ -1,4 +1,3 @@
-import { TasterSignupForm } from '@/components/marketing/TasterSignupForm'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Wine, ClipboardList, DollarSign, CalendarCheck } from 'lucide-react'
@@ -64,7 +63,7 @@ export default function TasterSignupPage() {
                 Create your AHAWC<br />taster account
               </h1>
               <p className="max-w-xl text-lg leading-relaxed text-slate-600">
-                This page is for AHAWC tasters and brand ambassadors. Create your taster portal account with your invite code, then an admin can activate access for assignments, reports, and payouts.
+                Taster accounts are invitation-only. Ask the AHAWC team for a private activation link to access assignments, reports, and payouts.
               </p>
             </div>
 
@@ -97,7 +96,23 @@ export default function TasterSignupPage() {
           </div>
 
           <div className="lg:sticky lg:top-8">
-            <TasterSignupForm />
+            <div className="space-y-5 rounded-3xl border border-slate-200 bg-white p-8 shadow-[0_24px_60px_-32px_rgba(15,23,42,0.35)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-700">Invitation Required</p>
+              <h2 className="text-2xl font-bold text-slate-900">Taster signup is private</h2>
+              <p className="text-sm leading-relaxed text-slate-600">
+                For security, shared signup codes are no longer accepted. An AHAWC admin will create your account and email you a single-use activation link.
+              </p>
+              <a
+                href="mailto:tastings@ahawc.com?subject=Taster%20portal%20invitation"
+                className="inline-flex w-full items-center justify-center rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-slate-800"
+              >
+                Request an invitation
+              </a>
+              <p className="text-center text-xs text-slate-500">
+                Already received an invitation? Open the private link in your email, or{' '}
+                <Link href="/login" className="font-medium text-blue-700 underline underline-offset-2">sign in</Link>.
+              </p>
+            </div>
           </div>
         </div>
       </main>

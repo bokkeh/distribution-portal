@@ -23,13 +23,9 @@ export default async function NewUserPage() {
       </div>
 
       <div className="max-w-2xl rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950">
-        <p className="font-medium">Need the public taster signup link handy?</p>
+        <p className="font-medium">Adding a taster?</p>
         <p className="mt-1 text-sky-900">
-          Share{' '}
-          <Link href="/taster-signup" className="font-semibold underline underline-offset-4">
-            /taster-signup
-          </Link>{' '}
-          for invite-code based taster registration. Admin-created users can still log in directly with the temporary password you set here.
+          Public shared-code signup has been retired. Create the taster here to send a private, single-use activation link.
         </p>
       </div>
 

@@ -14,6 +14,16 @@ export async function registerTaster(
   _prev: TasterSignupState,
   formData: FormData,
 ): Promise<TasterSignupState> {
+  // The shared-code signup is a legacy escape hatch. New tasters should be
+  // created by an admin and activate their account with a single-use token via
+  // /taster-invite/[token]. Keeping this deny-by-default prevents bots from
+  // creating dormant user rows even if they discover this server action.
+  if (process.env.ALLOW_PUBLIC_TASTER_REGISTRATION !== 'true') {
+    return {
+      error: 'Public taster signup is closed. Ask an AHAWC admin to send you a private invitation.',
+    }
+  }
+
   const inviteCode = (formData.get('inviteCode') as string)?.trim()
   const name = (formData.get('name') as string)?.trim()
   const email = (formData.get('email') as string)?.trim().toLowerCase()
