@@ -4,12 +4,18 @@ import { z } from 'zod'
 import { headers } from 'next/headers'
 import { db } from '@/db'
 import { wholesaleAccountRequests, type NewWholesaleAccountRequest } from '@/db/schema'
-import { sql } from 'drizzle-orm'
+import { and, eq, gte, or, sql } from 'drizzle-orm'
 import { normalizePhone, setSmsSubscription, SMS_CONFIRMATION_MESSAGE, SMS_CONSENT_COPY } from '@/lib/telnyx/compliance'
 import { sendSms } from '@/lib/telnyx/client'
 import { createNotificationsForRoles } from '@/lib/notifications/in-app'
 import { normalizeBusinessType } from '@/lib/customers/business-types'
 import { AGE_GATE_VERSION, requireAdultBirthDate } from '@/lib/telnyx/age-gate'
+import { isWholesaleEmailRateLimited, isWholesaleRequestRateLimited } from '@/lib/auth/rate-limit'
+
+const MIN_FORM_COMPLETION_MS = 3_000
+const MAX_FORM_AGE_MS = 2 * 60 * 60 * 1_000
+const DUPLICATE_WINDOW_MS = 24 * 60 * 60 * 1_000
+const BOT_ACCEPTED_RESPONSE = { success: true as const }
 
 const requestSchema = z.object({
   businessName: z.string().trim().min(2, 'Business name is required'),
@@ -71,6 +77,26 @@ export async function submitWholesaleAccountRequest(
   formData: FormData
 ): Promise<{ error?: string; success?: boolean }> {
   try {
+    const requestHeaders = await headers()
+    const ipAddress = requestHeaders.get('x-forwarded-for')?.split(',')[0]?.trim()
+      ?? requestHeaders.get('x-real-ip')?.trim()
+      ?? 'unknown'
+    const honeypot = String(formData.get('website') ?? '').trim()
+    const formStartedAt = Number(formData.get('formStartedAt'))
+    const completionTime = Date.now() - formStartedAt
+
+    // Silently accept automated submissions so bots do not learn which check
+    // rejected them. No row, notification, email, or SMS is created.
+    if (
+      honeypot
+      || !Number.isFinite(formStartedAt)
+      || completionTime < MIN_FORM_COMPLETION_MS
+      || completionTime > MAX_FORM_AGE_MS
+      || await isWholesaleRequestRateLimited(ipAddress)
+    ) {
+      return BOT_ACCEPTED_RESPONSE
+    }
+
     requireAdultBirthDate(formData.get('birthDate'))
     const parsed = requestSchema.parse({
       businessName: formData.get('businessName'),
@@ -82,13 +108,34 @@ export async function submitWholesaleAccountRequest(
       submissionPage: formData.get('submissionPage'),
     })
 
-    const requestHeaders = await headers()
     const phone = parsed.phone
     const phoneNormalized = normalizePhone(phone)
+    const normalizedEmail = parsed.businessEmail.trim().toLowerCase()
+
+    if (await isWholesaleEmailRateLimited(normalizedEmail)) {
+      return BOT_ACCEPTED_RESPONSE
+    }
+
+    const duplicateSince = new Date(Date.now() - DUPLICATE_WINDOW_MS)
+    const [recentDuplicate] = await db
+      .select({ id: wholesaleAccountRequests.id })
+      .from(wholesaleAccountRequests)
+      .where(and(
+        gte(wholesaleAccountRequests.createdAt, duplicateSince),
+        or(
+          eq(sql`lower(${wholesaleAccountRequests.businessEmail})`, normalizedEmail),
+          eq(wholesaleAccountRequests.ipAddress, ipAddress),
+        ),
+      ))
+      .limit(1)
+
+    if (recentDuplicate) {
+      return BOT_ACCEPTED_RESPONSE
+    }
 
     const insertValues = {
       businessName: parsed.businessName,
-      businessEmail: parsed.businessEmail,
+      businessEmail: normalizedEmail,
       businessType: normalizeBusinessType(parsed.businessType) ?? null,
       phone,
       phoneNormalized,
@@ -99,7 +146,7 @@ export async function submitWholesaleAccountRequest(
       ageVerifiedAt: new Date(),
       source: parsed.source,
       submissionPage: parsed.submissionPage ?? null,
-      ipAddress: requestHeaders.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null,
+      ipAddress,
       userAgent: requestHeaders.get('user-agent'),
     }
 

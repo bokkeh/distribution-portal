@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useRef } from 'react'
+import { useActionState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { CheckCircle2 } from 'lucide-react'
 import { submitWholesaleAccountRequest } from '@/actions/marketing'
@@ -15,7 +15,14 @@ const fieldClassName =
 
 export function JoinRequestForm() {
   const formRef = useRef<HTMLFormElement>(null)
+  const formStartedAtRef = useRef<HTMLInputElement>(null)
   const [state, formAction, pending] = useActionState(submitWholesaleAccountRequest, initialState)
+
+  useEffect(() => {
+    if (formStartedAtRef.current && !formStartedAtRef.current.value) {
+      formStartedAtRef.current.value = String(Date.now())
+    }
+  }, [])
 
   if (state?.success) {
     return (
@@ -62,6 +69,11 @@ export function JoinRequestForm() {
       <form ref={formRef} action={formAction} className="space-y-3">
         <input type="hidden" name="source" value="join_page" />
         <input type="hidden" name="submissionPage" value="/join" />
+        <input ref={formStartedAtRef} type="hidden" name="formStartedAt" defaultValue="" />
+        <div className="absolute -left-[10000px] top-auto h-px w-px overflow-hidden" aria-hidden="true">
+          <label htmlFor="join-website">Website</label>
+          <input id="join-website" name="website" type="text" tabIndex={-1} autoComplete="off" />
+        </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">

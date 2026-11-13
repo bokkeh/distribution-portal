@@ -14,9 +14,14 @@ const fieldClassName =
 
 export function WholesaleAccountRequestForm() {
   const formRef = useRef<HTMLFormElement>(null)
+  const formStartedAtRef = useRef<HTMLInputElement>(null)
   const [state, formAction, pending] = useActionState(submitWholesaleAccountRequest, initialState)
 
   useEffect(() => {
+    if (formStartedAtRef.current && !formStartedAtRef.current.value) {
+      formStartedAtRef.current.value = String(Date.now())
+    }
+
     if (state?.error) {
       toast.error('Unable to submit request', { description: state.error })
       return
@@ -34,6 +39,11 @@ export function WholesaleAccountRequestForm() {
     <form ref={formRef} action={formAction} className="space-y-3 rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_22px_60px_-30px_rgba(15,23,42,0.28)]">
       <input type="hidden" name="source" value="marketing_contact_form" />
       <input type="hidden" name="submissionPage" value="/#contact" />
+      <input ref={formStartedAtRef} type="hidden" name="formStartedAt" defaultValue="" />
+      <div className="absolute -left-[10000px] top-auto h-px w-px overflow-hidden" aria-hidden="true">
+        <label htmlFor="wholesale-website">Website</label>
+        <input id="wholesale-website" name="website" type="text" tabIndex={-1} autoComplete="off" />
+      </div>
 
       <p className="text-lg font-bold text-slate-900">Request a Wholesale Account</p>
       <input
