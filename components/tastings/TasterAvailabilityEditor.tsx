@@ -1,18 +1,13 @@
 'use client'
 
 import { useMemo, useState, useTransition } from 'react'
-import { addMonths, eachDayOfInterval, endOfMonth, format, getDay, startOfMonth } from 'date-fns'
+import { addMonths, eachDayOfInterval, endOfMonth, format, startOfMonth } from 'date-fns'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { saveMyAvailability } from '@/actions/taster-availability'
 
 const AVAILABILITY_MONTH_COUNT = 6
-
-function isTastingDay(date: Date) {
-  const day = getDay(date)
-  return day === 5 || day === 6 || day === 0
-}
 
 export function TasterAvailabilityEditor({
   submittedDates,
@@ -34,8 +29,8 @@ export function TasterAvailabilityEditor({
   const monthStart = useMemo(() => startOfMonth(addMonths(new Date(), monthOffset)), [monthOffset])
   const monthKey = format(monthStart, 'yyyy-MM')
   const monthEnd = endOfMonth(monthStart)
-  const tastingDays = useMemo(
-    () => eachDayOfInterval({ start: monthStart, end: monthEnd }).filter(isTastingDay),
+  const availabilityDays = useMemo(
+    () => eachDayOfInterval({ start: monthStart, end: monthEnd }),
     [monthEnd, monthStart],
   )
   const selectedDates = selectedByMonth[monthKey] ?? new Set<string>()
@@ -92,7 +87,7 @@ export function TasterAvailabilityEditor({
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
-          {tastingDays.map((day) => {
+          {availabilityDays.map((day) => {
             const dateKey = format(day, 'yyyy-MM-dd')
             const selected = selectedDates.has(dateKey)
 
@@ -109,7 +104,7 @@ export function TasterAvailabilityEditor({
               >
                 <div>
                   <p className="font-medium text-slate-900">{format(day, 'EEEE, MMM d')}</p>
-                  <p className="text-xs text-slate-500">Tasting day</p>
+                  <p className="text-xs text-slate-500">Available for tastings</p>
                 </div>
                 <span className={`rounded-full px-3 py-1 text-xs font-semibold ${selected ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
                   {selected ? 'Available' : 'Not selected'}

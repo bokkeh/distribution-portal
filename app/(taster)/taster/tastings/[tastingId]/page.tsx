@@ -5,6 +5,7 @@ import { ArrowLeft } from 'lucide-react'
 import { db } from '@/db'
 import { tasterInvoices, tastingReportPhotoDrafts, tastingReports, users } from '@/db/schema'
 import { TastingSubmissionDetail } from '@/components/tastings/TastingSubmissionDetail'
+import { CancelTastingControl } from '@/components/tastings/CancelTastingControl'
 import { Button } from '@/components/ui/button'
 import { requireFeature } from '@/lib/auth/session'
 import { getTastingById } from '@/lib/tastings/read'
@@ -104,14 +105,22 @@ export default async function TasterTastingDetailPage({
             <p className="text-muted-foreground mt-1">Complete your event report and submit your payment request.</p>
           </div>
         </div>
-        {tasting.status === 'scheduled' ? (
+        {['scheduled', 'confirmed'].includes(tasting.status) ? (
           <div className="flex flex-wrap gap-3 rounded-2xl border border-slate-200 bg-white p-4">
-            <form action={confirmTastingAssignment.bind(null, tasting.id)}>
-              <Button type="submit">Confirm Assignment</Button>
-            </form>
-            <form action={declineTastingAssignment.bind(null, tasting.id)}>
-              <Button type="submit" variant="destructive">Decline Assignment</Button>
-            </form>
+            {tasting.status === 'scheduled' ? <>
+              <form action={confirmTastingAssignment.bind(null, tasting.id)}>
+                <Button type="submit">Confirm Assignment</Button>
+              </form>
+              <form action={declineTastingAssignment.bind(null, tasting.id)}>
+                <Button type="submit" variant="destructive">Decline Assignment</Button>
+              </form>
+            </> : null}
+            <CancelTastingControl
+              tastingId={tasting.id}
+              mode="taster"
+              redirectTo="/taster/tastings"
+              triggerLabel="Cancel Tasting"
+            />
             <Link href={googleCalendarUrl} target="_blank">
               <Button type="button" variant="outline">Add to Google Calendar</Button>
             </Link>
