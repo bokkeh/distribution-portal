@@ -115,12 +115,12 @@ export default async function TasterTastingDetailPage({
                 <Button type="submit" variant="destructive">Decline Assignment</Button>
               </form>
             </> : null}
-            <CancelTastingControl
+            {roles.includes('admin') ? <CancelTastingControl
               tastingId={tasting.id}
               mode="taster"
               redirectTo="/taster/tastings"
               triggerLabel="Cancel Tasting"
-            />
+            /> : null}
             <Link href={googleCalendarUrl} target="_blank">
               <Button type="button" variant="outline">Add to Google Calendar</Button>
             </Link>

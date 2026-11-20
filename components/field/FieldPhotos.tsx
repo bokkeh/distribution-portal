@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { saveFieldPhoto } from '@/actions/field-data'
 import { getEasternDateKey } from '@/lib/tastings/time'
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,25 @@ export function FieldPhotos({ accountId }: { accountId: string }) {
   const [photos, setPhotos] = useState<Photo[]>([])
   const [caption, setCaption] = useState(''), [pending, setPending] = useState(false), [message, setMessage] = useState('')
   const unsaved = photos.filter(photo => !photo.saved)
+  const photosRef = useRef(photos)
+  photosRef.current = photos
+  const captionRef = useRef(caption)
+  captionRef.current = caption
+
+  // Warn before closing/navigating when unsaved photos exist; auto-save already-uploaded ones on unmount
+  useEffect(() => {
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      if (photosRef.current.some(p => !p.saved)) e.preventDefault()
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      const toSave = photosRef.current.filter(p => !p.saved && p.mediaUrl)
+      for (const photo of toSave) {
+        saveFieldPhoto({ requestId: photo.id, accountId, mediaUrl: photo.mediaUrl!, caption: photo.caption ?? captionRef.current, date: photo.date ?? getEasternDateKey(new Date()) })
+      }
+    }
+  }, [accountId])
   function addFiles(files: FileList | null) {
     if (locked.current || !files) return
     const selected = Array.from(files)

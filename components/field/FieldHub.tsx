@@ -1,143 +1,273 @@
 'use client'
 
+
+
 import { useEffect, useRef, useState } from 'react'
+
 import Link from 'next/link'
+
 import Image from 'next/image'
-import { ArrowLeft, CalendarDays, Camera, Check, FileText, Home, ListTodo, Package, Search, StickyNote, UserRound, Wine } from 'lucide-react'
-import { getFieldAccount, searchFieldAccounts, getFieldAvailability } from '@/actions/field-data'
+
+import { ArrowLeft, CalendarDays, Camera, Check, FileText, Package, Search, StickyNote, UserRound, Wine } from 'lucide-react'
+
+import { getFieldAccount, searchFieldAccounts, getFieldAvailability, saveFieldTastingPlan } from '@/actions/field-data'
+
 import { getFieldDocument, sendFieldInvoice } from '@/actions/field-documents'
+
 import { QuickScheduleTasting } from '@/components/tastings/QuickScheduleTasting'
+
 import { AccountObservationForm } from '@/components/crm/AccountObservationForm'
+
 import { Button } from '@/components/ui/button'
+
 import { FieldDocumentForm, type FieldDocumentDraft, type FieldProduct, type SavedFieldDocument } from './FieldDocumentForm'
+
 import { FieldCardPayment } from './FieldCardPayment'
+
+import { FieldDeliveries } from './FieldDeliveries'
+
 import { FieldAccountNotes } from './FieldAccountNotes'
 import { FieldPhotos } from './FieldPhotos'
+
 import { FieldContacts } from './FieldContacts'
-import { FieldMyTasks, FieldMyTasksButton, FieldTasks } from './FieldTasks'
+
 import { FieldAccountTastings } from './FieldAccountTastings'
-import { FieldAccountOrders } from './FieldAccountOrders'
+
 import { FieldAccountForm } from './FieldAccountForm'
+
 import { FieldTasterAvatar } from './FieldTasterAvatar'
+
 import { fieldAvailabilityRows, type FieldAvailability } from '@/lib/field/availability'
-import { formatEasternDate, getEasternDateKey } from '@/lib/tastings/time'
+
+import { formatEasternDateWithWeekday, getEasternDateKey } from '@/lib/tastings/time'
+
 import { formatCurrency } from '@/lib/utils'
 
-type Account = Awaited<ReturnType<typeof getFieldAccount>>
-type Document = SavedFieldDocument & { status?: string; emailSentAt?: string | null }
-type View = 'home' | 'contacts' | 'tasks' | 'tastings' | 'tasting' | 'order' | 'invoice' | 'note' | 'photos' | 'observations' | 'document'
 
-function FieldTasting({ account, members, initialAvailability }: { account: Account; members: { id: string; name: string }[]; initialAvailability: FieldAvailability }) {
+
+type Account = Awaited<ReturnType<typeof getFieldAccount>>
+
+type Document = SavedFieldDocument & { status?: string; emailSentAt?: string | null }
+
+type View = 'delivery' | 'home' | 'contacts' | 'tastings' | 'order' | 'invoice' | 'note' | 'photos' | 'observations' | 'document'
+
+
+
+function FieldTasting({ account, members, initialAvailability, canCancel = false }: { account: Account; members: { id: string; name: string }[]; initialAvailability: FieldAvailability; canCancel?: boolean }) {
+
   const [availability, setAvailability] = useState(initialAvailability)
+
   const [historyRevision, setHistoryRevision] = useState(0)
+
   const [choice, setChoice] = useState({ date: getEasternDateKey(new Date()), memberId: '' })
+
   const [showCount, setShowCount] = useState(8), [showBooked, setShowBooked] = useState(false), [error, setError] = useState('')
+
   const rows = fieldAvailabilityRows(availability)
+
   const visible = (showBooked ? rows : rows.filter(row => row.free)).slice(0, showCount)
+
   return <div className="space-y-5">
-    <FieldAccountTastings accountId={account.id} revision={historyRevision} />
+
+    <FieldAccountTastings accountId={account.id} revision={historyRevision} canCancel={canCancel} />
+
     <section className="space-y-3 rounded-2xl border bg-white p-4">
+
       <div className="flex items-center justify-between gap-2"><h2 className="text-lg font-semibold">Taster availability</h2><Button variant="outline" className="h-11" onClick={async () => { try { setAvailability(await getFieldAvailability()); setError('') } catch { setError('Could not refresh availability. Retry.') } }}>Refresh</Button></div>
+
       <p className="text-sm text-muted-foreground">Reported available dates for <strong>4–7 p.m. Eastern</strong>, with existing bookings checked. Final availability is checked again when saving.</p>
+
       {error ? <p role="alert" className="text-red-700">{error}</p> : null}
+
       <div className="space-y-2">{visible.map(row => <button type="button" key={`${row.userId}-${row.date}`} onClick={() => setChoice({ date: row.date, memberId: row.userId })} className={`min-h-20 w-full rounded-xl border p-3 text-left ${choice.date === row.date && choice.memberId === row.userId ? 'border-orange-500 bg-orange-50' : 'border-stone-200'}`}>
-        <span className="flex items-center gap-3"><FieldTasterAvatar key={`${row.userId}:${row.avatarUrl ?? ''}`} name={row.name} avatarUrl={row.avatarUrl} /><span className="min-w-0 flex-1"><span className="block font-semibold">{formatEasternDate(`${row.date}T12:00:00Z`)} · {row.name}</span><span className={`mt-1 block text-sm ${row.free ? 'text-emerald-700' : 'text-amber-700'}`}>{row.free ? '4–7 p.m. free · Tap to book' : `Booked ${row.bookedLabel} · Choose another time below`}</span></span></span>
+
+        <span className="flex items-center gap-3"><FieldTasterAvatar key={`${row.userId}:${row.avatarUrl ?? ''}`} name={row.name} avatarUrl={row.avatarUrl} /><span className="min-w-0 flex-1"><span className="block font-semibold">{formatEasternDateWithWeekday(`${row.date}T12:00:00Z`)} · {row.name}</span><span className={`mt-1 block text-sm ${row.free ? 'text-emerald-700' : 'text-amber-700'}`}>{row.free ? '4–7 p.m. free · Tap to book' : `Booked ${row.bookedLabel} · Choose another time below`}</span></span></span>
+
       </button>)}</div>
+
       {!visible.length ? <p className="rounded-xl bg-stone-50 p-3 text-sm">No reported open dates for this time window. Refresh, choose another time below, or schedule Unassigned.</p> : null}
+
       <div className="flex flex-wrap gap-2"><Button variant="outline" className="h-11" onClick={() => setShowCount(count => count + 12)}>More dates</Button><Button variant="ghost" className="h-11" onClick={() => setShowBooked(value => !value)}>{showBooked ? 'Show only open 4–7 dates' : 'Include booked dates'}</Button></div>
+
     </section>
+
     <div className="rounded-2xl border bg-white p-4"><QuickScheduleTasting key={`${choice.date}:${choice.memberId}`} accounts={[account]} members={members} initialAccountId={account.id} initialMemberId={choice.memberId || undefined} date={choice.date} hideAccountPicker onSaved={async () => { setHistoryRevision(value => value + 1); try { setAvailability(await getFieldAvailability()) } catch { setError('Tasting saved. Refresh availability before the next booking.') } }} /></div>
+
   </div>
+
 }
+
+
 
 export function FieldHub({ bootstrap, availability, initialAccount = null, initialDocument = null }: {
-  bootstrap: { userName: string; canInvoice: boolean; canPhotos: boolean; products: FieldProduct[]; members: { id: string; name: string }[] }
+
+  bootstrap: { userName: string; canManageAccounts: boolean; canInvoice: boolean; canPhotos: boolean; products: FieldProduct[]; members: { id: string; name: string }[] }
+
   availability: FieldAvailability; initialAccount?: Account | null; initialDocument?: Document | null
+
 }) {
+
   const [account, setAccount] = useState<Account | null>(initialAccount), [query, setQuery] = useState('')
+
   const [results, setResults] = useState<Awaited<ReturnType<typeof searchFieldAccounts>>>([])
+
   const [searching, setSearching] = useState(!initialAccount), [loading, setLoading] = useState(false), [error, setError] = useState('')
+
   const [view, setView] = useState<View>(initialDocument ? 'document' : 'home'), [saved, setSaved] = useState<Document | null>(initialDocument)
+
   const [recipientEmail, setRecipientEmail] = useState(initialDocument?.email ?? '')
+
   const [deliveryMessage, setDeliveryMessage] = useState(''), [docPending, setDocPending] = useState(false)
+
   const documentLocked = useRef(false)
+
   const [documentDrafts, setDocumentDrafts] = useState<Record<string, FieldDocumentDraft>>({})
-  const [documentBack, setDocumentBack] = useState(0), [documentBusy, setDocumentBusy] = useState(false), [documentReviewing, setDocumentReviewing] = useState(false)
+
+  const [documentBack, setDocumentBack] = useState(0), [documentBusy, setDocumentBusy] = useState(false)
+
   const [addingAccount, setAddingAccount] = useState(false), [accountMessage, setAccountMessage] = useState('')
-  const [myTasks, setMyTasks] = useState(false)
+
   useEffect(() => {
+
     if (!searching) return
+
     let active = true
+
     const timer = setTimeout(async () => {
+
       setLoading(true)
+
       try { const rows = await searchFieldAccounts(query); if (active) { setResults(rows); setError('') } }
+
       catch { if (active) setError('Could not search accounts. Check your connection and try again.') }
+
       finally { if (active) setLoading(false) }
+
     }, 200)
+
     return () => { active = false; clearTimeout(timer) }
+
   }, [query, searching])
+
   const tasks = [
-    { view: 'contacts' as const, title: 'Contact information', detail: 'Key points of contact', icon: UserRound },
-    { view: 'tasks' as const, title: 'Tasks', detail: 'Follow-ups & to-dos', icon: ListTodo },
-    { view: 'tastings' as const, title: 'View tastings', detail: 'Last visit & future bookings', icon: CalendarDays },
-    { view: 'tasting' as const, title: 'Schedule tasting', detail: 'Open dates & team assignment', icon: CalendarDays },
-    { view: 'order' as const, title: 'Create order', detail: 'Cases, payment & invoice', icon: Package },
+
+    { view: 'contacts' as const, title: 'Contacts', detail: 'Key points of contact', icon: UserRound },
+
+    { view: 'tastings' as const, title: 'Tastings', detail: 'History, bookings & scheduling', icon: CalendarDays },
+
+    { view: 'delivery' as const, title: 'Record delivery', detail: 'Order quantities & photo proof', icon: Camera },
+
+    { view: 'order' as const, title: 'Orders', detail: 'Cases, payment & invoice', icon: Package },
+
     ...(bootstrap.canInvoice ? [{ view: 'invoice' as const, title: 'Quick invoice', detail: 'Create & send to customer', icon: FileText }] : []),
-    { view: 'note' as const, title: 'Account notes', detail: 'Read notes & capture the conversation', icon: StickyNote },
-    ...(bootstrap.canPhotos ? [{ view: 'photos' as const, title: 'Add photos', detail: 'Shelf, display or client visit', icon: Camera }] : []),
+
+    { view: 'note' as const, title: 'Notes', detail: 'Read & capture the conversation', icon: StickyNote },
+
+    ...(bootstrap.canPhotos ? [{ view: 'photos' as const, title: 'Photos', detail: 'Shelf, display or client visit', icon: Camera }] : []),
+
     { view: 'observations' as const, title: 'Price & inventory', detail: 'Record either or both', icon: Wine },
+
   ]
+
   const goHome = () => { setView('home'); window.history.replaceState(null, '', '/field') }
+
   return <div className="min-h-dvh bg-[#faf9f6] pb-[max(2rem,env(safe-area-inset-bottom))]">
+
     <header className="sticky top-0 z-20 bg-[#120f0e] px-4 pb-4 pt-[max(1rem,env(safe-area-inset-top))] text-white"><div className="mx-auto flex max-w-2xl items-center gap-3"><Image src="/brand/logo-badge.png" alt="AHAWC" width={44} height={44} className="rounded-lg" /><div className="flex-1"><p className="font-display text-2xl font-bold uppercase">Field notes</p><p className="text-xs text-stone-300">{bootstrap.userName} · At your client</p></div><span className="rounded-full bg-orange-500/20 px-3 py-1 text-xs text-orange-200">AHAWC / Wisher</span></div></header>
+
     <main className="mx-auto max-w-2xl space-y-5 p-4">
-      {view === 'home' && !addingAccount ? <Link href="/field/tastings" className="flex min-h-20 items-center gap-4 rounded-2xl border border-orange-200 bg-orange-50 p-4 text-left shadow-sm active:bg-orange-100"><CalendarDays className="size-8 shrink-0 text-[#ff5a00]" /><span><span className="block text-lg font-bold">View tastings</span><span className="mt-1 block text-sm text-muted-foreground">Overview across accounts · no account selection needed</span></span></Link> : null}
-      {myTasks ? <>
-        <Button variant="outline" className="h-12 w-full justify-start" onClick={() => setMyTasks(false)}><ArrowLeft className="size-5" /> {account && !searching ? `Back to ${account.companyName}` : 'Back to accounts'}</Button>
-        <FieldMyTasks onOpenAccount={async accountId => { const selected = await getFieldAccount(accountId); setAccount(selected); setSaved(null); setRecipientEmail(''); setDeliveryMessage(''); setAccountMessage(''); setSearching(false); setAddingAccount(false); setView('tasks'); setMyTasks(false); window.history.replaceState(null, '', '/field') }} />
-      </> : <>
+
+      {view === 'home' && !addingAccount ? <Link href="/field/tastings" className="flex min-h-20 items-center gap-4 rounded-2xl border border-orange-200 bg-orange-50 p-4 text-left shadow-sm active:bg-orange-100"><CalendarDays className="size-8 shrink-0 text-[#ff5a00]" /><span><span className="block text-lg font-bold">All tastings</span><span className="mt-1 block text-sm text-muted-foreground">Overview across accounts · no account selection needed</span></span></Link> : null}
+
       <section className="rounded-2xl border bg-white p-4">
+
         {addingAccount ? <FieldAccountForm initialName={query} onCancel={() => setAddingAccount(false)} onSelected={(selected, created) => { setAccount(selected); setSearching(false); setAddingAccount(false); setView('home'); setSaved(null); setRecipientEmail(''); setDeliveryMessage(''); setError(''); setAccountMessage(created ? `${selected.companyName} saved. Ready for field tasks.` : ''); window.history.replaceState(null, '', '/field') }} /> : account && !searching ? <div className="flex items-start gap-3"><div className="min-w-0 flex-1"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Working with</p><h1 className="mt-1 break-words text-xl font-bold">{account.companyName}</h1><p className="mt-1 text-sm text-muted-foreground">{[account.address, account.city, account.state].filter(Boolean).join(', ') || 'Address not entered'}</p></div><Button variant="outline" className="h-12" disabled={documentBusy} onClick={() => { setSearching(true); setQuery(''); setAccountMessage('') }}>Change</Button></div> : <>
+
           <label htmlFor="field-search" className="mb-2 block text-lg font-semibold">Find the account</label><div className="relative"><Search className="pointer-events-none absolute left-4 top-4 size-5 text-muted-foreground" /><input id="field-search" type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Account, city or street…" autoComplete="off" className="h-14 w-full rounded-xl border bg-white pl-12 pr-4 text-base" /></div>
+
           <p className="mt-2 text-xs text-muted-foreground">{loading ? 'Searching…' : 'Tap an account. Search narrows the list.'}</p>
+
           <Button variant="outline" className="mt-3 h-14 w-full text-base" onClick={() => setAddingAccount(true)}>Add new account</Button>
+
           <div className="mt-2 max-h-80 space-y-1 overflow-y-auto overscroll-contain">{results.map(row => <button type="button" key={row.id} disabled={loading} className="min-h-16 w-full rounded-xl p-3 text-left hover:bg-orange-50" onClick={async () => {
+
             setLoading(true); setError('')
+
             try { const selected = await getFieldAccount(row.id); setAccount(selected); setSaved(null); setRecipientEmail(''); setDeliveryMessage(''); setAccountMessage(''); setSearching(false); setView('home'); window.history.replaceState(null, '', '/field') }
+
             catch { setError('Could not load this account. Retry.') }
+
             finally { setLoading(false) }
-          }}><span className="block font-semibold">{row.companyName}</span><span className="block text-sm text-muted-foreground">{[row.city, row.state, row.address].filter(Boolean).join(' · ')}</span></button>)}</div>
+
+          }}><span className="block font-semibold">{row.companyName}</span>{row.matchingContact ? <span className="block text-sm">Contact: {row.matchingContact}</span> : null}<span className="block text-sm text-muted-foreground">{[row.city, row.state, row.address].filter(Boolean).join(' · ')}</span></button>)}</div>
+
           {!loading && query && !results.length ? <p className="mt-3 text-sm">No matching account. Try its city or street.</p> : null}
+
           {account ? <Button variant="ghost" className="mt-2 h-12 w-full" onClick={() => setSearching(false)}>Keep {account.companyName}</Button> : null}
+
         </>}
+
         {error ? <p role="alert" className="mt-3 text-sm text-red-700">{error}</p> : null}
+
       </section>
-      {!addingAccount && (searching || view === 'home') ? <FieldMyTasksButton onOpen={() => setMyTasks(true)} /> : null}
+
       {accountMessage && !searching ? <p role="status" className="rounded-xl bg-emerald-50 p-3 text-emerald-800">{accountMessage}</p> : null}
+
       {!addingAccount && !searching && account ? <>
-        {view !== 'home' ? <Button variant="outline" className="h-12 w-full justify-start" disabled={documentBusy} onClick={() => { if ((view === 'order' || view === 'invoice') && documentReviewing) setDocumentBack(value => value + 1); else goHome() }}><ArrowLeft className="size-5" /> {(view === 'order' || view === 'invoice') && documentReviewing ? 'Back to edit entry' : (view === 'order' || view === 'invoice') ? 'Back to field tasks · keep draft' : 'Back to field tasks'}</Button> : null}{(view === 'order' || view === 'invoice') && documentReviewing ? <Button variant="outline" className="h-12 w-full justify-start" disabled={documentBusy} onClick={goHome}><Home className="size-5" /> Field tasks · keep draft</Button> : null}
-        {view === 'home' ? <><div><h2 className="text-lg font-semibold">What do you need to do?</h2><p className="mt-1 text-sm text-muted-foreground">One account. Simple actions while you’re there.</p></div><div className="grid grid-cols-2 gap-3">{tasks.map(task => <button key={task.view} type="button" onClick={() => setView(task.view)} className="flex min-h-36 flex-col items-start justify-between gap-3 rounded-2xl border bg-white p-4 text-left shadow-sm active:bg-orange-50"><task.icon className="size-7 text-[#ff5a00]" /><div><span className="block text-lg font-bold leading-tight">{task.title}</span><span className="mt-1 block text-xs text-muted-foreground">{task.detail}</span></div></button>)}</div>{saved ? <Button variant="outline" className="h-14 w-full" onClick={() => setView('document')}>Return to invoice {saved.invoiceNumber}</Button> : null}<FieldAccountOrders key={account.id} accountId={account.id} /></> : null}
+
+        {view !== 'home' ? <Button variant="outline" className="h-12 w-full justify-start" disabled={documentBusy} onClick={() => { if (view === 'order' || view === 'invoice') setDocumentBack(value => value + 1); else goHome() }}><ArrowLeft className="size-5" /> {view === 'order' || view === 'invoice' ? 'Back to edit entry' : 'Back to field tasks'}</Button> : null}{view === 'order' || view === 'invoice' ? <Button variant="ghost" className="h-12 w-full" disabled={documentBusy} onClick={goHome}>Field tasks · keep draft</Button> : null}
+
+        {view === 'home' ? <><FieldTastingPlan account={account} canEdit={bootstrap.canManageAccounts} onSaved={setAccount} /><div><h2 className="text-lg font-semibold">What do you need to do?</h2><p className="mt-1 text-sm text-muted-foreground">One account. Simple actions while you’re there.</p></div><div className="grid grid-cols-2 gap-3">{tasks.map(task => <button key={task.view} type="button" onClick={() => setView(task.view)} className="flex min-h-36 flex-col items-start justify-between gap-3 rounded-2xl border bg-white p-4 text-left shadow-sm active:bg-orange-50"><task.icon className="size-7 text-[#ff5a00]" /><div><span className="block text-lg font-bold leading-tight">{task.title}</span><span className="mt-1 block text-xs text-muted-foreground">{task.detail}</span></div></button>)}</div>{saved ? <Button variant="outline" className="h-14 w-full" onClick={() => setView('document')}>Return to invoice {saved.invoiceNumber}</Button> : null}</> : null}
+
         {view === 'note' ? <FieldAccountNotes key={account.id} accountId={account.id} /> : null}
+
+        {view === 'delivery' ? <FieldDeliveries accountId={account.id} /> : null}
+
         {view === 'photos' ? <FieldPhotos key={account.id} accountId={account.id} /> : null}
+
         {view === 'observations' ? <AccountObservationForm key={account.id} accountId={account.id} products={bootstrap.products} fieldMode /> : null}
+
         {view === 'contacts' ? <FieldContacts key={account.id} account={account} onAccountChanged={setAccount} /> : null}
-        {view === 'tasks' ? <FieldTasks key={account.id} account={account} /> : null}
-        {view === 'tastings' ? <FieldAccountTastings key={account.id} accountId={account.id} /> : null}
-        {view === 'tasting' ? <FieldTasting key={account.id} account={account} members={bootstrap.members} initialAvailability={availability} /> : null}
-        {view === 'order' || view === 'invoice' ? <FieldDocumentForm key={`${account.id}:${view}`} account={account} products={bootstrap.products} kind={view} draft={documentDrafts[`${account.id}:${view}`]} onDraftChange={draft => setDocumentDrafts(previous => ({ ...previous, [`${account.id}:${view}`]: draft }))} backRevision={documentBack} onBusyChange={setDocumentBusy} onReviewChange={setDocumentReviewing} onSaved={(document, message) => { setDocumentDrafts(previous => { const next = { ...previous }; delete next[`${account.id}:${view}`]; return next }); setSaved(document); setRecipientEmail(document.email); setDeliveryMessage(message); setView('document'); window.history.replaceState(null, '', `/field?invoice=${document.requestId}`) }} /> : null}
+
+        {view === 'tastings' ? <FieldTasting key={account.id} account={account} members={bootstrap.members} initialAvailability={availability} canCancel={bootstrap.canInvoice} /> : null}
+
+        {view === 'order' || view === 'invoice' ? <FieldDocumentForm key={`${account.id}:${view}`} account={account} products={bootstrap.products} kind={view} draft={documentDrafts[`${account.id}:${view}`]} onDraftChange={draft => setDocumentDrafts(previous => ({ ...previous, [`${account.id}:${view}`]: draft }))} backRevision={documentBack} onBusyChange={setDocumentBusy} onSaved={(document, message) => { setDocumentDrafts(previous => { const next = { ...previous }; delete next[`${account.id}:${view}`]; return next }); setSaved(document); setRecipientEmail(document.email); setDeliveryMessage(message); setView('document'); window.history.replaceState(null, '', `/field?invoice=${document.requestId}`) }} /> : null}
+
         {view === 'document' && saved ? <div className="space-y-4">
+
           <div role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5"><Check className="mb-2 size-7 text-emerald-700" /><h2 className="text-xl font-bold">{saved.orderId ? 'Order & invoice saved' : 'Invoice saved'}</h2><p className="mt-2 break-all">{saved.invoiceNumber} · {formatCurrency(saved.total)}</p><p className="mt-2 text-sm">{saved.status === 'paid' ? 'Payment received.' : `${saved.paymentMethod === 'cod' ? 'COD' : saved.paymentMethod === 'check' ? 'Check' : 'Stripe card'} · Payment not yet confirmed.`}</p></div>
+
+          {saved.orderId ? <FieldDeliveries accountId={account.id} initialOrderId={saved.orderId} /> : null}
+
           {deliveryMessage ? <p role="status" className="rounded-xl bg-white p-3 text-sm">{deliveryMessage}</p> : saved.emailSentAt ? <p className="text-sm">Emailed to {saved.email}</p> : null}
+
           <label className="block">Invoice recipient email<input type="email" value={recipientEmail} onChange={event => setRecipientEmail(event.target.value)} className="mt-2 h-14 w-full rounded-xl border bg-white px-4 text-base" /></label>
-          <Button className="h-14 w-full text-base" disabled={docPending} onClick={async () => { if (documentLocked.current) return; documentLocked.current = true; setDocPending(true); try { const result = await sendFieldInvoice(saved.requestId, recipientEmail, true); setDeliveryMessage(result.error ?? result.message ?? 'Check email status.'); setSaved({ ...saved, ...(await getFieldDocument(saved.requestId)) }) } catch { setDeliveryMessage('Could not confirm email. Invoice remains saved.'); } finally { documentLocked.current = false; setDocPending(false) } }}>{docPending ? 'Sending…' : 'Email invoice to customer'}</Button>
+
+          <Button className="h-14 w-full text-base" disabled={docPending} onClick={async () => { if (documentLocked.current) return; documentLocked.current = true; setDocPending(true); try { const result = await sendFieldInvoice(saved.requestId, recipientEmail); setDeliveryMessage(result.error ?? result.message ?? 'Check email status.'); setSaved({ ...saved, ...(await getFieldDocument(saved.requestId)) }) } catch { setDeliveryMessage('Could not confirm email. Invoice remains saved.'); } finally { documentLocked.current = false; setDocPending(false) } }}>{docPending ? 'Sending…' : 'Email invoice to customer'}</Button>
+
           <a href={saved.paymentPath} target="_blank" rel="noreferrer" className="flex min-h-14 items-center justify-center rounded-xl border bg-white px-4 text-base font-semibold">View customer invoice & PDF</a>
+
           <Button variant="outline" className="h-14 w-full text-base" onClick={async () => { try { const url = `${window.location.origin}${saved.paymentPath}`; if (navigator.share) await navigator.share({ title: `Invoice ${saved.invoiceNumber}`, url }); else { await navigator.clipboard.writeText(url); setDeliveryMessage('Secure invoice link copied.'); } } catch { setDeliveryMessage('Could not share. Open the invoice and copy its URL.'); } }}>Share secure invoice link</Button>
+
           <Button variant="outline" className="h-12 w-full" disabled={docPending} onClick={async () => { setDocPending(true); try { setSaved({ ...saved, ...(await getFieldDocument(saved.requestId)) }); setDeliveryMessage('Invoice status refreshed.') } catch { setDeliveryMessage('Could not refresh invoice status. Retry.') } finally { setDocPending(false) } }}>Refresh payment status</Button>
+
           {saved.paymentMethod === 'stripe' && saved.status !== 'paid' ? <FieldCardPayment key={saved.requestId} requestId={saved.requestId} /> : null}
+
         </div> : null}
+
         <Link href="/field" onClick={event => { event.preventDefault(); if (documentBusy) return; setSearching(true); setView('home'); setAccount(null); setSaved(null); window.history.replaceState(null, '', '/field') }} className="flex min-h-12 items-center justify-center text-sm text-muted-foreground underline">Next client · choose another account</Link>
+
       </> : <p className="px-2 text-sm text-muted-foreground">Choose a client to schedule, order, invoice, or capture field notes.</p>}
-      </>}
+
     </main>
+
   </div>
+
 }
+
+const TIER_CADENCE: Record<number, string> = { 1: 'Every 1–2 months', 2: 'Every 3 months', 3: 'Every 4–6 months', 4: '1–2 times per year', 5: 'No recurring tasting' }
+function FieldTastingPlan({ account, canEdit, onSaved }: { account: Account; canEdit: boolean; onSaved: (account: Account) => void }) {
+  const [editing, setEditing] = useState(false), [message, setMessage] = useState('')
+  return <section className="rounded-2xl border bg-white p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold uppercase text-muted-foreground">Tasting plan</p><p className="font-semibold">{account.tastingPriorityTier ? `Tier ${account.tastingPriorityTier} · ${TIER_CADENCE[account.tastingPriorityTier]}` : 'Priority not assigned'}</p>{account.tastingPriorityNotes ? <p className="mt-1 text-sm">{account.tastingPriorityNotes}</p> : null}</div>{canEdit ? <Button variant="outline" size="sm" onClick={() => setEditing(value => !value)}>{editing ? 'Close' : 'Edit'}</Button> : null}</div>{editing ? <form className="mt-4 space-y-3" onSubmit={async event => { event.preventDefault(); const data = new FormData(event.currentTarget); const tierValue = Number(data.get('tier')); const placement = String(data.get('placement') || '') as 'entrance' | 'exit' | 'tasting_room' | 'back' | 'middle' | 'other'; const result = await saveFieldTastingPlan({ accountId: account.id, tier: tierValue || null, notes: String(data.get('notes') || ''), placement: placement || null, placementNotes: String(data.get('placementNotes') || '') }); if ('error' in result) setMessage(result.error ?? 'Could not save tasting plan.'); else { onSaved(result.account); setEditing(false); setMessage('Tasting plan saved.') } }}><label className="block">Priority tier<select name="tier" defaultValue={account.tastingPriorityTier ?? ''} className="mt-1 h-12 w-full rounded-xl border px-3"><option value="">Not assigned</option>{[1,2,3,4,5].map(tier => <option key={tier} value={tier}>Tier {tier} · {TIER_CADENCE[tier]}</option>)}</select></label><label className="block">Assignment notes<textarea name="notes" defaultValue={account.tastingPriorityNotes ?? ''} className="mt-1 min-h-20 w-full rounded-xl border p-3" /></label><label className="block">Default placement<select name="placement" defaultValue={account.tastingPlacementDefault ?? ''} className="mt-1 h-12 w-full rounded-xl border px-3"><option value="">No default</option><option value="entrance">Front of store / near entrance</option><option value="exit">Near exit</option><option value="tasting_room">Tasting room</option><option value="back">Back of store</option><option value="middle">Middle / away from door</option><option value="other">Other</option></select></label><label className="block">Placement notes<input name="placementNotes" defaultValue={account.tastingPlacementDefaultNotes ?? ''} className="mt-1 h-12 w-full rounded-xl border px-3" /></label><Button className="h-12 w-full">Save tasting plan</Button></form> : null}{message ? <p role="status" className="mt-2 text-sm">{message}</p> : null}</section>
+}
+

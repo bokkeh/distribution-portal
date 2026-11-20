@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { getFieldAccountNotes, saveFieldNote } from '@/actions/field-data'
 import { Button } from '@/components/ui/button'
 
@@ -15,6 +15,8 @@ export function FieldAccountNotes({ accountId }: { accountId: string }) {
   const [message, setMessage] = useState('')
   const locked = useRef(false)
   const requestId = useRef<string | null>(null)
+  const textRef = useRef(text)
+  textRef.current = text
 
   useEffect(() => {
     let active = true
@@ -34,7 +36,40 @@ export function FieldAccountNotes({ accountId }: { accountId: string }) {
     return () => { active = false }
   }, [accountId, revision])
 
+  // Auto-save unsaved note text when navigating away
+  useEffect(() => {
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      if (textRef.current.trim()) { e.preventDefault() }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      if (textRef.current.trim() && !locked.current) {
+        const id = requestId.current ?? crypto.randomUUID()
+        saveFieldNote(accountId, textRef.current, id)
+      }
+    }
+  }, [accountId])
+
+  const save = useCallback(async () => {
+    if (locked.current) return
+    locked.current = true; setPending(true); setMessage('')
+    try {
+      requestId.current ??= crypto.randomUUID()
+      const result = await saveFieldNote(accountId, text, requestId.current)
+      if (result.error) { setMessage(result.error); return }
+      requestId.current = null; setText(''); setMessage('Note saved to this account.'); setRevision(value => value + 1)
+    } catch { setMessage('Could not confirm save. Your note is kept; retry the same entry.') }
+    finally { locked.current = false; setPending(false) }
+  }, [accountId, text])
+
   return <div className="space-y-5">
+    <form className="space-y-4 rounded-2xl border bg-white p-4" onSubmit={async event => { event.preventDefault(); await save() }}>
+      <h3 className="text-lg font-semibold">Add a quick note</h3>
+      <label className="block">What happened?<textarea value={text} onChange={event => setText(event.target.value)} required maxLength={4000} disabled={pending} placeholder="Conversation, next step, shelf conditions..." className="mt-2 min-h-40 w-full rounded-2xl border bg-white p-4 text-base" /></label>
+      {message ? <p role="status" className="rounded-xl bg-stone-100 p-3">{message}</p> : null}
+      <Button className="h-14 w-full text-base" disabled={pending}>{pending ? 'Saving...' : 'Save note'}</Button>
+    </form>
     <section aria-label="Previous account notes" className="space-y-4 rounded-2xl border bg-white p-4">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-xl font-semibold">Account notes</h2>
@@ -51,23 +86,5 @@ export function FieldAccountNotes({ accountId }: { accountId: string }) {
       {notes && !notes.length && !loading && !loadError ? <p className="text-sm text-muted-foreground">No previous notes recorded for this account.</p> : null}
       {notes && notes.length > visibleCount ? <Button type="button" variant="outline" className="h-12 w-full" onClick={() => setVisibleCount(count => count + 10)}>Show more notes ({notes.length - visibleCount} remaining)</Button> : null}
     </section>
-    <form className="space-y-4 rounded-2xl border bg-white p-4" onSubmit={async event => {
-      event.preventDefault()
-      if (locked.current) return
-      locked.current = true; setPending(true); setMessage('')
-      try {
-        requestId.current ??= crypto.randomUUID()
-        const result = await saveFieldNote(accountId, text, requestId.current)
-        if (result.error) { setMessage(result.error); return }
-        requestId.current = null; setText(''); setMessage('Note saved to this account.'); setRevision(value => value + 1)
-      } catch { setMessage('Could not confirm save. Your note is kept; retry the same entry.') }
-      finally { locked.current = false; setPending(false) }
-    }}>
-      <h3 className="text-lg font-semibold">Add a quick note</h3>
-      <label className="block">What happened?<textarea value={text} onChange={event => setText(event.target.value)} required maxLength={4000} disabled={pending} placeholder="Conversation, next step, shelf conditions..." className="mt-2 min-h-40 w-full rounded-2xl border bg-white p-4 text-base" /></label>
-      {message ? <p role="status" className="rounded-xl bg-stone-100 p-3">{message}</p> : null}
-      <Button className="h-14 w-full text-base" disabled={pending}>{pending ? 'Saving...' : 'Save note'}</Button>
-    </form>
   </div>
 }
-

@@ -2,7 +2,7 @@
 
 import { and, asc, desc, eq, gte, inArray, ilike, or, sql } from 'drizzle-orm'
 import { db } from '@/db'
-import { accountMedia, accountNotes, contacts, crmTasks, customerAccounts, historicalOrders, invoices, orderItems, orders, products, tasterAvailability, tastings, users } from '@/db/schema'
+import { accountInventoryOnHand, accountInventoryAdjustments, accountMedia, accountNotes, contacts, customerAccounts, products, salesRegions, tasterAvailability, tastings, users } from '@/db/schema'
 import { fieldAccount, fieldContext } from '@/lib/field/access'
 import { getEasternDateKey } from '@/lib/tastings/time'
 import { upcomingTastingFilter } from '@/lib/tastings/upcoming-filter'
@@ -13,9 +13,6 @@ import { fieldAccountSchema, fieldContactSchema, fieldContactEditSchema, fieldAc
 import { normalizeVenueIdentity } from '@/lib/tastings/scheduling'
 import { after } from 'next/server'
 import { logActivityEvent } from '@/lib/activity/log'
-import { createTask, updateTaskStatus } from '@/actions/tasks'
-import { getTasksForView } from '@/lib/tasks/read'
-import { TASK_ROLES } from '@/lib/tasks/roles'
 
 export async function createFieldAccount(raw: FieldAccountInput): Promise<{ success: true; account: Awaited<ReturnType<typeof getFieldAccount>> } | { error: string; matches?: Awaited<ReturnType<typeof searchFieldAccounts>> }> {
   const parsed = fieldAccountSchema.safeParse(raw)
@@ -24,24 +21,33 @@ export async function createFieldAccount(raw: FieldAccountInput): Promise<{ succ
   try {
     const { session, managesAll, member } = await fieldContext()
     const sourceExternalId = `field:${session.user.id}:${input.requestId}`
+    const contactEmail = input.primaryContactEmail.toLowerCase() || null
+    const accountEmail = input.email.toLowerCase() || contactEmail
+    const accountPhone = input.phone || input.primaryContactPhone || null
     const [retry] = await db.select().from(customerAccounts).where(eq(customerAccounts.id, input.requestId)).limit(1)
     if (retry) {
-      if (retry.sourceExternalId !== sourceExternalId || retry.companyName !== input.companyName || (retry.address ?? '') !== input.address || (retry.city ?? '') !== input.city || (retry.state ?? '') !== input.state || (retry.zip ?? '') !== input.zip || (retry.email ?? '') !== input.email || (retry.phone ?? '') !== input.phone) return { error: 'This request already saved different details. Start a new account or select the saved account.' }
+      if (retry.sourceExternalId !== sourceExternalId || retry.companyName !== input.companyName || (retry.address ?? '') !== input.address || (retry.city ?? '') !== input.city || (retry.state ?? '') !== input.state || (retry.zip ?? '') !== input.zip || retry.email !== accountEmail || retry.phone !== accountPhone) return { error: 'This request already saved different details. Start a new account or select the saved account.' }
+      if (input.primaryContactName) await db.insert(contacts).values({ id: input.requestId, customerId: retry.id, name: input.primaryContactName, email: input.primaryContactEmail.toLowerCase() || null, phone: input.primaryContactPhone || null, phoneType: input.primaryContactPhoneType, isPrimary: true }).onConflictDoNothing({ target: contacts.id })
+      if (input.interactionNote) await db.insert(accountNotes).values({ id: input.requestId, accountId: retry.id, authorUserId: session.user.id, authorRole: session.user.role, noteBody: input.interactionNote }).onConflictDoNothing({ target: accountNotes.id })
       const account = await getFieldAccount(retry.id)
       refreshFieldAccount(account.id)
       return { success: true as const, account }
     }
     const candidates = await db.select({ id: customerAccounts.id, companyName: customerAccounts.companyName, address: customerAccounts.address, city: customerAccounts.city, state: customerAccounts.state, assignedSalesRepId: customerAccounts.assignedSalesRepId }).from(customerAccounts)
     const matches = candidates.filter(row => normalizeVenueIdentity(row.companyName) === normalizeVenueIdentity(input.companyName))
-    if (matches.length) return { error: 'An account with this name already exists. Select it below, or use a distinct location name. If it is not listed, ask your administrator to check your account access.', matches: matches.filter(row => managesAll || row.assignedSalesRepId === member?.id).map(({ id, companyName, address, city, state }) => ({ id, companyName, address, city, state })) }
+    if (matches.length) return { error: 'An account with this name already exists. Select it below, or use a distinct location name. If it is not listed, ask your administrator to check your account access.', matches: matches.filter(row => managesAll || row.assignedSalesRepId === member?.id).map(({ id, companyName, address, city, state }) => ({ id, companyName, address, city, state, matchingContact: null })) }
     const schedulingVenueKey = [input.companyName, input.address, input.city, input.state, input.zip].map(normalizeVenueIdentity).join('|')
-    const [created] = await db.insert(customerAccounts).values({ id: input.requestId, companyName: input.companyName, address: input.address || null, city: input.city || null, state: input.state || null, zip: input.zip || null, email: input.email || null, phone: input.phone || null, assignedSalesRepId: member?.id ?? null, schedulingVenueKey, customerSource: 'manual', sourceExternalId, dealStage: null }).onConflictDoNothing().returning({ id: customerAccounts.id })
+    const [region] = member?.homeRegion ? await db.select({ id: salesRegions.id }).from(salesRegions).where(sql`lower(${salesRegions.name}) = lower(${member.homeRegion})`).limit(1) : []
+    const invoiceEmail = input.invoiceEmail.toLowerCase() || contactEmail || input.email.toLowerCase() || null
+    const [created] = await db.insert(customerAccounts).values({ id: input.requestId, companyName: input.companyName, address: input.address || null, city: input.city || null, state: input.state || null, zip: input.zip || null, email: accountEmail, phone: accountPhone, invoiceEmail, pocName: input.primaryContactName || null, pocEmail: contactEmail, pocPhone: input.primaryContactPhone || null, liquorLicenseNumber: input.liquorLicenseNumber || null, liquorLicenseState: input.liquorLicenseState || null, liquorLicenseExpiration: input.liquorLicenseExpiration || null, liquorLicenseUrl: input.liquorLicenseUrl || null, assignedSalesRepId: member?.id ?? null, assignedRegionId: region?.id ?? null, schedulingVenueKey, customerSource: 'manual', sourceExternalId, dealStage: null }).onConflictDoNothing().returning({ id: customerAccounts.id })
     if (!created) {
       // A racing/lost-response request may have saved this exact entry. Verify it on retry.
       const [saved] = await db.select({ id: customerAccounts.id, sourceExternalId: customerAccounts.sourceExternalId }).from(customerAccounts).where(eq(customerAccounts.id, input.requestId)).limit(1)
       if (saved?.sourceExternalId === sourceExternalId) return createFieldAccount(raw)
       return { error: 'This account may already have been saved. Search for its name before retrying.', matches: await searchFieldAccounts(input.companyName) }
     }
+    if (input.primaryContactName) await db.insert(contacts).values({ id: input.requestId, customerId: created.id, name: input.primaryContactName, email: contactEmail, phone: input.primaryContactPhone || null, phoneType: input.primaryContactPhoneType, isPrimary: true }).onConflictDoNothing({ target: contacts.id })
+    if (input.interactionNote) await db.insert(accountNotes).values({ id: input.requestId, accountId: created.id, authorUserId: session.user.id, authorRole: session.user.role, noteBody: input.interactionNote }).onConflictDoNothing({ target: accountNotes.id })
     const account = await getFieldAccount(created.id)
     refreshFieldAccount(account.id)
     for (const path of ['/admin/crm', '/staff/crm', '/sales/accounts', '/admin/dashboard', '/sales/dashboard']) revalidatePath(path)
@@ -53,15 +59,16 @@ export async function createFieldAccount(raw: FieldAccountInput): Promise<{ succ
 export async function searchFieldAccounts(query: string) {
   const { managesAll, member } = await fieldContext()
   const text = query.trim().slice(0, 100)
-  const matches = text ? or(ilike(customerAccounts.companyName, `%${text}%`), ilike(customerAccounts.city, `%${text}%`), ilike(customerAccounts.address, `%${text}%`)) : undefined
-  return db.select({ id: customerAccounts.id, companyName: customerAccounts.companyName, address: customerAccounts.address, city: customerAccounts.city, state: customerAccounts.state }).from(customerAccounts)
+  const matches = text ? or(ilike(customerAccounts.companyName, `%${text}%`), ilike(customerAccounts.city, `%${text}%`), ilike(customerAccounts.address, `%${text}%`), ilike(customerAccounts.pocName, `%${text}%`), sql`EXISTS (SELECT 1 FROM contacts c WHERE c.customer_id = "customer_accounts"."id" AND c.name ILIKE ${'%'+text+'%'})`) : undefined
+  return db.select({ id: customerAccounts.id, companyName: customerAccounts.companyName, address: customerAccounts.address, city: customerAccounts.city, state: customerAccounts.state, matchingContact: text ? sql<string | null>`COALESCE((SELECT string_agg(c.name, ', ' ORDER BY c.name) FROM contacts c WHERE c.customer_id = "customer_accounts"."id" AND c.name ILIKE ${'%'+text+'%'}), CASE WHEN ${customerAccounts.pocName} ILIKE ${'%'+text+'%'} THEN ${customerAccounts.pocName} END)` : sql<string | null>`NULL` }).from(customerAccounts)
     .where(and(matches, managesAll ? undefined : eq(customerAccounts.assignedSalesRepId, member!.id))).orderBy(asc(customerAccounts.companyName)).limit(30)
 }
 
 export async function getFieldAccount(accountId: string) {
   const { account } = await fieldAccount(accountId)
   const contactRows = await db.select({ id: contacts.id, name: contacts.name, title: contacts.title, email: contacts.email, phone: contacts.phone, preferredContact: contacts.preferredContact, isPrimary: contacts.isPrimary }).from(contacts).where(eq(contacts.customerId, accountId)).orderBy(desc(contacts.isPrimary), asc(contacts.name), asc(contacts.id))
-  return { id: account.id, companyName: account.companyName, address: account.address, city: account.city, state: account.state, zip: account.zip, additionalLocations: account.additionalLocations, email: account.pocEmail || account.businessEmail || account.email || '',
+  return { id: account.id, companyName: account.companyName, address: account.address, city: account.city, state: account.state, zip: account.zip, additionalLocations: account.additionalLocations, paymentTerms: account.paymentTerms, tastingPriorityTier: account.tastingPriorityTier, tastingPriorityNotes: account.tastingPriorityNotes, tastingPlacementDefault: account.tastingPlacementDefault, tastingPlacementDefaultNotes: account.tastingPlacementDefaultNotes, email: account.invoiceEmail || account.businessEmail || account.email || account.pocEmail || '',
+    invoiceEmails: [...new Set([account.invoiceEmail, account.businessEmail, account.email, account.pocEmail, ...contactRows.map(c => c.email)].filter((v): v is string => !!v?.trim()).map(v => v.trim().toLowerCase()))],
     contacts: contactRows, pointOfContact: { name: account.pocName, phone: account.pocPhone, email: account.pocEmail }, businessContact: { phone: account.businessPhone || account.phone, email: account.businessEmail || account.email } }
 }
 
@@ -77,8 +84,7 @@ export async function createFieldContact(raw: FieldContactInput) {
     if (retry && !matchesRequest(retry)) return { error: 'This request already saved different contact details. Check the contact list before starting another entry.' }
     if (!retry) {
       const existing = await db.select().from(contacts).where(eq(contacts.customerId, input.accountId))
-      // Shared emails are allowed across different people; only the same person entered twice is a duplicate.
-      const duplicate = existing.find(row => row.name.trim().toLowerCase() === values.name.toLowerCase() && ((!values.email && !values.phone) || (values.email && row.email?.trim().toLowerCase() === values.email) || (values.phone && row.phone?.replace(/\D/g, '') === values.phone.replace(/\D/g, ''))))
+      const duplicate = existing.find(row => (values.email && row.email?.trim().toLowerCase() === values.email) || (row.name.trim().toLowerCase() === values.name.toLowerCase() && ((!values.email && !values.phone) || (values.phone && row.phone?.replace(/\D/g, '') === values.phone.replace(/\D/g, '')))))
       if (duplicate) return { error: `${duplicate.name} is already listed for this account. Check the contact card before adding another entry.` }
       const [created] = await db.insert(contacts).values(values).onConflictDoNothing({ target: contacts.id }).returning()
       if (!created) {
@@ -179,38 +185,42 @@ export async function getFieldAccountTastings(accountId: string) {
   return { last: past[0] ? serialize(past[0]) : null, upcoming: upcoming.map(serialize) }
 }
 
-export async function getFieldAccountOrders(accountId: string) {
-  await fieldAccount(accountId)
+export async function cancelFieldTasting(tastingId: string): Promise<{ success: true } | { error: string }> {
   const { session } = await fieldContext()
-  const canManageInvoices = (session.user.roles ?? [session.user.role]).some(role => ['admin', 'staff'].includes(role))
-  const savedInvoices = canManageInvoices ? await db.select({ id: invoices.id, orderId: invoices.orderId }).from(invoices).where(eq(invoices.customerId, accountId)) : []
-  const [liveOrders, items, backfilled] = await Promise.all([
-    db.select({ id: orders.id, createdAt: orders.createdAt, total: orders.total, status: orders.status, orderType: orders.orderType, paymentStatus: orders.paymentStatus })
-      .from(orders).where(eq(orders.customerId, accountId)).orderBy(desc(orders.createdAt)),
-    db.select({ orderId: orderItems.orderId, quantity: orderItems.quantity, unit: orderItems.unit, name: products.name })
-      .from(orderItems).innerJoin(orders, eq(orderItems.orderId, orders.id)).innerJoin(products, eq(orderItems.productId, products.id)).where(eq(orders.customerId, accountId)),
-    db.select({ id: historicalOrders.id, orderDate: historicalOrders.orderDate, orderValue: historicalOrders.orderValue, cases: historicalOrders.cases, productName: products.name, productNameFreeform: historicalOrders.productNameFreeform })
-      .from(historicalOrders).leftJoin(products, eq(historicalOrders.productId, products.id)).where(eq(historicalOrders.accountId, accountId)).orderBy(desc(historicalOrders.orderDate)),
-  ])
-  const itemsByOrder = new Map<string, string[]>()
-  for (const item of items) itemsByOrder.set(item.orderId, [...(itemsByOrder.get(item.orderId) ?? []), `${Number(item.quantity)} ${item.unit === 'bottle' ? 'btl' : 'cs'} ${item.name}`])
-  const counted = liveOrders.filter(order => order.status !== 'cancelled' && order.orderType !== 'sample')
-  const history = [
-    ...liveOrders.map(order => ({ id: order.id, date: order.createdAt.toISOString(), total: order.total, label: order.orderType === 'sample' ? 'Sample' : order.status === 'cancelled' ? 'Cancelled' : order.paymentStatus === 'paid' ? 'Paid' : 'Unpaid', summary: itemsByOrder.get(order.id)?.join(' · ') ?? '', historical: false, invoiceId: savedInvoices.find(invoice => invoice.orderId === order.id)?.id ?? null })),
-    ...backfilled.map(order => ({ id: order.id, date: order.orderDate.toISOString(), total: order.orderValue, label: 'Historical', summary: `${Number(order.cases)} cs ${order.productName ?? order.productNameFreeform ?? 'Product'}`, historical: true, invoiceId: null })),
-  ].sort((a, b) => b.date.localeCompare(a.date))
-  const totalRevenue = counted.reduce((sum, order) => sum + Number(order.total), 0) + backfilled.reduce((sum, order) => sum + Number(order.orderValue ?? 0), 0)
-  return { totalRevenue, orderCount: counted.length + backfilled.length, lastOrderDate: history.find(order => order.label !== 'Cancelled' && order.label !== 'Sample')?.date ?? null, orders: history }
+  if (!session.user.roles.some(role => ['admin', 'staff'].includes(role))) return { error: 'Only administrators and staff can cancel tastings.' }
+  const parsed = z.string().uuid().safeParse(tastingId)
+  if (!parsed.success) return { error: 'Invalid tasting.' }
+  const [tasting] = await db.select({ id: tastings.id, status: tastings.status, eventName: tastings.eventName }).from(tastings).where(eq(tastings.id, parsed.data)).limit(1)
+  if (!tasting) return { error: 'Tasting not found.' }
+  if (['completed', 'cancelled', 'declined'].includes(tasting.status)) return { error: 'This tasting is already closed.' }
+  await db.update(tastings).set({ status: 'cancelled', cancelledByUserId: session.user.id, cancelledAt: new Date() }).where(eq(tastings.id, tasting.id))
+  after(async () => {
+    try { await logActivityEvent({ entityType: 'tasting', entityId: tasting.id, actorUserId: session.user.id, kind: 'tasting_cancelled', title: 'Tasting cancelled from field', body: `${tasting.eventName} was cancelled via Field Notes.` }) } catch (error) { console.error('Tasting cancelled; audit failed:', error) }
+  })
+  revalidatePath('/field')
+  revalidatePath('/admin/tastings')
+  revalidatePath('/staff/tastings')
+  return { success: true }
 }
 
 export async function getFieldBootstrap() {
-  const { session } = await fieldContext()
+  const { session, managesAll } = await fieldContext()
   const [productRows, team] = await Promise.all([
     db.select({ id: products.id, name: products.name, sku: products.sku, price: products.price, bottlesPerCase: products.bottlesPerCase }).from(products).where(eq(products.active, true)).orderBy(asc(products.name)),
     db.select({ id: users.id, name: users.name, roles: users.roles }).from(users).where(eq(users.active, true)).orderBy(asc(users.name)),
   ])
-  return { userName: session.user.name ?? 'Team member', canInvoice: session.user.roles.some(role => ['admin', 'staff'].includes(role)), canPhotos: session.user.roles.some(role => ['admin', 'sales_rep', 'sales_manager'].includes(role)), products: productRows,
+  return { userName: session.user.name ?? 'Team member', canManageAccounts: managesAll, canInvoice: session.user.roles.some(role => ['admin', 'staff'].includes(role)), canPhotos: session.user.roles.some(role => ['admin', 'sales_rep', 'sales_manager'].includes(role)), products: productRows,
     members: team.filter(member => member.roles.some(role => ['admin', 'staff', 'sales_manager', 'sales_rep', 'taster'].includes(role))) }
+}
+
+export async function saveFieldTastingPlan(input: { accountId: string; tier: number | null; notes: string; placement: 'entrance' | 'exit' | 'tasting_room' | 'back' | 'middle' | 'other' | null; placementNotes: string }) {
+  const parsed = z.object({ accountId: z.uuid(), tier: z.number().int().min(1).max(5).nullable(), notes: z.string().trim().max(2000), placement: z.enum(['entrance', 'exit', 'tasting_room', 'back', 'middle', 'other']).nullable(), placementNotes: z.string().trim().max(1000) }).safeParse(input)
+  if (!parsed.success) return { error: parsed.error.issues[0].message }
+  const { session, managesAll } = await fieldAccount(input.accountId)
+  if (!managesAll) return { error: 'Only authorized managers can change tasting priority and placement defaults.' }
+  await db.update(customerAccounts).set({ tastingPriorityTier: input.tier, tastingPriorityNotes: input.notes || null, tastingPrioritySetByUserId: session.user.id, tastingPrioritySetAt: new Date(), tastingPlacementDefault: input.placement, tastingPlacementDefaultNotes: input.placementNotes || null }).where(eq(customerAccounts.id, input.accountId))
+  refreshFieldAccount(input.accountId)
+  return { success: true as const, account: await getFieldAccount(input.accountId) }
 }
 
 export async function getFieldAvailability() {
@@ -265,73 +275,25 @@ export async function saveFieldPhoto(input: { requestId: string; accountId: stri
   } catch { return { error: 'Could not confirm photo save. Your upload is kept; retry saving the same photo.' } }
 }
 
-async function fieldTaskList(session: Awaited<ReturnType<typeof fieldContext>>['session'], input: { accountId?: string; includeOrganization: boolean; completedLimit: number }) {
-  const [tasks, team] = await Promise.all([
-    getTasksForView({ userId: session.user.id, roles: session.user.roles, accountId: input.accountId, includeOrganization: input.includeOrganization, limit: 200 }),
-    db.select({ id: users.id, name: users.name, roles: users.roles }).from(users).where(eq(users.active, true)).orderBy(asc(users.name)),
-  ])
-  return {
-    currentUserId: session.user.id,
-    open: tasks.filter(task => task.status === 'open' || task.status === 'in_progress'),
-    completed: tasks.filter(task => task.status === 'completed').sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? '')).slice(0, input.completedLimit),
-    assignees: team.filter(user => user.roles.some(role => (TASK_ROLES as readonly string[]).includes(role))).map(({ id, name }) => ({ id, name })),
-  }
-}
-
-export async function getFieldAccountTasks(accountId: string) {
-  const { session } = await fieldAccount(accountId)
-  return fieldTaskList(session, { accountId, includeOrganization: true, completedLimit: 5 })
-}
-
-/** The same task list as the portal Tasks page: mine (assigned to or created by me), or everyone's for CRM managers. */
-export async function getFieldMyTasks(scope: 'mine' | 'everyone' = 'mine') {
-  const { session, managesAll } = await fieldContext()
-  return { ...(await fieldTaskList(session, { includeOrganization: managesAll && scope === 'everyone', completedLimit: 10 })), canViewEveryone: managesAll, scope: managesAll ? scope : 'mine' as const }
-}
-
-const fieldTaskSchema = z.object({
-  requestId: z.uuid(), accountId: z.union([z.uuid(), z.literal('')]).default(''),
-  title: z.string().trim().min(1, 'Enter what needs to be done.').max(200),
-  description: z.string().trim().max(4000).default(''),
-  dueAt: z.iso.datetime({ offset: true, error: 'Choose a due date and time.' }),
-  priority: z.enum(['low', 'normal', 'high', 'urgent']).default('normal'),
-  contactId: z.union([z.uuid(), z.literal('')]).default(''),
-  assignedToUserId: z.union([z.uuid(), z.literal('')]).default(''),
-})
-export type FieldTaskInput = z.input<typeof fieldTaskSchema>
-
-export async function createFieldTask(raw: FieldTaskInput) {
-  const parsed = fieldTaskSchema.safeParse(raw)
-  if (!parsed.success) return { error: parsed.error.issues[0].message }
-  const input = parsed.data
-  try {
-    // Tasks without an account are general to-dos, like tasks added from the portal Tasks page.
-    if (input.accountId) await fieldAccount(input.accountId); else await fieldContext()
-    const result = await createTask({ requestId: input.requestId, accountId: input.accountId || null, title: input.title, description: input.description || null, dueAt: input.dueAt, priority: input.priority, contactId: input.contactId || null, assignedToUserId: input.assignedToUserId || null })
-    if ('error' in result) return { error: result.error }
-    if (!input.accountId) return { success: true as const, tasks: null }
-    refreshFieldAccount(input.accountId)
-    return { success: true as const, tasks: await getFieldAccountTasks(input.accountId) }
-  } catch { return { error: 'Could not confirm task save. Your details are kept; retry the same entry to avoid duplicates.' } }
-}
-
-/** With an account, the task must belong to it; without one (My tasks), the portal task permissions decide. */
-export async function setFieldTaskStatus(accountId: string | null, taskId: string, status: 'open' | 'completed') {
-  try {
-    if (accountId) await fieldAccount(accountId); else await fieldContext()
-    const [task] = await db.select({ accountId: crmTasks.accountId }).from(crmTasks).where(eq(crmTasks.id, taskId)).limit(1)
-    if (!task || (accountId && task.accountId !== accountId)) return { error: 'This task is no longer linked to this account. Refresh tasks.' }
-    const result = await updateTaskStatus(taskId, status)
-    if ('error' in result) return { error: result.error }
-    if (!accountId) return { success: true as const, tasks: null }
-    refreshFieldAccount(accountId)
-    return { success: true as const, tasks: await getFieldAccountTasks(accountId) }
-  } catch { return { error: 'Could not confirm the task update. Refresh tasks and retry.' } }
-}
-
 export async function getFieldAccountNotes(accountId: string) {
   await fieldAccount(accountId)
   const rows = await db.select({ id: accountNotes.id, body: accountNotes.noteBody, occurredAt: accountNotes.occurredAt, author: users.name, pinned: accountNotes.isPinned }).from(accountNotes).leftJoin(users, eq(accountNotes.authorUserId, users.id)).where(eq(accountNotes.accountId, accountId)).orderBy(desc(accountNotes.isPinned), desc(accountNotes.occurredAt), desc(accountNotes.createdAt), asc(accountNotes.id))
   return rows.map(row => ({ ...row, occurredAt: row.occurredAt.toISOString() }))
 }
 
+export async function getFieldInventory(accountId: string) {
+  await fieldAccount(accountId)
+  const [balances, history] = await Promise.all([
+    db.select().from(accountInventoryOnHand).where(eq(accountInventoryOnHand.accountId, accountId)),
+    db.select().from(accountInventoryAdjustments).where(eq(accountInventoryAdjustments.accountId, accountId)).orderBy(desc(accountInventoryAdjustments.effectiveAt), desc(accountInventoryAdjustments.createdAt)),
+  ])
+  // The shared ledger removes zero-balance snapshot rows. Keep the latest
+  // adjustment visible so a recorded empty shelf is not mistaken for missing data.
+  const seen = new Set(balances.map(row => row.productId))
+  for (const row of history) {
+    if (seen.has(row.productId)) continue
+    seen.add(row.productId)
+    balances.push({ id: row.id, accountId, productId: row.productId, sku: row.sku, productName: row.productName, unitType: 'bottle', casesOnHand: row.resultingCasesOnHand, bottlesOnHand: row.resultingBottlesOnHand, quantityOnHand: row.resultingBottlesOnHand, updatedByUserId: row.updatedByUserId, createdAt: row.createdAt, updatedAt: row.effectiveAt })
+  }
+  return balances.map(row => ({ ...row, physicalCount: history.find(check => check.productId === row.productId && check.recordedBottlesOnHand !== null) ?? null }))
+}
